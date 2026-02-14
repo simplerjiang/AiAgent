@@ -37,6 +37,36 @@
 - 后端单元测试：dotnet test backend/SimplerJiangAiAgent.Api.Tests/SimplerJiangAiAgent.Api.Tests.csproj
 - 前端单元测试：cd frontend && npm run test:unit
 
+## OpenCode（VS Code + CLI）接入
+本仓库已提供 OpenCode 项目级配置文件：`opencode.json` 与 `AGENTS.md`。
+
+### 已配置内容
+- 使用 OpenAI 兼容 provider 方式接入 GLM-5
+- 项目指令文件：`.github/copilot-instructions.md` + `AGENTS.md`
+- 默认模型：`zai/glm-5`
+
+### 环境变量（必须）
+请在终端设置你的 GLM-5 key（不要写入仓库）：
+
+PowerShell:
+
+```powershell
+$env:GLM_API_KEY="你的GLM-5_API_KEY"
+```
+
+如果需要长期生效，请在你的用户环境变量里配置 `GLM_API_KEY`。
+
+### 启动方式
+在项目根目录运行：
+
+```powershell
+opencode
+```
+
+首次建议执行：
+- `/models` 确认已选中 `zai/glm-5`
+- `/init` 让 OpenCode 读取仓库结构与规则
+
 ## 多 Agent 自动化开发与测试
 入口与说明： [.automation/README.md](.automation/README.md)
 
@@ -45,6 +75,11 @@
 - 每次运行有清晰的计划、变更、测试和日志
 - 可回滚的 git checkpoint，失败立即止损
 - 强制执行测试顺序并记录结果
+
+## 当前目标清单（与 .automation/tasks.json 同步）
+- GOAL-002 多源事件与权重评估（公告/研报/新闻分级）
+- GOAL-003 事件驱动信号与可解释输出
+- GOAL-004 个性化风控与仓位建议
 
 ## 未来目标（智能化炒股助手愿景）
 以下目标不是口号，而是系统可以逐步落地的路线图：
