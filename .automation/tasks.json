@@ -87,6 +87,61 @@
                                      "test":  "done"
                                  },
                       "notes":  "已新增分时图成交量副图（分钟量柱）与 K线 MA5/MA10 叠加线；补充前端测试与 Edge UI 验证"
+                  },
+                  {
+                      "id":  "GOAL-007",
+                      "title":  "LLM online stock evaluation + action targets",
+                      "status":  "todo",
+                      "stages":  {
+                                     "plan":  "todo",
+                                     "dev":  "todo",
+                                     "test":  "todo"
+                                 },
+                      "notes":  "最优先：在风控与规则约束下，结合联网信息输出个股优劣评分、目标操作、触发条件与失效条件，要求可解释可追溯"
+                  },
+                  {
+                      "id":  "GOAL-008",
+                      "title":  "Trading plan engine",
+                      "status":  "todo",
+                      "stages":  {
+                                     "plan":  "todo",
+                                     "dev":  "todo",
+                                     "test":  "todo"
+                                 },
+                      "notes":  "盘前候选池与计划模板；盘中触发与失效管理；防冲动交易"
+                  },
+                  {
+                      "id":  "GOAL-009",
+                      "title":  "Market sentiment cycle + sector rotation",
+                      "status":  "todo",
+                      "stages":  {
+                                     "plan":  "todo",
+                                     "dev":  "todo",
+                                     "test":  "todo"
+                                 },
+                      "notes":  "连板高度、涨跌停与炸板率、成交额结构、主线持续性与扩散度"
+                  },
+                  {
+                      "id":  "GOAL-010",
+                      "title":  "Execution risk gates",
+                      "status":  "todo",
+                      "stages":  {
+                                     "plan":  "todo",
+                                     "dev":  "todo",
+                                     "test":  "todo"
+                                 },
+                      "notes":  "单票亏损阈值、单日回撤、连续亏损降仓、尾盘禁开新仓"
+                  },
+                  {
+                      "id":  "GOAL-011",
+                      "title":  "Trade review closed loop",
+                      "status":  "todo",
+                      "stages":  {
+                                     "plan":  "todo",
+                                     "dev":  "todo",
+                                     "test":  "todo"
+                                 },
+                      "notes":  "交易自动归因与违规检查，形成周/月度可执行改进清单"
                   }
               ]
 }

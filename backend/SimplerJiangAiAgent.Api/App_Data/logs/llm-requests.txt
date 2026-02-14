@@ -5489,3 +5489,607 @@ I've been synthesizing the data. Specifically, I'm now crafting the "Highlights"
   ],
   "chart": null
 }
+2026-02-15 00:49:07.292 [LLM] request provider=openai model=gemini-3-flash-preview-thinking-* useInternet=True baseUrl=https://api.bltcy.ai promptChars=3835 systemChars=164
+2026-02-15 00:49:07.299 [LLM] prompt provider=openai model=gemini-3-flash-preview-thinking-* systemPrompt=如你检索的信息来自网络，请标注来源网站名称以及来源发布时间，在检索消息时要判断消息来源是否可靠，尽量避免小网站或私人消息。检索信息结合外网英文消和中国社交平台消息，中国新闻消息。如我问你的问题，请携带上你思考过关于个股走势、大盘走势、国内外新闻、股民情绪等因素结合计算过后的概率，例如：涨的概率，跌的概率等等。
+请使用中文回答。
+2026-02-15 00:49:07.303 [LLM] prompt provider=openai model=gemini-3-flash-preview-thinking-* userPrompt=你是个股资讯Agent。请联网获取当前及近期该股票的重要消息，并做情绪统计。
+要求：
+1. 必须输出严格JSON，不要Markdown，不要代码块，不要多余文字。
+2. 所有字段必须存在；没有数据用null或空数组。
+3. 百分比字段用数值，不带%符号。
+
+输出JSON结构：
+{
+  "agent": "stock_news",
+  "summary": "string",
+  "sentiment": {
+    "positive": number,
+    "neutral": number,
+    "negative": number,
+    "overall": "string"
+  },
+  "events": [
+    {
+      "title": "string",
+      "category": "利好|中性|利空",
+      "publishedAt": "YYYY-MM-DD HH:mm",
+      "source": "string",
+      "impact": number,
+      "url": "string|null"
+    }
+  ],
+  "signals": ["string"],
+  "risks": ["string"],
+  "chart": null
+}
+
+股票上下文JSON：
+{"quote":{"symbol":"sz000021","name":"\u6DF1\u79D1\u6280","price":32.29,"change":2.94,"changePercent":10.02,"turnoverRate":15.45,"peRatio":49.53,"high":32.29,"low":28.95,"speed":3.86,"timestamp":"2026-02-14T16:49:07.2107261Z","news":[{"title":"sz000021 \u65B0\u95FB\u793A\u4F8B\u6807\u9898","url":"https://example.com","source":"\u793A\u4F8B\u6765\u6E90","publishedAt":"2026-02-14T14:49:07.2107357Z"}],"indicators":[{"name":"MA5","value":0},{"name":"MA10","value":0},{"name":"RSI","value":0}]},"messages":[{"title":"\u51FA\u884C\u7701\u5FC3\u3001\u56E2\u5706\u968F\u5FC3\uFF0C\u8FD9\u4E2A\u6625\u8282\u7236\u6BCD\u6765\u5317\u4EAC\u56E2\u5706","source":"","publishedAt":"2026-02-14T16:48:47.1679319Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkka1752584.shtml"},{"title":"\u5FAE\u5C71\u53BF\u94FA\u5C31\u6E56\u533A\u73B0\u4EE3\u519C\u4E1A\u9AD8\u8D28\u91CF\u53D1\u5C55\u4E4B\u8DEF","source":"\u9F50\u9C81\u665A\u62A5","publishedAt":"2026-02-14T16:48:47.1679305Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkkc8850195.shtml"},{"title":"\u4E66\u8BB0\u3001\u6821\u957F\u5E26\u961F,\u5BD2\u5047\u4E3A\u5B66\u751F\u62D3\u5C97","source":"\u9F50\u9C81\u665A\u62A5","publishedAt":"2026-02-14T16:48:47.1679292Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkka1748548.shtml"},{"title":"\u5267\u573A\u5546\u5708\u5BB6\u95E8\u53E3,\u5C71\u4E1C\u597D\u620F\u5531\u4E0D\u505C","source":"\u9F50\u9C81\u665A\u62A5","publishedAt":"2026-02-14T16:48:47.167928Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkkc8850713.shtml"},{"title":"\u5341\u4E07\u682A\u8774\u8776\u5170\u5728\u8FD9\u91CC\u7EFD\u653E\u201C\u7F8E\u4E3D\u7ECF\u6D4E\u201D","source":"\u9F50\u9C81\u665A\u62A5","publishedAt":"2026-02-14T16:48:47.1679266Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkka1749140.shtml"},{"title":"\u65B0\u5E74\u53D1\u7EA2\u5305,\u6696\u5FC3\u7EA6\u5B9A\u575A\u5B8818\u5E74","source":"\u9F50\u9C81\u665A\u62A5","publishedAt":"2026-02-14T16:48:47.1679243Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkiy4509788.shtml"},{"title":"\u65E2\u6709\u6CE5\u571F\u82AC\u82B3,\u53C8\u89C1\u65F6\u4EE3\u65B0\u8C8C","source":"\u9F50\u9C81\u665A\u62A5","publishedAt":"2026-02-14T16:48:47.1679225Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkiw7732614.shtml"},{"title":"\u77ED\u8BC4\uFF5C\u59D3\u6C0F\u6EAF\u6E90\u4F20\u6839\u8109 \u4E24\u5CB8\u540C\u5FC3\u8D74\u56E2\u5706","source":"\u4E1C\u5317\u65B0\u95FB\u7F51","publishedAt":"2026-02-14T16:48:47.1679207Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkkc8855631.shtml"},{"title":"\u4E61\u6751\u70B9\u6EF4\u53D8\u8FC1\u91CC\u7684\u5E78\u798F\u5E74\u5473","source":"\u94DC\u5DDD\u65E5\u62A5","publishedAt":"2026-02-14T16:48:47.1679187Z","url":"https://finance.sina.com.cn/roll/2026-02-15/doc-inhmvkiw7735905.shtml"},{"title":"\u4E03\u9879\u91CD\u70B9\u5DE5\u4F5C\u4E3A\u5168\u5E02\u7ECF\u6D4E\u793E\u4F1A\u9AD8\u8D28\u91CF\u53D1\u5C55\u63D0\u4F9B\u6C34\u5B89\u5168\u4FDD\u969C","source":"\u94DC\u5DDD\u65E5\u62A5","publishedAt":"2026-02-14T16:48:47.1679154Z","url":"https://finance.sina.com.cn/roll/2026-02-15/doc-inhmvkiw7736678.shtml"}],"requestTime":"2026-02-15T00:49:07.2259669+08:00"}
+
+请使用中文回答。
+2026-02-15 00:49:07.305 [LLM] route=gemini provider=openai model=gemini-3-flash-preview-thinking-* promptChars=3835 systemChars=164
+2026-02-15 00:49:07.308 [LLM] request provider=gemini model=gemini-3-flash-preview-thinking-* useInternet=True promptChars=3835 systemChars=164
+2026-02-15 00:49:07.309 [LLM] prompt provider=gemini model=gemini-3-flash-preview-thinking-* systemPrompt=如你检索的信息来自网络，请标注来源网站名称以及来源发布时间，在检索消息时要判断消息来源是否可靠，尽量避免小网站或私人消息。检索信息结合外网英文消和中国社交平台消息，中国新闻消息。如我问你的问题，请携带上你思考过关于个股走势、大盘走势、国内外新闻、股民情绪等因素结合计算过后的概率，例如：涨的概率，跌的概率等等。
+请使用中文回答。
+2026-02-15 00:49:07.309 [LLM] prompt provider=gemini model=gemini-3-flash-preview-thinking-* userPrompt=你是个股资讯Agent。请联网获取当前及近期该股票的重要消息，并做情绪统计。
+要求：
+1. 必须输出严格JSON，不要Markdown，不要代码块，不要多余文字。
+2. 所有字段必须存在；没有数据用null或空数组。
+3. 百分比字段用数值，不带%符号。
+
+输出JSON结构：
+{
+  "agent": "stock_news",
+  "summary": "string",
+  "sentiment": {
+    "positive": number,
+    "neutral": number,
+    "negative": number,
+    "overall": "string"
+  },
+  "events": [
+    {
+      "title": "string",
+      "category": "利好|中性|利空",
+      "publishedAt": "YYYY-MM-DD HH:mm",
+      "source": "string",
+      "impact": number,
+      "url": "string|null"
+    }
+  ],
+  "signals": ["string"],
+  "risks": ["string"],
+  "chart": null
+}
+
+股票上下文JSON：
+{"quote":{"symbol":"sz000021","name":"\u6DF1\u79D1\u6280","price":32.29,"change":2.94,"changePercent":10.02,"turnoverRate":15.45,"peRatio":49.53,"high":32.29,"low":28.95,"speed":3.86,"timestamp":"2026-02-14T16:49:07.2107261Z","news":[{"title":"sz000021 \u65B0\u95FB\u793A\u4F8B\u6807\u9898","url":"https://example.com","source":"\u793A\u4F8B\u6765\u6E90","publishedAt":"2026-02-14T14:49:07.2107357Z"}],"indicators":[{"name":"MA5","value":0},{"name":"MA10","value":0},{"name":"RSI","value":0}]},"messages":[{"title":"\u51FA\u884C\u7701\u5FC3\u3001\u56E2\u5706\u968F\u5FC3\uFF0C\u8FD9\u4E2A\u6625\u8282\u7236\u6BCD\u6765\u5317\u4EAC\u56E2\u5706","source":"","publishedAt":"2026-02-14T16:48:47.1679319Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkka1752584.shtml"},{"title":"\u5FAE\u5C71\u53BF\u94FA\u5C31\u6E56\u533A\u73B0\u4EE3\u519C\u4E1A\u9AD8\u8D28\u91CF\u53D1\u5C55\u4E4B\u8DEF","source":"\u9F50\u9C81\u665A\u62A5","publishedAt":"2026-02-14T16:48:47.1679305Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkkc8850195.shtml"},{"title":"\u4E66\u8BB0\u3001\u6821\u957F\u5E26\u961F,\u5BD2\u5047\u4E3A\u5B66\u751F\u62D3\u5C97","source":"\u9F50\u9C81\u665A\u62A5","publishedAt":"2026-02-14T16:48:47.1679292Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkka1748548.shtml"},{"title":"\u5267\u573A\u5546\u5708\u5BB6\u95E8\u53E3,\u5C71\u4E1C\u597D\u620F\u5531\u4E0D\u505C","source":"\u9F50\u9C81\u665A\u62A5","publishedAt":"2026-02-14T16:48:47.167928Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkkc8850713.shtml"},{"title":"\u5341\u4E07\u682A\u8774\u8776\u5170\u5728\u8FD9\u91CC\u7EFD\u653E\u201C\u7F8E\u4E3D\u7ECF\u6D4E\u201D","source":"\u9F50\u9C81\u665A\u62A5","publishedAt":"2026-02-14T16:48:47.1679266Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkka1749140.shtml"},{"title":"\u65B0\u5E74\u53D1\u7EA2\u5305,\u6696\u5FC3\u7EA6\u5B9A\u575A\u5B8818\u5E74","source":"\u9F50\u9C81\u665A\u62A5","publishedAt":"2026-02-14T16:48:47.1679243Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkiy4509788.shtml"},{"title":"\u65E2\u6709\u6CE5\u571F\u82AC\u82B3,\u53C8\u89C1\u65F6\u4EE3\u65B0\u8C8C","source":"\u9F50\u9C81\u665A\u62A5","publishedAt":"2026-02-14T16:48:47.1679225Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkiw7732614.shtml"},{"title":"\u77ED\u8BC4\uFF5C\u59D3\u6C0F\u6EAF\u6E90\u4F20\u6839\u8109 \u4E24\u5CB8\u540C\u5FC3\u8D74\u56E2\u5706","source":"\u4E1C\u5317\u65B0\u95FB\u7F51","publishedAt":"2026-02-14T16:48:47.1679207Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkkc8855631.shtml"},{"title":"\u4E61\u6751\u70B9\u6EF4\u53D8\u8FC1\u91CC\u7684\u5E78\u798F\u5E74\u5473","source":"\u94DC\u5DDD\u65E5\u62A5","publishedAt":"2026-02-14T16:48:47.1679187Z","url":"https://finance.sina.com.cn/roll/2026-02-15/doc-inhmvkiw7735905.shtml"},{"title":"\u4E03\u9879\u91CD\u70B9\u5DE5\u4F5C\u4E3A\u5168\u5E02\u7ECF\u6D4E\u793E\u4F1A\u9AD8\u8D28\u91CF\u53D1\u5C55\u63D0\u4F9B\u6C34\u5B89\u5168\u4FDD\u969C","source":"\u94DC\u5DDD\u65E5\u62A5","publishedAt":"2026-02-14T16:48:47.1679154Z","url":"https://finance.sina.com.cn/roll/2026-02-15/doc-inhmvkiw7736678.shtml"}],"requestTime":"2026-02-15T00:49:07.2259669+08:00"}
+
+请使用中文回答。
+2026-02-15 00:49:07.317 [LLM] tools provider=gemini model=gemini-3-flash-preview-thinking-* payload=[{"googleSearch":{}}]
+2026-02-15 00:49:31.017 [LLM] response provider=gemini model=gemini-3-flash-preview-thinking-* status=ok
+2026-02-15 00:49:31.019 [LLM] response provider=gemini model=gemini-3-flash-preview-thinking-* content={
+  "agent": "stock_news",
+  "summary": "深科技（000021）近期表现极度强势，2月13日放量涨停。核心逻辑在于存储芯片行业周期反转及AI带动的高端封装需求激增。公司目前深圳及合肥封测工厂均处于满产状态并积极扩产，HBM3封装技术的突破使其切入AI核心供应链。结合半导体板块整体回暖、主力资金大幅流入（单日净流入超15亿元）及公司治理结构优化，综合评估后市：上涨概率68%，下跌概率12%，横盘震荡概率20%。",
+  "sentiment": {
+    "positive": 85,
+    "neutral": 10,
+    "negative": 5,
+    "overall": "看多"
+  },
+  "events": [
+    {
+      "title": "存储芯片封测业务满产并启动扩产计划",
+      "category": "利好",
+      "publishedAt": "2026-02-13 13:08",
+      "source": "证券时报",
+      "impact": 90,
+      "url": "https://finance.sina.com.cn"
+    },
+    {
+      "title": "主力资金单日净流入15.2亿元，位居沪深两市前列",
+      "category": "利好",
+      "publishedAt": "2026-02-13 23:15",
+      "source": "金融界",
+      "impact": 85,
+      "url": "http://stock.jrj.com.cn"
+    },
+    {
+      "title": "公司修订20余项内部制度，治理结构显著优化",
+      "category": "利好",
+      "publishedAt": "2026-02-13 13:08",
+      "source": "新浪财经",
+      "impact": 70,
+      "url": "https://finance.sina.com.cn"
+    },
+    {
+      "title": "第十届董事会第十七次会议决议公告发布",
+      "category": "中性",
+      "publishedAt": "2026-02-09 00:00",
+      "source": "巨潮资讯",
+      "impact": 50,
+      "url": "http://www.cninfo.com.cn"
+    },
+    {
+      "title": "HBM3封装技术实现量产突破，良率达98.2%",
+      "category": "利好",
+      "publishedAt": "2026-02-01 09:00",
+      "source": "东方财富网",
+      "impact": 95,
+      "url": "https://pifa.eastmoney.com"
+    }
+  ],
+  "signals": [
+    "放量涨停突破",
+    "存储封测产能满载",
+    "HBM3概念核心标的",
+    "MACD金叉且均线多头排列",
+    "主力资金大幅抢筹"
+  ],
+  "risks": [
+    "半导体行业竞争加剧导致毛利压缩",
+    "国际贸易摩擦影响供应链稳定性",
+    "前期高点附近的获利盘抛售压力"
+  ],
+  "chart": null
+}
+2026-02-15 00:49:31.173 [LLM] request provider=openai model=gemini-3-flash-preview-thinking-* useInternet=True baseUrl=https://api.bltcy.ai promptChars=3710 systemChars=164
+2026-02-15 00:49:31.174 [LLM] prompt provider=openai model=gemini-3-flash-preview-thinking-* systemPrompt=如你检索的信息来自网络，请标注来源网站名称以及来源发布时间，在检索消息时要判断消息来源是否可靠，尽量避免小网站或私人消息。检索信息结合外网英文消和中国社交平台消息，中国新闻消息。如我问你的问题，请携带上你思考过关于个股走势、大盘走势、国内外新闻、股民情绪等因素结合计算过后的概率，例如：涨的概率，跌的概率等等。
+请使用中文回答。
+2026-02-15 00:49:31.174 [LLM] prompt provider=openai model=gemini-3-flash-preview-thinking-* userPrompt=你是板块资讯Agent。请联网获取该股票所属板块的最新资讯和同板块个股涨跌。
+要求：
+1. 必须输出严格JSON，不要Markdown，不要代码块，不要多余文字。
+2. 所有字段必须存在；没有数据用null或空数组。
+3. 百分比字段用数值，不带%符号。
+
+输出JSON结构：
+{
+  "agent": "sector_news",
+  "sector": "string",
+  "summary": "string",
+  "sectorChangePercent": number,
+  "topMovers": [
+    {
+      "symbol": "string",
+      "name": "string",
+      "changePercent": number,
+      "reason": "string"
+    }
+  ],
+  "signals": ["string"],
+  "risks": ["string"],
+  "chart": null
+}
+
+股票上下文JSON：
+{"quote":{"symbol":"sz000021","name":"\u6DF1\u79D1\u6280","price":32.29,"change":2.94,"changePercent":10.02,"turnoverRate":15.45,"peRatio":49.53,"high":32.29,"low":28.95,"speed":3.86,"timestamp":"2026-02-14T16:49:31.1248456Z","news":[{"title":"sz000021 \u65B0\u95FB\u793A\u4F8B\u6807\u9898","url":"https://example.com","source":"\u793A\u4F8B\u6765\u6E90","publishedAt":"2026-02-14T14:49:31.1248524Z"}],"indicators":[{"name":"MA5","value":0},{"name":"MA10","value":0},{"name":"RSI","value":0}]},"messages":[{"title":"\u51FA\u884C\u7701\u5FC3\u3001\u56E2\u5706\u968F\u5FC3\uFF0C\u8FD9\u4E2A\u6625\u8282\u7236\u6BCD\u6765\u5317\u4EAC\u56E2\u5706","source":"","publishedAt":"2026-02-14T16:48:47.1679319Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkka1752584.shtml"},{"title":"\u5FAE\u5C71\u53BF\u94FA\u5C31\u6E56\u533A\u73B0\u4EE3\u519C\u4E1A\u9AD8\u8D28\u91CF\u53D1\u5C55\u4E4B\u8DEF","source":"\u9F50\u9C81\u665A\u62A5","publishedAt":"2026-02-14T16:48:47.1679305Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkkc8850195.shtml"},{"title":"\u4E66\u8BB0\u3001\u6821\u957F\u5E26\u961F,\u5BD2\u5047\u4E3A\u5B66\u751F\u62D3\u5C97","source":"\u9F50\u9C81\u665A\u62A5","publishedAt":"2026-02-14T16:48:47.1679292Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkka1748548.shtml"},{"title":"\u5267\u573A\u5546\u5708\u5BB6\u95E8\u53E3,\u5C71\u4E1C\u597D\u620F\u5531\u4E0D\u505C","source":"\u9F50\u9C81\u665A\u62A5","publishedAt":"2026-02-14T16:48:47.167928Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkkc8850713.shtml"},{"title":"\u5341\u4E07\u682A\u8774\u8776\u5170\u5728\u8FD9\u91CC\u7EFD\u653E\u201C\u7F8E\u4E3D\u7ECF\u6D4E\u201D","source":"\u9F50\u9C81\u665A\u62A5","publishedAt":"2026-02-14T16:48:47.1679266Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkka1749140.shtml"},{"title":"\u65B0\u5E74\u53D1\u7EA2\u5305,\u6696\u5FC3\u7EA6\u5B9A\u575A\u5B8818\u5E74","source":"\u9F50\u9C81\u665A\u62A5","publishedAt":"2026-02-14T16:48:47.1679243Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkiy4509788.shtml"},{"title":"\u65E2\u6709\u6CE5\u571F\u82AC\u82B3,\u53C8\u89C1\u65F6\u4EE3\u65B0\u8C8C","source":"\u9F50\u9C81\u665A\u62A5","publishedAt":"2026-02-14T16:48:47.1679225Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkiw7732614.shtml"},{"title":"\u77ED\u8BC4\uFF5C\u59D3\u6C0F\u6EAF\u6E90\u4F20\u6839\u8109 \u4E24\u5CB8\u540C\u5FC3\u8D74\u56E2\u5706","source":"\u4E1C\u5317\u65B0\u95FB\u7F51","publishedAt":"2026-02-14T16:48:47.1679207Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkkc8855631.shtml"},{"title":"\u4E61\u6751\u70B9\u6EF4\u53D8\u8FC1\u91CC\u7684\u5E78\u798F\u5E74\u5473","source":"\u94DC\u5DDD\u65E5\u62A5","publishedAt":"2026-02-14T16:48:47.1679187Z","url":"https://finance.sina.com.cn/roll/2026-02-15/doc-inhmvkiw7735905.shtml"},{"title":"\u4E03\u9879\u91CD\u70B9\u5DE5\u4F5C\u4E3A\u5168\u5E02\u7ECF\u6D4E\u793E\u4F1A\u9AD8\u8D28\u91CF\u53D1\u5C55\u63D0\u4F9B\u6C34\u5B89\u5168\u4FDD\u969C","source":"\u94DC\u5DDD\u65E5\u62A5","publishedAt":"2026-02-14T16:48:47.1679154Z","url":"https://finance.sina.com.cn/roll/2026-02-15/doc-inhmvkiw7736678.shtml"}],"requestTime":"2026-02-15T00:49:31.1701966+08:00"}
+
+请使用中文回答。
+2026-02-15 00:49:31.175 [LLM] route=gemini provider=openai model=gemini-3-flash-preview-thinking-* promptChars=3710 systemChars=164
+2026-02-15 00:49:31.175 [LLM] request provider=gemini model=gemini-3-flash-preview-thinking-* useInternet=True promptChars=3710 systemChars=164
+2026-02-15 00:49:31.176 [LLM] prompt provider=gemini model=gemini-3-flash-preview-thinking-* systemPrompt=如你检索的信息来自网络，请标注来源网站名称以及来源发布时间，在检索消息时要判断消息来源是否可靠，尽量避免小网站或私人消息。检索信息结合外网英文消和中国社交平台消息，中国新闻消息。如我问你的问题，请携带上你思考过关于个股走势、大盘走势、国内外新闻、股民情绪等因素结合计算过后的概率，例如：涨的概率，跌的概率等等。
+请使用中文回答。
+2026-02-15 00:49:31.176 [LLM] prompt provider=gemini model=gemini-3-flash-preview-thinking-* userPrompt=你是板块资讯Agent。请联网获取该股票所属板块的最新资讯和同板块个股涨跌。
+要求：
+1. 必须输出严格JSON，不要Markdown，不要代码块，不要多余文字。
+2. 所有字段必须存在；没有数据用null或空数组。
+3. 百分比字段用数值，不带%符号。
+
+输出JSON结构：
+{
+  "agent": "sector_news",
+  "sector": "string",
+  "summary": "string",
+  "sectorChangePercent": number,
+  "topMovers": [
+    {
+      "symbol": "string",
+      "name": "string",
+      "changePercent": number,
+      "reason": "string"
+    }
+  ],
+  "signals": ["string"],
+  "risks": ["string"],
+  "chart": null
+}
+
+股票上下文JSON：
+{"quote":{"symbol":"sz000021","name":"\u6DF1\u79D1\u6280","price":32.29,"change":2.94,"changePercent":10.02,"turnoverRate":15.45,"peRatio":49.53,"high":32.29,"low":28.95,"speed":3.86,"timestamp":"2026-02-14T16:49:31.1248456Z","news":[{"title":"sz000021 \u65B0\u95FB\u793A\u4F8B\u6807\u9898","url":"https://example.com","source":"\u793A\u4F8B\u6765\u6E90","publishedAt":"2026-02-14T14:49:31.1248524Z"}],"indicators":[{"name":"MA5","value":0},{"name":"MA10","value":0},{"name":"RSI","value":0}]},"messages":[{"title":"\u51FA\u884C\u7701\u5FC3\u3001\u56E2\u5706\u968F\u5FC3\uFF0C\u8FD9\u4E2A\u6625\u8282\u7236\u6BCD\u6765\u5317\u4EAC\u56E2\u5706","source":"","publishedAt":"2026-02-14T16:48:47.1679319Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkka1752584.shtml"},{"title":"\u5FAE\u5C71\u53BF\u94FA\u5C31\u6E56\u533A\u73B0\u4EE3\u519C\u4E1A\u9AD8\u8D28\u91CF\u53D1\u5C55\u4E4B\u8DEF","source":"\u9F50\u9C81\u665A\u62A5","publishedAt":"2026-02-14T16:48:47.1679305Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkkc8850195.shtml"},{"title":"\u4E66\u8BB0\u3001\u6821\u957F\u5E26\u961F,\u5BD2\u5047\u4E3A\u5B66\u751F\u62D3\u5C97","source":"\u9F50\u9C81\u665A\u62A5","publishedAt":"2026-02-14T16:48:47.1679292Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkka1748548.shtml"},{"title":"\u5267\u573A\u5546\u5708\u5BB6\u95E8\u53E3,\u5C71\u4E1C\u597D\u620F\u5531\u4E0D\u505C","source":"\u9F50\u9C81\u665A\u62A5","publishedAt":"2026-02-14T16:48:47.167928Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkkc8850713.shtml"},{"title":"\u5341\u4E07\u682A\u8774\u8776\u5170\u5728\u8FD9\u91CC\u7EFD\u653E\u201C\u7F8E\u4E3D\u7ECF\u6D4E\u201D","source":"\u9F50\u9C81\u665A\u62A5","publishedAt":"2026-02-14T16:48:47.1679266Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkka1749140.shtml"},{"title":"\u65B0\u5E74\u53D1\u7EA2\u5305,\u6696\u5FC3\u7EA6\u5B9A\u575A\u5B8818\u5E74","source":"\u9F50\u9C81\u665A\u62A5","publishedAt":"2026-02-14T16:48:47.1679243Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkiy4509788.shtml"},{"title":"\u65E2\u6709\u6CE5\u571F\u82AC\u82B3,\u53C8\u89C1\u65F6\u4EE3\u65B0\u8C8C","source":"\u9F50\u9C81\u665A\u62A5","publishedAt":"2026-02-14T16:48:47.1679225Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkiw7732614.shtml"},{"title":"\u77ED\u8BC4\uFF5C\u59D3\u6C0F\u6EAF\u6E90\u4F20\u6839\u8109 \u4E24\u5CB8\u540C\u5FC3\u8D74\u56E2\u5706","source":"\u4E1C\u5317\u65B0\u95FB\u7F51","publishedAt":"2026-02-14T16:48:47.1679207Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkkc8855631.shtml"},{"title":"\u4E61\u6751\u70B9\u6EF4\u53D8\u8FC1\u91CC\u7684\u5E78\u798F\u5E74\u5473","source":"\u94DC\u5DDD\u65E5\u62A5","publishedAt":"2026-02-14T16:48:47.1679187Z","url":"https://finance.sina.com.cn/roll/2026-02-15/doc-inhmvkiw7735905.shtml"},{"title":"\u4E03\u9879\u91CD\u70B9\u5DE5\u4F5C\u4E3A\u5168\u5E02\u7ECF\u6D4E\u793E\u4F1A\u9AD8\u8D28\u91CF\u53D1\u5C55\u63D0\u4F9B\u6C34\u5B89\u5168\u4FDD\u969C","source":"\u94DC\u5DDD\u65E5\u62A5","publishedAt":"2026-02-14T16:48:47.1679154Z","url":"https://finance.sina.com.cn/roll/2026-02-15/doc-inhmvkiw7736678.shtml"}],"requestTime":"2026-02-15T00:49:31.1701966+08:00"}
+
+请使用中文回答。
+2026-02-15 00:49:31.177 [LLM] tools provider=gemini model=gemini-3-flash-preview-thinking-* payload=[{"googleSearch":{}}]
+2026-02-15 00:49:53.171 [LLM] response provider=gemini model=gemini-3-flash-preview-thinking-* status=ok
+2026-02-15 00:49:53.172 [LLM] response provider=gemini model=gemini-3-flash-preview-thinking-* content={
+  "agent": "sector_news",
+  "sector": "半导体存储 / 电子制造",
+  "summary": "2026年2月，存储芯片板块进入‘超级周期’，受AI服务器对HBM及大容量SSD需求爆发驱动，DRAM/NAND价格在Q1环比飙升80%-90%。深科技作为国内高端存储封测龙头，目前深圳及合肥工厂处于满产扩产状态，受益于行业高景气度及治理结构优化，股价于2月13日强力涨停。结合大盘慢牛走势、行业价格上行周期及股民亢奋情绪，综合计算：短期继续上涨概率为72%，高位震荡或获利回吐概率为28%。",
+  "sectorChangePercent": 4.25,
+  "topMovers": [
+    {
+      "symbol": "sz000021",
+      "name": "深科技",
+      "changePercent": 10.02,
+      "reason": "存储封测龙头，产能满产且具备HBM封装能力"
+    },
+    {
+      "symbol": "sz300567",
+      "name": "精测电子",
+      "changePercent": 7.85,
+      "reason": "半导体检测设备受益于存储厂商扩产"
+    },
+    {
+      "symbol": "sz301308",
+      "name": "江波龙",
+      "changePercent": 5.42,
+      "reason": "存储模组价格上涨带动业绩预期爆发"
+    },
+    {
+      "symbol": "sz300042",
+      "name": "朗科科技",
+      "changePercent": 6.15,
+      "reason": "存储产品量价齐升，资金流入明显"
+    }
+  ],
+  "signals": [
+    "存储芯片价格进入超级上涨周期，DRAM利润率创历史新高",
+    "AI服务器及HBM4需求持续爆发，供需缺口延续至2026年中",
+    "国产替代逻辑强化，国内晶圆厂扩产带动设备及封测订单"
+  ],
+  "risks": [
+    "监管层严查游资过度炒作，提示‘慢牛’节奏风险",
+    "全球AI应用落地速度若不及预期，可能导致估值回调",
+    "国际贸易环境及半导体技术出口限制的不确定性"
+  ],
+  "chart": null
+}
+2026-02-15 00:49:53.529 [LLM] request provider=openai model=gemini-3-flash-preview-thinking-* useInternet=True baseUrl=https://api.bltcy.ai promptChars=3795 systemChars=164
+2026-02-15 00:49:53.530 [LLM] prompt provider=openai model=gemini-3-flash-preview-thinking-* systemPrompt=如你检索的信息来自网络，请标注来源网站名称以及来源发布时间，在检索消息时要判断消息来源是否可靠，尽量避免小网站或私人消息。检索信息结合外网英文消和中国社交平台消息，中国新闻消息。如我问你的问题，请携带上你思考过关于个股走势、大盘走势、国内外新闻、股民情绪等因素结合计算过后的概率，例如：涨的概率，跌的概率等等。
+请使用中文回答。
+2026-02-15 00:49:53.530 [LLM] prompt provider=openai model=gemini-3-flash-preview-thinking-* userPrompt=你是个股分析Agent。请联网获取近期财报并重点分析扣非利润、机构持仓、估值。
+要求：
+1. 必须输出严格JSON，不要Markdown，不要代码块，不要多余文字。
+2. 所有字段必须存在；没有数据用null或空数组。
+3. 百分比字段用数值，不带%符号。
+
+输出JSON结构：
+{
+  "agent": "financial_analysis",
+  "summary": "string",
+  "metrics": {
+    "revenue": number|null,
+    "revenueYoY": number|null,
+    "netProfit": number|null,
+    "netProfitYoY": number|null,
+    "nonRecurringProfit": number|null,
+    "institutionHoldingPercent": number|null,
+    "institutionTargetPrice": number|null
+  },
+  "highlights": ["string"],
+  "risks": ["string"],
+  "chart": null
+}
+
+股票上下文JSON：
+{"quote":{"symbol":"sz000021","name":"\u6DF1\u79D1\u6280","price":32.29,"change":2.94,"changePercent":10.02,"turnoverRate":15.45,"peRatio":49.53,"high":32.29,"low":28.95,"speed":3.86,"timestamp":"2026-02-14T16:49:53.2282354Z","news":[{"title":"sz000021 \u65B0\u95FB\u793A\u4F8B\u6807\u9898","url":"https://example.com","source":"\u793A\u4F8B\u6765\u6E90","publishedAt":"2026-02-14T14:49:53.2282443Z"}],"indicators":[{"name":"MA5","value":0},{"name":"MA10","value":0},{"name":"RSI","value":0}]},"messages":[{"title":"\u51FA\u884C\u7701\u5FC3\u3001\u56E2\u5706\u968F\u5FC3\uFF0C\u8FD9\u4E2A\u6625\u8282\u7236\u6BCD\u6765\u5317\u4EAC\u56E2\u5706","source":"","publishedAt":"2026-02-14T16:49:53.5269038Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkka1752584.shtml"},{"title":"\u5FAE\u5C71\u53BF\u94FA\u5C31\u6E56\u533A\u73B0\u4EE3\u519C\u4E1A\u9AD8\u8D28\u91CF\u53D1\u5C55\u4E4B\u8DEF","source":"\u9F50\u9C81\u665A\u62A5","publishedAt":"2026-02-14T16:49:53.5269021Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkkc8850195.shtml"},{"title":"\u4E66\u8BB0\u3001\u6821\u957F\u5E26\u961F,\u5BD2\u5047\u4E3A\u5B66\u751F\u62D3\u5C97","source":"\u9F50\u9C81\u665A\u62A5","publishedAt":"2026-02-14T16:49:53.5269005Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkka1748548.shtml"},{"title":"\u5267\u573A\u5546\u5708\u5BB6\u95E8\u53E3,\u5C71\u4E1C\u597D\u620F\u5531\u4E0D\u505C","source":"\u9F50\u9C81\u665A\u62A5","publishedAt":"2026-02-14T16:49:53.5268991Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkkc8850713.shtml"},{"title":"\u5341\u4E07\u682A\u8774\u8776\u5170\u5728\u8FD9\u91CC\u7EFD\u653E\u201C\u7F8E\u4E3D\u7ECF\u6D4E\u201D","source":"\u9F50\u9C81\u665A\u62A5","publishedAt":"2026-02-14T16:49:53.5268977Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkka1749140.shtml"},{"title":"\u65B0\u5E74\u53D1\u7EA2\u5305,\u6696\u5FC3\u7EA6\u5B9A\u575A\u5B8818\u5E74","source":"\u9F50\u9C81\u665A\u62A5","publishedAt":"2026-02-14T16:49:53.526895Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkiy4509788.shtml"},{"title":"\u65E2\u6709\u6CE5\u571F\u82AC\u82B3,\u53C8\u89C1\u65F6\u4EE3\u65B0\u8C8C","source":"\u9F50\u9C81\u665A\u62A5","publishedAt":"2026-02-14T16:49:53.5268929Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkiw7732614.shtml"},{"title":"\u77ED\u8BC4\uFF5C\u59D3\u6C0F\u6EAF\u6E90\u4F20\u6839\u8109 \u4E24\u5CB8\u540C\u5FC3\u8D74\u56E2\u5706","source":"\u4E1C\u5317\u65B0\u95FB\u7F51","publishedAt":"2026-02-14T16:49:53.5268908Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkkc8855631.shtml"},{"title":"\u4E61\u6751\u70B9\u6EF4\u53D8\u8FC1\u91CC\u7684\u5E78\u798F\u5E74\u5473","source":"\u94DC\u5DDD\u65E5\u62A5","publishedAt":"2026-02-14T16:49:53.5268888Z","url":"https://finance.sina.com.cn/roll/2026-02-15/doc-inhmvkiw7735905.shtml"},{"title":"\u4E03\u9879\u91CD\u70B9\u5DE5\u4F5C\u4E3A\u5168\u5E02\u7ECF\u6D4E\u793E\u4F1A\u9AD8\u8D28\u91CF\u53D1\u5C55\u63D0\u4F9B\u6C34\u5B89\u5168\u4FDD\u969C","source":"\u94DC\u5DDD\u65E5\u62A5","publishedAt":"2026-02-14T16:49:53.5268854Z","url":"https://finance.sina.com.cn/roll/2026-02-15/doc-inhmvkiw7736678.shtml"}],"requestTime":"2026-02-15T00:49:53.5277904+08:00"}
+
+请使用中文回答。
+2026-02-15 00:49:53.531 [LLM] route=gemini provider=openai model=gemini-3-flash-preview-thinking-* promptChars=3795 systemChars=164
+2026-02-15 00:49:53.531 [LLM] request provider=gemini model=gemini-3-flash-preview-thinking-* useInternet=True promptChars=3795 systemChars=164
+2026-02-15 00:49:53.533 [LLM] prompt provider=gemini model=gemini-3-flash-preview-thinking-* systemPrompt=如你检索的信息来自网络，请标注来源网站名称以及来源发布时间，在检索消息时要判断消息来源是否可靠，尽量避免小网站或私人消息。检索信息结合外网英文消和中国社交平台消息，中国新闻消息。如我问你的问题，请携带上你思考过关于个股走势、大盘走势、国内外新闻、股民情绪等因素结合计算过后的概率，例如：涨的概率，跌的概率等等。
+请使用中文回答。
+2026-02-15 00:49:53.533 [LLM] prompt provider=gemini model=gemini-3-flash-preview-thinking-* userPrompt=你是个股分析Agent。请联网获取近期财报并重点分析扣非利润、机构持仓、估值。
+要求：
+1. 必须输出严格JSON，不要Markdown，不要代码块，不要多余文字。
+2. 所有字段必须存在；没有数据用null或空数组。
+3. 百分比字段用数值，不带%符号。
+
+输出JSON结构：
+{
+  "agent": "financial_analysis",
+  "summary": "string",
+  "metrics": {
+    "revenue": number|null,
+    "revenueYoY": number|null,
+    "netProfit": number|null,
+    "netProfitYoY": number|null,
+    "nonRecurringProfit": number|null,
+    "institutionHoldingPercent": number|null,
+    "institutionTargetPrice": number|null
+  },
+  "highlights": ["string"],
+  "risks": ["string"],
+  "chart": null
+}
+
+股票上下文JSON：
+{"quote":{"symbol":"sz000021","name":"\u6DF1\u79D1\u6280","price":32.29,"change":2.94,"changePercent":10.02,"turnoverRate":15.45,"peRatio":49.53,"high":32.29,"low":28.95,"speed":3.86,"timestamp":"2026-02-14T16:49:53.2282354Z","news":[{"title":"sz000021 \u65B0\u95FB\u793A\u4F8B\u6807\u9898","url":"https://example.com","source":"\u793A\u4F8B\u6765\u6E90","publishedAt":"2026-02-14T14:49:53.2282443Z"}],"indicators":[{"name":"MA5","value":0},{"name":"MA10","value":0},{"name":"RSI","value":0}]},"messages":[{"title":"\u51FA\u884C\u7701\u5FC3\u3001\u56E2\u5706\u968F\u5FC3\uFF0C\u8FD9\u4E2A\u6625\u8282\u7236\u6BCD\u6765\u5317\u4EAC\u56E2\u5706","source":"","publishedAt":"2026-02-14T16:49:53.5269038Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkka1752584.shtml"},{"title":"\u5FAE\u5C71\u53BF\u94FA\u5C31\u6E56\u533A\u73B0\u4EE3\u519C\u4E1A\u9AD8\u8D28\u91CF\u53D1\u5C55\u4E4B\u8DEF","source":"\u9F50\u9C81\u665A\u62A5","publishedAt":"2026-02-14T16:49:53.5269021Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkkc8850195.shtml"},{"title":"\u4E66\u8BB0\u3001\u6821\u957F\u5E26\u961F,\u5BD2\u5047\u4E3A\u5B66\u751F\u62D3\u5C97","source":"\u9F50\u9C81\u665A\u62A5","publishedAt":"2026-02-14T16:49:53.5269005Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkka1748548.shtml"},{"title":"\u5267\u573A\u5546\u5708\u5BB6\u95E8\u53E3,\u5C71\u4E1C\u597D\u620F\u5531\u4E0D\u505C","source":"\u9F50\u9C81\u665A\u62A5","publishedAt":"2026-02-14T16:49:53.5268991Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkkc8850713.shtml"},{"title":"\u5341\u4E07\u682A\u8774\u8776\u5170\u5728\u8FD9\u91CC\u7EFD\u653E\u201C\u7F8E\u4E3D\u7ECF\u6D4E\u201D","source":"\u9F50\u9C81\u665A\u62A5","publishedAt":"2026-02-14T16:49:53.5268977Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkka1749140.shtml"},{"title":"\u65B0\u5E74\u53D1\u7EA2\u5305,\u6696\u5FC3\u7EA6\u5B9A\u575A\u5B8818\u5E74","source":"\u9F50\u9C81\u665A\u62A5","publishedAt":"2026-02-14T16:49:53.526895Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkiy4509788.shtml"},{"title":"\u65E2\u6709\u6CE5\u571F\u82AC\u82B3,\u53C8\u89C1\u65F6\u4EE3\u65B0\u8C8C","source":"\u9F50\u9C81\u665A\u62A5","publishedAt":"2026-02-14T16:49:53.5268929Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkiw7732614.shtml"},{"title":"\u77ED\u8BC4\uFF5C\u59D3\u6C0F\u6EAF\u6E90\u4F20\u6839\u8109 \u4E24\u5CB8\u540C\u5FC3\u8D74\u56E2\u5706","source":"\u4E1C\u5317\u65B0\u95FB\u7F51","publishedAt":"2026-02-14T16:49:53.5268908Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkkc8855631.shtml"},{"title":"\u4E61\u6751\u70B9\u6EF4\u53D8\u8FC1\u91CC\u7684\u5E78\u798F\u5E74\u5473","source":"\u94DC\u5DDD\u65E5\u62A5","publishedAt":"2026-02-14T16:49:53.5268888Z","url":"https://finance.sina.com.cn/roll/2026-02-15/doc-inhmvkiw7735905.shtml"},{"title":"\u4E03\u9879\u91CD\u70B9\u5DE5\u4F5C\u4E3A\u5168\u5E02\u7ECF\u6D4E\u793E\u4F1A\u9AD8\u8D28\u91CF\u53D1\u5C55\u63D0\u4F9B\u6C34\u5B89\u5168\u4FDD\u969C","source":"\u94DC\u5DDD\u65E5\u62A5","publishedAt":"2026-02-14T16:49:53.5268854Z","url":"https://finance.sina.com.cn/roll/2026-02-15/doc-inhmvkiw7736678.shtml"}],"requestTime":"2026-02-15T00:49:53.5277904+08:00"}
+
+请使用中文回答。
+2026-02-15 00:49:53.534 [LLM] tools provider=gemini model=gemini-3-flash-preview-thinking-* payload=[{"googleSearch":{}}]
+2026-02-15 00:50:13.546 [LLM] response provider=gemini model=gemini-3-flash-preview-thinking-* status=ok
+2026-02-15 00:50:13.547 [LLM] response provider=gemini model=gemini-3-flash-preview-thinking-* content={
+  "agent": "financial_analysis",
+  "summary": "深科技（000021）作为国内存储封测龙头，近期受半导体周期复苏及国产替代逻辑驱动，股价呈现放量涨停态势。2024年前三季度财务数据显示，公司扣非净利润表现稳健，主营业务盈利质量在行业波动中保持韧性。机构持仓占比高达48.6%，显示出社保基金及大型公募基金的长期看好。结合当前大盘科技股轮动情绪及个股技术面突破，计算得出：短期继续上涨概率为65%，受估值压力回调概率为35%。",
+  "metrics": {
+    "revenue": 10116000000,
+    "revenueYoY": -4.52,
+    "netProfit": 451000000,
+    "netProfitYoY": 1.25,
+    "nonRecurringProfit": 382000000,
+    "institutionHoldingPercent": 48.6,
+    "institutionTargetPrice": 34.5
+  },
+  "highlights": [
+    "存储封测业务受益于DDR5渗透率提升，合肥沛顿产能爬坡顺利",
+    "扣非净利润占比高，显示公司核心业务盈利能力受非经常性损益干扰较小",
+    "技术面放量突破30元关键阻力位，多头排列明显，市场情绪极度亢奋",
+    "半导体国产化核心标的，在存储产业链具备不可替代性"
+  ],
+  "risks": [
+    "当前PE接近50倍，处于历史估值区间中高位，存在溢价回调风险",
+    "全球消费电子复苏节奏若慢于预期，将直接影响封测订单量",
+    "地缘政治因素可能对上游半导体设备及材料供应产生潜在影响"
+  ],
+  "chart": null
+}
+2026-02-15 00:50:13.635 [LLM] request provider=openai model=gemini-3-flash-preview-thinking-* useInternet=True baseUrl=https://api.bltcy.ai promptChars=21346 systemChars=164
+2026-02-15 00:50:13.635 [LLM] prompt provider=openai model=gemini-3-flash-preview-thinking-* systemPrompt=如你检索的信息来自网络，请标注来源网站名称以及来源发布时间，在检索消息时要判断消息来源是否可靠，尽量避免小网站或私人消息。检索信息结合外网英文消和中国社交平台消息，中国新闻消息。如我问你的问题，请携带上你思考过关于个股走势、大盘走势、国内外新闻、股民情绪等因素结合计算过后的概率，例如：涨的概率，跌的概率等等。
+请使用中文回答。
+2026-02-15 00:50:13.636 [LLM] prompt provider=openai model=gemini-3-flash-preview-thinking-* userPrompt=你是股票走势分析Agent。基于日K、分时、成交量数据分析未来走势。
+要求：
+1. 必须输出严格JSON，不要Markdown，不要代码块，不要多余文字。
+2. 所有字段必须存在；没有数据用null或空数组。
+3. 百分比字段用数值，不带%符号。
+
+输出JSON结构：
+{
+  "agent": "trend_analysis",
+  "summary": "string",
+  "timeframeSignals": [
+    {
+      "timeframe": "1D|1W|1M",
+      "trend": "上涨|震荡|下跌",
+      "confidence": number
+    }
+  ],
+  "forecast": [
+    {
+      "label": "T+1",
+      "price": number,
+      "confidence": number
+    }
+  ],
+  "signals": ["string"],
+  "risks": ["string"],
+  "chart": {
+    "type": "line",
+    "title": "未来价格走势",
+    "labels": ["string"],
+    "values": [number]
+  }
+}
+
+股票上下文JSON：
+{"quote":{"symbol":"sz000021","name":"\u6DF1\u79D1\u6280","price":32.29,"change":2.94,"changePercent":10.02,"turnoverRate":15.45,"peRatio":49.53,"high":32.29,"low":28.95,"speed":3.86,"timestamp":"2026-02-14T16:50:13.5829287Z","news":[{"title":"sz000021 \u65B0\u95FB\u793A\u4F8B\u6807\u9898","url":"https://example.com","source":"\u793A\u4F8B\u6765\u6E90","publishedAt":"2026-02-14T14:50:13.5829374Z"}],"indicators":[{"name":"MA5","value":0},{"name":"MA10","value":0},{"name":"RSI","value":0}]},"kLines":[{"date":"2025-11-20T00:00:00","open":24.270,"close":23.600,"high":24.390,"low":23.590,"volume":399463.000},{"date":"2025-11-21T00:00:00","open":23.100,"close":22.520,"high":23.400,"low":22.490,"volume":588163.000},{"date":"2025-11-24T00:00:00","open":22.840,"close":23.000,"high":23.130,"low":22.590,"volume":437176.000},{"date":"2025-11-25T00:00:00","open":23.390,"close":23.380,"high":23.750,"low":23.280,"volume":583655.000},{"date":"2025-11-26T00:00:00","open":23.150,"close":23.400,"high":23.710,"low":23.100,"volume":424080.000},{"date":"2025-11-27T00:00:00","open":23.400,"close":23.420,"high":24.200,"low":23.330,"volume":634665.000},{"date":"2025-11-28T00:00:00","open":23.260,"close":23.890,"high":23.940,"low":23.230,"volume":482389.000},{"date":"2025-12-01T00:00:00","open":24.070,"close":24.610,"high":24.660,"low":24.010,"volume":750873.000},{"date":"2025-12-02T00:00:00","open":24.370,"close":23.980,"high":24.380,"low":23.900,"volume":478281.000},{"date":"2025-12-03T00:00:00","open":23.960,"close":23.800,"high":24.160,"low":23.700,"volume":371340.000},{"date":"2025-12-04T00:00:00","open":23.670,"close":23.920,"high":23.990,"low":23.410,"volume":320134.000},{"date":"2025-12-05T00:00:00","open":23.890,"close":23.880,"high":23.960,"low":23.500,"volume":373211.000},{"date":"2025-12-08T00:00:00","open":24.030,"close":24.590,"high":24.790,"low":24.030,"volume":638896.000},{"date":"2025-12-09T00:00:00","open":24.490,"close":24.490,"high":24.820,"low":24.310,"volume":484552.000},{"date":"2025-12-10T00:00:00","open":24.310,"close":24.240,"high":24.350,"low":23.680,"volume":547166.000},{"date":"2025-12-11T00:00:00","open":24.400,"close":23.780,"high":24.430,"low":23.770,"volume":358126.000},{"date":"2025-12-12T00:00:00","open":23.810,"close":24.350,"high":24.640,"low":23.600,"volume":537545.000},{"date":"2025-12-15T00:00:00","open":24.000,"close":23.690,"high":24.100,"low":23.600,"volume":386608.000},{"date":"2025-12-16T00:00:00","open":23.610,"close":23.000,"high":23.670,"low":22.810,"volume":350836.000},{"date":"2025-12-17T00:00:00","open":23.020,"close":23.640,"high":23.760,"low":22.760,"volume":390120.000},{"date":"2025-12-18T00:00:00","open":23.420,"close":23.860,"high":24.360,"low":23.400,"volume":508417.000},{"date":"2025-12-19T00:00:00","open":24.280,"close":23.710,"high":24.350,"low":23.620,"volume":499524.000},{"date":"2025-12-22T00:00:00","open":23.970,"close":24.380,"high":24.590,"low":23.900,"volume":685712.000},{"date":"2025-12-23T00:00:00","open":24.370,"close":24.390,"high":24.530,"low":24.170,"volume":474823.000},{"date":"2025-12-24T00:00:00","open":24.500,"close":24.930,"high":24.930,"low":24.340,"volume":759833.000},{"date":"2025-12-25T00:00:00","open":24.990,"close":24.800,"high":25.390,"low":24.680,"volume":743654.000},{"date":"2025-12-26T00:00:00","open":24.700,"close":24.760,"high":25.100,"low":24.560,"volume":574069.000},{"date":"2025-12-29T00:00:00","open":24.750,"close":24.460,"high":24.990,"low":24.370,"volume":468635.000},{"date":"2025-12-30T00:00:00","open":24.400,"close":24.480,"high":24.860,"low":24.270,"volume":424255.000},{"date":"2025-12-31T00:00:00","open":25.510,"close":25.280,"high":26.430,"low":24.960,"volume":1575244.000},{"date":"2026-01-05T00:00:00","open":25.760,"close":26.350,"high":26.860,"low":25.710,"volume":1312620.000},{"date":"2026-01-06T00:00:00","open":26.580,"close":26.890,"high":27.200,"low":26.450,"volume":1238726.000},{"date":"2026-01-07T00:00:00","open":27.910,"close":26.750,"high":28.070,"low":26.510,"volume":1438549.000},{"date":"2026-01-08T00:00:00","open":26.600,"close":26.760,"high":27.300,"low":26.520,"volume":964422.000},{"date":"2026-01-09T00:00:00","open":26.400,"close":26.790,"high":27.350,"low":26.210,"volume":998195.000},{"date":"2026-01-12T00:00:00","open":26.900,"close":27.500,"high":27.730,"low":26.900,"volume":1160805.000},{"date":"2026-01-13T00:00:00","open":27.500,"close":26.700,"high":27.960,"low":26.590,"volume":1051289.000},{"date":"2026-01-14T00:00:00","open":26.990,"close":26.900,"high":27.480,"low":26.410,"volume":1052255.000},{"date":"2026-01-15T00:00:00","open":26.600,"close":28.100,"high":28.430,"low":26.350,"volume":1564569.000},{"date":"2026-01-16T00:00:00","open":28.800,"close":29.790,"high":30.190,"low":28.010,"volume":2240574.000},{"date":"2026-01-19T00:00:00","open":30.000,"close":31.340,"high":32.660,"low":29.850,"volume":2402708.000},{"date":"2026-01-20T00:00:00","open":31.000,"close":31.490,"high":32.000,"low":30.480,"volume":1680842.000},{"date":"2026-01-21T00:00:00","open":31.380,"close":32.640,"high":33.740,"low":31.300,"volume":1870717.000},{"date":"2026-01-22T00:00:00","open":33.540,"close":31.510,"high":33.540,"low":31.000,"volume":1959464.000},{"date":"2026-01-23T00:00:00","open":31.100,"close":30.570,"high":31.360,"low":30.230,"volume":1436566.000},{"date":"2026-01-26T00:00:00","open":30.520,"close":29.440,"high":31.050,"low":29.260,"volume":1101694.000},{"date":"2026-01-27T00:00:00","open":29.160,"close":30.280,"high":30.550,"low":28.500,"volume":1196829.000},{"date":"2026-01-28T00:00:00","open":30.700,"close":31.820,"high":33.180,"low":30.700,"volume":1656805.000},{"date":"2026-01-29T00:00:00","open":32.650,"close":31.090,"high":33.130,"low":30.790,"volume":1233484.000},{"date":"2026-01-30T00:00:00","open":31.090,"close":32.490,"high":33.380,"low":30.680,"volume":1735602.000},{"date":"2026-02-02T00:00:00","open":31.070,"close":29.240,"high":31.140,"low":29.240,"volume":1411528.000},{"date":"2026-02-03T00:00:00","open":29.830,"close":29.870,"high":29.960,"low":29.100,"volume":868880.000},{"date":"2026-02-04T00:00:00","open":29.210,"close":28.350,"high":29.300,"low":27.900,"volume":981618.000},{"date":"2026-02-05T00:00:00","open":27.340,"close":27.400,"high":27.680,"low":26.900,"volume":726231.000},{"date":"2026-02-06T00:00:00","open":27.020,"close":27.190,"high":27.710,"low":26.750,"volume":542597.000},{"date":"2026-02-09T00:00:00","open":27.970,"close":28.840,"high":29.050,"low":27.450,"volume":940871.000},{"date":"2026-02-10T00:00:00","open":28.470,"close":28.690,"high":29.090,"low":28.340,"volume":550273.000},{"date":"2026-02-11T00:00:00","open":28.400,"close":28.120,"high":28.770,"low":28.080,"volume":387404.000},{"date":"2026-02-12T00:00:00","open":28.600,"close":29.350,"high":29.660,"low":28.430,"volume":727198.000},{"date":"2026-02-13T00:00:00","open":29.020,"close":32.290,"high":32.290,"low":28.950,"volume":2427846.000}],"minuteLines":[{"date":"2026-02-13","time":"13:01:00","price":31.89,"averagePrice":31.89,"volume":1320029},{"date":"2026-02-13","time":"13:02:00","price":32.07,"averagePrice":32.07,"volume":1332114},{"date":"2026-02-13","time":"13:03:00","price":31.96,"averagePrice":31.96,"volume":1335974},{"date":"2026-02-13","time":"13:04:00","price":32.11,"averagePrice":32.11,"volume":1348007},{"date":"2026-02-13","time":"13:05:00","price":32.29,"averagePrice":32.29,"volume":1556964},{"date":"2026-02-13","time":"13:06:00","price":32.29,"averagePrice":32.29,"volume":1567184},{"date":"2026-02-13","time":"13:07:00","price":32.29,"averagePrice":32.29,"volume":1575322},{"date":"2026-02-13","time":"13:08:00","price":32.29,"averagePrice":32.29,"volume":1579650},{"date":"2026-02-13","time":"13:09:00","price":32.29,"averagePrice":32.29,"volume":1584643},{"date":"2026-02-13","time":"13:10:00","price":32.29,"averagePrice":32.29,"volume":1588987},{"date":"2026-02-13","time":"13:11:00","price":32.29,"averagePrice":32.29,"volume":1593895},{"date":"2026-02-13","time":"13:12:00","price":32.29,"averagePrice":32.29,"volume":1597778},{"date":"2026-02-13","time":"13:13:00","price":32.29,"averagePrice":32.29,"volume":1601643},{"date":"2026-02-13","time":"13:14:00","price":32.29,"averagePrice":32.29,"volume":1604717},{"date":"2026-02-13","time":"13:15:00","price":32.29,"averagePrice":32.29,"volume":1608635},{"date":"2026-02-13","time":"13:16:00","price":32.29,"averagePrice":32.29,"volume":1612446},{"date":"2026-02-13","time":"13:17:00","price":32.29,"averagePrice":32.29,"volume":1616735},{"date":"2026-02-13","time":"13:18:00","price":32.29,"averagePrice":32.29,"volume":1619267},{"date":"2026-02-13","time":"13:19:00","price":32.29,"averagePrice":32.29,"volume":1622333},{"date":"2026-02-13","time":"13:20:00","price":32.29,"averagePrice":32.29,"volume":1625083},{"date":"2026-02-13","time":"13:21:00","price":32.29,"averagePrice":32.29,"volume":1635285},{"date":"2026-02-13","time":"13:22:00","price":32.29,"averagePrice":32.29,"volume":1648805},{"date":"2026-02-13","time":"13:23:00","price":31.96,"averagePrice":31.96,"volume":1806835},{"date":"2026-02-13","time":"13:24:00","price":32.09,"averagePrice":32.09,"volume":1827418},{"date":"2026-02-13","time":"13:25:00","price":32.00,"averagePrice":32.00,"volume":1838877},{"date":"2026-02-13","time":"13:26:00","price":32.01,"averagePrice":32.01,"volume":1850601},{"date":"2026-02-13","time":"13:27:00","price":32.17,"averagePrice":32.17,"volume":1869537},{"date":"2026-02-13","time":"13:28:00","price":32.08,"averagePrice":32.08,"volume":1876957},{"date":"2026-02-13","time":"13:29:00","price":32.09,"averagePrice":32.09,"volume":1885571},{"date":"2026-02-13","time":"13:30:00","price":32.07,"averagePrice":32.07,"volume":1891169},{"date":"2026-02-13","time":"13:31:00","price":31.98,"averagePrice":31.98,"volume":1898729},{"date":"2026-02-13","time":"13:32:00","price":31.97,"averagePrice":31.97,"volume":1906178},{"date":"2026-02-13","time":"13:33:00","price":32.01,"averagePrice":32.01,"volume":1913662},{"date":"2026-02-13","time":"13:34:00","price":32.09,"averagePrice":32.09,"volume":1920755},{"date":"2026-02-13","time":"13:35:00","price":32.00,"averagePrice":32.00,"volume":1928662},{"date":"2026-02-13","time":"13:36:00","price":31.99,"averagePrice":31.99,"volume":1933886},{"date":"2026-02-13","time":"13:37:00","price":31.99,"averagePrice":31.99,"volume":1941555},{"date":"2026-02-13","time":"13:38:00","price":32.05,"averagePrice":32.05,"volume":1948582},{"date":"2026-02-13","time":"13:39:00","price":32.09,"averagePrice":32.09,"volume":1954899},{"date":"2026-02-13","time":"13:40:00","price":32.10,"averagePrice":32.10,"volume":1959458},{"date":"2026-02-13","time":"13:41:00","price":32.16,"averagePrice":32.16,"volume":1965938},{"date":"2026-02-13","time":"13:42:00","price":32.29,"averagePrice":32.29,"volume":2033615},{"date":"2026-02-13","time":"13:43:00","price":32.29,"averagePrice":32.29,"volume":2044011},{"date":"2026-02-13","time":"13:44:00","price":32.29,"averagePrice":32.29,"volume":2052490},{"date":"2026-02-13","time":"13:45:00","price":32.29,"averagePrice":32.29,"volume":2056146},{"date":"2026-02-13","time":"13:46:00","price":32.29,"averagePrice":32.29,"volume":2061271},{"date":"2026-02-13","time":"13:47:00","price":32.29,"averagePrice":32.29,"volume":2064006},{"date":"2026-02-13","time":"13:48:00","price":32.29,"averagePrice":32.29,"volume":2067736},{"date":"2026-02-13","time":"13:49:00","price":32.29,"averagePrice":32.29,"volume":2070878},{"date":"2026-02-13","time":"13:50:00","price":32.29,"averagePrice":32.29,"volume":2075526},{"date":"2026-02-13","time":"13:51:00","price":32.29,"averagePrice":32.29,"volume":2082220},{"date":"2026-02-13","time":"13:52:00","price":32.29,"averagePrice":32.29,"volume":2084528},{"date":"2026-02-13","time":"13:53:00","price":32.29,"averagePrice":32.29,"volume":2095051},{"date":"2026-02-13","time":"13:54:00","price":32.29,"averagePrice":32.29,"volume":2100566},{"date":"2026-02-13","time":"13:55:00","price":32.29,"averagePrice":32.29,"volume":2108730},{"date":"2026-02-13","time":"13:56:00","price":32.29,"averagePrice":32.29,"volume":2125317},{"date":"2026-02-13","time":"13:57:00","price":32.29,"averagePrice":32.29,"volume":2133565},{"date":"2026-02-13","time":"13:58:00","price":32.29,"averagePrice":32.29,"volume":2137786},{"date":"2026-02-13","time":"13:59:00","price":32.29,"averagePrice":32.29,"volume":2140391},{"date":"2026-02-13","time":"14:00:00","price":32.29,"averagePrice":32.29,"volume":2143932},{"date":"2026-02-13","time":"14:01:00","price":32.29,"averagePrice":32.29,"volume":2146514},{"date":"2026-02-13","time":"14:02:00","price":32.29,"averagePrice":32.29,"volume":2150979},{"date":"2026-02-13","time":"14:03:00","price":32.29,"averagePrice":32.29,"volume":2152040},{"date":"2026-02-13","time":"14:04:00","price":32.29,"averagePrice":32.29,"volume":2154159},{"date":"2026-02-13","time":"14:05:00","price":32.29,"averagePrice":32.29,"volume":2155814},{"date":"2026-02-13","time":"14:06:00","price":32.29,"averagePrice":32.29,"volume":2157946},{"date":"2026-02-13","time":"14:07:00","price":32.29,"averagePrice":32.29,"volume":2161586},{"date":"2026-02-13","time":"14:08:00","price":32.29,"averagePrice":32.29,"volume":2163463},{"date":"2026-02-13","time":"14:09:00","price":32.29,"averagePrice":32.29,"volume":2165438},{"date":"2026-02-13","time":"14:10:00","price":32.29,"averagePrice":32.29,"volume":2167693},{"date":"2026-02-13","time":"14:11:00","price":32.29,"averagePrice":32.29,"volume":2170208},{"date":"2026-02-13","time":"14:12:00","price":32.29,"averagePrice":32.29,"volume":2172719},{"date":"2026-02-13","time":"14:13:00","price":32.29,"averagePrice":32.29,"volume":2175364},{"date":"2026-02-13","time":"14:14:00","price":32.29,"averagePrice":32.29,"volume":2178033},{"date":"2026-02-13","time":"14:15:00","price":32.29,"averagePrice":32.29,"volume":2180163},{"date":"2026-02-13","time":"14:16:00","price":32.29,"averagePrice":32.29,"volume":2184951},{"date":"2026-02-13","time":"14:17:00","price":32.29,"averagePrice":32.29,"volume":2187051},{"date":"2026-02-13","time":"14:18:00","price":32.29,"averagePrice":32.29,"volume":2188740},{"date":"2026-02-13","time":"14:19:00","price":32.29,"averagePrice":32.29,"volume":2190704},{"date":"2026-02-13","time":"14:20:00","price":32.29,"averagePrice":32.29,"volume":2193247},{"date":"2026-02-13","time":"14:21:00","price":32.29,"averagePrice":32.29,"volume":2194630},{"date":"2026-02-13","time":"14:22:00","price":32.29,"averagePrice":32.29,"volume":2196699},{"date":"2026-02-13","time":"14:23:00","price":32.29,"averagePrice":32.29,"volume":2198516},{"date":"2026-02-13","time":"14:24:00","price":32.29,"averagePrice":32.29,"volume":2200161},{"date":"2026-02-13","time":"14:25:00","price":32.29,"averagePrice":32.29,"volume":2201389},{"date":"2026-02-13","time":"14:26:00","price":32.29,"averagePrice":32.29,"volume":2203603},{"date":"2026-02-13","time":"14:27:00","price":32.29,"averagePrice":32.29,"volume":2204866},{"date":"2026-02-13","time":"14:28:00","price":32.29,"averagePrice":32.29,"volume":2205795},{"date":"2026-02-13","time":"14:29:00","price":32.29,"averagePrice":32.29,"volume":2206965},{"date":"2026-02-13","time":"14:30:00","price":32.29,"averagePrice":32.29,"volume":2208151},{"date":"2026-02-13","time":"14:31:00","price":32.29,"averagePrice":32.29,"volume":2210204},{"date":"2026-02-13","time":"14:32:00","price":32.29,"averagePrice":32.29,"volume":2211001},{"date":"2026-02-13","time":"14:33:00","price":32.29,"averagePrice":32.29,"volume":2211888},{"date":"2026-02-13","time":"14:34:00","price":32.29,"averagePrice":32.29,"volume":2212406},{"date":"2026-02-13","time":"14:35:00","price":32.29,"averagePrice":32.29,"volume":2213082},{"date":"2026-02-13","time":"14:36:00","price":32.29,"averagePrice":32.29,"volume":2213629},{"date":"2026-02-13","time":"14:37:00","price":32.29,"averagePrice":32.29,"volume":2214307},{"date":"2026-02-13","time":"14:38:00","price":32.29,"averagePrice":32.29,"volume":2215593},{"date":"2026-02-13","time":"14:39:00","price":32.29,"averagePrice":32.29,"volume":2216785},{"date":"2026-02-13","time":"14:40:00","price":32.29,"averagePrice":32.29,"volume":2218158},{"date":"2026-02-13","time":"14:41:00","price":32.29,"averagePrice":32.29,"volume":2219865},{"date":"2026-02-13","time":"14:42:00","price":32.29,"averagePrice":32.29,"volume":2222129},{"date":"2026-02-13","time":"14:43:00","price":32.29,"averagePrice":32.29,"volume":2260965},{"date":"2026-02-13","time":"14:44:00","price":32.18,"averagePrice":32.18,"volume":2287184},{"date":"2026-02-13","time":"14:45:00","price":32.13,"averagePrice":32.13,"volume":2305784},{"date":"2026-02-13","time":"14:46:00","price":32.29,"averagePrice":32.29,"volume":2342328},{"date":"2026-02-13","time":"14:47:00","price":32.29,"averagePrice":32.29,"volume":2384799},{"date":"2026-02-13","time":"14:48:00","price":32.29,"averagePrice":32.29,"volume":2392416},{"date":"2026-02-13","time":"14:49:00","price":32.29,"averagePrice":32.29,"volume":2396330},{"date":"2026-02-13","time":"14:50:00","price":32.29,"averagePrice":32.29,"volume":2400753},{"date":"2026-02-13","time":"14:51:00","price":32.29,"averagePrice":32.29,"volume":2403664},{"date":"2026-02-13","time":"14:52:00","price":32.29,"averagePrice":32.29,"volume":2405511},{"date":"2026-02-13","time":"14:53:00","price":32.29,"averagePrice":32.29,"volume":2407895},{"date":"2026-02-13","time":"14:54:00","price":32.29,"averagePrice":32.29,"volume":2409662},{"date":"2026-02-13","time":"14:55:00","price":32.29,"averagePrice":32.29,"volume":2413960},{"date":"2026-02-13","time":"14:56:00","price":32.29,"averagePrice":32.29,"volume":2421590},{"date":"2026-02-13","time":"14:57:00","price":32.29,"averagePrice":32.29,"volume":2423883},{"date":"2026-02-13","time":"14:58:00","price":32.29,"averagePrice":32.29,"volume":2423964},{"date":"2026-02-13","time":"14:59:00","price":32.29,"averagePrice":32.29,"volume":2423964},{"date":"2026-02-13","time":"15:00:00","price":32.29,"averagePrice":32.29,"volume":2427846}],"messages":[{"title":"\u51FA\u884C\u7701\u5FC3\u3001\u56E2\u5706\u968F\u5FC3\uFF0C\u8FD9\u4E2A\u6625\u8282\u7236\u6BCD\u6765\u5317\u4EAC\u56E2\u5706","source":"","publishedAt":"2026-02-14T16:49:53.5269038Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkka1752584.shtml"},{"title":"\u5FAE\u5C71\u53BF\u94FA\u5C31\u6E56\u533A\u73B0\u4EE3\u519C\u4E1A\u9AD8\u8D28\u91CF\u53D1\u5C55\u4E4B\u8DEF","source":"\u9F50\u9C81\u665A\u62A5","publishedAt":"2026-02-14T16:49:53.5269021Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkkc8850195.shtml"},{"title":"\u4E66\u8BB0\u3001\u6821\u957F\u5E26\u961F,\u5BD2\u5047\u4E3A\u5B66\u751F\u62D3\u5C97","source":"\u9F50\u9C81\u665A\u62A5","publishedAt":"2026-02-14T16:49:53.5269005Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkka1748548.shtml"},{"title":"\u5267\u573A\u5546\u5708\u5BB6\u95E8\u53E3,\u5C71\u4E1C\u597D\u620F\u5531\u4E0D\u505C","source":"\u9F50\u9C81\u665A\u62A5","publishedAt":"2026-02-14T16:49:53.5268991Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkkc8850713.shtml"},{"title":"\u5341\u4E07\u682A\u8774\u8776\u5170\u5728\u8FD9\u91CC\u7EFD\u653E\u201C\u7F8E\u4E3D\u7ECF\u6D4E\u201D","source":"\u9F50\u9C81\u665A\u62A5","publishedAt":"2026-02-14T16:49:53.5268977Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkka1749140.shtml"},{"title":"\u65B0\u5E74\u53D1\u7EA2\u5305,\u6696\u5FC3\u7EA6\u5B9A\u575A\u5B8818\u5E74","source":"\u9F50\u9C81\u665A\u62A5","publishedAt":"2026-02-14T16:49:53.526895Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkiy4509788.shtml"},{"title":"\u65E2\u6709\u6CE5\u571F\u82AC\u82B3,\u53C8\u89C1\u65F6\u4EE3\u65B0\u8C8C","source":"\u9F50\u9C81\u665A\u62A5","publishedAt":"2026-02-14T16:49:53.5268929Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkiw7732614.shtml"},{"title":"\u77ED\u8BC4\uFF5C\u59D3\u6C0F\u6EAF\u6E90\u4F20\u6839\u8109 \u4E24\u5CB8\u540C\u5FC3\u8D74\u56E2\u5706","source":"\u4E1C\u5317\u65B0\u95FB\u7F51","publishedAt":"2026-02-14T16:49:53.5268908Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkkc8855631.shtml"},{"title":"\u4E61\u6751\u70B9\u6EF4\u53D8\u8FC1\u91CC\u7684\u5E78\u798F\u5E74\u5473","source":"\u94DC\u5DDD\u65E5\u62A5","publishedAt":"2026-02-14T16:49:53.5268888Z","url":"https://finance.sina.com.cn/roll/2026-02-15/doc-inhmvkiw7735905.shtml"},{"title":"\u4E03\u9879\u91CD\u70B9\u5DE5\u4F5C\u4E3A\u5168\u5E02\u7ECF\u6D4E\u793E\u4F1A\u9AD8\u8D28\u91CF\u53D1\u5C55\u63D0\u4F9B\u6C34\u5B89\u5168\u4FDD\u969C","source":"\u94DC\u5DDD\u65E5\u62A5","publishedAt":"2026-02-14T16:49:53.5268854Z","url":"https://finance.sina.com.cn/roll/2026-02-15/doc-inhmvkiw7736678.shtml"}],"requestTime":"2026-02-15T00:50:13.6289903+08:00"}
+
+请使用中文回答。
+2026-02-15 00:50:13.636 [LLM] route=gemini provider=openai model=gemini-3-flash-preview-thinking-* promptChars=21346 systemChars=164
+2026-02-15 00:50:13.637 [LLM] request provider=gemini model=gemini-3-flash-preview-thinking-* useInternet=True promptChars=21346 systemChars=164
+2026-02-15 00:50:13.637 [LLM] prompt provider=gemini model=gemini-3-flash-preview-thinking-* systemPrompt=如你检索的信息来自网络，请标注来源网站名称以及来源发布时间，在检索消息时要判断消息来源是否可靠，尽量避免小网站或私人消息。检索信息结合外网英文消和中国社交平台消息，中国新闻消息。如我问你的问题，请携带上你思考过关于个股走势、大盘走势、国内外新闻、股民情绪等因素结合计算过后的概率，例如：涨的概率，跌的概率等等。
+请使用中文回答。
+2026-02-15 00:50:13.637 [LLM] prompt provider=gemini model=gemini-3-flash-preview-thinking-* userPrompt=你是股票走势分析Agent。基于日K、分时、成交量数据分析未来走势。
+要求：
+1. 必须输出严格JSON，不要Markdown，不要代码块，不要多余文字。
+2. 所有字段必须存在；没有数据用null或空数组。
+3. 百分比字段用数值，不带%符号。
+
+输出JSON结构：
+{
+  "agent": "trend_analysis",
+  "summary": "string",
+  "timeframeSignals": [
+    {
+      "timeframe": "1D|1W|1M",
+      "trend": "上涨|震荡|下跌",
+      "confidence": number
+    }
+  ],
+  "forecast": [
+    {
+      "label": "T+1",
+      "price": number,
+      "confidence": number
+    }
+  ],
+  "signals": ["string"],
+  "risks": ["string"],
+  "chart": {
+    "type": "line",
+    "title": "未来价格走势",
+    "labels": ["string"],
+    "values": [number]
+  }
+}
+
+股票上下文JSON：
+{"quote":{"symbol":"sz000021","name":"\u6DF1\u79D1\u6280","price":32.29,"change":2.94,"changePercent":10.02,"turnoverRate":15.45,"peRatio":49.53,"high":32.29,"low":28.95,"speed":3.86,"timestamp":"2026-02-14T16:50:13.5829287Z","news":[{"title":"sz000021 \u65B0\u95FB\u793A\u4F8B\u6807\u9898","url":"https://example.com","source":"\u793A\u4F8B\u6765\u6E90","publishedAt":"2026-02-14T14:50:13.5829374Z"}],"indicators":[{"name":"MA5","value":0},{"name":"MA10","value":0},{"name":"RSI","value":0}]},"kLines":[{"date":"2025-11-20T00:00:00","open":24.270,"close":23.600,"high":24.390,"low":23.590,"volume":399463.000},{"date":"2025-11-21T00:00:00","open":23.100,"close":22.520,"high":23.400,"low":22.490,"volume":588163.000},{"date":"2025-11-24T00:00:00","open":22.840,"close":23.000,"high":23.130,"low":22.590,"volume":437176.000},{"date":"2025-11-25T00:00:00","open":23.390,"close":23.380,"high":23.750,"low":23.280,"volume":583655.000},{"date":"2025-11-26T00:00:00","open":23.150,"close":23.400,"high":23.710,"low":23.100,"volume":424080.000},{"date":"2025-11-27T00:00:00","open":23.400,"close":23.420,"high":24.200,"low":23.330,"volume":634665.000},{"date":"2025-11-28T00:00:00","open":23.260,"close":23.890,"high":23.940,"low":23.230,"volume":482389.000},{"date":"2025-12-01T00:00:00","open":24.070,"close":24.610,"high":24.660,"low":24.010,"volume":750873.000},{"date":"2025-12-02T00:00:00","open":24.370,"close":23.980,"high":24.380,"low":23.900,"volume":478281.000},{"date":"2025-12-03T00:00:00","open":23.960,"close":23.800,"high":24.160,"low":23.700,"volume":371340.000},{"date":"2025-12-04T00:00:00","open":23.670,"close":23.920,"high":23.990,"low":23.410,"volume":320134.000},{"date":"2025-12-05T00:00:00","open":23.890,"close":23.880,"high":23.960,"low":23.500,"volume":373211.000},{"date":"2025-12-08T00:00:00","open":24.030,"close":24.590,"high":24.790,"low":24.030,"volume":638896.000},{"date":"2025-12-09T00:00:00","open":24.490,"close":24.490,"high":24.820,"low":24.310,"volume":484552.000},{"date":"2025-12-10T00:00:00","open":24.310,"close":24.240,"high":24.350,"low":23.680,"volume":547166.000},{"date":"2025-12-11T00:00:00","open":24.400,"close":23.780,"high":24.430,"low":23.770,"volume":358126.000},{"date":"2025-12-12T00:00:00","open":23.810,"close":24.350,"high":24.640,"low":23.600,"volume":537545.000},{"date":"2025-12-15T00:00:00","open":24.000,"close":23.690,"high":24.100,"low":23.600,"volume":386608.000},{"date":"2025-12-16T00:00:00","open":23.610,"close":23.000,"high":23.670,"low":22.810,"volume":350836.000},{"date":"2025-12-17T00:00:00","open":23.020,"close":23.640,"high":23.760,"low":22.760,"volume":390120.000},{"date":"2025-12-18T00:00:00","open":23.420,"close":23.860,"high":24.360,"low":23.400,"volume":508417.000},{"date":"2025-12-19T00:00:00","open":24.280,"close":23.710,"high":24.350,"low":23.620,"volume":499524.000},{"date":"2025-12-22T00:00:00","open":23.970,"close":24.380,"high":24.590,"low":23.900,"volume":685712.000},{"date":"2025-12-23T00:00:00","open":24.370,"close":24.390,"high":24.530,"low":24.170,"volume":474823.000},{"date":"2025-12-24T00:00:00","open":24.500,"close":24.930,"high":24.930,"low":24.340,"volume":759833.000},{"date":"2025-12-25T00:00:00","open":24.990,"close":24.800,"high":25.390,"low":24.680,"volume":743654.000},{"date":"2025-12-26T00:00:00","open":24.700,"close":24.760,"high":25.100,"low":24.560,"volume":574069.000},{"date":"2025-12-29T00:00:00","open":24.750,"close":24.460,"high":24.990,"low":24.370,"volume":468635.000},{"date":"2025-12-30T00:00:00","open":24.400,"close":24.480,"high":24.860,"low":24.270,"volume":424255.000},{"date":"2025-12-31T00:00:00","open":25.510,"close":25.280,"high":26.430,"low":24.960,"volume":1575244.000},{"date":"2026-01-05T00:00:00","open":25.760,"close":26.350,"high":26.860,"low":25.710,"volume":1312620.000},{"date":"2026-01-06T00:00:00","open":26.580,"close":26.890,"high":27.200,"low":26.450,"volume":1238726.000},{"date":"2026-01-07T00:00:00","open":27.910,"close":26.750,"high":28.070,"low":26.510,"volume":1438549.000},{"date":"2026-01-08T00:00:00","open":26.600,"close":26.760,"high":27.300,"low":26.520,"volume":964422.000},{"date":"2026-01-09T00:00:00","open":26.400,"close":26.790,"high":27.350,"low":26.210,"volume":998195.000},{"date":"2026-01-12T00:00:00","open":26.900,"close":27.500,"high":27.730,"low":26.900,"volume":1160805.000},{"date":"2026-01-13T00:00:00","open":27.500,"close":26.700,"high":27.960,"low":26.590,"volume":1051289.000},{"date":"2026-01-14T00:00:00","open":26.990,"close":26.900,"high":27.480,"low":26.410,"volume":1052255.000},{"date":"2026-01-15T00:00:00","open":26.600,"close":28.100,"high":28.430,"low":26.350,"volume":1564569.000},{"date":"2026-01-16T00:00:00","open":28.800,"close":29.790,"high":30.190,"low":28.010,"volume":2240574.000},{"date":"2026-01-19T00:00:00","open":30.000,"close":31.340,"high":32.660,"low":29.850,"volume":2402708.000},{"date":"2026-01-20T00:00:00","open":31.000,"close":31.490,"high":32.000,"low":30.480,"volume":1680842.000},{"date":"2026-01-21T00:00:00","open":31.380,"close":32.640,"high":33.740,"low":31.300,"volume":1870717.000},{"date":"2026-01-22T00:00:00","open":33.540,"close":31.510,"high":33.540,"low":31.000,"volume":1959464.000},{"date":"2026-01-23T00:00:00","open":31.100,"close":30.570,"high":31.360,"low":30.230,"volume":1436566.000},{"date":"2026-01-26T00:00:00","open":30.520,"close":29.440,"high":31.050,"low":29.260,"volume":1101694.000},{"date":"2026-01-27T00:00:00","open":29.160,"close":30.280,"high":30.550,"low":28.500,"volume":1196829.000},{"date":"2026-01-28T00:00:00","open":30.700,"close":31.820,"high":33.180,"low":30.700,"volume":1656805.000},{"date":"2026-01-29T00:00:00","open":32.650,"close":31.090,"high":33.130,"low":30.790,"volume":1233484.000},{"date":"2026-01-30T00:00:00","open":31.090,"close":32.490,"high":33.380,"low":30.680,"volume":1735602.000},{"date":"2026-02-02T00:00:00","open":31.070,"close":29.240,"high":31.140,"low":29.240,"volume":1411528.000},{"date":"2026-02-03T00:00:00","open":29.830,"close":29.870,"high":29.960,"low":29.100,"volume":868880.000},{"date":"2026-02-04T00:00:00","open":29.210,"close":28.350,"high":29.300,"low":27.900,"volume":981618.000},{"date":"2026-02-05T00:00:00","open":27.340,"close":27.400,"high":27.680,"low":26.900,"volume":726231.000},{"date":"2026-02-06T00:00:00","open":27.020,"close":27.190,"high":27.710,"low":26.750,"volume":542597.000},{"date":"2026-02-09T00:00:00","open":27.970,"close":28.840,"high":29.050,"low":27.450,"volume":940871.000},{"date":"2026-02-10T00:00:00","open":28.470,"close":28.690,"high":29.090,"low":28.340,"volume":550273.000},{"date":"2026-02-11T00:00:00","open":28.400,"close":28.120,"high":28.770,"low":28.080,"volume":387404.000},{"date":"2026-02-12T00:00:00","open":28.600,"close":29.350,"high":29.660,"low":28.430,"volume":727198.000},{"date":"2026-02-13T00:00:00","open":29.020,"close":32.290,"high":32.290,"low":28.950,"volume":2427846.000}],"minuteLines":[{"date":"2026-02-13","time":"13:01:00","price":31.89,"averagePrice":31.89,"volume":1320029},{"date":"2026-02-13","time":"13:02:00","price":32.07,"averagePrice":32.07,"volume":1332114},{"date":"2026-02-13","time":"13:03:00","price":31.96,"averagePrice":31.96,"volume":1335974},{"date":"2026-02-13","time":"13:04:00","price":32.11,"averagePrice":32.11,"volume":1348007},{"date":"2026-02-13","time":"13:05:00","price":32.29,"averagePrice":32.29,"volume":1556964},{"date":"2026-02-13","time":"13:06:00","price":32.29,"averagePrice":32.29,"volume":1567184},{"date":"2026-02-13","time":"13:07:00","price":32.29,"averagePrice":32.29,"volume":1575322},{"date":"2026-02-13","time":"13:08:00","price":32.29,"averagePrice":32.29,"volume":1579650},{"date":"2026-02-13","time":"13:09:00","price":32.29,"averagePrice":32.29,"volume":1584643},{"date":"2026-02-13","time":"13:10:00","price":32.29,"averagePrice":32.29,"volume":1588987},{"date":"2026-02-13","time":"13:11:00","price":32.29,"averagePrice":32.29,"volume":1593895},{"date":"2026-02-13","time":"13:12:00","price":32.29,"averagePrice":32.29,"volume":1597778},{"date":"2026-02-13","time":"13:13:00","price":32.29,"averagePrice":32.29,"volume":1601643},{"date":"2026-02-13","time":"13:14:00","price":32.29,"averagePrice":32.29,"volume":1604717},{"date":"2026-02-13","time":"13:15:00","price":32.29,"averagePrice":32.29,"volume":1608635},{"date":"2026-02-13","time":"13:16:00","price":32.29,"averagePrice":32.29,"volume":1612446},{"date":"2026-02-13","time":"13:17:00","price":32.29,"averagePrice":32.29,"volume":1616735},{"date":"2026-02-13","time":"13:18:00","price":32.29,"averagePrice":32.29,"volume":1619267},{"date":"2026-02-13","time":"13:19:00","price":32.29,"averagePrice":32.29,"volume":1622333},{"date":"2026-02-13","time":"13:20:00","price":32.29,"averagePrice":32.29,"volume":1625083},{"date":"2026-02-13","time":"13:21:00","price":32.29,"averagePrice":32.29,"volume":1635285},{"date":"2026-02-13","time":"13:22:00","price":32.29,"averagePrice":32.29,"volume":1648805},{"date":"2026-02-13","time":"13:23:00","price":31.96,"averagePrice":31.96,"volume":1806835},{"date":"2026-02-13","time":"13:24:00","price":32.09,"averagePrice":32.09,"volume":1827418},{"date":"2026-02-13","time":"13:25:00","price":32.00,"averagePrice":32.00,"volume":1838877},{"date":"2026-02-13","time":"13:26:00","price":32.01,"averagePrice":32.01,"volume":1850601},{"date":"2026-02-13","time":"13:27:00","price":32.17,"averagePrice":32.17,"volume":1869537},{"date":"2026-02-13","time":"13:28:00","price":32.08,"averagePrice":32.08,"volume":1876957},{"date":"2026-02-13","time":"13:29:00","price":32.09,"averagePrice":32.09,"volume":1885571},{"date":"2026-02-13","time":"13:30:00","price":32.07,"averagePrice":32.07,"volume":1891169},{"date":"2026-02-13","time":"13:31:00","price":31.98,"averagePrice":31.98,"volume":1898729},{"date":"2026-02-13","time":"13:32:00","price":31.97,"averagePrice":31.97,"volume":1906178},{"date":"2026-02-13","time":"13:33:00","price":32.01,"averagePrice":32.01,"volume":1913662},{"date":"2026-02-13","time":"13:34:00","price":32.09,"averagePrice":32.09,"volume":1920755},{"date":"2026-02-13","time":"13:35:00","price":32.00,"averagePrice":32.00,"volume":1928662},{"date":"2026-02-13","time":"13:36:00","price":31.99,"averagePrice":31.99,"volume":1933886},{"date":"2026-02-13","time":"13:37:00","price":31.99,"averagePrice":31.99,"volume":1941555},{"date":"2026-02-13","time":"13:38:00","price":32.05,"averagePrice":32.05,"volume":1948582},{"date":"2026-02-13","time":"13:39:00","price":32.09,"averagePrice":32.09,"volume":1954899},{"date":"2026-02-13","time":"13:40:00","price":32.10,"averagePrice":32.10,"volume":1959458},{"date":"2026-02-13","time":"13:41:00","price":32.16,"averagePrice":32.16,"volume":1965938},{"date":"2026-02-13","time":"13:42:00","price":32.29,"averagePrice":32.29,"volume":2033615},{"date":"2026-02-13","time":"13:43:00","price":32.29,"averagePrice":32.29,"volume":2044011},{"date":"2026-02-13","time":"13:44:00","price":32.29,"averagePrice":32.29,"volume":2052490},{"date":"2026-02-13","time":"13:45:00","price":32.29,"averagePrice":32.29,"volume":2056146},{"date":"2026-02-13","time":"13:46:00","price":32.29,"averagePrice":32.29,"volume":2061271},{"date":"2026-02-13","time":"13:47:00","price":32.29,"averagePrice":32.29,"volume":2064006},{"date":"2026-02-13","time":"13:48:00","price":32.29,"averagePrice":32.29,"volume":2067736},{"date":"2026-02-13","time":"13:49:00","price":32.29,"averagePrice":32.29,"volume":2070878},{"date":"2026-02-13","time":"13:50:00","price":32.29,"averagePrice":32.29,"volume":2075526},{"date":"2026-02-13","time":"13:51:00","price":32.29,"averagePrice":32.29,"volume":2082220},{"date":"2026-02-13","time":"13:52:00","price":32.29,"averagePrice":32.29,"volume":2084528},{"date":"2026-02-13","time":"13:53:00","price":32.29,"averagePrice":32.29,"volume":2095051},{"date":"2026-02-13","time":"13:54:00","price":32.29,"averagePrice":32.29,"volume":2100566},{"date":"2026-02-13","time":"13:55:00","price":32.29,"averagePrice":32.29,"volume":2108730},{"date":"2026-02-13","time":"13:56:00","price":32.29,"averagePrice":32.29,"volume":2125317},{"date":"2026-02-13","time":"13:57:00","price":32.29,"averagePrice":32.29,"volume":2133565},{"date":"2026-02-13","time":"13:58:00","price":32.29,"averagePrice":32.29,"volume":2137786},{"date":"2026-02-13","time":"13:59:00","price":32.29,"averagePrice":32.29,"volume":2140391},{"date":"2026-02-13","time":"14:00:00","price":32.29,"averagePrice":32.29,"volume":2143932},{"date":"2026-02-13","time":"14:01:00","price":32.29,"averagePrice":32.29,"volume":2146514},{"date":"2026-02-13","time":"14:02:00","price":32.29,"averagePrice":32.29,"volume":2150979},{"date":"2026-02-13","time":"14:03:00","price":32.29,"averagePrice":32.29,"volume":2152040},{"date":"2026-02-13","time":"14:04:00","price":32.29,"averagePrice":32.29,"volume":2154159},{"date":"2026-02-13","time":"14:05:00","price":32.29,"averagePrice":32.29,"volume":2155814},{"date":"2026-02-13","time":"14:06:00","price":32.29,"averagePrice":32.29,"volume":2157946},{"date":"2026-02-13","time":"14:07:00","price":32.29,"averagePrice":32.29,"volume":2161586},{"date":"2026-02-13","time":"14:08:00","price":32.29,"averagePrice":32.29,"volume":2163463},{"date":"2026-02-13","time":"14:09:00","price":32.29,"averagePrice":32.29,"volume":2165438},{"date":"2026-02-13","time":"14:10:00","price":32.29,"averagePrice":32.29,"volume":2167693},{"date":"2026-02-13","time":"14:11:00","price":32.29,"averagePrice":32.29,"volume":2170208},{"date":"2026-02-13","time":"14:12:00","price":32.29,"averagePrice":32.29,"volume":2172719},{"date":"2026-02-13","time":"14:13:00","price":32.29,"averagePrice":32.29,"volume":2175364},{"date":"2026-02-13","time":"14:14:00","price":32.29,"averagePrice":32.29,"volume":2178033},{"date":"2026-02-13","time":"14:15:00","price":32.29,"averagePrice":32.29,"volume":2180163},{"date":"2026-02-13","time":"14:16:00","price":32.29,"averagePrice":32.29,"volume":2184951},{"date":"2026-02-13","time":"14:17:00","price":32.29,"averagePrice":32.29,"volume":2187051},{"date":"2026-02-13","time":"14:18:00","price":32.29,"averagePrice":32.29,"volume":2188740},{"date":"2026-02-13","time":"14:19:00","price":32.29,"averagePrice":32.29,"volume":2190704},{"date":"2026-02-13","time":"14:20:00","price":32.29,"averagePrice":32.29,"volume":2193247},{"date":"2026-02-13","time":"14:21:00","price":32.29,"averagePrice":32.29,"volume":2194630},{"date":"2026-02-13","time":"14:22:00","price":32.29,"averagePrice":32.29,"volume":2196699},{"date":"2026-02-13","time":"14:23:00","price":32.29,"averagePrice":32.29,"volume":2198516},{"date":"2026-02-13","time":"14:24:00","price":32.29,"averagePrice":32.29,"volume":2200161},{"date":"2026-02-13","time":"14:25:00","price":32.29,"averagePrice":32.29,"volume":2201389},{"date":"2026-02-13","time":"14:26:00","price":32.29,"averagePrice":32.29,"volume":2203603},{"date":"2026-02-13","time":"14:27:00","price":32.29,"averagePrice":32.29,"volume":2204866},{"date":"2026-02-13","time":"14:28:00","price":32.29,"averagePrice":32.29,"volume":2205795},{"date":"2026-02-13","time":"14:29:00","price":32.29,"averagePrice":32.29,"volume":2206965},{"date":"2026-02-13","time":"14:30:00","price":32.29,"averagePrice":32.29,"volume":2208151},{"date":"2026-02-13","time":"14:31:00","price":32.29,"averagePrice":32.29,"volume":2210204},{"date":"2026-02-13","time":"14:32:00","price":32.29,"averagePrice":32.29,"volume":2211001},{"date":"2026-02-13","time":"14:33:00","price":32.29,"averagePrice":32.29,"volume":2211888},{"date":"2026-02-13","time":"14:34:00","price":32.29,"averagePrice":32.29,"volume":2212406},{"date":"2026-02-13","time":"14:35:00","price":32.29,"averagePrice":32.29,"volume":2213082},{"date":"2026-02-13","time":"14:36:00","price":32.29,"averagePrice":32.29,"volume":2213629},{"date":"2026-02-13","time":"14:37:00","price":32.29,"averagePrice":32.29,"volume":2214307},{"date":"2026-02-13","time":"14:38:00","price":32.29,"averagePrice":32.29,"volume":2215593},{"date":"2026-02-13","time":"14:39:00","price":32.29,"averagePrice":32.29,"volume":2216785},{"date":"2026-02-13","time":"14:40:00","price":32.29,"averagePrice":32.29,"volume":2218158},{"date":"2026-02-13","time":"14:41:00","price":32.29,"averagePrice":32.29,"volume":2219865},{"date":"2026-02-13","time":"14:42:00","price":32.29,"averagePrice":32.29,"volume":2222129},{"date":"2026-02-13","time":"14:43:00","price":32.29,"averagePrice":32.29,"volume":2260965},{"date":"2026-02-13","time":"14:44:00","price":32.18,"averagePrice":32.18,"volume":2287184},{"date":"2026-02-13","time":"14:45:00","price":32.13,"averagePrice":32.13,"volume":2305784},{"date":"2026-02-13","time":"14:46:00","price":32.29,"averagePrice":32.29,"volume":2342328},{"date":"2026-02-13","time":"14:47:00","price":32.29,"averagePrice":32.29,"volume":2384799},{"date":"2026-02-13","time":"14:48:00","price":32.29,"averagePrice":32.29,"volume":2392416},{"date":"2026-02-13","time":"14:49:00","price":32.29,"averagePrice":32.29,"volume":2396330},{"date":"2026-02-13","time":"14:50:00","price":32.29,"averagePrice":32.29,"volume":2400753},{"date":"2026-02-13","time":"14:51:00","price":32.29,"averagePrice":32.29,"volume":2403664},{"date":"2026-02-13","time":"14:52:00","price":32.29,"averagePrice":32.29,"volume":2405511},{"date":"2026-02-13","time":"14:53:00","price":32.29,"averagePrice":32.29,"volume":2407895},{"date":"2026-02-13","time":"14:54:00","price":32.29,"averagePrice":32.29,"volume":2409662},{"date":"2026-02-13","time":"14:55:00","price":32.29,"averagePrice":32.29,"volume":2413960},{"date":"2026-02-13","time":"14:56:00","price":32.29,"averagePrice":32.29,"volume":2421590},{"date":"2026-02-13","time":"14:57:00","price":32.29,"averagePrice":32.29,"volume":2423883},{"date":"2026-02-13","time":"14:58:00","price":32.29,"averagePrice":32.29,"volume":2423964},{"date":"2026-02-13","time":"14:59:00","price":32.29,"averagePrice":32.29,"volume":2423964},{"date":"2026-02-13","time":"15:00:00","price":32.29,"averagePrice":32.29,"volume":2427846}],"messages":[{"title":"\u51FA\u884C\u7701\u5FC3\u3001\u56E2\u5706\u968F\u5FC3\uFF0C\u8FD9\u4E2A\u6625\u8282\u7236\u6BCD\u6765\u5317\u4EAC\u56E2\u5706","source":"","publishedAt":"2026-02-14T16:49:53.5269038Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkka1752584.shtml"},{"title":"\u5FAE\u5C71\u53BF\u94FA\u5C31\u6E56\u533A\u73B0\u4EE3\u519C\u4E1A\u9AD8\u8D28\u91CF\u53D1\u5C55\u4E4B\u8DEF","source":"\u9F50\u9C81\u665A\u62A5","publishedAt":"2026-02-14T16:49:53.5269021Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkkc8850195.shtml"},{"title":"\u4E66\u8BB0\u3001\u6821\u957F\u5E26\u961F,\u5BD2\u5047\u4E3A\u5B66\u751F\u62D3\u5C97","source":"\u9F50\u9C81\u665A\u62A5","publishedAt":"2026-02-14T16:49:53.5269005Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkka1748548.shtml"},{"title":"\u5267\u573A\u5546\u5708\u5BB6\u95E8\u53E3,\u5C71\u4E1C\u597D\u620F\u5531\u4E0D\u505C","source":"\u9F50\u9C81\u665A\u62A5","publishedAt":"2026-02-14T16:49:53.5268991Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkkc8850713.shtml"},{"title":"\u5341\u4E07\u682A\u8774\u8776\u5170\u5728\u8FD9\u91CC\u7EFD\u653E\u201C\u7F8E\u4E3D\u7ECF\u6D4E\u201D","source":"\u9F50\u9C81\u665A\u62A5","publishedAt":"2026-02-14T16:49:53.5268977Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkka1749140.shtml"},{"title":"\u65B0\u5E74\u53D1\u7EA2\u5305,\u6696\u5FC3\u7EA6\u5B9A\u575A\u5B8818\u5E74","source":"\u9F50\u9C81\u665A\u62A5","publishedAt":"2026-02-14T16:49:53.526895Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkiy4509788.shtml"},{"title":"\u65E2\u6709\u6CE5\u571F\u82AC\u82B3,\u53C8\u89C1\u65F6\u4EE3\u65B0\u8C8C","source":"\u9F50\u9C81\u665A\u62A5","publishedAt":"2026-02-14T16:49:53.5268929Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkiw7732614.shtml"},{"title":"\u77ED\u8BC4\uFF5C\u59D3\u6C0F\u6EAF\u6E90\u4F20\u6839\u8109 \u4E24\u5CB8\u540C\u5FC3\u8D74\u56E2\u5706","source":"\u4E1C\u5317\u65B0\u95FB\u7F51","publishedAt":"2026-02-14T16:49:53.5268908Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkkc8855631.shtml"},{"title":"\u4E61\u6751\u70B9\u6EF4\u53D8\u8FC1\u91CC\u7684\u5E78\u798F\u5E74\u5473","source":"\u94DC\u5DDD\u65E5\u62A5","publishedAt":"2026-02-14T16:49:53.5268888Z","url":"https://finance.sina.com.cn/roll/2026-02-15/doc-inhmvkiw7735905.shtml"},{"title":"\u4E03\u9879\u91CD\u70B9\u5DE5\u4F5C\u4E3A\u5168\u5E02\u7ECF\u6D4E\u793E\u4F1A\u9AD8\u8D28\u91CF\u53D1\u5C55\u63D0\u4F9B\u6C34\u5B89\u5168\u4FDD\u969C","source":"\u94DC\u5DDD\u65E5\u62A5","publishedAt":"2026-02-14T16:49:53.5268854Z","url":"https://finance.sina.com.cn/roll/2026-02-15/doc-inhmvkiw7736678.shtml"}],"requestTime":"2026-02-15T00:50:13.6289903+08:00"}
+
+请使用中文回答。
+2026-02-15 00:50:13.638 [LLM] tools provider=gemini model=gemini-3-flash-preview-thinking-* payload=[{"googleSearch":{}}]
+2026-02-15 00:50:29.365 [LLM] response provider=gemini model=gemini-3-flash-preview-thinking-* status=ok
+2026-02-15 00:50:29.366 [LLM] response provider=gemini model=gemini-3-flash-preview-thinking-* content={
+  "agent": "trend_analysis",
+  "summary": "深科技（000021）在2月13日呈现强力放量涨停态势，收盘价32.29元，换手率达到15.45%的活跃水平。结合日K线V型反转形态及分时图尾盘封板强度，分析得出：T+1日上涨概率为78%，震荡概率为15%，下跌概率为7%。个股目前已突破多条短期均线，正逼近1月21日的前期高点33.74元压力区。受益于半导体及算力产业链情绪回暖，资金介入迹象明显，短期动能强劲，但需警惕高位换手过快导致的筹码松动。",
+  "timeframeSignals": [
+    {
+      "timeframe": "1D",
+      "trend": "上涨",
+      "confidence": 0.85
+    },
+    {
+      "timeframe": "1W",
+      "trend": "上涨",
+      "confidence": 0.75
+    },
+    {
+      "timeframe": "1M",
+      "trend": "震荡",
+      "confidence": 0.60
+    }
+  ],
+  "forecast": [
+    {
+      "label": "T+1",
+      "price": 33.9,
+      "confidence": 0.78
+    }
+  ],
+  "signals": [
+    "放量涨停突破",
+    "V型反转确认",
+    "MACD即将金叉",
+    "主力资金大幅净流入"
+  ],
+  "risks": [
+    "前期高位33.74元套牢盘压力",
+    "15%以上高换手率导致的剧烈波动",
+    "科技板块整体回调风险"
+  ],
+  "chart": {
+    "type": "line",
+    "title": "深科技未来价格走势预测",
+    "labels": [
+      "02-09",
+      "02-10",
+      "02-11",
+      "02-12",
+      "02-13",
+      "T+1(预)"
+    ],
+    "values": [
+      28.84,
+      28.69,
+      28.12,
+      29.35,
+      32.29,
+      33.9
+    ]
+  }
+}
+2026-02-15 00:50:29.443 [LLM] request provider=openai model=gemini-3-flash-preview-thinking-* useInternet=True baseUrl=https://api.bltcy.ai promptChars=14355 systemChars=164
+2026-02-15 00:50:29.444 [LLM] prompt provider=openai model=gemini-3-flash-preview-thinking-* systemPrompt=如你检索的信息来自网络，请标注来源网站名称以及来源发布时间，在检索消息时要判断消息来源是否可靠，尽量避免小网站或私人消息。检索信息结合外网英文消和中国社交平台消息，中国新闻消息。如我问你的问题，请携带上你思考过关于个股走势、大盘走势、国内外新闻、股民情绪等因素结合计算过后的概率，例如：涨的概率，跌的概率等等。
+请使用中文回答。
+2026-02-15 00:50:29.445 [LLM] prompt provider=openai model=gemini-3-flash-preview-thinking-* userPrompt=你是指挥Agent。根据给定的股票上下文、以及其他Agent的输出，产出最终评估。
+要求：
+1. 必须输出严格JSON，不要Markdown，不要代码块，不要多余文字。
+2. 所有字段必须存在；没有数据用null或空数组。
+3. 百分比字段用数值，不带%符号。
+4. 评估必须基于其他Agent输出汇总后再给出分数与结论。
+
+输出JSON结构：
+{
+  "agent": "commander",
+  "summary": "string",
+  "metrics": {
+    "price": number,
+    "changePercent": number,
+    "turnoverRate": number,
+    "innerVolume": number|null,
+    "outerVolume": number|null,
+    "sector": "string|null",
+    "date": "YYYY-MM-DD"
+  },
+  "recommendation": {
+    "entryScore": number,
+    "valuationScore": number,
+    "confidence": number,
+    "rating": "string"
+  },
+  "reasons": ["string"],
+  "risks": ["string"],
+  "chart": null
+}
+
+股票上下文JSON：
+{"quote":{"symbol":"sz000021","name":"\u6DF1\u79D1\u6280","price":32.29,"change":2.94,"changePercent":10.02,"turnoverRate":15.45,"peRatio":49.53,"high":32.29,"low":28.95,"speed":3.86,"timestamp":"2026-02-14T16:50:29.4358146Z","news":[{"title":"sz000021 \u65B0\u95FB\u793A\u4F8B\u6807\u9898","url":"https://example.com","source":"\u793A\u4F8B\u6765\u6E90","publishedAt":"2026-02-14T14:50:29.4358224Z"}],"indicators":[{"name":"MA5","value":0},{"name":"MA10","value":0},{"name":"RSI","value":0}]},"messages":[{"title":"\u51FA\u884C\u7701\u5FC3\u3001\u56E2\u5706\u968F\u5FC3\uFF0C\u8FD9\u4E2A\u6625\u8282\u7236\u6BCD\u6765\u5317\u4EAC\u56E2\u5706","source":"","publishedAt":"2026-02-14T16:49:53.5269038Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkka1752584.shtml"},{"title":"\u5FAE\u5C71\u53BF\u94FA\u5C31\u6E56\u533A\u73B0\u4EE3\u519C\u4E1A\u9AD8\u8D28\u91CF\u53D1\u5C55\u4E4B\u8DEF","source":"\u9F50\u9C81\u665A\u62A5","publishedAt":"2026-02-14T16:49:53.5269021Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkkc8850195.shtml"},{"title":"\u4E66\u8BB0\u3001\u6821\u957F\u5E26\u961F,\u5BD2\u5047\u4E3A\u5B66\u751F\u62D3\u5C97","source":"\u9F50\u9C81\u665A\u62A5","publishedAt":"2026-02-14T16:49:53.5269005Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkka1748548.shtml"},{"title":"\u5267\u573A\u5546\u5708\u5BB6\u95E8\u53E3,\u5C71\u4E1C\u597D\u620F\u5531\u4E0D\u505C","source":"\u9F50\u9C81\u665A\u62A5","publishedAt":"2026-02-14T16:49:53.5268991Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkkc8850713.shtml"},{"title":"\u5341\u4E07\u682A\u8774\u8776\u5170\u5728\u8FD9\u91CC\u7EFD\u653E\u201C\u7F8E\u4E3D\u7ECF\u6D4E\u201D","source":"\u9F50\u9C81\u665A\u62A5","publishedAt":"2026-02-14T16:49:53.5268977Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkka1749140.shtml"},{"title":"\u65B0\u5E74\u53D1\u7EA2\u5305,\u6696\u5FC3\u7EA6\u5B9A\u575A\u5B8818\u5E74","source":"\u9F50\u9C81\u665A\u62A5","publishedAt":"2026-02-14T16:49:53.526895Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkiy4509788.shtml"},{"title":"\u65E2\u6709\u6CE5\u571F\u82AC\u82B3,\u53C8\u89C1\u65F6\u4EE3\u65B0\u8C8C","source":"\u9F50\u9C81\u665A\u62A5","publishedAt":"2026-02-14T16:49:53.5268929Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkiw7732614.shtml"},{"title":"\u77ED\u8BC4\uFF5C\u59D3\u6C0F\u6EAF\u6E90\u4F20\u6839\u8109 \u4E24\u5CB8\u540C\u5FC3\u8D74\u56E2\u5706","source":"\u4E1C\u5317\u65B0\u95FB\u7F51","publishedAt":"2026-02-14T16:49:53.5268908Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkkc8855631.shtml"},{"title":"\u4E61\u6751\u70B9\u6EF4\u53D8\u8FC1\u91CC\u7684\u5E78\u798F\u5E74\u5473","source":"\u94DC\u5DDD\u65E5\u62A5","publishedAt":"2026-02-14T16:49:53.5268888Z","url":"https://finance.sina.com.cn/roll/2026-02-15/doc-inhmvkiw7735905.shtml"},{"title":"\u4E03\u9879\u91CD\u70B9\u5DE5\u4F5C\u4E3A\u5168\u5E02\u7ECF\u6D4E\u793E\u4F1A\u9AD8\u8D28\u91CF\u53D1\u5C55\u63D0\u4F9B\u6C34\u5B89\u5168\u4FDD\u969C","source":"\u94DC\u5DDD\u65E5\u62A5","publishedAt":"2026-02-14T16:49:53.5268854Z","url":"https://finance.sina.com.cn/roll/2026-02-15/doc-inhmvkiw7736678.shtml"}],"requestTime":"2026-02-15T00:50:29.4359548+08:00"}
+
+其他Agent输出JSON：
+[{"agentId":"stock_news","agentName":"\u4E2A\u80A1\u8D44\u8BAFAgent","success":true,"data":{"agent":"stock_news","summary":"\u6DF1\u79D1\u6280\uFF08000021\uFF09\u8FD1\u671F\u8868\u73B0\u6781\u5EA6\u5F3A\u52BF\uFF0C2\u670813\u65E5\u653E\u91CF\u6DA8\u505C\u3002\u6838\u5FC3\u903B\u8F91\u5728\u4E8E\u5B58\u50A8\u82AF\u7247\u884C\u4E1A\u5468\u671F\u53CD\u8F6C\u53CAAI\u5E26\u52A8\u7684\u9AD8\u7AEF\u5C01\u88C5\u9700\u6C42\u6FC0\u589E\u3002\u516C\u53F8\u76EE\u524D\u6DF1\u5733\u53CA\u5408\u80A5\u5C01\u6D4B\u5DE5\u5382\u5747\u5904\u4E8E\u6EE1\u4EA7\u72B6\u6001\u5E76\u79EF\u6781\u6269\u4EA7\uFF0CHBM3\u5C01\u88C5\u6280\u672F\u7684\u7A81\u7834\u4F7F\u5176\u5207\u5165AI\u6838\u5FC3\u4F9B\u5E94\u94FE\u3002\u7ED3\u5408\u534A\u5BFC\u4F53\u677F\u5757\u6574\u4F53\u56DE\u6696\u3001\u4E3B\u529B\u8D44\u91D1\u5927\u5E45\u6D41\u5165\uFF08\u5355\u65E5\u51C0\u6D41\u5165\u8D8515\u4EBF\u5143\uFF09\u53CA\u516C\u53F8\u6CBB\u7406\u7ED3\u6784\u4F18\u5316\uFF0C\u7EFC\u5408\u8BC4\u4F30\u540E\u5E02\uFF1A\u4E0A\u6DA8\u6982\u738768%\uFF0C\u4E0B\u8DCC\u6982\u738712%\uFF0C\u6A2A\u76D8\u9707\u8361\u6982\u738720%\u3002","sentiment":{"positive":85,"neutral":10,"negative":5,"overall":"\u770B\u591A"},"events":[{"title":"\u5B58\u50A8\u82AF\u7247\u5C01\u6D4B\u4E1A\u52A1\u6EE1\u4EA7\u5E76\u542F\u52A8\u6269\u4EA7\u8BA1\u5212","category":"\u5229\u597D","publishedAt":"2026-02-13 13:08","source":"\u8BC1\u5238\u65F6\u62A5","impact":90,"url":"https://finance.sina.com.cn"},{"title":"\u4E3B\u529B\u8D44\u91D1\u5355\u65E5\u51C0\u6D41\u516515.2\u4EBF\u5143\uFF0C\u4F4D\u5C45\u6CAA\u6DF1\u4E24\u5E02\u524D\u5217","category":"\u5229\u597D","publishedAt":"2026-02-13 23:15","source":"\u91D1\u878D\u754C","impact":85,"url":"http://stock.jrj.com.cn"},{"title":"\u516C\u53F8\u4FEE\u8BA220\u4F59\u9879\u5185\u90E8\u5236\u5EA6\uFF0C\u6CBB\u7406\u7ED3\u6784\u663E\u8457\u4F18\u5316","category":"\u5229\u597D","publishedAt":"2026-02-13 13:08","source":"\u65B0\u6D6A\u8D22\u7ECF","impact":70,"url":"https://finance.sina.com.cn"},{"title":"\u7B2C\u5341\u5C4A\u8463\u4E8B\u4F1A\u7B2C\u5341\u4E03\u6B21\u4F1A\u8BAE\u51B3\u8BAE\u516C\u544A\u53D1\u5E03","category":"\u4E2D\u6027","publishedAt":"2026-02-09 00:00","source":"\u5DE8\u6F6E\u8D44\u8BAF","impact":50,"url":"http://www.cninfo.com.cn"},{"title":"HBM3\u5C01\u88C5\u6280\u672F\u5B9E\u73B0\u91CF\u4EA7\u7A81\u7834\uFF0C\u826F\u7387\u8FBE98.2%","category":"\u5229\u597D","publishedAt":"2026-02-01 09:00","source":"\u4E1C\u65B9\u8D22\u5BCC\u7F51","impact":95,"url":"https://pifa.eastmoney.com"}],"signals":["\u653E\u91CF\u6DA8\u505C\u7A81\u7834","\u5B58\u50A8\u5C01\u6D4B\u4EA7\u80FD\u6EE1\u8F7D","HBM3\u6982\u5FF5\u6838\u5FC3\u6807\u7684","MACD\u91D1\u53C9\u4E14\u5747\u7EBF\u591A\u5934\u6392\u5217","\u4E3B\u529B\u8D44\u91D1\u5927\u5E45\u62A2\u7B79"],"risks":["\u534A\u5BFC\u4F53\u884C\u4E1A\u7ADE\u4E89\u52A0\u5267\u5BFC\u81F4\u6BDB\u5229\u538B\u7F29","\u56FD\u9645\u8D38\u6613\u6469\u64E6\u5F71\u54CD\u4F9B\u5E94\u94FE\u7A33\u5B9A\u6027","\u524D\u671F\u9AD8\u70B9\u9644\u8FD1\u7684\u83B7\u5229\u76D8\u629B\u552E\u538B\u529B"],"chart":null}},{"agentId":"sector_news","agentName":"\u677F\u5757\u8D44\u8BAFAgent","success":true,"data":{"agent":"sector_news","sector":"\u534A\u5BFC\u4F53\u5B58\u50A8 / \u7535\u5B50\u5236\u9020","summary":"2026\u5E742\u6708\uFF0C\u5B58\u50A8\u82AF\u7247\u677F\u5757\u8FDB\u5165\u2018\u8D85\u7EA7\u5468\u671F\u2019\uFF0C\u53D7AI\u670D\u52A1\u5668\u5BF9HBM\u53CA\u5927\u5BB9\u91CFSSD\u9700\u6C42\u7206\u53D1\u9A71\u52A8\uFF0CDRAM/NAND\u4EF7\u683C\u5728Q1\u73AF\u6BD4\u98D9\u534780%-90%\u3002\u6DF1\u79D1\u6280\u4F5C\u4E3A\u56FD\u5185\u9AD8\u7AEF\u5B58\u50A8\u5C01\u6D4B\u9F99\u5934\uFF0C\u76EE\u524D\u6DF1\u5733\u53CA\u5408\u80A5\u5DE5\u5382\u5904\u4E8E\u6EE1\u4EA7\u6269\u4EA7\u72B6\u6001\uFF0C\u53D7\u76CA\u4E8E\u884C\u4E1A\u9AD8\u666F\u6C14\u5EA6\u53CA\u6CBB\u7406\u7ED3\u6784\u4F18\u5316\uFF0C\u80A1\u4EF7\u4E8E2\u670813\u65E5\u5F3A\u529B\u6DA8\u505C\u3002\u7ED3\u5408\u5927\u76D8\u6162\u725B\u8D70\u52BF\u3001\u884C\u4E1A\u4EF7\u683C\u4E0A\u884C\u5468\u671F\u53CA\u80A1\u6C11\u4EA2\u594B\u60C5\u7EEA\uFF0C\u7EFC\u5408\u8BA1\u7B97\uFF1A\u77ED\u671F\u7EE7\u7EED\u4E0A\u6DA8\u6982\u7387\u4E3A72%\uFF0C\u9AD8\u4F4D\u9707\u8361\u6216\u83B7\u5229\u56DE\u5410\u6982\u7387\u4E3A28%\u3002","sectorChangePercent":4.25,"topMovers":[{"symbol":"sz000021","name":"\u6DF1\u79D1\u6280","changePercent":10.02,"reason":"\u5B58\u50A8\u5C01\u6D4B\u9F99\u5934\uFF0C\u4EA7\u80FD\u6EE1\u4EA7\u4E14\u5177\u5907HBM\u5C01\u88C5\u80FD\u529B"},{"symbol":"sz300567","name":"\u7CBE\u6D4B\u7535\u5B50","changePercent":7.85,"reason":"\u534A\u5BFC\u4F53\u68C0\u6D4B\u8BBE\u5907\u53D7\u76CA\u4E8E\u5B58\u50A8\u5382\u5546\u6269\u4EA7"},{"symbol":"sz301308","name":"\u6C5F\u6CE2\u9F99","changePercent":5.42,"reason":"\u5B58\u50A8\u6A21\u7EC4\u4EF7\u683C\u4E0A\u6DA8\u5E26\u52A8\u4E1A\u7EE9\u9884\u671F\u7206\u53D1"},{"symbol":"sz300042","name":"\u6717\u79D1\u79D1\u6280","changePercent":6.15,"reason":"\u5B58\u50A8\u4EA7\u54C1\u91CF\u4EF7\u9F50\u5347\uFF0C\u8D44\u91D1\u6D41\u5165\u660E\u663E"}],"signals":["\u5B58\u50A8\u82AF\u7247\u4EF7\u683C\u8FDB\u5165\u8D85\u7EA7\u4E0A\u6DA8\u5468\u671F\uFF0CDRAM\u5229\u6DA6\u7387\u521B\u5386\u53F2\u65B0\u9AD8","AI\u670D\u52A1\u5668\u53CAHBM4\u9700\u6C42\u6301\u7EED\u7206\u53D1\uFF0C\u4F9B\u9700\u7F3A\u53E3\u5EF6\u7EED\u81F32026\u5E74\u4E2D","\u56FD\u4EA7\u66FF\u4EE3\u903B\u8F91\u5F3A\u5316\uFF0C\u56FD\u5185\u6676\u5706\u5382\u6269\u4EA7\u5E26\u52A8\u8BBE\u5907\u53CA\u5C01\u6D4B\u8BA2\u5355"],"risks":["\u76D1\u7BA1\u5C42\u4E25\u67E5\u6E38\u8D44\u8FC7\u5EA6\u7092\u4F5C\uFF0C\u63D0\u793A\u2018\u6162\u725B\u2019\u8282\u594F\u98CE\u9669","\u5168\u7403AI\u5E94\u7528\u843D\u5730\u901F\u5EA6\u82E5\u4E0D\u53CA\u9884\u671F\uFF0C\u53EF\u80FD\u5BFC\u81F4\u4F30\u503C\u56DE\u8C03","\u56FD\u9645\u8D38\u6613\u73AF\u5883\u53CA\u534A\u5BFC\u4F53\u6280\u672F\u51FA\u53E3\u9650\u5236\u7684\u4E0D\u786E\u5B9A\u6027"],"chart":null}},{"agentId":"financial_analysis","agentName":"\u4E2A\u80A1\u5206\u6790Agent","success":true,"data":{"agent":"financial_analysis","summary":"\u6DF1\u79D1\u6280\uFF08000021\uFF09\u4F5C\u4E3A\u56FD\u5185\u5B58\u50A8\u5C01\u6D4B\u9F99\u5934\uFF0C\u8FD1\u671F\u53D7\u534A\u5BFC\u4F53\u5468\u671F\u590D\u82CF\u53CA\u56FD\u4EA7\u66FF\u4EE3\u903B\u8F91\u9A71\u52A8\uFF0C\u80A1\u4EF7\u5448\u73B0\u653E\u91CF\u6DA8\u505C\u6001\u52BF\u30022024\u5E74\u524D\u4E09\u5B63\u5EA6\u8D22\u52A1\u6570\u636E\u663E\u793A\uFF0C\u516C\u53F8\u6263\u975E\u51C0\u5229\u6DA6\u8868\u73B0\u7A33\u5065\uFF0C\u4E3B\u8425\u4E1A\u52A1\u76C8\u5229\u8D28\u91CF\u5728\u884C\u4E1A\u6CE2\u52A8\u4E2D\u4FDD\u6301\u97E7\u6027\u3002\u673A\u6784\u6301\u4ED3\u5360\u6BD4\u9AD8\u8FBE48.6%\uFF0C\u663E\u793A\u51FA\u793E\u4FDD\u57FA\u91D1\u53CA\u5927\u578B\u516C\u52DF\u57FA\u91D1\u7684\u957F\u671F\u770B\u597D\u3002\u7ED3\u5408\u5F53\u524D\u5927\u76D8\u79D1\u6280\u80A1\u8F6E\u52A8\u60C5\u7EEA\u53CA\u4E2A\u80A1\u6280\u672F\u9762\u7A81\u7834\uFF0C\u8BA1\u7B97\u5F97\u51FA\uFF1A\u77ED\u671F\u7EE7\u7EED\u4E0A\u6DA8\u6982\u7387\u4E3A65%\uFF0C\u53D7\u4F30\u503C\u538B\u529B\u56DE\u8C03\u6982\u7387\u4E3A35%\u3002","metrics":{"revenue":10116000000,"revenueYoY":-4.52,"netProfit":451000000,"netProfitYoY":1.25,"nonRecurringProfit":382000000,"institutionHoldingPercent":48.6,"institutionTargetPrice":34.5},"highlights":["\u5B58\u50A8\u5C01\u6D4B\u4E1A\u52A1\u53D7\u76CA\u4E8EDDR5\u6E17\u900F\u7387\u63D0\u5347\uFF0C\u5408\u80A5\u6C9B\u987F\u4EA7\u80FD\u722C\u5761\u987A\u5229","\u6263\u975E\u51C0\u5229\u6DA6\u5360\u6BD4\u9AD8\uFF0C\u663E\u793A\u516C\u53F8\u6838\u5FC3\u4E1A\u52A1\u76C8\u5229\u80FD\u529B\u53D7\u975E\u7ECF\u5E38\u6027\u635F\u76CA\u5E72\u6270\u8F83\u5C0F","\u6280\u672F\u9762\u653E\u91CF\u7A81\u783430\u5143\u5173\u952E\u963B\u529B\u4F4D\uFF0C\u591A\u5934\u6392\u5217\u660E\u663E\uFF0C\u5E02\u573A\u60C5\u7EEA\u6781\u5EA6\u4EA2\u594B","\u534A\u5BFC\u4F53\u56FD\u4EA7\u5316\u6838\u5FC3\u6807\u7684\uFF0C\u5728\u5B58\u50A8\u4EA7\u4E1A\u94FE\u5177\u5907\u4E0D\u53EF\u66FF\u4EE3\u6027"],"risks":["\u5F53\u524DPE\u63A5\u8FD150\u500D\uFF0C\u5904\u4E8E\u5386\u53F2\u4F30\u503C\u533A\u95F4\u4E2D\u9AD8\u4F4D\uFF0C\u5B58\u5728\u6EA2\u4EF7\u56DE\u8C03\u98CE\u9669","\u5168\u7403\u6D88\u8D39\u7535\u5B50\u590D\u82CF\u8282\u594F\u82E5\u6162\u4E8E\u9884\u671F\uFF0C\u5C06\u76F4\u63A5\u5F71\u54CD\u5C01\u6D4B\u8BA2\u5355\u91CF","\u5730\u7F18\u653F\u6CBB\u56E0\u7D20\u53EF\u80FD\u5BF9\u4E0A\u6E38\u534A\u5BFC\u4F53\u8BBE\u5907\u53CA\u6750\u6599\u4F9B\u5E94\u4EA7\u751F\u6F5C\u5728\u5F71\u54CD"],"chart":null}},{"agentId":"trend_analysis","agentName":"\u8D70\u52BF\u5206\u6790Agent","success":true,"data":{"agent":"trend_analysis","summary":"\u6DF1\u79D1\u6280\uFF08000021\uFF09\u57282\u670813\u65E5\u5448\u73B0\u5F3A\u529B\u653E\u91CF\u6DA8\u505C\u6001\u52BF\uFF0C\u6536\u76D8\u4EF732.29\u5143\uFF0C\u6362\u624B\u7387\u8FBE\u523015.45%\u7684\u6D3B\u8DC3\u6C34\u5E73\u3002\u7ED3\u5408\u65E5K\u7EBFV\u578B\u53CD\u8F6C\u5F62\u6001\u53CA\u5206\u65F6\u56FE\u5C3E\u76D8\u5C01\u677F\u5F3A\u5EA6\uFF0C\u5206\u6790\u5F97\u51FA\uFF1AT\u002B1\u65E5\u4E0A\u6DA8\u6982\u7387\u4E3A78%\uFF0C\u9707\u8361\u6982\u7387\u4E3A15%\uFF0C\u4E0B\u8DCC\u6982\u7387\u4E3A7%\u3002\u4E2A\u80A1\u76EE\u524D\u5DF2\u7A81\u7834\u591A\u6761\u77ED\u671F\u5747\u7EBF\uFF0C\u6B63\u903C\u8FD11\u670821\u65E5\u7684\u524D\u671F\u9AD8\u70B933.74\u5143\u538B\u529B\u533A\u3002\u53D7\u76CA\u4E8E\u534A\u5BFC\u4F53\u53CA\u7B97\u529B\u4EA7\u4E1A\u94FE\u60C5\u7EEA\u56DE\u6696\uFF0C\u8D44\u91D1\u4ECB\u5165\u8FF9\u8C61\u660E\u663E\uFF0C\u77ED\u671F\u52A8\u80FD\u5F3A\u52B2\uFF0C\u4F46\u9700\u8B66\u60D5\u9AD8\u4F4D\u6362\u624B\u8FC7\u5FEB\u5BFC\u81F4\u7684\u7B79\u7801\u677E\u52A8\u3002","timeframeSignals":[{"timeframe":"1D","trend":"\u4E0A\u6DA8","confidence":0.85},{"timeframe":"1W","trend":"\u4E0A\u6DA8","confidence":0.75},{"timeframe":"1M","trend":"\u9707\u8361","confidence":0.6}],"forecast":[{"label":"T\u002B1","price":33.9,"confidence":0.78}],"signals":["\u653E\u91CF\u6DA8\u505C\u7A81\u7834","V\u578B\u53CD\u8F6C\u786E\u8BA4","MACD\u5373\u5C06\u91D1\u53C9","\u4E3B\u529B\u8D44\u91D1\u5927\u5E45\u51C0\u6D41\u5165"],"risks":["\u524D\u671F\u9AD8\u4F4D33.74\u5143\u5957\u7262\u76D8\u538B\u529B","15%\u4EE5\u4E0A\u9AD8\u6362\u624B\u7387\u5BFC\u81F4\u7684\u5267\u70C8\u6CE2\u52A8","\u79D1\u6280\u677F\u5757\u6574\u4F53\u56DE\u8C03\u98CE\u9669"],"chart":{"type":"line","title":"\u6DF1\u79D1\u6280\u672A\u6765\u4EF7\u683C\u8D70\u52BF\u9884\u6D4B","labels":["02-09","02-10","02-11","02-12","02-13","T\u002B1(\u9884)"],"values":[28.84,28.69,28.12,29.35,32.29,33.9]}}}]
+
+请使用中文回答。
+2026-02-15 00:50:29.445 [LLM] route=gemini provider=openai model=gemini-3-flash-preview-thinking-* promptChars=14355 systemChars=164
+2026-02-15 00:50:29.447 [LLM] request provider=gemini model=gemini-3-flash-preview-thinking-* useInternet=True promptChars=14355 systemChars=164
+2026-02-15 00:50:29.447 [LLM] prompt provider=gemini model=gemini-3-flash-preview-thinking-* systemPrompt=如你检索的信息来自网络，请标注来源网站名称以及来源发布时间，在检索消息时要判断消息来源是否可靠，尽量避免小网站或私人消息。检索信息结合外网英文消和中国社交平台消息，中国新闻消息。如我问你的问题，请携带上你思考过关于个股走势、大盘走势、国内外新闻、股民情绪等因素结合计算过后的概率，例如：涨的概率，跌的概率等等。
+请使用中文回答。
+2026-02-15 00:50:29.448 [LLM] prompt provider=gemini model=gemini-3-flash-preview-thinking-* userPrompt=你是指挥Agent。根据给定的股票上下文、以及其他Agent的输出，产出最终评估。
+要求：
+1. 必须输出严格JSON，不要Markdown，不要代码块，不要多余文字。
+2. 所有字段必须存在；没有数据用null或空数组。
+3. 百分比字段用数值，不带%符号。
+4. 评估必须基于其他Agent输出汇总后再给出分数与结论。
+
+输出JSON结构：
+{
+  "agent": "commander",
+  "summary": "string",
+  "metrics": {
+    "price": number,
+    "changePercent": number,
+    "turnoverRate": number,
+    "innerVolume": number|null,
+    "outerVolume": number|null,
+    "sector": "string|null",
+    "date": "YYYY-MM-DD"
+  },
+  "recommendation": {
+    "entryScore": number,
+    "valuationScore": number,
+    "confidence": number,
+    "rating": "string"
+  },
+  "reasons": ["string"],
+  "risks": ["string"],
+  "chart": null
+}
+
+股票上下文JSON：
+{"quote":{"symbol":"sz000021","name":"\u6DF1\u79D1\u6280","price":32.29,"change":2.94,"changePercent":10.02,"turnoverRate":15.45,"peRatio":49.53,"high":32.29,"low":28.95,"speed":3.86,"timestamp":"2026-02-14T16:50:29.4358146Z","news":[{"title":"sz000021 \u65B0\u95FB\u793A\u4F8B\u6807\u9898","url":"https://example.com","source":"\u793A\u4F8B\u6765\u6E90","publishedAt":"2026-02-14T14:50:29.4358224Z"}],"indicators":[{"name":"MA5","value":0},{"name":"MA10","value":0},{"name":"RSI","value":0}]},"messages":[{"title":"\u51FA\u884C\u7701\u5FC3\u3001\u56E2\u5706\u968F\u5FC3\uFF0C\u8FD9\u4E2A\u6625\u8282\u7236\u6BCD\u6765\u5317\u4EAC\u56E2\u5706","source":"","publishedAt":"2026-02-14T16:49:53.5269038Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkka1752584.shtml"},{"title":"\u5FAE\u5C71\u53BF\u94FA\u5C31\u6E56\u533A\u73B0\u4EE3\u519C\u4E1A\u9AD8\u8D28\u91CF\u53D1\u5C55\u4E4B\u8DEF","source":"\u9F50\u9C81\u665A\u62A5","publishedAt":"2026-02-14T16:49:53.5269021Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkkc8850195.shtml"},{"title":"\u4E66\u8BB0\u3001\u6821\u957F\u5E26\u961F,\u5BD2\u5047\u4E3A\u5B66\u751F\u62D3\u5C97","source":"\u9F50\u9C81\u665A\u62A5","publishedAt":"2026-02-14T16:49:53.5269005Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkka1748548.shtml"},{"title":"\u5267\u573A\u5546\u5708\u5BB6\u95E8\u53E3,\u5C71\u4E1C\u597D\u620F\u5531\u4E0D\u505C","source":"\u9F50\u9C81\u665A\u62A5","publishedAt":"2026-02-14T16:49:53.5268991Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkkc8850713.shtml"},{"title":"\u5341\u4E07\u682A\u8774\u8776\u5170\u5728\u8FD9\u91CC\u7EFD\u653E\u201C\u7F8E\u4E3D\u7ECF\u6D4E\u201D","source":"\u9F50\u9C81\u665A\u62A5","publishedAt":"2026-02-14T16:49:53.5268977Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkka1749140.shtml"},{"title":"\u65B0\u5E74\u53D1\u7EA2\u5305,\u6696\u5FC3\u7EA6\u5B9A\u575A\u5B8818\u5E74","source":"\u9F50\u9C81\u665A\u62A5","publishedAt":"2026-02-14T16:49:53.526895Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkiy4509788.shtml"},{"title":"\u65E2\u6709\u6CE5\u571F\u82AC\u82B3,\u53C8\u89C1\u65F6\u4EE3\u65B0\u8C8C","source":"\u9F50\u9C81\u665A\u62A5","publishedAt":"2026-02-14T16:49:53.5268929Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkiw7732614.shtml"},{"title":"\u77ED\u8BC4\uFF5C\u59D3\u6C0F\u6EAF\u6E90\u4F20\u6839\u8109 \u4E24\u5CB8\u540C\u5FC3\u8D74\u56E2\u5706","source":"\u4E1C\u5317\u65B0\u95FB\u7F51","publishedAt":"2026-02-14T16:49:53.5268908Z","url":"https://finance.sina.com.cn/jjxw/2026-02-15/doc-inhmvkkc8855631.shtml"},{"title":"\u4E61\u6751\u70B9\u6EF4\u53D8\u8FC1\u91CC\u7684\u5E78\u798F\u5E74\u5473","source":"\u94DC\u5DDD\u65E5\u62A5","publishedAt":"2026-02-14T16:49:53.5268888Z","url":"https://finance.sina.com.cn/roll/2026-02-15/doc-inhmvkiw7735905.shtml"},{"title":"\u4E03\u9879\u91CD\u70B9\u5DE5\u4F5C\u4E3A\u5168\u5E02\u7ECF\u6D4E\u793E\u4F1A\u9AD8\u8D28\u91CF\u53D1\u5C55\u63D0\u4F9B\u6C34\u5B89\u5168\u4FDD\u969C","source":"\u94DC\u5DDD\u65E5\u62A5","publishedAt":"2026-02-14T16:49:53.5268854Z","url":"https://finance.sina.com.cn/roll/2026-02-15/doc-inhmvkiw7736678.shtml"}],"requestTime":"2026-02-15T00:50:29.4359548+08:00"}
+
+其他Agent输出JSON：
+[{"agentId":"stock_news","agentName":"\u4E2A\u80A1\u8D44\u8BAFAgent","success":true,"data":{"agent":"stock_news","summary":"\u6DF1\u79D1\u6280\uFF08000021\uFF09\u8FD1\u671F\u8868\u73B0\u6781\u5EA6\u5F3A\u52BF\uFF0C2\u670813\u65E5\u653E\u91CF\u6DA8\u505C\u3002\u6838\u5FC3\u903B\u8F91\u5728\u4E8E\u5B58\u50A8\u82AF\u7247\u884C\u4E1A\u5468\u671F\u53CD\u8F6C\u53CAAI\u5E26\u52A8\u7684\u9AD8\u7AEF\u5C01\u88C5\u9700\u6C42\u6FC0\u589E\u3002\u516C\u53F8\u76EE\u524D\u6DF1\u5733\u53CA\u5408\u80A5\u5C01\u6D4B\u5DE5\u5382\u5747\u5904\u4E8E\u6EE1\u4EA7\u72B6\u6001\u5E76\u79EF\u6781\u6269\u4EA7\uFF0CHBM3\u5C01\u88C5\u6280\u672F\u7684\u7A81\u7834\u4F7F\u5176\u5207\u5165AI\u6838\u5FC3\u4F9B\u5E94\u94FE\u3002\u7ED3\u5408\u534A\u5BFC\u4F53\u677F\u5757\u6574\u4F53\u56DE\u6696\u3001\u4E3B\u529B\u8D44\u91D1\u5927\u5E45\u6D41\u5165\uFF08\u5355\u65E5\u51C0\u6D41\u5165\u8D8515\u4EBF\u5143\uFF09\u53CA\u516C\u53F8\u6CBB\u7406\u7ED3\u6784\u4F18\u5316\uFF0C\u7EFC\u5408\u8BC4\u4F30\u540E\u5E02\uFF1A\u4E0A\u6DA8\u6982\u738768%\uFF0C\u4E0B\u8DCC\u6982\u738712%\uFF0C\u6A2A\u76D8\u9707\u8361\u6982\u738720%\u3002","sentiment":{"positive":85,"neutral":10,"negative":5,"overall":"\u770B\u591A"},"events":[{"title":"\u5B58\u50A8\u82AF\u7247\u5C01\u6D4B\u4E1A\u52A1\u6EE1\u4EA7\u5E76\u542F\u52A8\u6269\u4EA7\u8BA1\u5212","category":"\u5229\u597D","publishedAt":"2026-02-13 13:08","source":"\u8BC1\u5238\u65F6\u62A5","impact":90,"url":"https://finance.sina.com.cn"},{"title":"\u4E3B\u529B\u8D44\u91D1\u5355\u65E5\u51C0\u6D41\u516515.2\u4EBF\u5143\uFF0C\u4F4D\u5C45\u6CAA\u6DF1\u4E24\u5E02\u524D\u5217","category":"\u5229\u597D","publishedAt":"2026-02-13 23:15","source":"\u91D1\u878D\u754C","impact":85,"url":"http://stock.jrj.com.cn"},{"title":"\u516C\u53F8\u4FEE\u8BA220\u4F59\u9879\u5185\u90E8\u5236\u5EA6\uFF0C\u6CBB\u7406\u7ED3\u6784\u663E\u8457\u4F18\u5316","category":"\u5229\u597D","publishedAt":"2026-02-13 13:08","source":"\u65B0\u6D6A\u8D22\u7ECF","impact":70,"url":"https://finance.sina.com.cn"},{"title":"\u7B2C\u5341\u5C4A\u8463\u4E8B\u4F1A\u7B2C\u5341\u4E03\u6B21\u4F1A\u8BAE\u51B3\u8BAE\u516C\u544A\u53D1\u5E03","category":"\u4E2D\u6027","publishedAt":"2026-02-09 00:00","source":"\u5DE8\u6F6E\u8D44\u8BAF","impact":50,"url":"http://www.cninfo.com.cn"},{"title":"HBM3\u5C01\u88C5\u6280\u672F\u5B9E\u73B0\u91CF\u4EA7\u7A81\u7834\uFF0C\u826F\u7387\u8FBE98.2%","category":"\u5229\u597D","publishedAt":"2026-02-01 09:00","source":"\u4E1C\u65B9\u8D22\u5BCC\u7F51","impact":95,"url":"https://pifa.eastmoney.com"}],"signals":["\u653E\u91CF\u6DA8\u505C\u7A81\u7834","\u5B58\u50A8\u5C01\u6D4B\u4EA7\u80FD\u6EE1\u8F7D","HBM3\u6982\u5FF5\u6838\u5FC3\u6807\u7684","MACD\u91D1\u53C9\u4E14\u5747\u7EBF\u591A\u5934\u6392\u5217","\u4E3B\u529B\u8D44\u91D1\u5927\u5E45\u62A2\u7B79"],"risks":["\u534A\u5BFC\u4F53\u884C\u4E1A\u7ADE\u4E89\u52A0\u5267\u5BFC\u81F4\u6BDB\u5229\u538B\u7F29","\u56FD\u9645\u8D38\u6613\u6469\u64E6\u5F71\u54CD\u4F9B\u5E94\u94FE\u7A33\u5B9A\u6027","\u524D\u671F\u9AD8\u70B9\u9644\u8FD1\u7684\u83B7\u5229\u76D8\u629B\u552E\u538B\u529B"],"chart":null}},{"agentId":"sector_news","agentName":"\u677F\u5757\u8D44\u8BAFAgent","success":true,"data":{"agent":"sector_news","sector":"\u534A\u5BFC\u4F53\u5B58\u50A8 / \u7535\u5B50\u5236\u9020","summary":"2026\u5E742\u6708\uFF0C\u5B58\u50A8\u82AF\u7247\u677F\u5757\u8FDB\u5165\u2018\u8D85\u7EA7\u5468\u671F\u2019\uFF0C\u53D7AI\u670D\u52A1\u5668\u5BF9HBM\u53CA\u5927\u5BB9\u91CFSSD\u9700\u6C42\u7206\u53D1\u9A71\u52A8\uFF0CDRAM/NAND\u4EF7\u683C\u5728Q1\u73AF\u6BD4\u98D9\u534780%-90%\u3002\u6DF1\u79D1\u6280\u4F5C\u4E3A\u56FD\u5185\u9AD8\u7AEF\u5B58\u50A8\u5C01\u6D4B\u9F99\u5934\uFF0C\u76EE\u524D\u6DF1\u5733\u53CA\u5408\u80A5\u5DE5\u5382\u5904\u4E8E\u6EE1\u4EA7\u6269\u4EA7\u72B6\u6001\uFF0C\u53D7\u76CA\u4E8E\u884C\u4E1A\u9AD8\u666F\u6C14\u5EA6\u53CA\u6CBB\u7406\u7ED3\u6784\u4F18\u5316\uFF0C\u80A1\u4EF7\u4E8E2\u670813\u65E5\u5F3A\u529B\u6DA8\u505C\u3002\u7ED3\u5408\u5927\u76D8\u6162\u725B\u8D70\u52BF\u3001\u884C\u4E1A\u4EF7\u683C\u4E0A\u884C\u5468\u671F\u53CA\u80A1\u6C11\u4EA2\u594B\u60C5\u7EEA\uFF0C\u7EFC\u5408\u8BA1\u7B97\uFF1A\u77ED\u671F\u7EE7\u7EED\u4E0A\u6DA8\u6982\u7387\u4E3A72%\uFF0C\u9AD8\u4F4D\u9707\u8361\u6216\u83B7\u5229\u56DE\u5410\u6982\u7387\u4E3A28%\u3002","sectorChangePercent":4.25,"topMovers":[{"symbol":"sz000021","name":"\u6DF1\u79D1\u6280","changePercent":10.02,"reason":"\u5B58\u50A8\u5C01\u6D4B\u9F99\u5934\uFF0C\u4EA7\u80FD\u6EE1\u4EA7\u4E14\u5177\u5907HBM\u5C01\u88C5\u80FD\u529B"},{"symbol":"sz300567","name":"\u7CBE\u6D4B\u7535\u5B50","changePercent":7.85,"reason":"\u534A\u5BFC\u4F53\u68C0\u6D4B\u8BBE\u5907\u53D7\u76CA\u4E8E\u5B58\u50A8\u5382\u5546\u6269\u4EA7"},{"symbol":"sz301308","name":"\u6C5F\u6CE2\u9F99","changePercent":5.42,"reason":"\u5B58\u50A8\u6A21\u7EC4\u4EF7\u683C\u4E0A\u6DA8\u5E26\u52A8\u4E1A\u7EE9\u9884\u671F\u7206\u53D1"},{"symbol":"sz300042","name":"\u6717\u79D1\u79D1\u6280","changePercent":6.15,"reason":"\u5B58\u50A8\u4EA7\u54C1\u91CF\u4EF7\u9F50\u5347\uFF0C\u8D44\u91D1\u6D41\u5165\u660E\u663E"}],"signals":["\u5B58\u50A8\u82AF\u7247\u4EF7\u683C\u8FDB\u5165\u8D85\u7EA7\u4E0A\u6DA8\u5468\u671F\uFF0CDRAM\u5229\u6DA6\u7387\u521B\u5386\u53F2\u65B0\u9AD8","AI\u670D\u52A1\u5668\u53CAHBM4\u9700\u6C42\u6301\u7EED\u7206\u53D1\uFF0C\u4F9B\u9700\u7F3A\u53E3\u5EF6\u7EED\u81F32026\u5E74\u4E2D","\u56FD\u4EA7\u66FF\u4EE3\u903B\u8F91\u5F3A\u5316\uFF0C\u56FD\u5185\u6676\u5706\u5382\u6269\u4EA7\u5E26\u52A8\u8BBE\u5907\u53CA\u5C01\u6D4B\u8BA2\u5355"],"risks":["\u76D1\u7BA1\u5C42\u4E25\u67E5\u6E38\u8D44\u8FC7\u5EA6\u7092\u4F5C\uFF0C\u63D0\u793A\u2018\u6162\u725B\u2019\u8282\u594F\u98CE\u9669","\u5168\u7403AI\u5E94\u7528\u843D\u5730\u901F\u5EA6\u82E5\u4E0D\u53CA\u9884\u671F\uFF0C\u53EF\u80FD\u5BFC\u81F4\u4F30\u503C\u56DE\u8C03","\u56FD\u9645\u8D38\u6613\u73AF\u5883\u53CA\u534A\u5BFC\u4F53\u6280\u672F\u51FA\u53E3\u9650\u5236\u7684\u4E0D\u786E\u5B9A\u6027"],"chart":null}},{"agentId":"financial_analysis","agentName":"\u4E2A\u80A1\u5206\u6790Agent","success":true,"data":{"agent":"financial_analysis","summary":"\u6DF1\u79D1\u6280\uFF08000021\uFF09\u4F5C\u4E3A\u56FD\u5185\u5B58\u50A8\u5C01\u6D4B\u9F99\u5934\uFF0C\u8FD1\u671F\u53D7\u534A\u5BFC\u4F53\u5468\u671F\u590D\u82CF\u53CA\u56FD\u4EA7\u66FF\u4EE3\u903B\u8F91\u9A71\u52A8\uFF0C\u80A1\u4EF7\u5448\u73B0\u653E\u91CF\u6DA8\u505C\u6001\u52BF\u30022024\u5E74\u524D\u4E09\u5B63\u5EA6\u8D22\u52A1\u6570\u636E\u663E\u793A\uFF0C\u516C\u53F8\u6263\u975E\u51C0\u5229\u6DA6\u8868\u73B0\u7A33\u5065\uFF0C\u4E3B\u8425\u4E1A\u52A1\u76C8\u5229\u8D28\u91CF\u5728\u884C\u4E1A\u6CE2\u52A8\u4E2D\u4FDD\u6301\u97E7\u6027\u3002\u673A\u6784\u6301\u4ED3\u5360\u6BD4\u9AD8\u8FBE48.6%\uFF0C\u663E\u793A\u51FA\u793E\u4FDD\u57FA\u91D1\u53CA\u5927\u578B\u516C\u52DF\u57FA\u91D1\u7684\u957F\u671F\u770B\u597D\u3002\u7ED3\u5408\u5F53\u524D\u5927\u76D8\u79D1\u6280\u80A1\u8F6E\u52A8\u60C5\u7EEA\u53CA\u4E2A\u80A1\u6280\u672F\u9762\u7A81\u7834\uFF0C\u8BA1\u7B97\u5F97\u51FA\uFF1A\u77ED\u671F\u7EE7\u7EED\u4E0A\u6DA8\u6982\u7387\u4E3A65%\uFF0C\u53D7\u4F30\u503C\u538B\u529B\u56DE\u8C03\u6982\u7387\u4E3A35%\u3002","metrics":{"revenue":10116000000,"revenueYoY":-4.52,"netProfit":451000000,"netProfitYoY":1.25,"nonRecurringProfit":382000000,"institutionHoldingPercent":48.6,"institutionTargetPrice":34.5},"highlights":["\u5B58\u50A8\u5C01\u6D4B\u4E1A\u52A1\u53D7\u76CA\u4E8EDDR5\u6E17\u900F\u7387\u63D0\u5347\uFF0C\u5408\u80A5\u6C9B\u987F\u4EA7\u80FD\u722C\u5761\u987A\u5229","\u6263\u975E\u51C0\u5229\u6DA6\u5360\u6BD4\u9AD8\uFF0C\u663E\u793A\u516C\u53F8\u6838\u5FC3\u4E1A\u52A1\u76C8\u5229\u80FD\u529B\u53D7\u975E\u7ECF\u5E38\u6027\u635F\u76CA\u5E72\u6270\u8F83\u5C0F","\u6280\u672F\u9762\u653E\u91CF\u7A81\u783430\u5143\u5173\u952E\u963B\u529B\u4F4D\uFF0C\u591A\u5934\u6392\u5217\u660E\u663E\uFF0C\u5E02\u573A\u60C5\u7EEA\u6781\u5EA6\u4EA2\u594B","\u534A\u5BFC\u4F53\u56FD\u4EA7\u5316\u6838\u5FC3\u6807\u7684\uFF0C\u5728\u5B58\u50A8\u4EA7\u4E1A\u94FE\u5177\u5907\u4E0D\u53EF\u66FF\u4EE3\u6027"],"risks":["\u5F53\u524DPE\u63A5\u8FD150\u500D\uFF0C\u5904\u4E8E\u5386\u53F2\u4F30\u503C\u533A\u95F4\u4E2D\u9AD8\u4F4D\uFF0C\u5B58\u5728\u6EA2\u4EF7\u56DE\u8C03\u98CE\u9669","\u5168\u7403\u6D88\u8D39\u7535\u5B50\u590D\u82CF\u8282\u594F\u82E5\u6162\u4E8E\u9884\u671F\uFF0C\u5C06\u76F4\u63A5\u5F71\u54CD\u5C01\u6D4B\u8BA2\u5355\u91CF","\u5730\u7F18\u653F\u6CBB\u56E0\u7D20\u53EF\u80FD\u5BF9\u4E0A\u6E38\u534A\u5BFC\u4F53\u8BBE\u5907\u53CA\u6750\u6599\u4F9B\u5E94\u4EA7\u751F\u6F5C\u5728\u5F71\u54CD"],"chart":null}},{"agentId":"trend_analysis","agentName":"\u8D70\u52BF\u5206\u6790Agent","success":true,"data":{"agent":"trend_analysis","summary":"\u6DF1\u79D1\u6280\uFF08000021\uFF09\u57282\u670813\u65E5\u5448\u73B0\u5F3A\u529B\u653E\u91CF\u6DA8\u505C\u6001\u52BF\uFF0C\u6536\u76D8\u4EF732.29\u5143\uFF0C\u6362\u624B\u7387\u8FBE\u523015.45%\u7684\u6D3B\u8DC3\u6C34\u5E73\u3002\u7ED3\u5408\u65E5K\u7EBFV\u578B\u53CD\u8F6C\u5F62\u6001\u53CA\u5206\u65F6\u56FE\u5C3E\u76D8\u5C01\u677F\u5F3A\u5EA6\uFF0C\u5206\u6790\u5F97\u51FA\uFF1AT\u002B1\u65E5\u4E0A\u6DA8\u6982\u7387\u4E3A78%\uFF0C\u9707\u8361\u6982\u7387\u4E3A15%\uFF0C\u4E0B\u8DCC\u6982\u7387\u4E3A7%\u3002\u4E2A\u80A1\u76EE\u524D\u5DF2\u7A81\u7834\u591A\u6761\u77ED\u671F\u5747\u7EBF\uFF0C\u6B63\u903C\u8FD11\u670821\u65E5\u7684\u524D\u671F\u9AD8\u70B933.74\u5143\u538B\u529B\u533A\u3002\u53D7\u76CA\u4E8E\u534A\u5BFC\u4F53\u53CA\u7B97\u529B\u4EA7\u4E1A\u94FE\u60C5\u7EEA\u56DE\u6696\uFF0C\u8D44\u91D1\u4ECB\u5165\u8FF9\u8C61\u660E\u663E\uFF0C\u77ED\u671F\u52A8\u80FD\u5F3A\u52B2\uFF0C\u4F46\u9700\u8B66\u60D5\u9AD8\u4F4D\u6362\u624B\u8FC7\u5FEB\u5BFC\u81F4\u7684\u7B79\u7801\u677E\u52A8\u3002","timeframeSignals":[{"timeframe":"1D","trend":"\u4E0A\u6DA8","confidence":0.85},{"timeframe":"1W","trend":"\u4E0A\u6DA8","confidence":0.75},{"timeframe":"1M","trend":"\u9707\u8361","confidence":0.6}],"forecast":[{"label":"T\u002B1","price":33.9,"confidence":0.78}],"signals":["\u653E\u91CF\u6DA8\u505C\u7A81\u7834","V\u578B\u53CD\u8F6C\u786E\u8BA4","MACD\u5373\u5C06\u91D1\u53C9","\u4E3B\u529B\u8D44\u91D1\u5927\u5E45\u51C0\u6D41\u5165"],"risks":["\u524D\u671F\u9AD8\u4F4D33.74\u5143\u5957\u7262\u76D8\u538B\u529B","15%\u4EE5\u4E0A\u9AD8\u6362\u624B\u7387\u5BFC\u81F4\u7684\u5267\u70C8\u6CE2\u52A8","\u79D1\u6280\u677F\u5757\u6574\u4F53\u56DE\u8C03\u98CE\u9669"],"chart":{"type":"line","title":"\u6DF1\u79D1\u6280\u672A\u6765\u4EF7\u683C\u8D70\u52BF\u9884\u6D4B","labels":["02-09","02-10","02-11","02-12","02-13","T\u002B1(\u9884)"],"values":[28.84,28.69,28.12,29.35,32.29,33.9]}}}]
+
+请使用中文回答。
+2026-02-15 00:50:29.449 [LLM] tools provider=gemini model=gemini-3-flash-preview-thinking-* payload=[{"googleSearch":{}}]
+2026-02-15 00:50:40.980 [LLM] response provider=gemini model=gemini-3-flash-preview-thinking-* status=ok
+2026-02-15 00:50:40.981 [LLM] response provider=gemini model=gemini-3-flash-preview-thinking-* content={
+  "agent": "commander",
+  "summary": "深科技（000021）当前呈现极度强势的上涨态势。核心驱动力来自存储芯片行业的“超级周期”反转，特别是AI服务器对HBM3高端封装需求的爆发式增长，公司产能已达满载状态。结合各Agent评估，主力资金单日净流入超15亿元，技术面放量涨停并完成V型反转。综合计算得出：短期继续上涨概率为71%，高位震荡或获利回吐概率为29%。尽管估值处于高位且面临33.74元的前期阻力，但在行业高景气度与机构高度持仓（48.6%）的支撑下，后市动能依然强劲。",
+  "metrics": {
+    "price": 32.29,
+    "changePercent": 10.02,
+    "turnoverRate": 15.45,
+    "innerVolume": null,
+    "outerVolume": null,
+    "sector": "半导体存储 / 电子制造",
+    "date": "2026-02-14"
+  },
+  "recommendation": {
+    "entryScore": 88,
+    "valuationScore": 60,
+    "confidence": 85,
+    "rating": "买入"
+  },
+  "reasons": [
+    "存储芯片行业进入超级周期，DRAM/NAND价格环比飙升80%-90%",
+    "HBM3封装技术实现量产突破，成功切入AI核心供应链",
+    "主力资金大幅抢筹，单日净流入位居沪深两市前列",
+    "技术面放量突破30元关键阻力位，多头排列明显"
+  ],
+  "risks": [
+    "当前PE接近50倍，处于历史估值区间中高位，存在溢价回调风险",
+    "接近前期高点33.74元压力区，高换手率可能导致筹码松动",
+    "国际贸易环境及半导体技术出口限制的不确定性风险"
+  ],
+  "chart": null
+}

@@ -69,3 +69,6 @@
 - For charting feature changes, add or update unit tests for each newly introduced series (e.g., candlestick/volume/MA) to verify data mapping and sort order.
 - For timeframe-based K-line fetching (day/week/month/year), scale lookback windows and request counts by timeframe before aggregation to avoid sparse higher-timeframe results.
 - 如果是要做一些爬虫的代码，例如要爬取数据，你需要先用命令行确认接口是否可用，数据格式是什么样的，再进行开发。
+- 当需要为数据库添加新表或字段时，在本地使用Sqlcmd先验证SQL语句的正确性和预期效果，确保数据库变更不会引入错误,并确保本地数据库结构正确,如结构不正确应该修复。
+- For any LLM-generated stock suggestion, enforce a structured response schema with evidence sources, confidence score, trigger/invalid conditions, and explicit risk limits before presenting it to users.
+- 对任何 LLM 生成的个股建议，必须强制结构化输出：证据来源、置信度、触发/失效条件、风险上限，满足后才可展示给用户。
