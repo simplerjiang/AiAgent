@@ -44,6 +44,9 @@ const agentHistoryList = ref([])
 const agentHistoryLoading = ref(false)
 const agentHistoryError = ref('')
 const selectedAgentHistoryId = ref('')
+const newsImpact = ref(null)
+const newsImpactLoading = ref(false)
+const newsImpactError = ref('')
 
 const upsertAgentResult = result => {
   const agentId = result?.agentId ?? result?.AgentId ?? ''
@@ -72,6 +75,18 @@ const formatDate = value => {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return ''
   return date.toLocaleString()
+}
+
+const formatImpactScore = value => {
+  if (value == null || Number.isNaN(Number(value))) return ''
+  const num = Number(value)
+  return num > 0 ? `+${num}` : `${num}`
+}
+
+const getImpactClass = category => {
+  if (category === '利好') return 'impact-positive'
+  if (category === '利空') return 'impact-negative'
+  return 'impact-neutral'
 }
 
 const buildStockContext = currentDetail => {
@@ -452,6 +467,34 @@ const fetchQuote = async () => {
   }
 }
 
+const fetchNewsImpact = async () => {
+  const symbolValue = detail.value?.quote?.symbol
+  if (!symbolValue) {
+    newsImpact.value = null
+    newsImpactError.value = ''
+    return
+  }
+
+  newsImpactLoading.value = true
+  newsImpactError.value = ''
+  try {
+    const params = new URLSearchParams({ symbol: symbolValue })
+    if (selectedSource.value) {
+      params.set('source', selectedSource.value)
+    }
+    const response = await fetch(`/api/stocks/news/impact?${params.toString()}`)
+    if (!response.ok) {
+      throw new Error('资讯影响加载失败')
+    }
+    newsImpact.value = await response.json()
+  } catch (err) {
+    newsImpactError.value = err.message || '资讯影响加载失败'
+    newsImpact.value = null
+  } finally {
+    newsImpactLoading.value = false
+  }
+}
+
 const runAgents = async () => {
   if (!detail.value?.quote?.symbol) {
     agentError.value = '请先选择股票'
@@ -671,6 +714,9 @@ watch(selectedSource, value => {
   if (historyList.value.length) {
     refreshHistory()
   }
+  if (detail.value?.quote?.symbol) {
+    fetchNewsImpact()
+  }
 })
 
 watch(chatSymbolKey, value => {
@@ -723,6 +769,7 @@ watch(
     agentResults.value = []
     agentError.value = ''
     agentUpdatedAt.value = ''
+    fetchNewsImpact()
   }
 )
 </script>
@@ -870,6 +917,39 @@ watch(
           {{ item.title }} - {{ item.source }}
         </li>
       </ul>
+
+      <section class="news-impact">
+        <div class="news-impact-header">
+          <div>
+            <h3>资讯影响</h3>
+            <p class="muted">对近期资讯做情绪与影响评估。</p>
+          </div>
+          <button @click="fetchNewsImpact" :disabled="newsImpactLoading">刷新</button>
+        </div>
+
+        <p v-if="newsImpactError" class="muted error">{{ newsImpactError }}</p>
+        <p v-else-if="newsImpactLoading" class="muted">分析中...</p>
+
+        <div v-else-if="newsImpact" class="news-impact-content">
+          <div class="news-impact-summary">
+            <span>利好 {{ newsImpact.summary.positive }}</span>
+            <span>中性 {{ newsImpact.summary.neutral }}</span>
+            <span>利空 {{ newsImpact.summary.negative }}</span>
+            <span class="overall">总体：{{ newsImpact.summary.overall }}</span>
+          </div>
+
+          <ul v-if="newsImpact.events?.length" class="news-impact-list">
+            <li v-for="item in newsImpact.events.slice(0, 6)" :key="item.title">
+              <span class="impact-tag" :class="getImpactClass(item.category)">{{ item.category }}</span>
+              <span class="impact-title">{{ item.title }}</span>
+              <span class="impact-score">{{ formatImpactScore(item.impactScore) }}</span>
+            </li>
+          </ul>
+          <p v-else class="muted">暂无资讯影响数据。</p>
+        </div>
+
+        <p v-else class="muted">暂无资讯影响数据。</p>
+      </section>
 
       <StockCharts
         :k-lines="detail.kLines"

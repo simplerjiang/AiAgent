@@ -32,6 +32,7 @@ public sealed class StocksModule : IModule
         services.AddScoped<IStockAgentOrchestrator, StockAgentOrchestrator>();
         services.AddScoped<IStockAgentHistoryService, StockAgentHistoryService>();
         services.AddScoped<IStockChatHistoryService, StockChatHistoryService>();
+        services.AddScoped<IStockNewsImpactService, StockNewsImpactService>();
     }
 
     public void MapEndpoints(IEndpointRouteBuilder app)
@@ -132,6 +133,23 @@ public sealed class StocksModule : IModule
             return Results.Ok(data);
         })
         .WithName("GetIntradayMessages")
+        .WithOpenApi();
+
+        // 新闻影响评估
+        group.MapGet("/news/impact", async (string symbol, string? source, IStockDataService dataService, IStockNewsImpactService impactService) =>
+        {
+            if (string.IsNullOrWhiteSpace(symbol))
+            {
+                return Results.BadRequest(new { message = "symbol 不能为空" });
+            }
+
+            var target = symbol.Trim();
+            var quote = await dataService.GetQuoteAsync(target, source);
+            var messages = await dataService.GetIntradayMessagesAsync(target, source);
+            var impact = impactService.Evaluate(target, quote.Name, messages);
+            return Results.Ok(impact);
+        })
+        .WithName("GetNewsImpact")
         .WithOpenApi();
 
         // 手动触发一次同步

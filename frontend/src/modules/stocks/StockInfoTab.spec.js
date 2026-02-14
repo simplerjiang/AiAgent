@@ -67,6 +67,17 @@ const createChatFetchMock = (handlers = {}) => {
       return makeResponse({ ok: true, status: 200, json: async () => ([]) })
     }
 
+    if (url.startsWith('/api/stocks/news/impact')) {
+      return makeResponse({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          summary: { positive: 0, neutral: 0, negative: 0, overall: '中性' },
+          events: []
+        })
+      })
+    }
+
     return makeResponse({ ok: false, status: 404 })
   })
 
@@ -405,5 +416,39 @@ describe('StockInfoTab', () => {
 
     const restored = chatWindow.vm.chatMessages.find(item => item.role === 'assistant')
     expect(restored?.content).toBe('历史A')
+  })
+
+  it('renders news impact summary when data is available', async () => {
+    const { fetchMock } = createChatFetchMock({
+      handle: async (url) => {
+        if (url.startsWith('/api/stocks/news/impact')) {
+          return makeResponse({
+            ok: true,
+            status: 200,
+            json: async () => ({
+              summary: { positive: 2, neutral: 1, negative: 0, overall: '利好偏多' },
+              events: [{ title: '公司宣布回购', category: '利好', impactScore: 60 }]
+            })
+          })
+        }
+        return null
+      }
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    const wrapper = mount(StockInfoTab)
+    wrapper.vm.detail = {
+      quote: { name: '深科技', symbol: 'sz000021', price: 31.1, change: 0, changePercent: 0 },
+      kLines: [],
+      minuteLines: [],
+      messages: []
+    }
+    await wrapper.vm.$nextTick()
+    await flushPromises()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('资讯影响')
+    expect(wrapper.text()).toContain('利好偏多')
   })
 })
