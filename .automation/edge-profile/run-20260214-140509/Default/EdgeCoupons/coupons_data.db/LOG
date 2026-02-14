@@ -1,0 +1,5 @@
+2026/02/14-14:05:45.086 2a7c Creating DB D:\SimplerJiangAiAgent\.automation\edge-profile\run-20260214-140509\Default\EdgeCoupons/coupons_data.db since it was missing.
+2026/02/14-14:05:46.259 2a7c Reusing MANIFEST D:\SimplerJiangAiAgent\.automation\edge-profile\run-20260214-140509\Default\EdgeCoupons/coupons_data.db/MANIFEST-000001
+2026/02/14-14:05:51.841 93c4 Level-0 table #5: started
+2026/02/14-14:05:51.986 93c4 Level-0 table #5: 681504 bytes OK
+2026/02/14-14:05:52.024 93c4 Delete type=0 #3

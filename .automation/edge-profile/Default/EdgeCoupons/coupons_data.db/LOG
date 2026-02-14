@@ -1,0 +1,5 @@
+2026/02/14-15:37:10.908 9f44 Reusing MANIFEST D:\SimplerJiangAiAgent\.automation\edge-profile\Default\EdgeCoupons/coupons_data.db/MANIFEST-000001
+2026/02/14-15:37:10.913 9f44 Recovering log #60
+2026/02/14-15:37:10.914 9f44 Reusing old log D:\SimplerJiangAiAgent\.automation\edge-profile\Default\EdgeCoupons/coupons_data.db/000060.log 
+2026/02/14-15:37:12.271 933c Level-0 table #65: started
+2026/02/14-15:37:12.375 933c Level-0 table #65: 681664 bytes OK

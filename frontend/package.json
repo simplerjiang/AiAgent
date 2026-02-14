@@ -20,6 +20,7 @@
     "@vitejs/plugin-vue": "^6.0.1",
     "@vue/test-utils": "^2.4.6",
     "jsdom": "^27.4.0",
+    "playwright": "^1.58.2",
     "vite": "^7.2.4",
     "vitest": "^4.0.17"
   }

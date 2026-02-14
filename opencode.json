@@ -9,12 +9,15 @@
       "npm": "@ai-sdk/openai-compatible",
       "name": "Z.AI (GLM)",
       "options": {
-        "baseURL": "https://open.bigmodel.cn/api/paas/v4",
+        "baseURL": "https://open.bigmodel.cn/api/coding/paas/v4",
         "apiKey": "{env:GLM_API_KEY}"
       },
       "models": {
         "glm-5": {
           "name": "GLM-5"
+        },
+        "glm-4-flash": {
+          "name": "GLM-4-Flash"
         }
       }
     }

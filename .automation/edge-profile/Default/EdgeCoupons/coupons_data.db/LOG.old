@@ -1,0 +1,15 @@
+2026/02/14-13:46:10.859 9f1c Reusing MANIFEST D:\SimplerJiangAiAgent\.automation\edge-profile\Default\EdgeCoupons/coupons_data.db/MANIFEST-000001
+2026/02/14-13:46:10.871 9f1c Recovering log #57
+2026/02/14-13:46:10.895 9f1c Reusing old log D:\SimplerJiangAiAgent\.automation\edge-profile\Default\EdgeCoupons/coupons_data.db/000057.log 
+2026/02/14-13:46:11.495 3f5c Level-0 table #61: started
+2026/02/14-13:46:11.574 3f5c Level-0 table #61: 681664 bytes OK
+2026/02/14-13:46:11.599 3f5c Delete type=0 #57
+2026/02/14-13:46:11.600 7cb4 Compacting 4@0 + 1@1 files
+2026/02/14-13:46:11.644 7cb4 Generated table #62@0: 2 keys, 681493 bytes
+2026/02/14-13:46:11.644 7cb4 Compacted 4@0 + 1@1 files => 681493 bytes
+2026/02/14-13:46:11.679 7cb4 compacted to: files[ 0 1 0 0 0 0 0 ]
+2026/02/14-13:46:11.685 7cb4 Delete type=2 #49
+2026/02/14-13:46:11.685 7cb4 Delete type=2 #52
+2026/02/14-13:46:11.685 7cb4 Delete type=2 #55
+2026/02/14-13:46:11.685 7cb4 Delete type=2 #58
+2026/02/14-13:46:11.685 7cb4 Delete type=2 #61

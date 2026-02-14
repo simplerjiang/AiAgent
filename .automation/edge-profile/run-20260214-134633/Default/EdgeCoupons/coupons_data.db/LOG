@@ -1,0 +1,6 @@
+2026/02/14-13:51:04.184 6a00 Reusing MANIFEST D:\SimplerJiangAiAgent\.automation\edge-profile\run-20260214-134633\Default\EdgeCoupons/coupons_data.db/MANIFEST-000001
+2026/02/14-13:51:04.196 6a00 Recovering log #26
+2026/02/14-13:51:04.198 6a00 Reusing old log D:\SimplerJiangAiAgent\.automation\edge-profile\run-20260214-134633\Default\EdgeCoupons/coupons_data.db/000026.log 
+2026/02/14-13:51:05.039 6808 Level-0 table #30: started
+2026/02/14-13:51:05.103 6808 Level-0 table #30: 681664 bytes OK
+2026/02/14-13:51:05.180 6808 Delete type=0 #26
