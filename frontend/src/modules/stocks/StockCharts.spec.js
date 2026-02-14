@@ -6,7 +6,10 @@ import StockCharts from './StockCharts.vue'
 const chartMocks = vi.hoisted(() => ({
   klineSetDataMock: vi.fn(),
   volumeSetDataMock: vi.fn(),
+  ma5SetDataMock: vi.fn(),
+  ma10SetDataMock: vi.fn(),
   minuteSetDataMock: vi.fn(),
+  minuteVolumeSetDataMock: vi.fn(),
   minuteCreatePriceLineMock: vi.fn(),
   minuteRemovePriceLineMock: vi.fn(),
   subscribeCrosshairMoveMock: vi.fn(),
@@ -26,6 +29,11 @@ vi.mock('lightweight-charts', () => {
       if (seriesType === 'HistogramSeries') {
         return { setData: chartMocks.volumeSetDataMock }
       }
+      if (seriesType === 'LineSeries') {
+        if (!chartMocks.__lineSeriesCount) chartMocks.__lineSeriesCount = 0
+        chartMocks.__lineSeriesCount += 1
+        return { setData: chartMocks.__lineSeriesCount === 1 ? chartMocks.ma5SetDataMock : chartMocks.ma10SetDataMock }
+      }
       return { setData: vi.fn() }
     }),
     priceScale: vi.fn(() => ({ applyOptions: vi.fn() })),
@@ -44,6 +52,9 @@ vi.mock('lightweight-charts', () => {
           removePriceLine: chartMocks.minuteRemovePriceLineMock
         }
       }
+      if (seriesType === 'HistogramSeries') {
+        return { setData: chartMocks.minuteVolumeSetDataMock }
+      }
       return { setData: vi.fn() }
     }),
     priceScale: vi.fn(() => ({ applyOptions: vi.fn() })),
@@ -61,15 +72,20 @@ vi.mock('lightweight-charts', () => {
     ColorType: { Solid: 'solid' },
     CandlestickSeries: 'CandlestickSeries',
     HistogramSeries: 'HistogramSeries',
-    AreaSeries: 'AreaSeries'
+    AreaSeries: 'AreaSeries',
+    LineSeries: 'LineSeries'
   }
 })
 
 describe('StockCharts', () => {
   beforeEach(() => {
+    chartMocks.__lineSeriesCount = 0
     chartMocks.klineSetDataMock.mockClear()
     chartMocks.volumeSetDataMock.mockClear()
+    chartMocks.ma5SetDataMock.mockClear()
+    chartMocks.ma10SetDataMock.mockClear()
     chartMocks.minuteSetDataMock.mockClear()
+    chartMocks.minuteVolumeSetDataMock.mockClear()
     chartMocks.minuteCreatePriceLineMock.mockClear()
     chartMocks.minuteRemovePriceLineMock.mockClear()
     chartMocks.subscribeCrosshairMoveMock.mockClear()
@@ -114,8 +130,8 @@ describe('StockCharts', () => {
     })
 
     const minuteLines = [
-      { date: '2026-01-29', time: '09:31:00', price: 31.2 },
-      { date: '2026-01-29', time: '09:30:00', price: 31.1 }
+      { date: '2026-01-29', time: '09:31:00', price: 31.2, volume: 2300 },
+      { date: '2026-01-29', time: '09:30:00', price: 31.1, volume: 1800 }
     ]
 
     mount(StockCharts, {
@@ -133,10 +149,15 @@ describe('StockCharts', () => {
     expect(minuteSeriesData.length).toBe(2)
     expect(minuteSeriesData[0].value).toBe(31.1)
     expect(minuteSeriesData[0].time).toBeLessThan(minuteSeriesData[1].time)
+
+    expect(chartMocks.minuteVolumeSetDataMock).toHaveBeenCalled()
+    const minuteVolumeData = chartMocks.minuteVolumeSetDataMock.mock.calls.at(-1)?.[0] ?? []
+    expect(minuteVolumeData[0].value).toBe(1800)
+    expect(minuteVolumeData[1].value).toBe(2300)
     expect(chartMocks.minuteCreatePriceLineMock).toHaveBeenCalled()
   })
 
-  it('sorts kline data and includes candlestick + volume data', async () => {
+  it('sorts kline data and includes candlestick + volume + MA overlays', async () => {
     Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
       configurable: true,
       value: () => ({
@@ -162,8 +183,16 @@ describe('StockCharts', () => {
     })
 
     const kLines = [
+      { date: '2026-01-01', open: 8, close: 9, low: 7, high: 10, volume: 800 },
       { date: '2026-01-02', open: 10, close: 11, low: 9, high: 12, volume: 1200 },
-      { date: '2026-01-01', open: 8, close: 9, low: 7, high: 10, volume: 800 }
+      { date: '2026-01-03', open: 11, close: 10, low: 9.8, high: 11.5, volume: 900 },
+      { date: '2026-01-04', open: 10, close: 10.8, low: 9.7, high: 11.1, volume: 880 },
+      { date: '2026-01-05', open: 10.8, close: 11.6, low: 10.4, high: 11.8, volume: 1360 },
+      { date: '2026-01-06', open: 11.6, close: 12.1, low: 11.2, high: 12.4, volume: 1500 },
+      { date: '2026-01-07', open: 12.1, close: 12.4, low: 11.9, high: 12.8, volume: 1320 },
+      { date: '2026-01-08', open: 12.4, close: 12.0, low: 11.7, high: 12.6, volume: 1210 },
+      { date: '2026-01-09', open: 12.0, close: 12.8, low: 11.8, high: 13.0, volume: 1680 },
+      { date: '2026-01-10', open: 12.8, close: 13.1, low: 12.4, high: 13.3, volume: 1750 }
     ]
 
     mount(StockCharts, {
@@ -178,6 +207,8 @@ describe('StockCharts', () => {
 
     expect(chartMocks.klineSetDataMock).toHaveBeenCalled()
     expect(chartMocks.volumeSetDataMock).toHaveBeenCalled()
+    expect(chartMocks.ma5SetDataMock).toHaveBeenCalled()
+    expect(chartMocks.ma10SetDataMock).toHaveBeenCalled()
 
     const klineData = chartMocks.klineSetDataMock.mock.calls.at(-1)?.[0] ?? []
     expect(klineData[0].time).toEqual({ year: 2026, month: 1, day: 1 })
@@ -186,6 +217,12 @@ describe('StockCharts', () => {
 
     const volumeData = chartMocks.volumeSetDataMock.mock.calls.at(-1)?.[0] ?? []
     expect(volumeData[0].value).toBe(800)
-    expect(volumeData[1].value).toBe(1200)
+    expect(volumeData.at(-1).value).toBe(1750)
+
+    const ma5Data = chartMocks.ma5SetDataMock.mock.calls.at(-1)?.[0] ?? []
+    const ma10Data = chartMocks.ma10SetDataMock.mock.calls.at(-1)?.[0] ?? []
+    expect(ma5Data.length).toBe(6)
+    expect(ma10Data.length).toBe(1)
+    expect(ma10Data[0].time).toEqual({ year: 2026, month: 1, day: 10 })
   })
 })

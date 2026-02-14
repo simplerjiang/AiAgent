@@ -76,6 +76,17 @@
                                      "test":  "done"
                                  },
                       "notes":  "前端 StockCharts 升级为 lightweight-charts；K线图增加成交量副图；分时图升级为专业面积线；完善数据解析与单测"
+                  },
+                  {
+                      "id":  "GOAL-006",
+                      "title":  "Minute volume subplot + Kline MA overlays",
+                      "status":  "done",
+                      "stages":  {
+                                     "plan":  "done",
+                                     "dev":  "done",
+                                     "test":  "done"
+                                 },
+                      "notes":  "已新增分时图成交量副图（分钟量柱）与 K线 MA5/MA10 叠加线；补充前端测试与 Edge UI 验证"
                   }
               ]
 }

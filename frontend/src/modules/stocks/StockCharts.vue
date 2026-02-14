@@ -1,6 +1,6 @@
 <script setup>
 import { onMounted, onUnmounted, ref, watch, nextTick } from 'vue'
-import { createChart, ColorType, CandlestickSeries, HistogramSeries, AreaSeries } from 'lightweight-charts'
+import { createChart, ColorType, CandlestickSeries, HistogramSeries, AreaSeries, LineSeries } from 'lightweight-charts'
 
 const props = defineProps({
   kLines: {
@@ -29,7 +29,10 @@ const klineChartRef = ref(null)
 const minuteChartRef = ref(null)
 const klineSeriesRef = ref(null)
 const klineVolumeSeriesRef = ref(null)
+const klineMa5SeriesRef = ref(null)
+const klineMa10SeriesRef = ref(null)
 const minuteSeriesRef = ref(null)
+const minuteVolumeSeriesRef = ref(null)
 let resizeObserver = null
 let resizeHandler = null
 const klineValues = ref([])
@@ -102,6 +105,23 @@ const parseTimePart = raw => {
   return null
 }
 
+const calculateMovingAverage = (records, period) => {
+  if (!Array.isArray(records) || period <= 0) return []
+  let rollingSum = 0
+  return records.map((item, index) => {
+    const close = Number(item?.close)
+    if (!Number.isFinite(close)) return null
+    rollingSum += close
+    if (index >= period) {
+      const outClose = Number(records[index - period]?.close)
+      if (Number.isFinite(outClose)) {
+        rollingSum -= outClose
+      }
+    }
+    return index >= period - 1 ? Number((rollingSum / period).toFixed(4)) : null
+  })
+}
+
 const resizeCharts = () => {
   if (klineRef.value && klineChartRef.value) {
     klineChartRef.value.applyOptions({
@@ -158,6 +178,23 @@ const ensureKlineChart = () => {
     priceScaleId: 'volume',
     priceFormat: { type: 'volume' }
   })
+
+  const ma5Series = chart.addSeries(LineSeries, {
+    color: '#f59e0b',
+    lineWidth: 1,
+    priceLineVisible: false,
+    lastValueVisible: false,
+    title: 'MA5'
+  })
+
+  const ma10Series = chart.addSeries(LineSeries, {
+    color: '#a855f7',
+    lineWidth: 1,
+    priceLineVisible: false,
+    lastValueVisible: false,
+    title: 'MA10'
+  })
+
   chart.priceScale('volume').applyOptions({
     borderVisible: false,
     scaleMargins: { top: 0.78, bottom: 0 }
@@ -176,6 +213,8 @@ const ensureKlineChart = () => {
     const index = klineValues.value.findIndex(item => item.timeKey === formatTimeLabel(param.time))
     const prevClose = index > 0 ? Number(klineValues.value[index - 1]?.close) : NaN
     const closePrice = Number(candle.close)
+    const ma5 = Number(klineValues.value[index]?.ma5)
+    const ma10 = Number(klineValues.value[index]?.ma10)
     const changePercent = Number.isFinite(prevClose) && prevClose !== 0 && Number.isFinite(closePrice)
       ? (((closePrice - prevClose) / prevClose) * 100).toFixed(2)
       : '-'
@@ -193,6 +232,8 @@ const ensureKlineChart = () => {
         `高: ${candle.high}`,
         `低: ${candle.low}`,
         `成交量: ${Math.round(Number(candle.volume ?? 0))}`,
+        `MA5: ${Number.isFinite(ma5) ? ma5 : '-'}`,
+        `MA10: ${Number.isFinite(ma10) ? ma10 : '-'}`,
         `涨跌幅: ${changePercent}%`
       ]
     }
@@ -201,6 +242,8 @@ const ensureKlineChart = () => {
   klineChartRef.value = chart
   klineSeriesRef.value = candleSeries
   klineVolumeSeriesRef.value = volumeSeries
+  klineMa5SeriesRef.value = ma5Series
+  klineMa10SeriesRef.value = ma10Series
 }
 
 const ensureMinuteChart = () => {
@@ -215,7 +258,7 @@ const ensureMinuteChart = () => {
     },
     rightPriceScale: {
       borderVisible: false,
-      scaleMargins: { top: 0.08, bottom: 0.12 }
+      scaleMargins: { top: 0.08, bottom: 0.28 }
     },
     timeScale: {
       borderVisible: false,
@@ -236,6 +279,16 @@ const ensureMinuteChart = () => {
     priceLineVisible: true
   })
 
+  const minuteVolumeSeries = chart.addSeries(HistogramSeries, {
+    priceScaleId: 'volume',
+    priceFormat: { type: 'volume' }
+  })
+
+  chart.priceScale('volume').applyOptions({
+    borderVisible: false,
+    scaleMargins: { top: 0.78, bottom: 0 }
+  })
+
   chart.subscribeCrosshairMove(param => {
     if (!param?.point || !param.time || !minuteRef.value) {
       minuteHover.value.visible = false
@@ -249,6 +302,7 @@ const ensureMinuteChart = () => {
 
     const value = Number(lineItem.value)
     const base = minuteBasePrice.value
+    const volume = Number(minuteValues.value.find(item => item.time === param.time)?.volume)
     const changePercent = Number.isFinite(base) && base !== 0
       ? (((value - base) / base) * 100).toFixed(2)
       : '-'
@@ -259,17 +313,23 @@ const ensureMinuteChart = () => {
       visible: true,
       x: pointX,
       y: pointY,
-      lines: [formatTimeLabel(param.time), `${value}`, `涨跌幅: ${changePercent}%`]
+      lines: [
+        formatTimeLabel(param.time),
+        `${value}`,
+        `成交量: ${Number.isFinite(volume) ? Math.round(volume) : '-'}`,
+        `涨跌幅: ${changePercent}%`
+      ]
     }
   })
 
   minuteChartRef.value = chart
   minuteSeriesRef.value = minuteSeries
+  minuteVolumeSeriesRef.value = minuteVolumeSeries
 }
 
 const renderKLine = () => {
   ensureKlineChart()
-  if (!klineSeriesRef.value || !klineVolumeSeriesRef.value) return
+  if (!klineSeriesRef.value || !klineVolumeSeriesRef.value || !klineMa5SeriesRef.value || !klineMa10SeriesRef.value) return
 
   const normalized = props.kLines
     .map(item => {
@@ -299,11 +359,21 @@ const renderKLine = () => {
     klineValues.value = []
     klineSeriesRef.value.setData([])
     klineVolumeSeriesRef.value.setData([])
+    klineMa5SeriesRef.value.setData([])
+    klineMa10SeriesRef.value.setData([])
     return
   }
 
-  klineValues.value = normalized
-  const candleData = normalized.map(item => ({
+  const ma5Values = calculateMovingAverage(normalized, 5)
+  const ma10Values = calculateMovingAverage(normalized, 10)
+  const withIndicators = normalized.map((item, index) => ({
+    ...item,
+    ma5: ma5Values[index],
+    ma10: ma10Values[index]
+  }))
+
+  klineValues.value = withIndicators
+  const candleData = withIndicators.map(item => ({
     time: { year: item.datePart.year, month: item.datePart.month, day: item.datePart.day },
     open: item.open,
     high: item.high,
@@ -312,31 +382,50 @@ const renderKLine = () => {
     volume: item.volume
   }))
 
-  const volumeData = normalized.map(item => ({
+  const volumeData = withIndicators.map(item => ({
     time: { year: item.datePart.year, month: item.datePart.month, day: item.datePart.day },
     value: item.volume,
     color: item.close >= item.open ? 'rgba(239,68,68,0.72)' : 'rgba(34,197,94,0.72)'
   }))
 
+  const ma5Data = withIndicators
+    .filter(item => Number.isFinite(item.ma5))
+    .map(item => ({
+      time: { year: item.datePart.year, month: item.datePart.month, day: item.datePart.day },
+      value: item.ma5
+    }))
+
+  const ma10Data = withIndicators
+    .filter(item => Number.isFinite(item.ma10))
+    .map(item => ({
+      time: { year: item.datePart.year, month: item.datePart.month, day: item.datePart.day },
+      value: item.ma10
+    }))
+
   klineSeriesRef.value.setData(candleData)
   klineVolumeSeriesRef.value.setData(volumeData)
+  klineMa5SeriesRef.value.setData(ma5Data)
+  klineMa10SeriesRef.value.setData(ma10Data)
   klineChartRef.value?.timeScale().fitContent()
 }
 
 const renderMinute = () => {
   ensureMinuteChart()
-  if (!minuteSeriesRef.value) return
+  if (!minuteSeriesRef.value || !minuteVolumeSeriesRef.value) return
 
   const data = props.minuteLines.map(item => {
     const datePart = parseDatePart(item?.date ?? item?.Date)
     const timePart = parseTimePart(item?.time ?? item?.Time)
     const price = Number(item?.price ?? item?.Price)
+    const volume = Number(item?.volume ?? item?.Volume ?? item?.amount ?? item?.Amount ?? 0)
     if (!datePart || !timePart || !Number.isFinite(price)) return null
     const { year, month, day } = datePart
     const { hour, minute, second } = timePart
     if (![year, month, day, hour, minute, second].every(Number.isFinite)) return null
     const timestamp = Math.floor(new Date(year, month - 1, day, hour, minute, second).getTime() / 1000)
-    return Number.isFinite(timestamp) ? { time: timestamp, value: price } : null
+    return Number.isFinite(timestamp)
+      ? { time: timestamp, value: price, volume: Number.isFinite(volume) ? volume : 0 }
+      : null
   })
     .filter(Boolean)
     .sort((a, b) => a.time - b.time)
@@ -346,10 +435,23 @@ const renderMinute = () => {
 
   if (!data.length) {
     minuteSeriesRef.value.setData([])
+    minuteVolumeSeriesRef.value.setData([])
     return
   }
 
-  minuteSeriesRef.value.setData(data)
+  minuteSeriesRef.value.setData(data.map(item => ({ time: item.time, value: item.value })))
+
+  const minuteVolumeData = data.map((item, index) => {
+    const prev = index > 0 ? data[index - 1]?.value : item.value
+    const color = item.value >= prev ? 'rgba(239,68,68,0.72)' : 'rgba(34,197,94,0.72)'
+    return {
+      time: item.time,
+      value: item.volume,
+      color
+    }
+  })
+  minuteVolumeSeriesRef.value.setData(minuteVolumeData)
+
   if (minuteBaseLineRef.value) {
     minuteSeriesRef.value.removePriceLine(minuteBaseLineRef.value)
     minuteBaseLineRef.value = null
@@ -413,6 +515,9 @@ onUnmounted(() => {
     minuteChartRef.value.remove()
     minuteChartRef.value = null
   }
+  klineMa5SeriesRef.value = null
+  klineMa10SeriesRef.value = null
+  minuteVolumeSeriesRef.value = null
   minuteBaseLineRef.value = null
 })
 
