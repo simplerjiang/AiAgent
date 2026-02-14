@@ -1,4 +1,11 @@
-{
-  "currentRun": null,
-  "lastCompletedTask": null
+﻿{
+    "lastCompletedTask":  null,
+    "currentRun":  {
+                       "branch":  "auto/AUTO-001/20260214-102003",
+                       "timestamp":  "20260214-102003",
+                       "logPath":  "D:\\SimplerJiangAiAgent\\.automation\\logs\\run-20260214-102003.log",
+                       "reportPath":  "D:\\SimplerJiangAiAgent\\.automation\\reports\\AUTO-001-20260214-102003.md",
+                       "checkpointTag":  "auto-start-20260214-102003",
+                       "taskId":  "AUTO-001"
+                   }
 }

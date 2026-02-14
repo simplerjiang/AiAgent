@@ -12,10 +12,14 @@ $RepoRoot = Resolve-Path (Join-Path $AutomationRoot "..")
 $TasksPath = Join-Path $AutomationRoot "tasks.json"
 $StatePath = Join-Path $AutomationRoot "state.json"
 $LogDir = Join-Path $AutomationRoot "logs"
+$ReportDir = Join-Path $AutomationRoot "reports"
+$TemplatePath = Join-Path $AutomationRoot "templates\report.md"
 
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
+New-Item -ItemType Directory -Force -Path $ReportDir | Out-Null
 $Timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $LogPath = Join-Path $LogDir "run-$Timestamp.log"
+$ReportPath = Join-Path $ReportDir "$TaskId-$Timestamp.md"
 
 function Write-Log {
   param([string]$Message)
@@ -51,6 +55,21 @@ if (-not $task) {
   exit 0
 }
 
+if (-not $TaskId) {
+  $TaskId = $task.id
+}
+
+$ReportPath = Join-Path $ReportDir "$TaskId-$Timestamp.md"
+if (Test-Path $TemplatePath) {
+  $template = Get-Content $TemplatePath -Raw
+  $template = $template.Replace("<TASK_ID>", $task.id)
+  $template = $template.Replace("<TASK_TITLE>", $task.title)
+  $template = $template.Replace("<YYYYMMDD-HHMMSS>", $Timestamp)
+  Set-Content -Path $ReportPath -Value $template -Encoding UTF8
+} else {
+  Set-Content -Path $ReportPath -Value "# Task Report`n`nTask: $($task.id) - $($task.title)`n" -Encoding UTF8
+}
+
 $task.status = "in_progress"
 if ($task.stages) {
   $task.stages.plan = "todo"
@@ -73,6 +92,7 @@ $state = @{
     checkpointTag = $checkpointTag
     branch = $branchName
     logPath = $LogPath
+    reportPath = $ReportPath
   }
   lastCompletedTask = $null
 }

@@ -2,7 +2,8 @@ param(
   [Parameter(Mandatory = $true)]
   [string]$TaskId,
   [string]$Message = "auto: complete task",
-  [switch]$SkipTests
+  [switch]$SkipTests,
+  [switch]$SkipPush
 )
 
 Set-StrictMode -Version Latest
@@ -46,3 +47,12 @@ $state | ConvertTo-Json -Depth 6 | Set-Content -Path $StatePath -Encoding UTF8
 git -C $RepoRoot add -A
 
 git -C $RepoRoot commit -m $Message
+
+if (-not $SkipPush) {
+  $remotes = git -C $RepoRoot remote
+  if (-not $remotes) {
+    throw "No git remote configured. Add a remote or rerun with -SkipPush."
+  }
+  $branch = git -C $RepoRoot rev-parse --abbrev-ref HEAD
+  git -C $RepoRoot push -u origin $branch
+}
