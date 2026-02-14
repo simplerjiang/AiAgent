@@ -65,6 +65,17 @@
                                      "test":  "todo"
                                  },
                       "notes":  "由 OpenCode 执行者完成项目启动与端到端联调；执行者先自测并汇报，再由我按既有规则复测验收"
+                  },
+                  {
+                      "id":  "GOAL-005",
+                      "title":  "Professional K-line + minute charts",
+                      "status":  "done",
+                      "stages":  {
+                                     "plan":  "done",
+                                     "dev":  "done",
+                                     "test":  "done"
+                                 },
+                      "notes":  "前端 StockCharts 升级为 lightweight-charts；K线图增加成交量副图；分时图升级为专业面积线；完善数据解析与单测"
                   }
               ]
 }
