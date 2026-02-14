@@ -54,6 +54,17 @@
                                      "test":  "done"
                                  },
                       "notes":  "新增 AGENTS.md 与 opencode.json；配置 GLM-5(OpenAI-compatible) provider；将 API Key 改为环境变量；补充 README 使用说明"
+                  },
+                  {
+                      "id":  "OPS-006",
+                      "title":  "OpenCode supervised launch + E2E",
+                      "status":  "todo",
+                      "stages":  {
+                                     "plan":  "done",
+                                     "dev":  "todo",
+                                     "test":  "todo"
+                                 },
+                      "notes":  "由 OpenCode 执行者完成项目启动与端到端联调；执行者先自测并汇报，再由我按既有规则复测验收"
                   }
               ]
 }
