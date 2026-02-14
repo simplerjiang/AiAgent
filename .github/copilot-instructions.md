@@ -68,3 +68,4 @@
 - 每次提交后，必须立即清理无用的本地改动（运行缓存、临时输出、浏览器配置产物等）；如文件仍有保留价值，应通过忽略策略保留而非删除。
 - For charting feature changes, add or update unit tests for each newly introduced series (e.g., candlestick/volume/MA) to verify data mapping and sort order.
 - For timeframe-based K-line fetching (day/week/month/year), scale lookback windows and request counts by timeframe before aggregation to avoid sparse higher-timeframe results.
+- 如果是要做一些爬虫的代码，例如要爬取数据，你需要先用命令行确认接口是否可用，数据格式是什么样的，再进行开发。
