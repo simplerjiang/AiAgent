@@ -1,0 +1,6 @@
+2026-02-14 10:20:03 Automation run started.
+2026-02-14 10:20:03 Task: AUTO-001 - Bootstrap multi-agent automation
+2026-02-14 10:20:03 Checkpoint tag: auto-start-20260214-102003
+2026-02-14 10:20:03 Branch: auto/AUTO-001/20260214-102003
+2026-02-14 10:20:03 Next: follow prompts in .automation/prompts (plan -> dev -> test).
+2026-02-14 10:20:03 After test, run .automation/scripts/finalize.ps1 -TaskId AUTO-001 -Message \

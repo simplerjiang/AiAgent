@@ -17,6 +17,3 @@
 .DS_Store
 Thumbs.db
 
-# Automation
-.automation/logs/
-.automation/state.local.json
