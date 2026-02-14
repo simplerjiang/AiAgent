@@ -40,3 +40,20 @@
 - After tests pass, commit and push.
 - If no remote is configured, request the remote URL before pushing.
 - Keep commits focused and include report updates.
+
+# Continuous Rules (Required)
+- During each chat, extract at least one actionable rule from observed issues and add it here.
+- For split frontend/backend projects, start backend first and confirm it runs before frontend and Edge MCP tests.
+- When new features are proposed or accepted, update README.md and .automation/tasks.json immediately with clear descriptions.
+- Edge MCP tests must verify UI renders and interactions work, and check backend logs for errors; fix any issues found.
+- If new work breaks existing features, fix them in the same task; completion requires all features to work.
+- Prefer self-sufficient problem solving (reasoning and research). Only ask the user for decisions or required permissions.
+- If Edge MCP cannot launch due to profile lock, use a dedicated user-data-dir under .automation/edge-profile.
+- If required ports are already in use, stop the conflicting process or choose a free port, and record the chosen ports in the report.
+- For Edge MCP UI checks, prefer backend-served frontend (build dist and visit backend URL); only use Vite dev server when a proxy for /api is configured, and set explicit backend URLs to avoid port conflicts.
+- 在聊天过程中，每次都应该提炼一些规则并新增进去，基于你的思考与观察的问题。
+- 分析项目组成，若前后端分离，先启动后端并确认可用，再启动前端与 Edge MCP。
+- 沟通或新增新功能时，立即同步更新 README.md 与 .automation/tasks.json，且保证任务描述足够清晰，避免误导开发。
+- Edge MCP 测试需验证 UI 正常显示与可交互，同时检查后端日志是否报错并修复。
+- 新功能导致旧功能异常时需一并修复；只有全部功能正常时才算任务完成并回复。
+- 尽量自我解决（思考与检索），仅在需要用户决策或权限时再求助。
