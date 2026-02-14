@@ -1,0 +1,18 @@
+# Build outputs
+**/bin/
+**/obj/
+**/TestResults/
+
+# IDE/editor
+.vs/
+.vscode/
+
+# Node/Frontend
+**/node_modules/
+**/dist/
+**/.env
+**/.env.*
+
+# OS
+.DS_Store
+Thumbs.db

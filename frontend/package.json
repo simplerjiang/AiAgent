@@ -6,13 +6,21 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:unit": "vitest run"
   },
   "dependencies": {
+    "dompurify": "^3.1.7",
+    "echarts": "^6.0.0",
+    "lightweight-charts": "^5.0.0",
+    "marked": "^16.2.1",
     "vue": "^3.5.24"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.1",
-    "vite": "^7.2.4"
+    "@vue/test-utils": "^2.4.6",
+    "jsdom": "^27.4.0",
+    "vite": "^7.2.4",
+    "vitest": "^4.0.17"
   }
 }

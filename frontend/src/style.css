@@ -102,6 +102,13 @@ button {
   padding: 0.5rem 0.75rem;
 }
 
+.field select {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 0.45rem 0.6rem;
+  background: #ffffff;
+}
+
 .muted {
   color: #6b7280;
   font-size: 0.9rem;

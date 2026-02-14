@@ -10,3 +10,28 @@
 - 股票信息模块（爬虫来源：腾讯/新浪/百度）
 - 前端 UI 的 Tab 页面骨架
 - WinForms 载入前端页面的壳层
+
+已实现（后端）：
+- /api/stocks/market 大盘指数
+- /api/stocks/market/cache 大盘指数（缓存）
+- /api/stocks/quote 个股行情
+- /api/stocks/kline 个股K线
+- /api/stocks/minute 个股分时
+- /api/stocks/messages 盘中消息（占位）
+- /api/stocks/detail 组合详情
+- /api/stocks/detail/cache 组合详情（缓存）
+- /api/stocks/sync 手动触发同步
+- /api/admin/login 管理员登录
+- /api/admin/llm/settings/{provider} LLM 配置读取/更新（需管理员 token）
+- /api/admin/llm/test/{provider} LLM 调用测试（需管理员 token）
+
+自动化同步：
+- 后台定时任务按 appsettings.json 的 StockSync 配置抓取并落库
+
+管理员配置：
+- 默认账号：admin / admin123（可在 backend/SimplerJiangAiAgent.Api/appsettings.json 的 Admin 段落中修改）
+- 前端新增“LLM 设置”页签用于配置 OpenAI 以及后续 LLM provider
+
+测试：
+- 后端单元测试：dotnet test backend/SimplerJiangAiAgent.Api.Tests/SimplerJiangAiAgent.Api.Tests.csproj
+- 前端单元测试：cd frontend && npm run test:unit
