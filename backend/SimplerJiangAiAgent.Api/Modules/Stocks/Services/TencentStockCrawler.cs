@@ -42,9 +42,11 @@ public sealed class TencentStockCrawler : IStockCrawlerSource
         var normalized = StockSymbolNormalizer.Normalize(symbol);
         var safeInterval = NormalizeInterval(interval);
         var fetchInterval = safeInterval == "year" ? "month" : safeInterval;
+        var safeCount = Math.Max(count, 60);
+        var requestCount = CalculateRequestCount(safeInterval, safeCount);
         var end = DateTime.UtcNow;
-        var start = end.AddDays(-Math.Max(count, 60));
-        var url = $"https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param={normalized},{fetchInterval},{start:yyyy-MM-dd},{end:yyyy-MM-dd},{Math.Max(count, 60)},qfq";
+        var start = end.AddDays(-CalculateLookbackDays(safeInterval, safeCount));
+        var url = $"https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param={normalized},{fetchInterval},{start:yyyy-MM-dd},{end:yyyy-MM-dd},{requestCount},qfq";
 
         var json = await _httpClient.GetStringAsync(url, cancellationToken);
         using var document = JsonDocument.Parse(json);
@@ -112,13 +114,13 @@ public sealed class TencentStockCrawler : IStockCrawlerSource
             points.Add(new KLinePointDto(date, open, close, high, low, volume));
         }
 
-        var trimmed = points.TakeLast(count).ToArray();
+        var trimmed = points.TakeLast(requestCount).ToArray();
         if (safeInterval == "year")
         {
-            return AggregateYearly(trimmed);
+            return AggregateYearly(trimmed).TakeLast(safeCount).ToArray();
         }
 
-        return trimmed;
+        return trimmed.TakeLast(safeCount).ToArray();
     }
 
     public async Task<IReadOnlyList<MinuteLinePointDto>> GetMinuteLineAsync(string symbol, CancellationToken cancellationToken = default)
@@ -252,5 +254,27 @@ public sealed class TencentStockCrawler : IStockCrawlerSource
                 return new KLinePointDto(new DateTime(g.Key, 1, 1), open, close, high, low, volume);
             })
             .ToArray();
+    }
+
+    private static int CalculateLookbackDays(string interval, int count)
+    {
+        return interval switch
+        {
+            "week" => Math.Max(365, count * 12),
+            "month" => Math.Max(365 * 3, count * 35),
+            "year" => Math.Max(365 * 10, count * 370),
+            _ => Math.Max(120, count * 2)
+        };
+    }
+
+    private static int CalculateRequestCount(string interval, int count)
+    {
+        return interval switch
+        {
+            "week" => Math.Max(120, count * 2),
+            "month" => Math.Max(180, count + 24),
+            "year" => Math.Max(240, count * 12),
+            _ => Math.Max(120, count)
+        };
     }
 }

@@ -105,6 +105,23 @@ const parseTimePart = raw => {
   return null
 }
 
+const parseVolumeValue = raw => {
+  if (raw == null) return 0
+  if (typeof raw === 'number' && Number.isFinite(raw)) return raw
+  const text = String(raw).trim()
+  if (!text) return 0
+  const normalized = text.replace(/,/g, '')
+  if (/[万亿]$/.test(normalized)) {
+    const unit = normalized.slice(-1)
+    const base = Number(normalized.slice(0, -1))
+    if (!Number.isFinite(base)) return 0
+    if (unit === '万') return base * 10000
+    if (unit === '亿') return base * 100000000
+  }
+  const value = Number(normalized)
+  return Number.isFinite(value) ? value : 0
+}
+
 const calculateMovingAverage = (records, period) => {
   if (!Array.isArray(records) || period <= 0) return []
   let rollingSum = 0
@@ -339,7 +356,7 @@ const renderKLine = () => {
       const close = Number(item?.close ?? item?.Close)
       const low = Number(item?.low ?? item?.Low)
       const high = Number(item?.high ?? item?.High)
-      const volume = Number(item?.volume ?? item?.Volume ?? item?.amount ?? item?.Amount ?? 0)
+      const volume = parseVolumeValue(item?.volume ?? item?.Volume ?? item?.amount ?? item?.Amount ?? 0)
       const timeKey = `${datePart.year}-${pad(datePart.month)}-${pad(datePart.day)}`
       return {
         datePart,
@@ -385,7 +402,7 @@ const renderKLine = () => {
   const volumeData = withIndicators.map(item => ({
     time: { year: item.datePart.year, month: item.datePart.month, day: item.datePart.day },
     value: item.volume,
-    color: item.close >= item.open ? 'rgba(239,68,68,0.72)' : 'rgba(34,197,94,0.72)'
+    color: item.close >= item.open ? 'rgba(239,68,68,0.9)' : 'rgba(34,197,94,0.9)'
   }))
 
   const ma5Data = withIndicators
@@ -417,7 +434,7 @@ const renderMinute = () => {
     const datePart = parseDatePart(item?.date ?? item?.Date)
     const timePart = parseTimePart(item?.time ?? item?.Time)
     const price = Number(item?.price ?? item?.Price)
-    const volume = Number(item?.volume ?? item?.Volume ?? item?.amount ?? item?.Amount ?? 0)
+    const volume = parseVolumeValue(item?.volume ?? item?.Volume ?? item?.amount ?? item?.Amount ?? 0)
     if (!datePart || !timePart || !Number.isFinite(price)) return null
     const { year, month, day } = datePart
     const { hour, minute, second } = timePart

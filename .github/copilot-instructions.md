@@ -67,3 +67,4 @@
 - After each commit, clean up useless local modifications immediately (runtime caches, temp outputs, profile artifacts). Keep only useful artifacts, and ignore them instead of deleting when retention is needed.
 - 每次提交后，必须立即清理无用的本地改动（运行缓存、临时输出、浏览器配置产物等）；如文件仍有保留价值，应通过忽略策略保留而非删除。
 - For charting feature changes, add or update unit tests for each newly introduced series (e.g., candlestick/volume/MA) to verify data mapping and sort order.
+- For timeframe-based K-line fetching (day/week/month/year), scale lookback windows and request counts by timeframe before aggregation to avoid sparse higher-timeframe results.
