@@ -5,6 +5,11 @@ public sealed record StockNewsImpactItemDto(
     string Source,
     DateTime PublishedAt,
     string? Url,
+    string EventType,
+    decimal TypeWeight,
+    decimal SourceCredibility,
+    string Theme,
+    int MergedCount,
     string Category,
     int ImpactScore,
     string? Reason

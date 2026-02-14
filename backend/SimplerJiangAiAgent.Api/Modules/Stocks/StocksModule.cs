@@ -33,6 +33,8 @@ public sealed class StocksModule : IModule
         services.AddScoped<IStockAgentHistoryService, StockAgentHistoryService>();
         services.AddScoped<IStockChatHistoryService, StockChatHistoryService>();
         services.AddScoped<IStockNewsImpactService, StockNewsImpactService>();
+        services.AddScoped<IStockSignalService, StockSignalService>();
+        services.AddScoped<IStockPositionGuidanceService, StockPositionGuidanceService>();
     }
 
     public void MapEndpoints(IEndpointRouteBuilder app)
@@ -150,6 +152,57 @@ public sealed class StocksModule : IModule
             return Results.Ok(impact);
         })
         .WithName("GetNewsImpact")
+        .WithOpenApi();
+
+        // 事件驱动信号（含证据/反证与历史对齐）
+        group.MapGet("/signals", async (string symbol, string? source, IStockDataService dataService, IStockNewsImpactService impactService, IStockSignalService signalService) =>
+        {
+            if (string.IsNullOrWhiteSpace(symbol))
+            {
+                return Results.BadRequest(new { message = "symbol 不能为空" });
+            }
+
+            var target = symbol.Trim();
+            var quote = await dataService.GetQuoteAsync(target, source);
+            var kline = await dataService.GetKLineAsync(target, "day", 60, source);
+            var minute = await dataService.GetMinuteLineAsync(target, source);
+            var messages = await dataService.GetIntradayMessagesAsync(target, source);
+            var detail = new StockDetailDto(quote, kline, minute, messages);
+            var impact = impactService.Evaluate(target, quote.Name, messages);
+            var signal = signalService.Evaluate(detail, impact);
+
+            return Results.Ok(signal);
+        })
+        .WithName("GetStockSignals")
+        .WithOpenApi();
+
+        // 个性化风险 + 仓位建议
+        group.MapPost("/position-guidance", async (StockPositionGuidanceRequestDto request, IStockDataService dataService, IStockNewsImpactService impactService, IStockSignalService signalService, IStockPositionGuidanceService guidanceService) =>
+        {
+            if (string.IsNullOrWhiteSpace(request.Symbol))
+            {
+                return Results.BadRequest(new { message = "symbol 不能为空" });
+            }
+
+            if (request.Capital <= 0)
+            {
+                return Results.BadRequest(new { message = "capital 必须大于0" });
+            }
+
+            var target = request.Symbol.Trim();
+            var quote = await dataService.GetQuoteAsync(target, request.Source);
+            var kline = await dataService.GetKLineAsync(target, "day", 60, request.Source);
+            var minute = await dataService.GetMinuteLineAsync(target, request.Source);
+            var messages = await dataService.GetIntradayMessagesAsync(target, request.Source);
+
+            var detail = new StockDetailDto(quote, kline, minute, messages);
+            var impact = impactService.Evaluate(target, quote.Name, messages);
+            var signal = signalService.Evaluate(detail, impact);
+            var guidance = guidanceService.Build(quote, signal, request.RiskLevel, request.CurrentPositionPercent);
+
+            return Results.Ok(guidance);
+        })
+        .WithName("GetStockPositionGuidance")
         .WithOpenApi();
 
         // 手动触发一次同步

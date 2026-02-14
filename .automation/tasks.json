@@ -14,35 +14,35 @@
                   {
                       "id":  "GOAL-002",
                       "title":  "Multi-source events with weighted impact",
-                      "status":  "todo",
+                      "status":  "done",
                       "stages":  {
-                                     "plan":  "todo",
-                                     "dev":  "todo",
-                                     "test":  "todo"
+                                     "plan":  "done",
+                                     "dev":  "done",
+                                     "test":  "done"
                                  },
-                      "notes":  "公告/研报/新闻分级与权重；建立来源可信度与影响力评分；支持同主题事件合并去重"
+                      "notes":  "已实现公告/研报/新闻分级权重；来源可信度评分；同主题事件合并去重；新增后端单测"
                   },
                   {
                       "id":  "GOAL-003",
                       "title":  "Event-driven signals with explanations",
-                      "status":  "todo",
+                      "status":  "done",
                       "stages":  {
-                                     "plan":  "todo",
-                                     "dev":  "todo",
-                                     "test":  "todo"
+                                     "plan":  "done",
+                                     "dev":  "done",
+                                     "test":  "done"
                                  },
-                      "notes":  "事件影响->交易信号->可解释输出；给出证据与反证；与历史数据对齐"
+                      "notes":  "已实现事件影响->信号输出；证据与反证清单；与近期K线趋势的历史对齐评分；新增后端接口与单测"
                   },
                   {
                       "id":  "GOAL-004",
                       "title":  "Personalized risk + position guidance",
-                      "status":  "todo",
+                      "status":  "done",
                       "stages":  {
-                                     "plan":  "todo",
-                                     "dev":  "todo",
-                                     "test":  "todo"
+                                     "plan":  "done",
+                                     "dev":  "done",
+                                     "test":  "done"
                                  },
-                      "notes":  "风险画像/仓位联动；约束最大回撤；支持不同风格策略偏好"
+                      "notes":  "已实现按风险档位（稳健/平衡/激进）的仓位建议、止损止盈与最大回撤约束；新增后端接口与单测"
                   },
                   {
                       "id":  "OPS-005",

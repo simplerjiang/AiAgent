@@ -18,6 +18,9 @@
 - /api/stocks/detail 组合详情
 - /api/stocks/detail/cache 组合详情（缓存）
 - /api/stocks/sync 手动触发同步
+- /api/stocks/news/impact 资讯影响评估（公告/研报/新闻分级、来源可信度、同主题合并去重）
+- /api/stocks/signals 事件驱动信号（证据/反证、历史对齐）
+- /api/stocks/position-guidance 个性化风险与仓位建议
 - /api/admin/login 管理员登录
 - /api/admin/llm/settings/{provider} LLM 配置读取/更新（需管理员 token）
 - /api/admin/llm/test/{provider} LLM 调用测试（需管理员 token）
@@ -77,9 +80,9 @@ opencode
 - 强制执行测试顺序并记录结果
 
 ## 当前目标清单（与 .automation/tasks.json 同步）
-- GOAL-002 多源事件与权重评估（公告/研报/新闻分级）
-- GOAL-003 事件驱动信号与可解释输出
-- GOAL-004 个性化风控与仓位建议
+- [x] GOAL-002 多源事件与权重评估（公告/研报/新闻分级、来源可信度、同主题去重）
+- [x] GOAL-003 事件驱动信号与可解释输出（证据/反证、历史对齐）
+- [x] GOAL-004 个性化风控与仓位建议
 
 ## 未来目标（智能化炒股助手愿景）
 以下目标不是口号，而是系统可以逐步落地的路线图：
