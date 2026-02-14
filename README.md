@@ -35,3 +35,9 @@
 测试：
 - 后端单元测试：dotnet test backend/SimplerJiangAiAgent.Api.Tests/SimplerJiangAiAgent.Api.Tests.csproj
 - 前端单元测试：cd frontend && npm run test:unit
+
+多 Agent 自动化：
+- 入口与说明：.automation/README.md
+- 脚本：.automation/scripts/run.ps1, finalize.ps1, rollback.ps1
+- 任务清单：.automation/tasks.json
+- 约束：Git 回滚、日志留存、Playwright MCP (Edge)

@@ -1,0 +1,15 @@
+{
+  "tasks": [
+    {
+      "id": "AUTO-001",
+      "title": "Bootstrap multi-agent automation",
+      "status": "todo",
+      "stages": {
+        "plan": "todo",
+        "dev": "todo",
+        "test": "todo"
+      },
+      "notes": ""
+    }
+  ]
+}
