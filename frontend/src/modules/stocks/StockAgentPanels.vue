@@ -38,6 +38,7 @@ const toggleRaw = id => {
 const buildListSections = data => {
   if (!data) return []
   const configs = [
+    { key: 'evidence', title: '证据来源', columns: ['point', 'source', 'publishedAt'] },
     { key: 'events', title: '资讯列表', columns: ['title', 'category', 'publishedAt', 'source', 'impact'] },
     { key: 'topMovers', title: '板块龙头', columns: ['symbol', 'name', 'changePercent', 'reason'] },
     { key: 'forecast', title: '价格预测', columns: ['label', 'price', 'confidence'] },
@@ -54,6 +55,34 @@ const buildListSections = data => {
 const buildMetrics = data => {
   if (!data) return []
   return buildMetricRows(data.metrics, data.recommendation, data.sentiment)
+}
+
+const getRecommendation = data => {
+  if (!data || typeof data !== 'object') return null
+  return data.recommendation && typeof data.recommendation === 'object' ? data.recommendation : null
+}
+
+const getRecommendationRows = data => {
+  const recommendation = getRecommendation(data)
+  if (!recommendation) return []
+  const keys = ['action', 'rating', 'targetPrice', 'takeProfitPrice', 'stopLossPrice', 'timeHorizon', 'positionPercent']
+  return keys
+    .filter(key => recommendation[key] !== undefined && recommendation[key] !== null && recommendation[key] !== '')
+    .map(key => ({ key, value: recommendation[key] }))
+}
+
+const getConfidence = data => {
+  if (!data || typeof data !== 'object') return null
+  const recommendation = getRecommendation(data)
+  if (recommendation && recommendation.confidence != null) {
+    return recommendation.confidence
+  }
+  return data.confidence ?? null
+}
+
+const buildTagList = (data, key) => {
+  if (!data || typeof data !== 'object') return []
+  return Array.isArray(data[key]) ? data[key] : []
 }
 </script>
 
@@ -97,11 +126,26 @@ const buildMetrics = data => {
               {{ getAgentError(agent) }}
             </p>
           </div>
-          <button class="raw-toggle" @click="toggleRaw(getAgentId(agent))">JSON</button>
+          <div class="header-actions">
+            <span v-if="getAgentData(agent) && getConfidence(getAgentData(agent)) != null" class="confidence-badge">
+              置信度 {{ formatMetricValue(getConfidence(getAgentData(agent)), 'confidence') }}
+            </span>
+            <button class="raw-toggle" @click="toggleRaw(getAgentId(agent))">JSON</button>
+          </div>
         </header>
 
         <div v-if="getAgentData(agent)" class="agent-content">
           <p class="summary">{{ getAgentData(agent).summary }}</p>
+
+          <div v-if="getRecommendationRows(getAgentData(agent)).length" class="recommendation-block">
+            <h5>操作计划</h5>
+            <div class="metrics">
+              <div v-for="row in getRecommendationRows(getAgentData(agent))" :key="`rec-${row.key}`" class="metric-row">
+                <span class="metric-key">{{ formatMetricLabel(row.key) }}</span>
+                <span class="metric-value">{{ formatMetricValue(row.value, row.key) }}</span>
+              </div>
+            </div>
+          </div>
 
           <div v-if="buildMetrics(getAgentData(agent)).length" class="metrics">
             <div v-for="row in buildMetrics(getAgentData(agent))" :key="row.key" class="metric-row">
@@ -134,6 +178,27 @@ const buildMetrics = data => {
             <h5>信号</h5>
             <div class="pills">
               <span v-for="(item, idx) in getAgentData(agent).signals" :key="idx" class="pill">{{ item }}</span>
+            </div>
+          </div>
+
+          <div v-if="buildTagList(getAgentData(agent), 'triggers').length" class="pill-list">
+            <h5>触发条件</h5>
+            <div class="pills">
+              <span v-for="(item, idx) in buildTagList(getAgentData(agent), 'triggers')" :key="`trigger-${idx}`" class="pill trigger">{{ item }}</span>
+            </div>
+          </div>
+
+          <div v-if="buildTagList(getAgentData(agent), 'invalidations').length" class="pill-list">
+            <h5>失效条件</h5>
+            <div class="pills">
+              <span v-for="(item, idx) in buildTagList(getAgentData(agent), 'invalidations')" :key="`invalid-${idx}`" class="pill invalid">{{ item }}</span>
+            </div>
+          </div>
+
+          <div v-if="buildTagList(getAgentData(agent), 'riskLimits').length" class="pill-list">
+            <h5>风险上限</h5>
+            <div class="pills">
+              <span v-for="(item, idx) in buildTagList(getAgentData(agent), 'riskLimits')" :key="`limit-${idx}`" class="pill risk-limit">{{ item }}</span>
             </div>
           </div>
 
@@ -227,6 +292,20 @@ const buildMetrics = data => {
   gap: 0.5rem;
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.confidence-badge {
+  font-size: 0.72rem;
+  color: #1e3a8a;
+  background: rgba(59, 130, 246, 0.12);
+  border-radius: 999px;
+  padding: 0.2rem 0.55rem;
+}
+
 .raw-toggle {
   border-radius: 999px;
   border: 1px solid rgba(148, 163, 184, 0.4);
@@ -239,6 +318,10 @@ const buildMetrics = data => {
 .summary {
   color: #0f172a;
   font-weight: 500;
+}
+
+.recommendation-block h5 {
+  margin: 0 0 0.35rem;
 }
 
 .metrics {
@@ -298,6 +381,21 @@ const buildMetrics = data => {
 .pill.risk {
   background: rgba(239, 68, 68, 0.12);
   color: #b91c1c;
+}
+
+.pill.trigger {
+  background: rgba(16, 185, 129, 0.12);
+  color: #047857;
+}
+
+.pill.invalid {
+  background: rgba(245, 158, 11, 0.16);
+  color: #b45309;
+}
+
+.pill.risk-limit {
+  background: rgba(14, 165, 233, 0.14);
+  color: #0369a1;
 }
 
 .raw-json {

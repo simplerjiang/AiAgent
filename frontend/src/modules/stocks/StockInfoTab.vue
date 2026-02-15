@@ -314,6 +314,44 @@ const currentStockLabel = computed(() => {
   return `${quote.name ?? ''}（${quote.symbol ?? ''}）`
 })
 
+const getAgentId = agent => agent?.agentId ?? agent?.AgentId ?? ''
+const getAgentData = agent => agent?.data ?? agent?.Data ?? null
+
+const parseLevelNumber = value => {
+  const number = Number(value)
+  return Number.isFinite(number) ? number : null
+}
+
+const aiLevels = computed(() => {
+  const list = Array.isArray(agentResults.value) ? agentResults.value : []
+  const commanderData = getAgentData(list.find(item => getAgentId(item) === 'commander'))
+  const trendData = getAgentData(list.find(item => getAgentId(item) === 'trend_analysis'))
+
+  const recommendation = commanderData?.recommendation ?? {}
+  const resistanceFromRecommendation = parseLevelNumber(recommendation.targetPrice ?? recommendation.takeProfitPrice)
+  const supportFromRecommendation = parseLevelNumber(recommendation.stopLossPrice)
+
+  const forecast = Array.isArray(trendData?.forecast) ? trendData.forecast : []
+  const forecastPrices = forecast
+    .map(item => parseLevelNumber(item?.price))
+    .filter(price => Number.isFinite(price))
+
+  const resistanceFromTrend = forecastPrices.length ? Math.max(...forecastPrices) : null
+  const supportFromTrend = forecastPrices.length ? Math.min(...forecastPrices) : null
+
+  const resistance = resistanceFromRecommendation ?? resistanceFromTrend
+  const support = supportFromRecommendation ?? supportFromTrend
+
+  if (!Number.isFinite(resistance) && !Number.isFinite(support)) {
+    return null
+  }
+
+  return {
+    resistance: Number.isFinite(resistance) ? resistance : null,
+    support: Number.isFinite(support) ? support : null
+  }
+})
+
 const getChangeClass = value => {
   const number = Number(value)
   if (Number.isNaN(number)) return ''
@@ -955,6 +993,7 @@ watch(
         :k-lines="detail.kLines"
         :minute-lines="detail.minuteLines"
         :base-price="Number(detail.quote.price) - Number(detail.quote.change)"
+        :ai-levels="aiLevels"
         :interval="interval"
         @update:interval="interval = $event"
       />

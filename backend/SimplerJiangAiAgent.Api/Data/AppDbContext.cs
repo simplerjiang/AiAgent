@@ -57,5 +57,17 @@ public sealed class AppDbContext : DbContext
             .HasOne(x => x.Session)
             .WithMany(x => x.Messages)
             .HasForeignKey(x => x.SessionId);
+
+        foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+        {
+            foreach (var property in entityType.GetProperties())
+            {
+                if (property.ClrType == typeof(decimal) || property.ClrType == typeof(decimal?))
+                {
+                    property.SetPrecision(18);
+                    property.SetScale(2);
+                }
+            }
+        }
     }
 }

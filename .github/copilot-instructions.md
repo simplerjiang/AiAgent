@@ -72,3 +72,11 @@
 - 当需要为数据库添加新表或字段时，在本地使用Sqlcmd先验证SQL语句的正确性和预期效果，确保数据库变更不会引入错误,并确保本地数据库结构正确,如结构不正确应该修复。
 - For any LLM-generated stock suggestion, enforce a structured response schema with evidence sources, confidence score, trigger/invalid conditions, and explicit risk limits before presenting it to users.
 - 对任何 LLM 生成的个股建议，必须强制结构化输出：证据来源、置信度、触发/失效条件、风险上限，满足后才可展示给用户。
+- For GOAL-007 optimization requests, prefer in-place upgrades to existing multi-agent prompts and displays; do not introduce new modules when existing panels can be enhanced.
+- 对 GOAL-007 的优化需求，优先在现有多Agent提示词与展示层就地增强；若现有面板可扩展，则不要新增模块。
+- For Edge MCP validation, do not stop at static existence checks: must click key UI actions, wait for visible responses/state changes, and inspect both backend logs and frontend console logs for runtime errors.
+- Edge MCP 验证不能只做静态存在性检查：必须点击关键交互、等待可见响应/状态变化，并检查后端日志与前端控制台日志是否有运行时错误。
+- During testing, always verify database schema completeness with SQLCMD (tables/columns/indexes for touched features); if schema mismatches are found, fix the database structure before concluding the task.
+- 测试阶段必须使用 SQLCMD 检查数据库结构完整性（涉及功能的表/字段/索引）；若发现结构不匹配，需先修复数据库结构再结束任务。
+- For AI chart overlays, only render numeric support/resistance values and provide deterministic fallback precedence (commander recommendation first, then trend forecast extremes) to prevent runtime chart errors.
+- 对 AI 图表叠加线，仅渲染数值型支撑/突破价，并使用确定性的回退优先级（先 commander 建议，再 trend 预测极值），避免图表运行时错误。

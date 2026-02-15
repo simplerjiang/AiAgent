@@ -18,6 +18,10 @@ const props = defineProps({
   interval: {
     type: String,
     default: 'day'
+  },
+  aiLevels: {
+    type: Object,
+    default: null
   }
 })
 
@@ -31,8 +35,12 @@ const klineSeriesRef = ref(null)
 const klineVolumeSeriesRef = ref(null)
 const klineMa5SeriesRef = ref(null)
 const klineMa10SeriesRef = ref(null)
+const klineResistanceSeriesRef = ref(null)
+const klineSupportSeriesRef = ref(null)
 const minuteSeriesRef = ref(null)
 const minuteVolumeSeriesRef = ref(null)
+const minuteResistanceSeriesRef = ref(null)
+const minuteSupportSeriesRef = ref(null)
 let resizeObserver = null
 let resizeHandler = null
 const klineValues = ref([])
@@ -41,6 +49,46 @@ const minuteBasePrice = ref(null)
 const minuteBaseLineRef = ref(null)
 const klineHover = ref({ visible: false, x: 0, y: 0, lines: [] })
 const minuteHover = ref({ visible: false, x: 0, y: 0, lines: [] })
+
+const parseLevelValue = value => {
+  const number = Number(value)
+  return Number.isFinite(number) ? number : null
+}
+
+const aiResistance = () => parseLevelValue(props.aiLevels?.resistance)
+const aiSupport = () => parseLevelValue(props.aiLevels?.support)
+
+const aiLevelText = () => {
+  const resistance = aiResistance()
+  const support = aiSupport()
+  if (!Number.isFinite(resistance) && !Number.isFinite(support)) return ''
+  const parts = []
+  if (Number.isFinite(resistance)) parts.push(`突破线 ${resistance}`)
+  if (Number.isFinite(support)) parts.push(`支撑线 ${support}`)
+  return `AI线：${parts.join(' / ')}`
+}
+
+const buildKlineLevelData = value => {
+  if (!Number.isFinite(value) || !klineValues.value.length) return []
+  const first = klineValues.value[0]
+  const last = klineValues.value[klineValues.value.length - 1]
+  if (!first?.datePart || !last?.datePart) return []
+  return [
+    { time: { year: first.datePart.year, month: first.datePart.month, day: first.datePart.day }, value },
+    { time: { year: last.datePart.year, month: last.datePart.month, day: last.datePart.day }, value }
+  ]
+}
+
+const buildMinuteLevelData = value => {
+  if (!Number.isFinite(value) || !minuteValues.value.length) return []
+  const first = minuteValues.value[0]
+  const last = minuteValues.value[minuteValues.value.length - 1]
+  if (!Number.isFinite(first?.time) || !Number.isFinite(last?.time)) return []
+  return [
+    { time: first.time, value },
+    { time: last.time, value }
+  ]
+}
 
 const pad = value => String(value).padStart(2, '0')
 
@@ -212,6 +260,24 @@ const ensureKlineChart = () => {
     title: 'MA10'
   })
 
+  const resistanceSeries = chart.addSeries(LineSeries, {
+    color: '#f97316',
+    lineWidth: 1,
+    lineStyle: 2,
+    priceLineVisible: false,
+    lastValueVisible: true,
+    title: '突破线'
+  })
+
+  const supportSeries = chart.addSeries(LineSeries, {
+    color: '#10b981',
+    lineWidth: 1,
+    lineStyle: 2,
+    priceLineVisible: false,
+    lastValueVisible: true,
+    title: '支撑线'
+  })
+
   chart.priceScale('volume').applyOptions({
     borderVisible: false,
     scaleMargins: { top: 0.78, bottom: 0 }
@@ -261,6 +327,8 @@ const ensureKlineChart = () => {
   klineVolumeSeriesRef.value = volumeSeries
   klineMa5SeriesRef.value = ma5Series
   klineMa10SeriesRef.value = ma10Series
+  klineResistanceSeriesRef.value = resistanceSeries
+  klineSupportSeriesRef.value = supportSeries
 }
 
 const ensureMinuteChart = () => {
@@ -299,6 +367,24 @@ const ensureMinuteChart = () => {
   const minuteVolumeSeries = chart.addSeries(HistogramSeries, {
     priceScaleId: 'volume',
     priceFormat: { type: 'volume' }
+  })
+
+  const minuteResistanceSeries = chart.addSeries(LineSeries, {
+    color: '#f97316',
+    lineWidth: 1,
+    lineStyle: 2,
+    priceLineVisible: false,
+    lastValueVisible: true,
+    title: '突破线'
+  })
+
+  const minuteSupportSeries = chart.addSeries(LineSeries, {
+    color: '#10b981',
+    lineWidth: 1,
+    lineStyle: 2,
+    priceLineVisible: false,
+    lastValueVisible: true,
+    title: '支撑线'
   })
 
   chart.priceScale('volume').applyOptions({
@@ -342,11 +428,13 @@ const ensureMinuteChart = () => {
   minuteChartRef.value = chart
   minuteSeriesRef.value = minuteSeries
   minuteVolumeSeriesRef.value = minuteVolumeSeries
+  minuteResistanceSeriesRef.value = minuteResistanceSeries
+  minuteSupportSeriesRef.value = minuteSupportSeries
 }
 
 const renderKLine = () => {
   ensureKlineChart()
-  if (!klineSeriesRef.value || !klineVolumeSeriesRef.value || !klineMa5SeriesRef.value || !klineMa10SeriesRef.value) return
+  if (!klineSeriesRef.value || !klineVolumeSeriesRef.value || !klineMa5SeriesRef.value || !klineMa10SeriesRef.value || !klineResistanceSeriesRef.value || !klineSupportSeriesRef.value) return
 
   const normalized = props.kLines
     .map(item => {
@@ -378,6 +466,8 @@ const renderKLine = () => {
     klineVolumeSeriesRef.value.setData([])
     klineMa5SeriesRef.value.setData([])
     klineMa10SeriesRef.value.setData([])
+    klineResistanceSeriesRef.value.setData([])
+    klineSupportSeriesRef.value.setData([])
     return
   }
 
@@ -423,12 +513,14 @@ const renderKLine = () => {
   klineVolumeSeriesRef.value.setData(volumeData)
   klineMa5SeriesRef.value.setData(ma5Data)
   klineMa10SeriesRef.value.setData(ma10Data)
+  klineResistanceSeriesRef.value.setData(buildKlineLevelData(aiResistance()))
+  klineSupportSeriesRef.value.setData(buildKlineLevelData(aiSupport()))
   klineChartRef.value?.timeScale().fitContent()
 }
 
 const renderMinute = () => {
   ensureMinuteChart()
-  if (!minuteSeriesRef.value || !minuteVolumeSeriesRef.value) return
+  if (!minuteSeriesRef.value || !minuteVolumeSeriesRef.value || !minuteResistanceSeriesRef.value || !minuteSupportSeriesRef.value) return
 
   const data = props.minuteLines.map(item => {
     const datePart = parseDatePart(item?.date ?? item?.Date)
@@ -453,6 +545,8 @@ const renderMinute = () => {
   if (!data.length) {
     minuteSeriesRef.value.setData([])
     minuteVolumeSeriesRef.value.setData([])
+    minuteResistanceSeriesRef.value.setData([])
+    minuteSupportSeriesRef.value.setData([])
     return
   }
 
@@ -468,6 +562,8 @@ const renderMinute = () => {
     }
   })
   minuteVolumeSeriesRef.value.setData(minuteVolumeData)
+  minuteResistanceSeriesRef.value.setData(buildMinuteLevelData(aiResistance()))
+  minuteSupportSeriesRef.value.setData(buildMinuteLevelData(aiSupport()))
 
   if (minuteBaseLineRef.value) {
     minuteSeriesRef.value.removePriceLine(minuteBaseLineRef.value)
@@ -534,11 +630,15 @@ onUnmounted(() => {
   }
   klineMa5SeriesRef.value = null
   klineMa10SeriesRef.value = null
+  klineResistanceSeriesRef.value = null
+  klineSupportSeriesRef.value = null
   minuteVolumeSeriesRef.value = null
+  minuteResistanceSeriesRef.value = null
+  minuteSupportSeriesRef.value = null
   minuteBaseLineRef.value = null
 })
 
-watch(() => [props.kLines, props.minuteLines], async () => {
+watch(() => [props.kLines, props.minuteLines, props.basePrice, props.aiLevels], async () => {
   renderAll()
   await nextTick()
   resizeCharts()
@@ -562,6 +662,7 @@ watch(() => [props.kLines, props.minuteLines], async () => {
           </button>
         </div>
       </div>
+      <p v-if="aiLevelText()" class="ai-level-tip">{{ aiLevelText() }}</p>
       <div ref="klineRef" class="chart" v-show="kLines.length" />
       <p class="placeholder" v-show="!kLines.length">暂无 K 线数据</p>
       <div
@@ -574,6 +675,7 @@ watch(() => [props.kLines, props.minuteLines], async () => {
     </div>
     <div class="chart-wrapper">
       <h3>分时图</h3>
+      <p v-if="aiLevelText()" class="ai-level-tip">{{ aiLevelText() }}</p>
       <div ref="minuteRef" class="chart" v-show="minuteLines.length" />
       <p class="placeholder" v-show="!minuteLines.length">暂无分时数据</p>
       <div
@@ -623,6 +725,12 @@ watch(() => [props.kLines, props.minuteLines], async () => {
 .placeholder {
   color: #9ca3af;
   margin: 0.5rem 0 0;
+}
+
+.ai-level-tip {
+  color: #64748b;
+  margin: 0.35rem 0 0.4rem;
+  font-size: 0.82rem;
 }
 
 .hover-tip {

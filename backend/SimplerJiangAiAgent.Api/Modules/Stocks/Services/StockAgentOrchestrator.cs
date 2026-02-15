@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json.Nodes;
 using SimplerJiangAiAgent.Api.Infrastructure.Llm;
 using SimplerJiangAiAgent.Api.Infrastructure.Logging;
 using SimplerJiangAiAgent.Api.Modules.Stocks.Models;
@@ -158,7 +159,8 @@ public sealed class StockAgentOrchestrator : IStockAgentOrchestrator
                     var repairRaw = repair.Content?.Trim() ?? string.Empty;
                     if (StockAgentJsonParser.TryParse(repairRaw, out var repairData, out _))
                     {
-                        return new StockAgentResultDto(definition.Id, definition.Name, true, null, repairData, repairRaw);
+                        var normalizedRepairData = StockAgentResultNormalizer.Normalize(kind, repairData!.Value);
+                        return new StockAgentResultDto(definition.Id, definition.Name, true, null, normalizedRepairData, repairRaw);
                     }
 
                     _fileLogWriter.Write("LLM", $"parse_error agent={definition.Id} stage=repair attempt={attempt} raw={repairRaw}");
@@ -168,7 +170,8 @@ public sealed class StockAgentOrchestrator : IStockAgentOrchestrator
                 return new StockAgentResultDto(definition.Id, definition.Name, false, parseError, null, currentRaw);
             }
 
-            return new StockAgentResultDto(definition.Id, definition.Name, true, null, data, raw);
+            var normalizedData = StockAgentResultNormalizer.Normalize(kind, data!.Value);
+            return new StockAgentResultDto(definition.Id, definition.Name, true, null, normalizedData, raw);
         }
         catch (Exception ex)
         {
@@ -294,7 +297,8 @@ internal static class StockAgentPromptBuilder
             "1. 必须输出严格JSON，不要Markdown，不要代码块，不要多余文字。\n" +
             "2. 所有字段必须存在；没有数据用null或空数组。\n" +
             "3. 百分比字段用数值，不带%符号。\n" +
-            "4. 评估必须基于其他Agent输出汇总后再给出分数与结论。\n\n" +
+            "4. 评估必须基于其他Agent输出汇总后再给出分数与结论。\n" +
+            "5. 所有建议必须给出证据来源、触发条件、失效条件和风险上限。\n\n" +
             "输出JSON结构：\n" +
             "{\n" +
             "  \"agent\": \"commander\",\n" +
@@ -309,12 +313,30 @@ internal static class StockAgentPromptBuilder
             "    \"date\": \"YYYY-MM-DD\"\n" +
             "  },\n" +
             "  \"recommendation\": {\n" +
+            "    \"action\": \"观察|试仓|加仓|减仓|清仓\",\n" +
+            "    \"targetPrice\": number|null,\n" +
+            "    \"takeProfitPrice\": number|null,\n" +
+            "    \"stopLossPrice\": number|null,\n" +
+            "    \"timeHorizon\": \"string|null\",\n" +
+            "    \"positionPercent\": number|null,\n" +
             "    \"entryScore\": number,\n" +
             "    \"valuationScore\": number,\n" +
             "    \"confidence\": number,\n" +
             "    \"rating\": \"string\"\n" +
             "  },\n" +
             "  \"reasons\": [\"string\"],\n" +
+            "  \"evidence\": [\n" +
+            "    {\n" +
+            "      \"point\": \"string\",\n" +
+            "      \"source\": \"string\",\n" +
+            "      \"publishedAt\": \"YYYY-MM-DD HH:mm|null\",\n" +
+            "      \"url\": \"string|null\"\n" +
+            "    }\n" +
+            "  ],\n" +
+            "  \"triggers\": [\"string\"],\n" +
+            "  \"invalidations\": [\"string\"],\n" +
+            "  \"riskLimits\": [\"string\"],\n" +
+            "  \"signals\": [\"string\"],\n" +
             "  \"risks\": [\"string\"],\n" +
             "  \"chart\": null\n" +
             "}\n\n" +
@@ -335,6 +357,7 @@ internal static class StockAgentPromptBuilder
             "{\n" +
             "  \"agent\": \"stock_news\",\n" +
             "  \"summary\": \"string\",\n" +
+            "  \"confidence\": number,\n" +
             "  \"sentiment\": {\n" +
             "    \"positive\": number,\n" +
             "    \"neutral\": number,\n" +
@@ -351,7 +374,18 @@ internal static class StockAgentPromptBuilder
             "      \"url\": \"string|null\"\n" +
             "    }\n" +
             "  ],\n" +
+            "  \"evidence\": [\n" +
+            "    {\n" +
+            "      \"point\": \"string\",\n" +
+            "      \"source\": \"string\",\n" +
+            "      \"publishedAt\": \"YYYY-MM-DD HH:mm|null\",\n" +
+            "      \"url\": \"string|null\"\n" +
+            "    }\n" +
+            "  ],\n" +
             "  \"signals\": [\"string\"],\n" +
+            "  \"triggers\": [\"string\"],\n" +
+            "  \"invalidations\": [\"string\"],\n" +
+            "  \"riskLimits\": [\"string\"],\n" +
             "  \"risks\": [\"string\"],\n" +
             "  \"chart\": null\n" +
             "}\n\n" +
@@ -373,6 +407,7 @@ internal static class StockAgentPromptBuilder
             "  \"agent\": \"sector_news\",\n" +
             "  \"sector\": \"string\",\n" +
             "  \"summary\": \"string\",\n" +
+            "  \"confidence\": number,\n" +
             "  \"sectorChangePercent\": number,\n" +
             "  \"topMovers\": [\n" +
             "    {\n" +
@@ -382,7 +417,18 @@ internal static class StockAgentPromptBuilder
             "      \"reason\": \"string\"\n" +
             "    }\n" +
             "  ],\n" +
+            "  \"evidence\": [\n" +
+            "    {\n" +
+            "      \"point\": \"string\",\n" +
+            "      \"source\": \"string\",\n" +
+            "      \"publishedAt\": \"YYYY-MM-DD HH:mm|null\",\n" +
+            "      \"url\": \"string|null\"\n" +
+            "    }\n" +
+            "  ],\n" +
             "  \"signals\": [\"string\"],\n" +
+            "  \"triggers\": [\"string\"],\n" +
+            "  \"invalidations\": [\"string\"],\n" +
+            "  \"riskLimits\": [\"string\"],\n" +
             "  \"risks\": [\"string\"],\n" +
             "  \"chart\": null\n" +
             "}\n\n" +
@@ -403,6 +449,7 @@ internal static class StockAgentPromptBuilder
             "{\n" +
             "  \"agent\": \"financial_analysis\",\n" +
             "  \"summary\": \"string\",\n" +
+            "  \"confidence\": number,\n" +
             "  \"metrics\": {\n" +
             "    \"revenue\": number|null,\n" +
             "    \"revenueYoY\": number|null,\n" +
@@ -413,6 +460,18 @@ internal static class StockAgentPromptBuilder
             "    \"institutionTargetPrice\": number|null\n" +
             "  },\n" +
             "  \"highlights\": [\"string\"],\n" +
+            "  \"evidence\": [\n" +
+            "    {\n" +
+            "      \"point\": \"string\",\n" +
+            "      \"source\": \"string\",\n" +
+            "      \"publishedAt\": \"YYYY-MM-DD HH:mm|null\",\n" +
+            "      \"url\": \"string|null\"\n" +
+            "    }\n" +
+            "  ],\n" +
+            "  \"signals\": [\"string\"],\n" +
+            "  \"triggers\": [\"string\"],\n" +
+            "  \"invalidations\": [\"string\"],\n" +
+            "  \"riskLimits\": [\"string\"],\n" +
             "  \"risks\": [\"string\"],\n" +
             "  \"chart\": null\n" +
             "}\n\n" +
@@ -433,6 +492,7 @@ internal static class StockAgentPromptBuilder
             "{\n" +
             "  \"agent\": \"trend_analysis\",\n" +
             "  \"summary\": \"string\",\n" +
+            "  \"confidence\": number,\n" +
             "  \"timeframeSignals\": [\n" +
             "    {\n" +
             "      \"timeframe\": \"1D|1W|1M\",\n" +
@@ -447,7 +507,18 @@ internal static class StockAgentPromptBuilder
             "      \"confidence\": number\n" +
             "    }\n" +
             "  ],\n" +
+            "  \"evidence\": [\n" +
+            "    {\n" +
+            "      \"point\": \"string\",\n" +
+            "      \"source\": \"string\",\n" +
+            "      \"publishedAt\": \"YYYY-MM-DD HH:mm|null\",\n" +
+            "      \"url\": \"string|null\"\n" +
+            "    }\n" +
+            "  ],\n" +
             "  \"signals\": [\"string\"],\n" +
+            "  \"triggers\": [\"string\"],\n" +
+            "  \"invalidations\": [\"string\"],\n" +
+            "  \"riskLimits\": [\"string\"],\n" +
             "  \"risks\": [\"string\"],\n" +
             "  \"chart\": {\n" +
             "    \"type\": \"line\",\n" +
@@ -489,12 +560,30 @@ internal static class StockAgentPromptBuilder
                 "    \"date\": \"YYYY-MM-DD\"\n" +
                 "  },\n" +
                 "  \"recommendation\": {\n" +
+                "    \"action\": \"观察|试仓|加仓|减仓|清仓\",\n" +
+                "    \"targetPrice\": number|null,\n" +
+                "    \"takeProfitPrice\": number|null,\n" +
+                "    \"stopLossPrice\": number|null,\n" +
+                "    \"timeHorizon\": \"string|null\",\n" +
+                "    \"positionPercent\": number|null,\n" +
                 "    \"entryScore\": number,\n" +
                 "    \"valuationScore\": number,\n" +
                 "    \"confidence\": number,\n" +
                 "    \"rating\": \"string\"\n" +
                 "  },\n" +
                 "  \"reasons\": [\"string\"],\n" +
+                "  \"evidence\": [\n" +
+                "    {\n" +
+                "      \"point\": \"string\",\n" +
+                "      \"source\": \"string\",\n" +
+                "      \"publishedAt\": \"YYYY-MM-DD HH:mm|null\",\n" +
+                "      \"url\": \"string|null\"\n" +
+                "    }\n" +
+                "  ],\n" +
+                "  \"triggers\": [\"string\"],\n" +
+                "  \"invalidations\": [\"string\"],\n" +
+                "  \"riskLimits\": [\"string\"],\n" +
+                "  \"signals\": [\"string\"],\n" +
                 "  \"risks\": [\"string\"],\n" +
                 "  \"chart\": null\n" +
                 "}",
@@ -502,6 +591,7 @@ internal static class StockAgentPromptBuilder
                 "{\n" +
                 "  \"agent\": \"stock_news\",\n" +
                 "  \"summary\": \"string\",\n" +
+                "  \"confidence\": number,\n" +
                 "  \"sentiment\": {\n" +
                 "    \"positive\": number,\n" +
                 "    \"neutral\": number,\n" +
@@ -518,7 +608,18 @@ internal static class StockAgentPromptBuilder
                 "      \"url\": \"string|null\"\n" +
                 "    }\n" +
                 "  ],\n" +
+                "  \"evidence\": [\n" +
+                "    {\n" +
+                "      \"point\": \"string\",\n" +
+                "      \"source\": \"string\",\n" +
+                "      \"publishedAt\": \"YYYY-MM-DD HH:mm|null\",\n" +
+                "      \"url\": \"string|null\"\n" +
+                "    }\n" +
+                "  ],\n" +
                 "  \"signals\": [\"string\"],\n" +
+                "  \"triggers\": [\"string\"],\n" +
+                "  \"invalidations\": [\"string\"],\n" +
+                "  \"riskLimits\": [\"string\"],\n" +
                 "  \"risks\": [\"string\"],\n" +
                 "  \"chart\": null\n" +
                 "}",
@@ -527,6 +628,7 @@ internal static class StockAgentPromptBuilder
                 "  \"agent\": \"sector_news\",\n" +
                 "  \"sector\": \"string\",\n" +
                 "  \"summary\": \"string\",\n" +
+                "  \"confidence\": number,\n" +
                 "  \"sectorChangePercent\": number,\n" +
                 "  \"topMovers\": [\n" +
                 "    {\n" +
@@ -536,7 +638,18 @@ internal static class StockAgentPromptBuilder
                 "      \"reason\": \"string\"\n" +
                 "    }\n" +
                 "  ],\n" +
+                "  \"evidence\": [\n" +
+                "    {\n" +
+                "      \"point\": \"string\",\n" +
+                "      \"source\": \"string\",\n" +
+                "      \"publishedAt\": \"YYYY-MM-DD HH:mm|null\",\n" +
+                "      \"url\": \"string|null\"\n" +
+                "    }\n" +
+                "  ],\n" +
                 "  \"signals\": [\"string\"],\n" +
+                "  \"triggers\": [\"string\"],\n" +
+                "  \"invalidations\": [\"string\"],\n" +
+                "  \"riskLimits\": [\"string\"],\n" +
                 "  \"risks\": [\"string\"],\n" +
                 "  \"chart\": null\n" +
                 "}",
@@ -544,6 +657,7 @@ internal static class StockAgentPromptBuilder
                 "{\n" +
                 "  \"agent\": \"financial_analysis\",\n" +
                 "  \"summary\": \"string\",\n" +
+                "  \"confidence\": number,\n" +
                 "  \"metrics\": {\n" +
                 "    \"revenue\": number|null,\n" +
                 "    \"revenueYoY\": number|null,\n" +
@@ -554,6 +668,18 @@ internal static class StockAgentPromptBuilder
                 "    \"institutionTargetPrice\": number|null\n" +
                 "  },\n" +
                 "  \"highlights\": [\"string\"],\n" +
+                "  \"evidence\": [\n" +
+                "    {\n" +
+                "      \"point\": \"string\",\n" +
+                "      \"source\": \"string\",\n" +
+                "      \"publishedAt\": \"YYYY-MM-DD HH:mm|null\",\n" +
+                "      \"url\": \"string|null\"\n" +
+                "    }\n" +
+                "  ],\n" +
+                "  \"signals\": [\"string\"],\n" +
+                "  \"triggers\": [\"string\"],\n" +
+                "  \"invalidations\": [\"string\"],\n" +
+                "  \"riskLimits\": [\"string\"],\n" +
                 "  \"risks\": [\"string\"],\n" +
                 "  \"chart\": null\n" +
                 "}",
@@ -561,6 +687,7 @@ internal static class StockAgentPromptBuilder
                 "{\n" +
                 "  \"agent\": \"trend_analysis\",\n" +
                 "  \"summary\": \"string\",\n" +
+                "  \"confidence\": number,\n" +
                 "  \"timeframeSignals\": [\n" +
                 "    {\n" +
                 "      \"timeframe\": \"1D|1W|1M\",\n" +
@@ -575,7 +702,18 @@ internal static class StockAgentPromptBuilder
                 "      \"confidence\": number\n" +
                 "    }\n" +
                 "  ],\n" +
+                "  \"evidence\": [\n" +
+                "    {\n" +
+                "      \"point\": \"string\",\n" +
+                "      \"source\": \"string\",\n" +
+                "      \"publishedAt\": \"YYYY-MM-DD HH:mm|null\",\n" +
+                "      \"url\": \"string|null\"\n" +
+                "    }\n" +
+                "  ],\n" +
                 "  \"signals\": [\"string\"],\n" +
+                "  \"triggers\": [\"string\"],\n" +
+                "  \"invalidations\": [\"string\"],\n" +
+                "  \"riskLimits\": [\"string\"],\n" +
                 "  \"risks\": [\"string\"],\n" +
                 "  \"chart\": {\n" +
                 "    \"type\": \"line\",\n" +
@@ -710,5 +848,176 @@ internal static class StockAgentJsonParser
         }
 
         return trimmed[start..(end + 1)];
+    }
+}
+
+internal static class StockAgentResultNormalizer
+{
+    public static JsonElement Normalize(StockAgentKind kind, JsonElement data)
+    {
+        var root = JsonNode.Parse(data.GetRawText()) as JsonObject ?? new JsonObject();
+        var definition = StockAgentCatalog.GetDefinition(kind);
+
+        EnsureString(root, "agent", definition.Id);
+        EnsureString(root, "summary", string.Empty);
+        EnsureArray(root, "signals");
+        EnsureArray(root, "risks");
+        EnsureArray(root, "triggers");
+        EnsureArray(root, "invalidations");
+        EnsureArray(root, "riskLimits");
+        EnsureEvidenceArray(root);
+        EnsureProperty(root, "chart", null);
+
+        switch (kind)
+        {
+            case StockAgentKind.Commander:
+                NormalizeCommander(root);
+                break;
+            case StockAgentKind.StockNews:
+                NormalizeStockNews(root);
+                break;
+            case StockAgentKind.SectorNews:
+                NormalizeSectorNews(root);
+                break;
+            case StockAgentKind.FinancialAnalysis:
+                NormalizeFinancial(root);
+                break;
+            case StockAgentKind.TrendAnalysis:
+                NormalizeTrend(root);
+                break;
+        }
+
+        using var doc = JsonDocument.Parse(root.ToJsonString());
+        return doc.RootElement.Clone();
+    }
+
+    private static void NormalizeCommander(JsonObject root)
+    {
+        var metrics = EnsureObject(root, "metrics");
+        EnsureProperty(metrics, "price", null);
+        EnsureProperty(metrics, "changePercent", null);
+        EnsureProperty(metrics, "turnoverRate", null);
+        EnsureProperty(metrics, "innerVolume", null);
+        EnsureProperty(metrics, "outerVolume", null);
+        EnsureProperty(metrics, "sector", null);
+        EnsureProperty(metrics, "date", null);
+
+        var recommendation = EnsureObject(root, "recommendation");
+        EnsureProperty(recommendation, "action", null);
+        EnsureProperty(recommendation, "targetPrice", null);
+        EnsureProperty(recommendation, "takeProfitPrice", null);
+        EnsureProperty(recommendation, "stopLossPrice", null);
+        EnsureProperty(recommendation, "timeHorizon", null);
+        EnsureProperty(recommendation, "positionPercent", null);
+        EnsureProperty(recommendation, "entryScore", null);
+        EnsureProperty(recommendation, "valuationScore", null);
+        EnsureProperty(recommendation, "confidence", null);
+        EnsureProperty(recommendation, "rating", null);
+
+        EnsureArray(root, "reasons");
+    }
+
+    private static void NormalizeStockNews(JsonObject root)
+    {
+        EnsureProperty(root, "confidence", null);
+        var sentiment = EnsureObject(root, "sentiment");
+        EnsureProperty(sentiment, "positive", null);
+        EnsureProperty(sentiment, "neutral", null);
+        EnsureProperty(sentiment, "negative", null);
+        EnsureProperty(sentiment, "overall", null);
+
+        EnsureArray(root, "events");
+    }
+
+    private static void NormalizeSectorNews(JsonObject root)
+    {
+        EnsureProperty(root, "sector", null);
+        EnsureProperty(root, "confidence", null);
+        EnsureProperty(root, "sectorChangePercent", null);
+        EnsureArray(root, "topMovers");
+    }
+
+    private static void NormalizeFinancial(JsonObject root)
+    {
+        EnsureProperty(root, "confidence", null);
+        var metrics = EnsureObject(root, "metrics");
+        EnsureProperty(metrics, "revenue", null);
+        EnsureProperty(metrics, "revenueYoY", null);
+        EnsureProperty(metrics, "netProfit", null);
+        EnsureProperty(metrics, "netProfitYoY", null);
+        EnsureProperty(metrics, "nonRecurringProfit", null);
+        EnsureProperty(metrics, "institutionHoldingPercent", null);
+        EnsureProperty(metrics, "institutionTargetPrice", null);
+
+        EnsureArray(root, "highlights");
+    }
+
+    private static void NormalizeTrend(JsonObject root)
+    {
+        EnsureProperty(root, "confidence", null);
+        EnsureArray(root, "timeframeSignals");
+        EnsureArray(root, "forecast");
+    }
+
+    private static void EnsureEvidenceArray(JsonObject root)
+    {
+        var evidence = EnsureArray(root, "evidence");
+        for (var i = 0; i < evidence.Count; i++)
+        {
+            if (evidence[i] is not JsonObject item)
+            {
+                item = new JsonObject();
+                evidence[i] = item;
+            }
+
+            EnsureProperty(item, "point", null);
+            EnsureProperty(item, "source", null);
+            EnsureProperty(item, "publishedAt", null);
+            EnsureProperty(item, "url", null);
+        }
+    }
+
+    private static JsonObject EnsureObject(JsonObject root, string key)
+    {
+        if (root[key] is JsonObject obj)
+        {
+            return obj;
+        }
+
+        var created = new JsonObject();
+        root[key] = created;
+        return created;
+    }
+
+    private static JsonArray EnsureArray(JsonObject root, string key)
+    {
+        if (root[key] is JsonArray arr)
+        {
+            return arr;
+        }
+
+        var created = new JsonArray();
+        root[key] = created;
+        return created;
+    }
+
+    private static void EnsureString(JsonObject root, string key, string defaultValue)
+    {
+        if (root[key] is JsonValue value && value.TryGetValue<string>(out var text) && !string.IsNullOrWhiteSpace(text))
+        {
+            return;
+        }
+
+        root[key] = defaultValue;
+    }
+
+    private static void EnsureProperty(JsonObject root, string key, object? defaultValue)
+    {
+        if (root.ContainsKey(key))
+        {
+            return;
+        }
+
+        root[key] = defaultValue is null ? null : JsonValue.Create(defaultValue);
     }
 }

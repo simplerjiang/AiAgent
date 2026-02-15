@@ -12,6 +12,12 @@ const labelMap = {
   entryScore: '入场评分',
   valuationScore: '估值评分',
   confidence: '置信度',
+  action: '建议动作',
+  targetPrice: '目标价',
+  takeProfitPrice: '止盈价',
+  stopLossPrice: '止损价',
+  timeHorizon: '持有周期',
+  positionPercent: '建议仓位',
   rating: '评级',
   revenue: '营收',
   revenueYoY: '营收同比',
@@ -35,6 +41,10 @@ const labelMap = {
   label: '标签',
   timeframe: '周期',
   trend: '趋势',
+  point: '证据要点',
+  triggers: '触发条件',
+  invalidations: '失效条件',
+  riskLimits: '风险上限',
   signals: '信号',
   risks: '风险'
 }
@@ -44,8 +54,13 @@ export const formatMetricValue = (value, key = '') => {
   const keyText = String(key).toLowerCase()
   const num = Number(value)
   if (Number.isFinite(num)) {
-    if (keyText.includes('confidence') && num >= 0 && num <= 1) {
-      return `${(num * 100).toFixed(0)}%`
+    if (keyText.includes('confidence')) {
+      if (num >= 0 && num <= 1) {
+        return `${(num * 100).toFixed(0)}%`
+      }
+      if (num > 1 && num <= 100) {
+        return `${num.toFixed(0)}%`
+      }
     }
     const isPercent = percentKeys.some(term => keyText.includes(term))
     return isPercent ? `${num}%` : num

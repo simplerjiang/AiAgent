@@ -8,8 +8,12 @@ const chartMocks = vi.hoisted(() => ({
   volumeSetDataMock: vi.fn(),
   ma5SetDataMock: vi.fn(),
   ma10SetDataMock: vi.fn(),
+  klineResistanceSetDataMock: vi.fn(),
+  klineSupportSetDataMock: vi.fn(),
   minuteSetDataMock: vi.fn(),
   minuteVolumeSetDataMock: vi.fn(),
+  minuteResistanceSetDataMock: vi.fn(),
+  minuteSupportSetDataMock: vi.fn(),
   minuteCreatePriceLineMock: vi.fn(),
   minuteRemovePriceLineMock: vi.fn(),
   subscribeCrosshairMoveMock: vi.fn(),
@@ -20,6 +24,8 @@ const chartMocks = vi.hoisted(() => ({
 
 vi.mock('lightweight-charts', () => {
   let createCount = 0
+  let klineLineSeriesCount = 0
+  let minuteLineSeriesCount = 0
 
   const klineChart = {
     addSeries: vi.fn(seriesType => {
@@ -30,9 +36,11 @@ vi.mock('lightweight-charts', () => {
         return { setData: chartMocks.volumeSetDataMock }
       }
       if (seriesType === 'LineSeries') {
-        if (!chartMocks.__lineSeriesCount) chartMocks.__lineSeriesCount = 0
-        chartMocks.__lineSeriesCount += 1
-        return { setData: chartMocks.__lineSeriesCount === 1 ? chartMocks.ma5SetDataMock : chartMocks.ma10SetDataMock }
+        klineLineSeriesCount += 1
+        if (klineLineSeriesCount === 1) return { setData: chartMocks.ma5SetDataMock }
+        if (klineLineSeriesCount === 2) return { setData: chartMocks.ma10SetDataMock }
+        if (klineLineSeriesCount === 3) return { setData: chartMocks.klineResistanceSetDataMock }
+        return { setData: chartMocks.klineSupportSetDataMock }
       }
       return { setData: vi.fn() }
     }),
@@ -55,6 +63,10 @@ vi.mock('lightweight-charts', () => {
       if (seriesType === 'HistogramSeries') {
         return { setData: chartMocks.minuteVolumeSetDataMock }
       }
+      if (seriesType === 'LineSeries') {
+        minuteLineSeriesCount += 1
+        return { setData: minuteLineSeriesCount === 1 ? chartMocks.minuteResistanceSetDataMock : chartMocks.minuteSupportSetDataMock }
+      }
       return { setData: vi.fn() }
     }),
     priceScale: vi.fn(() => ({ applyOptions: vi.fn() })),
@@ -67,6 +79,11 @@ vi.mock('lightweight-charts', () => {
   return {
     createChart: vi.fn(() => {
       createCount += 1
+      if (createCount % 2 === 1) {
+        klineLineSeriesCount = 0
+      } else {
+        minuteLineSeriesCount = 0
+      }
       return createCount % 2 === 1 ? klineChart : minuteChart
     }),
     ColorType: { Solid: 'solid' },
@@ -79,13 +96,16 @@ vi.mock('lightweight-charts', () => {
 
 describe('StockCharts', () => {
   beforeEach(() => {
-    chartMocks.__lineSeriesCount = 0
     chartMocks.klineSetDataMock.mockClear()
     chartMocks.volumeSetDataMock.mockClear()
     chartMocks.ma5SetDataMock.mockClear()
     chartMocks.ma10SetDataMock.mockClear()
+    chartMocks.klineResistanceSetDataMock.mockClear()
+    chartMocks.klineSupportSetDataMock.mockClear()
     chartMocks.minuteSetDataMock.mockClear()
     chartMocks.minuteVolumeSetDataMock.mockClear()
+    chartMocks.minuteResistanceSetDataMock.mockClear()
+    chartMocks.minuteSupportSetDataMock.mockClear()
     chartMocks.minuteCreatePriceLineMock.mockClear()
     chartMocks.minuteRemovePriceLineMock.mockClear()
     chartMocks.subscribeCrosshairMoveMock.mockClear()
@@ -138,6 +158,7 @@ describe('StockCharts', () => {
       props: {
         kLines: [],
         minuteLines,
+        aiLevels: { resistance: 32, support: 30.5 },
         interval: 'day'
       }
     })
@@ -155,6 +176,14 @@ describe('StockCharts', () => {
     expect(minuteVolumeData[0].value).toBe(1800)
     expect(minuteVolumeData[1].value).toBe(2300)
     expect(chartMocks.minuteCreatePriceLineMock).toHaveBeenCalled()
+
+    const minuteResistanceData = chartMocks.minuteResistanceSetDataMock.mock.calls.at(-1)?.[0] ?? []
+    const minuteSupportData = chartMocks.minuteSupportSetDataMock.mock.calls.at(-1)?.[0] ?? []
+    expect(minuteResistanceData).toHaveLength(2)
+    expect(minuteSupportData).toHaveLength(2)
+    expect(minuteResistanceData[0].value).toBe(32)
+    expect(minuteSupportData[0].value).toBe(30.5)
+    expect(minuteResistanceData[0].time).toBeLessThan(minuteResistanceData[1].time)
   })
 
   it('sorts kline data and includes candlestick + volume + MA overlays', async () => {
@@ -199,6 +228,7 @@ describe('StockCharts', () => {
       props: {
         kLines,
         minuteLines: [],
+        aiLevels: { resistance: 13.5, support: 11.4 },
         interval: 'day'
       }
     })
@@ -221,8 +251,16 @@ describe('StockCharts', () => {
 
     const ma5Data = chartMocks.ma5SetDataMock.mock.calls.at(-1)?.[0] ?? []
     const ma10Data = chartMocks.ma10SetDataMock.mock.calls.at(-1)?.[0] ?? []
+    const resistanceData = chartMocks.klineResistanceSetDataMock.mock.calls.at(-1)?.[0] ?? []
+    const supportData = chartMocks.klineSupportSetDataMock.mock.calls.at(-1)?.[0] ?? []
     expect(ma5Data.length).toBe(6)
     expect(ma10Data.length).toBe(1)
     expect(ma10Data[0].time).toEqual({ year: 2026, month: 1, day: 10 })
+    expect(resistanceData).toHaveLength(2)
+    expect(supportData).toHaveLength(2)
+    expect(resistanceData[0].time).toEqual({ year: 2026, month: 1, day: 1 })
+    expect(resistanceData[1].time).toEqual({ year: 2026, month: 1, day: 10 })
+    expect(resistanceData[0].value).toBe(13.5)
+    expect(supportData[0].value).toBe(11.4)
   })
 })

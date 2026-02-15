@@ -91,13 +91,13 @@
                   {
                       "id":  "GOAL-007",
                       "title":  "LLM online stock evaluation + action targets",
-                      "status":  "todo",
+                      "status":  "done",
                       "stages":  {
-                                     "plan":  "todo",
-                                     "dev":  "todo",
-                                     "test":  "todo"
+                                     "plan":  "done",
+                                     "dev":  "done",
+                                     "test":  "done"
                                  },
-                      "notes":  "最优先：在风控与规则约束下，结合联网信息输出个股优劣评分、目标操作、触发条件与失效条件，要求可解释可追溯"
+                      "notes":  "已完成：后端运行时标准化并强制补齐结构化字段（证据/置信度/触发/失效/风险上限/目标动作）；前端现有面板完成可读性增强；K线/分时图新增 AI 突破线与支撑线叠加（优先 commander 目标/止损，回退 trend 预测区间）；新增与更新前端/后端单测；Edge 交互脚本已验证点击与等待流程，并检查前端控制台与后端日志无运行时崩溃"
                   },
                   {
                       "id":  "GOAL-008",
