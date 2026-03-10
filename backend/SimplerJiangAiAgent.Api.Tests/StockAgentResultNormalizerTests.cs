@@ -30,6 +30,21 @@ public sealed class StockAgentResultNormalizerTests
         Assert.True(recommendation.TryGetProperty("action", out _));
         Assert.True(recommendation.TryGetProperty("targetPrice", out _));
         Assert.True(recommendation.TryGetProperty("stopLossPrice", out _));
+
+        Assert.True(normalized.TryGetProperty("revision", out var revision));
+        Assert.True(revision.TryGetProperty("required", out _));
+        Assert.True(revision.TryGetProperty("reason", out _));
+        Assert.True(revision.TryGetProperty("previousDirection", out _));
+
+        Assert.True(normalized.TryGetProperty("consistency", out var consistency));
+        Assert.True(consistency.TryGetProperty("shortTermTrend", out _));
+        Assert.True(consistency.TryGetProperty("midTermTrend", out _));
+        Assert.True(consistency.TryGetProperty("status", out _));
+
+        Assert.True(normalized.TryGetProperty("marketState", out var marketState));
+        Assert.True(marketState.TryGetProperty("state", out _));
+        Assert.True(marketState.TryGetProperty("hysteresisApplied", out _));
+        Assert.True(marketState.TryGetProperty("strongCounterEvidence", out _));
     }
 
     [Fact]

@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Json.Nodes;
+using SimplerJiangAiAgent.Api.Data.Entities;
 using SimplerJiangAiAgent.Api.Infrastructure.Llm;
 using SimplerJiangAiAgent.Api.Infrastructure.Logging;
 using SimplerJiangAiAgent.Api.Modules.Stocks.Models;
@@ -24,12 +25,18 @@ public sealed class StockAgentOrchestrator : IStockAgentOrchestrator
     private readonly IStockDataService _dataService;
     private readonly ILlmService _llmService;
     private readonly IFileLogWriter _fileLogWriter;
+    private readonly IStockAgentHistoryService _agentHistoryService;
 
-    public StockAgentOrchestrator(IStockDataService dataService, ILlmService llmService, IFileLogWriter fileLogWriter)
+    public StockAgentOrchestrator(
+        IStockDataService dataService,
+        ILlmService llmService,
+        IFileLogWriter fileLogWriter,
+        IStockAgentHistoryService agentHistoryService)
     {
         _dataService = dataService;
         _llmService = llmService;
         _fileLogWriter = fileLogWriter;
+        _agentHistoryService = agentHistoryService;
     }
 
     public async Task<StockAgentResponseDto> RunAsync(StockAgentRequestDto request, CancellationToken cancellationToken = default)
@@ -64,7 +71,8 @@ public sealed class StockAgentOrchestrator : IStockAgentOrchestrator
 
         var subResults = await Task.WhenAll(subTasks);
 
-        var commanderContextJson = SerializeContext(StockAgentKind.Commander, context);
+        var commanderHistory = await BuildCommanderHistoryAsync(symbol, cancellationToken);
+        var commanderContextJson = SerializeCommanderContext(context, commanderHistory);
         var commanderResult = await RunAgentAsync(StockAgentKind.Commander, commanderContextJson, request, subResults, cancellationToken);
 
         var results = new List<StockAgentResultDto> { commanderResult };
@@ -91,7 +99,9 @@ public sealed class StockAgentOrchestrator : IStockAgentOrchestrator
         var count = Math.Clamp(request.Count ?? 60, 10, 120);
 
         var context = await BuildContextAsync(symbol, interval, count, request.Source, cancellationToken);
-        var contextJson = SerializeContext(kind, context);
+        var contextJson = kind == StockAgentKind.Commander
+            ? SerializeCommanderContext(context, await BuildCommanderHistoryAsync(symbol, cancellationToken))
+            : SerializeContext(kind, context);
         var dependencies = request.DependencyResults ?? Array.Empty<StockAgentResultDto>();
 
         return await RunAgentAsync(kind, contextJson, new StockAgentRequestDto(
@@ -162,6 +172,10 @@ public sealed class StockAgentOrchestrator : IStockAgentOrchestrator
                     if (StockAgentJsonParser.TryParse(repairRaw, out var repairData, out _))
                     {
                         var normalizedRepairData = StockAgentResultNormalizer.Normalize(kind, repairData!.Value);
+                        if (kind == StockAgentKind.Commander)
+                        {
+                            normalizedRepairData = StockAgentCommanderConsistencyGuardrails.Apply(normalizedRepairData, dependencyResults, contextJson);
+                        }
                         return new StockAgentResultDto(definition.Id, definition.Name, true, null, normalizedRepairData, repairRaw);
                     }
 
@@ -173,12 +187,24 @@ public sealed class StockAgentOrchestrator : IStockAgentOrchestrator
             }
 
             var normalizedData = StockAgentResultNormalizer.Normalize(kind, data!.Value);
+            if (kind == StockAgentKind.Commander)
+            {
+                normalizedData = StockAgentCommanderConsistencyGuardrails.Apply(normalizedData, dependencyResults, contextJson);
+            }
             return new StockAgentResultDto(definition.Id, definition.Name, true, null, normalizedData, raw);
         }
         catch (Exception ex)
         {
             return new StockAgentResultDto(definition.Id, definition.Name, false, ex.Message, null, null);
         }
+    }
+
+    private async Task<StockAgentCommanderHistoryPackageDto> BuildCommanderHistoryAsync(
+        string symbol,
+        CancellationToken cancellationToken)
+    {
+        var list = await _agentHistoryService.GetListAsync(symbol, cancellationToken);
+        return StockAgentCommanderHistoryPolicy.Build(list, DateTime.Now);
     }
 
     private sealed record StockAgentContextDto(
@@ -206,10 +232,32 @@ public sealed class StockAgentOrchestrator : IStockAgentOrchestrator
         return JsonSerializer.Serialize(slimContext, JsonOptions);
     }
 
+    private static string SerializeCommanderContext(StockAgentContextDto context, StockAgentCommanderHistoryPackageDto commanderHistory)
+    {
+        var commanderContext = new StockAgentCommanderContextDto(
+            context.Quote,
+            context.Messages,
+            context.NewsPolicy,
+            commanderHistory,
+            context.KLines.TakeLast(30).ToArray(),
+            context.RequestTime);
+
+        return JsonSerializer.Serialize(commanderContext, JsonOptions);
+    }
+
     private sealed record StockAgentSlimContextDto(
         StockQuoteDto Quote,
         IReadOnlyList<IntradayMessageDto> Messages,
         StockAgentNewsPolicyDto NewsPolicy,
+        DateTime RequestTime
+    );
+
+    private sealed record StockAgentCommanderContextDto(
+        StockQuoteDto Quote,
+        IReadOnlyList<IntradayMessageDto> Messages,
+        StockAgentNewsPolicyDto NewsPolicy,
+        StockAgentCommanderHistoryPackageDto CommanderHistory,
+        IReadOnlyList<KLinePointDto> KLines,
         DateTime RequestTime
     );
 }
@@ -221,6 +269,242 @@ internal sealed record StockAgentNewsPolicyDto(
     int CandidateCount,
     int SelectedCount
 );
+
+internal sealed record StockAgentCommanderHistoryItemDto(
+    DateTime CreatedAt,
+    string Direction,
+    decimal? Confidence,
+    IReadOnlyList<string> Triggers,
+    IReadOnlyList<string> Invalidations,
+    IReadOnlyList<string> RiskLimits,
+    IReadOnlyList<string> EvidenceSummary,
+    string? FinalResultTag,
+    string? Summary
+);
+
+internal sealed record StockAgentCommanderHistoryPackageDto(
+    int LookbackDays,
+    int MaxItems,
+    int IncludedCount,
+    IReadOnlyList<StockAgentCommanderHistoryItemDto> Items
+);
+
+internal static class StockAgentCommanderHistoryPolicy
+{
+    private const int DefaultLookbackDays = 5;
+    private const int MinLookbackDays = 3;
+    private const int MaxLookbackDays = 7;
+    private const int DefaultMaxItems = 8;
+
+    public static StockAgentCommanderHistoryPackageDto Build(
+        IReadOnlyList<StockAgentAnalysisHistory> list,
+        DateTime requestTime,
+        int lookbackDays = DefaultLookbackDays,
+        int maxItems = DefaultMaxItems)
+    {
+        var safeLookbackDays = Math.Clamp(lookbackDays, MinLookbackDays, MaxLookbackDays);
+        var safeMaxItems = Math.Clamp(maxItems, 5, 10);
+        var cutoff = requestTime.Date.AddDays(-safeLookbackDays);
+
+        var items = list
+            .Where(item => item.CreatedAt >= cutoff)
+            .OrderByDescending(item => item.CreatedAt)
+            .Take(safeMaxItems)
+            .Select(ParseCommanderHistoryItem)
+            .Where(item => item is not null)
+            .Select(item => item!)
+            .ToArray();
+
+        return new StockAgentCommanderHistoryPackageDto(
+            safeLookbackDays,
+            safeMaxItems,
+            items.Length,
+            items);
+    }
+
+    private static StockAgentCommanderHistoryItemDto? ParseCommanderHistoryItem(StockAgentAnalysisHistory entry)
+    {
+        if (string.IsNullOrWhiteSpace(entry.ResultJson))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(entry.ResultJson);
+            if (!TryGetCommanderAgentData(doc.RootElement, out var commanderData))
+            {
+                return null;
+            }
+
+            var direction = GetDirection(commanderData);
+            var confidence = TryGetNumber(commanderData, "recommendation", "confidence");
+            var triggers = ReadStringArray(commanderData, "triggers");
+            var invalidations = ReadStringArray(commanderData, "invalidations");
+            var riskLimits = ReadStringArray(commanderData, "riskLimits");
+            var evidence = ReadEvidencePoints(commanderData);
+            var summary = TryGetString(commanderData, "summary");
+
+            return new StockAgentCommanderHistoryItemDto(
+                entry.CreatedAt,
+                direction,
+                confidence,
+                triggers,
+                invalidations,
+                riskLimits,
+                evidence,
+                direction,
+                summary);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static bool TryGetCommanderAgentData(JsonElement root, out JsonElement commanderData)
+    {
+        commanderData = default;
+
+        if (!TryGetPropertyIgnoreCase(root, "agents", out var agents) || agents.ValueKind != JsonValueKind.Array)
+        {
+            return false;
+        }
+
+        foreach (var agent in agents.EnumerateArray())
+        {
+            if (!TryGetPropertyIgnoreCase(agent, "agentId", out var agentIdNode))
+            {
+                continue;
+            }
+
+            var agentId = agentIdNode.GetString();
+            if (!string.Equals(agentId, "commander", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (TryGetPropertyIgnoreCase(agent, "data", out var dataNode) && dataNode.ValueKind == JsonValueKind.Object)
+            {
+                commanderData = dataNode;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static string GetDirection(JsonElement commanderData)
+    {
+        var action = TryGetString(commanderData, "recommendation", "action");
+        if (!string.IsNullOrWhiteSpace(action))
+        {
+            return action;
+        }
+
+        var rating = TryGetString(commanderData, "recommendation", "rating");
+        return string.IsNullOrWhiteSpace(rating) ? "未知" : rating;
+    }
+
+    private static IReadOnlyList<string> ReadEvidencePoints(JsonElement commanderData)
+    {
+        if (!TryGetPropertyIgnoreCase(commanderData, "evidence", out var evidence) || evidence.ValueKind != JsonValueKind.Array)
+        {
+            return Array.Empty<string>();
+        }
+
+        var list = new List<string>();
+        foreach (var item in evidence.EnumerateArray())
+        {
+            if (!TryGetPropertyIgnoreCase(item, "point", out var pointNode) || pointNode.ValueKind != JsonValueKind.String)
+            {
+                continue;
+            }
+
+            var point = pointNode.GetString();
+            if (string.IsNullOrWhiteSpace(point))
+            {
+                continue;
+            }
+
+            list.Add(point);
+            if (list.Count >= 3)
+            {
+                break;
+            }
+        }
+
+        return list;
+    }
+
+    private static IReadOnlyList<string> ReadStringArray(JsonElement root, string property)
+    {
+        if (!TryGetPropertyIgnoreCase(root, property, out var arrayNode) || arrayNode.ValueKind != JsonValueKind.Array)
+        {
+            return Array.Empty<string>();
+        }
+
+        return arrayNode
+            .EnumerateArray()
+            .Where(item => item.ValueKind == JsonValueKind.String)
+            .Select(item => item.GetString())
+            .Where(item => !string.IsNullOrWhiteSpace(item))
+            .Select(item => item!)
+            .Take(5)
+            .ToArray();
+    }
+
+    private static decimal? TryGetNumber(JsonElement root, string parentProperty, string property)
+    {
+        if (!TryGetPropertyIgnoreCase(root, parentProperty, out var parent) || parent.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        if (!TryGetPropertyIgnoreCase(parent, property, out var node) || node.ValueKind != JsonValueKind.Number)
+        {
+            return null;
+        }
+
+        return node.TryGetDecimal(out var value) ? value : null;
+    }
+
+    private static string? TryGetString(JsonElement root, params string[] properties)
+    {
+        var current = root;
+        foreach (var property in properties)
+        {
+            if (!TryGetPropertyIgnoreCase(current, property, out var next))
+            {
+                return null;
+            }
+
+            current = next;
+        }
+
+        return current.ValueKind == JsonValueKind.String ? current.GetString() : null;
+    }
+
+    private static bool TryGetPropertyIgnoreCase(JsonElement root, string propertyName, out JsonElement value)
+    {
+        value = default;
+        if (root.ValueKind != JsonValueKind.Object)
+        {
+            return false;
+        }
+
+        foreach (var property in root.EnumerateObject())
+        {
+            if (string.Equals(property.Name, propertyName, StringComparison.OrdinalIgnoreCase))
+            {
+                value = property.Value;
+                return true;
+            }
+        }
+
+        return false;
+    }
+}
 
 internal static class StockAgentNewsContextPolicy
 {
@@ -448,7 +732,10 @@ internal static class StockAgentPromptBuilder
             "2. 所有字段必须存在；没有数据用null或空数组。\n" +
             "3. 百分比字段用数值，不带%符号。\n" +
             "4. 评估必须基于其他Agent输出汇总后再给出分数与结论。\n" +
-            "5. 所有建议必须给出证据来源、触发条件、失效条件和风险上限。\n\n" +
+            "5. 所有建议必须给出证据来源、触发条件、失效条件和风险上限。\n" +
+            "6. 你会收到仅供指挥Agent使用的近3-7天历史结论（默认5天）。若本次方向/评级与最近一次明显变化，必须给出改判原因。\n\n" +
+            "7. 必须执行多周期融合：综合1D/1W/1M信号；若短中周期冲突，consistency.status 必须为“分歧态”。\n" +
+            "8. 必须执行状态机与滞后机制：状态=延续/震荡/反转；单日波动不应轻易翻转方向，除非出现强反证（如关键失效条件触发）。\n\n" +
             "输出JSON结构：\n" +
             "{\n" +
             "  \"agent\": \"commander\",\n" +
@@ -486,6 +773,23 @@ internal static class StockAgentPromptBuilder
             "  \"triggers\": [\"string\"],\n" +
             "  \"invalidations\": [\"string\"],\n" +
             "  \"riskLimits\": [\"string\"],\n" +
+            "  \"revision\": {\n" +
+            "    \"required\": boolean,\n" +
+            "    \"reason\": \"string|null\",\n" +
+            "    \"previousDirection\": \"string|null\"\n" +
+            "  },\n" +
+            "  \"consistency\": {\n" +
+            "    \"shortTermTrend\": \"上涨|震荡|下跌|null\",\n" +
+            "    \"midTermTrend\": \"上涨|震荡|下跌|null\",\n" +
+            "    \"status\": \"一致|分歧态\",\n" +
+            "    \"note\": \"string|null\"\n" +
+            "  },\n" +
+            "  \"marketState\": {\n" +
+            "    \"state\": \"延续|震荡|反转\",\n" +
+            "    \"hysteresisApplied\": boolean,\n" +
+            "    \"strongCounterEvidence\": boolean,\n" +
+            "    \"overrideReason\": \"string|null\"\n" +
+            "  },\n" +
             "  \"signals\": [\"string\"],\n" +
             "  \"risks\": [\"string\"],\n" +
             "  \"chart\": null\n" +
@@ -741,6 +1045,23 @@ internal static class StockAgentPromptBuilder
                 "  \"triggers\": [\"string\"],\n" +
                 "  \"invalidations\": [\"string\"],\n" +
                 "  \"riskLimits\": [\"string\"],\n" +
+                "  \"revision\": {\n" +
+                "    \"required\": boolean,\n" +
+                "    \"reason\": \"string|null\",\n" +
+                "    \"previousDirection\": \"string|null\"\n" +
+                "  },\n" +
+                "  \"consistency\": {\n" +
+                "    \"shortTermTrend\": \"上涨|震荡|下跌|null\",\n" +
+                "    \"midTermTrend\": \"上涨|震荡|下跌|null\",\n" +
+                "    \"status\": \"一致|分歧态\",\n" +
+                "    \"note\": \"string|null\"\n" +
+                "  },\n" +
+                "  \"marketState\": {\n" +
+                "    \"state\": \"延续|震荡|反转\",\n" +
+                "    \"hysteresisApplied\": boolean,\n" +
+                "    \"strongCounterEvidence\": boolean,\n" +
+                "    \"overrideReason\": \"string|null\"\n" +
+                "  },\n" +
                 "  \"signals\": [\"string\"],\n" +
                 "  \"risks\": [\"string\"],\n" +
                 "  \"chart\": null\n" +
@@ -1011,6 +1332,374 @@ internal static class StockAgentJsonParser
     }
 }
 
+internal static class StockAgentCommanderConsistencyGuardrails
+{
+    public static JsonElement Apply(JsonElement commanderData, IReadOnlyList<StockAgentResultDto> dependencyResults, string contextJson)
+    {
+        var root = JsonNode.Parse(commanderData.GetRawText()) as JsonObject ?? new JsonObject();
+        var recommendation = EnsureObject(root, "recommendation");
+        var revision = EnsureObject(root, "revision");
+        var consistency = EnsureObject(root, "consistency");
+        var marketState = EnsureObject(root, "marketState");
+
+        var history = ParseCommanderHistory(contextJson);
+        var previousDirection = history.FirstOrDefault()?.Direction;
+        var currentDirection = TryReadString(recommendation, "action") ?? TryReadString(recommendation, "rating") ?? "未知";
+        var confidence = TryReadDecimal(recommendation, "confidence") ?? 50m;
+
+        var (shortTrend, midTrend, divergence) = EvaluateTimeframeConsistency(dependencyResults);
+        consistency["shortTermTrend"] = shortTrend;
+        consistency["midTermTrend"] = midTrend;
+        consistency["status"] = divergence ? "分歧态" : "一致";
+        consistency["note"] = divergence ? "短中周期信号冲突，需等待确认" : null;
+
+        if (divergence)
+        {
+            AppendUniqueSignal(root, "分歧态：短中周期冲突，避免单边重仓");
+        }
+
+        var (state, reversed) = EvaluateMarketState(contextJson);
+        marketState["state"] = state;
+
+        var strongCounterEvidence = HasStrongCounterEvidence(root);
+        marketState["strongCounterEvidence"] = strongCounterEvidence;
+
+        var changed = !string.IsNullOrWhiteSpace(previousDirection)
+            && !string.Equals(previousDirection, currentDirection, StringComparison.OrdinalIgnoreCase);
+
+        var hysteresisApplied = false;
+        if (changed && confidence < 65m && !strongCounterEvidence)
+        {
+            recommendation["action"] = previousDirection;
+            currentDirection = previousDirection;
+            hysteresisApplied = true;
+            marketState["overrideReason"] = "触发滞后机制：低置信度变更被抑制";
+            AppendUniqueSignal(root, "滞后机制生效：方向暂不翻转");
+        }
+        else if (changed && strongCounterEvidence)
+        {
+            marketState["overrideReason"] = "强反证触发，允许方向变更";
+        }
+
+        marketState["hysteresisApplied"] = hysteresisApplied;
+        if (reversed && string.Equals(state, "反转", StringComparison.Ordinal))
+        {
+            AppendUniqueSignal(root, "状态机识别：反转态");
+        }
+
+        revision["required"] = changed;
+        revision["previousDirection"] = previousDirection;
+        if (changed && string.IsNullOrWhiteSpace(TryReadString(revision, "reason")))
+        {
+            revision["reason"] = BuildAutoRevisionReason(previousDirection, currentDirection, divergence, strongCounterEvidence, hysteresisApplied);
+        }
+
+        using var doc = JsonDocument.Parse(root.ToJsonString());
+        return doc.RootElement.Clone();
+    }
+
+    private static string BuildAutoRevisionReason(string? previous, string? current, bool divergence, bool strongCounterEvidence, bool hysteresisApplied)
+    {
+        if (hysteresisApplied)
+        {
+            return $"由{previous}尝试改判为{current}，但置信度不足且无强反证，按滞后机制保持原方向";
+        }
+
+        var reasons = new List<string> { $"由{previous}改判为{current}" };
+        if (divergence)
+        {
+            reasons.Add("短中周期存在分歧");
+        }
+
+        if (strongCounterEvidence)
+        {
+            reasons.Add("存在强反证触发失效条件");
+        }
+
+        return string.Join("；", reasons);
+    }
+
+    private static (string? ShortTrend, string? MidTrend, bool Divergence) EvaluateTimeframeConsistency(IReadOnlyList<StockAgentResultDto> dependencyResults)
+    {
+        var trendAgent = dependencyResults.FirstOrDefault(item =>
+            string.Equals(item.AgentId, "trend_analysis", StringComparison.OrdinalIgnoreCase));
+        if (trendAgent is null || trendAgent.Data is null)
+        {
+            return (null, null, false);
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(trendAgent.Data.Value.GetRawText());
+            if (!TryGetPropertyIgnoreCase(doc.RootElement, "timeframeSignals", out var signals)
+                || signals.ValueKind != JsonValueKind.Array)
+            {
+                return (null, null, false);
+            }
+
+            string? shortTrend = null;
+            string? weekTrend = null;
+            string? monthTrend = null;
+            foreach (var item in signals.EnumerateArray())
+            {
+                var timeframe = TryReadString(item, "timeframe");
+                var trend = TryReadString(item, "trend");
+                if (string.IsNullOrWhiteSpace(timeframe) || string.IsNullOrWhiteSpace(trend))
+                {
+                    continue;
+                }
+
+                if (string.Equals(timeframe, "1D", StringComparison.OrdinalIgnoreCase))
+                {
+                    shortTrend = trend;
+                }
+                else if (string.Equals(timeframe, "1W", StringComparison.OrdinalIgnoreCase))
+                {
+                    weekTrend = trend;
+                }
+                else if (string.Equals(timeframe, "1M", StringComparison.OrdinalIgnoreCase))
+                {
+                    monthTrend = trend;
+                }
+            }
+
+            var midTrend = weekTrend ?? monthTrend;
+            var divergence = !string.IsNullOrWhiteSpace(shortTrend)
+                && !string.IsNullOrWhiteSpace(midTrend)
+                && !string.Equals(shortTrend, midTrend, StringComparison.OrdinalIgnoreCase);
+
+            return (shortTrend, midTrend, divergence);
+        }
+        catch
+        {
+            return (null, null, false);
+        }
+    }
+
+    private static (string State, bool Reversed) EvaluateMarketState(string contextJson)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(contextJson);
+            if (!TryGetPropertyIgnoreCase(doc.RootElement, "kLines", out var kLines) || kLines.ValueKind != JsonValueKind.Array)
+            {
+                return ("震荡", false);
+            }
+
+            var closes = kLines
+                .EnumerateArray()
+                .Select(item => TryReadDecimal(item, "close"))
+                .Where(item => item.HasValue)
+                .Select(item => item!.Value)
+                .ToList();
+            if (closes.Count < 20)
+            {
+                return ("震荡", false);
+            }
+
+            var currentMa5 = closes.TakeLast(5).Average();
+            var currentMa20 = closes.TakeLast(20).Average();
+            var prevStart = Math.Max(0, closes.Count - 10);
+            var prev20Start = Math.Max(0, closes.Count - 25);
+            var prevMa5 = closes.Skip(prevStart).Take(5).DefaultIfEmpty(currentMa5).Average();
+            var prevMa20 = closes.Skip(prev20Start).Take(20).DefaultIfEmpty(currentMa20).Average();
+
+            var currentSign = Math.Sign(currentMa5 - currentMa20);
+            var previousSign = Math.Sign(prevMa5 - prevMa20);
+            var reversed = currentSign != 0 && previousSign != 0 && currentSign != previousSign;
+            if (reversed)
+            {
+                return ("反转", true);
+            }
+
+            var latest = closes[^1];
+            if (Math.Abs(currentMa5 - currentMa20) < Math.Max(0.01m, latest * 0.01m))
+            {
+                return ("震荡", false);
+            }
+
+            return ("延续", false);
+        }
+        catch
+        {
+            return ("震荡", false);
+        }
+    }
+
+    private static bool HasStrongCounterEvidence(JsonObject root)
+    {
+        var invalidations = ReadStringArray(root, "invalidations");
+        if (invalidations.Count >= 2)
+        {
+            return true;
+        }
+
+        return invalidations.Any(item => item.Contains("跌破", StringComparison.OrdinalIgnoreCase)
+            || item.Contains("破位", StringComparison.OrdinalIgnoreCase)
+            || item.Contains("失效", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static IReadOnlyList<StockAgentCommanderHistoryItemDto> ParseCommanderHistory(string contextJson)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(contextJson);
+            if (!TryGetPropertyIgnoreCase(doc.RootElement, "commanderHistory", out var history)
+                || !TryGetPropertyIgnoreCase(history, "items", out var items)
+                || items.ValueKind != JsonValueKind.Array)
+            {
+                return Array.Empty<StockAgentCommanderHistoryItemDto>();
+            }
+
+            var result = new List<StockAgentCommanderHistoryItemDto>();
+            foreach (var item in items.EnumerateArray())
+            {
+                var direction = TryReadString(item, "direction") ?? "未知";
+                var summary = TryReadString(item, "summary");
+                var confidence = TryReadDecimal(item, "confidence");
+                var triggers = ReadStringArray(item, "triggers");
+                var invalidations = ReadStringArray(item, "invalidations");
+                var riskLimits = ReadStringArray(item, "riskLimits");
+                var evidenceSummary = ReadStringArray(item, "evidenceSummary");
+                var finalResultTag = TryReadString(item, "finalResultTag");
+                var createdAtText = TryReadString(item, "createdAt");
+                var createdAt = DateTime.TryParse(createdAtText, out var parsed) ? parsed : DateTime.MinValue;
+
+                result.Add(new StockAgentCommanderHistoryItemDto(
+                    createdAt,
+                    direction,
+                    confidence,
+                    triggers,
+                    invalidations,
+                    riskLimits,
+                    evidenceSummary,
+                    finalResultTag,
+                    summary));
+            }
+
+            return result;
+        }
+        catch
+        {
+            return Array.Empty<StockAgentCommanderHistoryItemDto>();
+        }
+    }
+
+    private static void AppendUniqueSignal(JsonObject root, string signal)
+    {
+        if (root["signals"] is not JsonArray signals)
+        {
+            signals = new JsonArray();
+            root["signals"] = signals;
+        }
+
+        var exists = signals.Any(item => string.Equals(item?.GetValue<string>(), signal, StringComparison.Ordinal));
+        if (!exists)
+        {
+            signals.Add(signal);
+        }
+    }
+
+    private static JsonObject EnsureObject(JsonObject root, string key)
+    {
+        if (root[key] is JsonObject obj)
+        {
+            return obj;
+        }
+
+        var created = new JsonObject();
+        root[key] = created;
+        return created;
+    }
+
+    private static bool TryGetPropertyIgnoreCase(JsonElement root, string propertyName, out JsonElement value)
+    {
+        value = default;
+        if (root.ValueKind != JsonValueKind.Object)
+        {
+            return false;
+        }
+
+        foreach (var property in root.EnumerateObject())
+        {
+            if (string.Equals(property.Name, propertyName, StringComparison.OrdinalIgnoreCase))
+            {
+                value = property.Value;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static string? TryReadString(JsonElement root, string key)
+    {
+        return TryGetPropertyIgnoreCase(root, key, out var value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString()
+            : null;
+    }
+
+    private static decimal? TryReadDecimal(JsonElement root, string key)
+    {
+        if (!TryGetPropertyIgnoreCase(root, key, out var value) || value.ValueKind != JsonValueKind.Number)
+        {
+            return null;
+        }
+
+        return value.TryGetDecimal(out var number) ? number : null;
+    }
+
+    private static string? TryReadString(JsonObject root, string key)
+    {
+        if (root[key] is not JsonValue value || !value.TryGetValue<string>(out var text))
+        {
+            return null;
+        }
+
+        return text;
+    }
+
+    private static decimal? TryReadDecimal(JsonObject root, string key)
+    {
+        if (root[key] is not JsonValue value || !value.TryGetValue<decimal>(out var number))
+        {
+            return null;
+        }
+
+        return number;
+    }
+
+    private static IReadOnlyList<string> ReadStringArray(JsonObject root, string key)
+    {
+        if (root[key] is not JsonArray arr)
+        {
+            return Array.Empty<string>();
+        }
+
+        return arr
+            .Select(node => node?.GetValue<string>())
+            .Where(item => !string.IsNullOrWhiteSpace(item))
+            .Select(item => item!)
+            .ToArray();
+    }
+
+    private static IReadOnlyList<string> ReadStringArray(JsonElement root, string key)
+    {
+        if (!TryGetPropertyIgnoreCase(root, key, out var arr) || arr.ValueKind != JsonValueKind.Array)
+        {
+            return Array.Empty<string>();
+        }
+
+        return arr
+            .EnumerateArray()
+            .Where(item => item.ValueKind == JsonValueKind.String)
+            .Select(item => item.GetString())
+            .Where(item => !string.IsNullOrWhiteSpace(item))
+            .Select(item => item!)
+            .ToArray();
+    }
+}
+
 internal static class StockAgentResultNormalizer
 {
     public static JsonElement Normalize(StockAgentKind kind, JsonElement data)
@@ -1075,6 +1764,23 @@ internal static class StockAgentResultNormalizer
         EnsureProperty(recommendation, "rating", null);
 
         EnsureArray(root, "reasons");
+
+        var revision = EnsureObject(root, "revision");
+        EnsureProperty(revision, "required", false);
+        EnsureProperty(revision, "reason", null);
+        EnsureProperty(revision, "previousDirection", null);
+
+        var consistency = EnsureObject(root, "consistency");
+        EnsureProperty(consistency, "shortTermTrend", null);
+        EnsureProperty(consistency, "midTermTrend", null);
+        EnsureProperty(consistency, "status", "一致");
+        EnsureProperty(consistency, "note", null);
+
+        var marketState = EnsureObject(root, "marketState");
+        EnsureProperty(marketState, "state", "震荡");
+        EnsureProperty(marketState, "hysteresisApplied", false);
+        EnsureProperty(marketState, "strongCounterEvidence", false);
+        EnsureProperty(marketState, "overrideReason", null);
     }
 
     private static void NormalizeStockNews(JsonObject root)

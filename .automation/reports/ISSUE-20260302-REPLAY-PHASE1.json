@@ -1,0 +1,61 @@
+﻿{
+    "generatedAt":  "2026-03-02T18:14:44",
+    "symbols":  [
+                    "sz000001",
+                    "sz000021",
+                    "sh600000",
+                    "sh600089",
+                    "sh600460"
+                ],
+    "details":  [
+                    {
+                        "symbol":  "sz000001",
+                        "totalEvents":  1,
+                        "traceableEvents":  1,
+                        "recent72hEvents":  1,
+                        "ratio72h":  100,
+                        "traceableRatio":  100
+                    },
+                    {
+                        "symbol":  "sz000021",
+                        "totalEvents":  1,
+                        "traceableEvents":  1,
+                        "recent72hEvents":  1,
+                        "ratio72h":  100,
+                        "traceableRatio":  100
+                    },
+                    {
+                        "symbol":  "sh600000",
+                        "totalEvents":  1,
+                        "traceableEvents":  1,
+                        "recent72hEvents":  1,
+                        "ratio72h":  100,
+                        "traceableRatio":  100
+                    },
+                    {
+                        "symbol":  "sh600089",
+                        "totalEvents":  1,
+                        "traceableEvents":  1,
+                        "recent72hEvents":  1,
+                        "ratio72h":  100,
+                        "traceableRatio":  100
+                    },
+                    {
+                        "symbol":  "sh600460",
+                        "totalEvents":  1,
+                        "traceableEvents":  1,
+                        "recent72hEvents":  1,
+                        "ratio72h":  100,
+                        "traceableRatio":  100
+                    }
+                ],
+    "overall":  {
+                    "totalEvents":  5,
+                    "traceableEvents":  5,
+                    "recent72hEvents":  5,
+                    "ratio72h":  100,
+                    "traceableRatio":  100,
+                    "passA":  true,
+                    "passB":  true
+                }
+}

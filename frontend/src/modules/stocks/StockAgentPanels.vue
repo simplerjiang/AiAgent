@@ -84,6 +84,33 @@ const buildTagList = (data, key) => {
   if (!data || typeof data !== 'object') return []
   return Array.isArray(data[key]) ? data[key] : []
 }
+
+const parsePublishedAt = value => {
+  if (!value) return null
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+const isEvidencePublishedAtColumn = (section, col) =>
+  (section?.key === 'evidence' || section?.key === 'events') && col === 'publishedAt'
+
+const isExpiredPublishedAt = value => {
+  const publishedAt = parsePublishedAt(value)
+  if (!publishedAt) return true
+  const ageHours = (Date.now() - publishedAt.getTime()) / 36e5
+  return ageHours > 72
+}
+
+const getCellClass = (section, row, col) => {
+  if (!isEvidencePublishedAtColumn(section, col)) return ''
+  return isExpiredPublishedAt(row?.[col]) ? 'cell-expired' : 'cell-fresh'
+}
+
+const getCellText = (section, row, col) => {
+  const value = formatMetricValue(row?.[col], col)
+  if (!isEvidencePublishedAtColumn(section, col)) return value
+  return isExpiredPublishedAt(row?.[col]) ? `${value || '未知'}（过期风险）` : value
+}
 </script>
 
 <template>
@@ -166,8 +193,8 @@ const buildTagList = (data, key) => {
               </thead>
               <tbody>
                 <tr v-for="(row, idx) in section.rows.slice(0, 6)" :key="idx">
-                  <td v-for="col in section.columns" :key="col">
-                    {{ formatMetricValue(row[col], col) }}
+                  <td v-for="col in section.columns" :key="col" :class="getCellClass(section, row, col)">
+                    {{ getCellText(section, row, col) }}
                   </td>
                 </tr>
               </tbody>
@@ -358,6 +385,16 @@ const buildTagList = (data, key) => {
   border-bottom: 1px solid #e2e8f0;
   padding: 0.3rem 0.25rem;
   text-align: left;
+}
+
+.list-section td.cell-fresh {
+  color: #15803d;
+  font-weight: 600;
+}
+
+.list-section td.cell-expired {
+  color: #b45309;
+  font-weight: 600;
 }
 
 .pill-list h5 {

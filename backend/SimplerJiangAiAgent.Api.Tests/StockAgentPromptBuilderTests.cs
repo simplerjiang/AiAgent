@@ -20,6 +20,12 @@ public sealed class StockAgentPromptBuilderTests
         Assert.Contains("\"triggers\"", prompt);
         Assert.Contains("\"invalidations\"", prompt);
         Assert.Contains("\"riskLimits\"", prompt);
+        Assert.Contains("\"revision\"", prompt);
+        Assert.Contains("\"consistency\"", prompt);
+        Assert.Contains("\"marketState\"", prompt);
+        Assert.Contains("近3-7天历史结论", prompt);
+        Assert.Contains("多周期融合", prompt);
+        Assert.Contains("状态机与滞后机制", prompt);
     }
 
     [Fact]

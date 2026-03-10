@@ -86,3 +86,7 @@
 - 对新闻驱动的 Agent 输出，必须强制时效窗口，并为每条关键证据给出来源与发布时间；若时间戳缺失，结论降级为中性/信息不足。
 - For multi-agent news context assembly, default to a 72-hour trusted-source window and allow 7-day fallback only when evidence count is insufficient, while marking the expansion explicitly in output.
 - 对多Agent资讯上下文组装，默认使用72小时可信来源窗口，仅在证据条数不足时扩窗到7天，并在输出中明确标注扩窗。
+- For commander consistency upgrades, inject 3-7 day history context to Commander only (never to sub-agents), and require an explicit structured revision block when direction/rating changes.
+- 对指挥者一致性升级，仅向 Commander 注入 3-7 天历史上下文（禁止注入子 Agent），并在方向/评级变化时强制输出结构化 revision 改判说明。
+- For commander consistency guardrails, always run deterministic unit tests covering divergence tagging, hysteresis suppression on low-confidence flips, and strong-counter-evidence override before marking Problem-2 work complete.
+- 对 Commander 一致性守护改动，完工前必须执行确定性单测，覆盖分歧态标注、低置信度改判滞后抑制、强反证覆盖三类场景。
