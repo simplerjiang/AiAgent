@@ -48,6 +48,7 @@ const getChangeClass = value => {
 <style scoped>
 .terminal-view {
   display: grid;
+  grid-template-rows: auto 1fr;
   gap: 1rem;
   min-height: 100%;
   padding: 1.25rem;
@@ -101,6 +102,7 @@ const getChangeClass = value => {
 
 .terminal-view-body {
   display: grid;
+  grid-template-rows: auto 1fr;
   gap: 1rem;
 }
 
