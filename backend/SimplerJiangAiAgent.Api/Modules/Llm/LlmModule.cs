@@ -5,7 +5,10 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Linq;
+using System.Text;
+using SimplerJiangAiAgent.Api.Infrastructure.Jobs;
 using SimplerJiangAiAgent.Api.Infrastructure.Llm;
+using SimplerJiangAiAgent.Api.Infrastructure.Logging;
 using SimplerJiangAiAgent.Api.Infrastructure.Security;
 using SimplerJiangAiAgent.Api.Modules.Llm.Models;
 
@@ -111,6 +114,97 @@ public sealed class LlmModule : IModule
         .WithName("TestLlmProvider")
         .WithOpenApi();
 
+        secureAdminGroup.MapGet("/source-governance/overview", async (ISourceGovernanceReadService readService) =>
+        {
+            var result = await readService.GetOverviewAsync();
+            return Results.Ok(result);
+        })
+        .WithName("GetSourceGovernanceOverview")
+        .WithOpenApi();
+
+        secureAdminGroup.MapGet("/source-governance/sources", async (
+            string? status,
+            string? tier,
+            int? page,
+            int? pageSize,
+            ISourceGovernanceReadService readService) =>
+        {
+            var normalizedPage = NormalizePage(page);
+            var normalizedPageSize = NormalizePageSize(pageSize);
+            var result = await readService.GetSourcesAsync(status, tier, normalizedPage, normalizedPageSize);
+            return Results.Ok(result);
+        })
+        .WithName("GetSourceGovernanceSources")
+        .WithOpenApi();
+
+        secureAdminGroup.MapGet("/source-governance/candidates", async (
+            string? status,
+            int? page,
+            int? pageSize,
+            ISourceGovernanceReadService readService) =>
+        {
+            var normalizedPage = NormalizePage(page);
+            var normalizedPageSize = NormalizePageSize(pageSize);
+            var result = await readService.GetCandidatesAsync(status, normalizedPage, normalizedPageSize);
+            return Results.Ok(result);
+        })
+        .WithName("GetSourceGovernanceCandidates")
+        .WithOpenApi();
+
+        secureAdminGroup.MapGet("/source-governance/changes", async (
+            string? status,
+            string? domain,
+            int? page,
+            int? pageSize,
+            ISourceGovernanceReadService readService) =>
+        {
+            var normalizedPage = NormalizePage(page);
+            var normalizedPageSize = NormalizePageSize(pageSize);
+            var result = await readService.GetChangesAsync(status, domain, normalizedPage, normalizedPageSize);
+            return Results.Ok(result);
+        })
+        .WithName("GetSourceGovernanceChanges")
+        .WithOpenApi();
+
+        secureAdminGroup.MapGet("/source-governance/changes/{id:long}", async (long id, ISourceGovernanceReadService readService) =>
+        {
+            var detail = await readService.GetChangeDetailAsync(id);
+            return detail is null ? Results.NotFound() : Results.Ok(detail);
+        })
+        .WithName("GetSourceGovernanceChangeDetail")
+        .WithOpenApi();
+
+        secureAdminGroup.MapGet("/source-governance/errors", async (int? take, ISourceGovernanceReadService readService) =>
+        {
+            var normalizedTake = Math.Clamp(take ?? 30, 1, 100);
+            var result = await readService.GetErrorSnapshotsAsync(normalizedTake);
+            return Results.Ok(result);
+        })
+        .WithName("GetSourceGovernanceErrors")
+        .WithOpenApi();
+
+        secureAdminGroup.MapGet("/source-governance/trace/{traceId}", async (string traceId, int? take, ISourceGovernanceReadService readService) =>
+        {
+            var normalizedTake = Math.Clamp(take ?? 50, 1, 200);
+            var result = await readService.SearchTraceAsync(traceId, normalizedTake);
+            return Results.Ok(result);
+        })
+        .WithName("SearchSourceGovernanceTrace")
+        .WithOpenApi();
+
+        secureAdminGroup.MapGet("/source-governance/llm-logs", async (int? take, string? keyword, ISourceGovernanceReadService readService) =>
+        {
+            var normalizedTake = Math.Clamp(take ?? 200, 1, 1000);
+            var result = await readService.GetLlmConversationLogsAsync(normalizedTake, keyword);
+            return Results.Ok(new
+            {
+                total = result.Count,
+                items = result
+            });
+        })
+        .WithName("GetSourceGovernanceLlmLogs")
+        .WithOpenApi();
+
         app.MapPost("/api/llm/chat/{provider}", async (string provider, LlmChatRequestDto request, ILlmService llmService) =>
         {
             if (string.IsNullOrWhiteSpace(request.Prompt))
@@ -131,12 +225,14 @@ public sealed class LlmModule : IModule
         .WithName("ChatLlmProvider")
         .WithOpenApi();
 
-        app.MapPost("/api/llm/chat/stream/{provider}", async (string provider, LlmChatRequestDto request, ILlmSettingsStore store, OpenAiProvider providerImpl, HttpContext context) =>
+        app.MapPost("/api/llm/chat/stream/{provider}", async (string provider, LlmChatRequestDto request, ILlmSettingsStore store, OpenAiProvider providerImpl, IFileLogWriter fileLogWriter, HttpContext context) =>
         {
             if (string.IsNullOrWhiteSpace(request.Prompt))
             {
                 return Results.BadRequest(new { message = "Prompt 不能为空" });
             }
+
+            var traceId = Guid.NewGuid().ToString("N");
 
             var settings = await store.GetProviderAsync(provider) ?? new LlmProviderSettings { Provider = provider, Enabled = true };
             if (!settings.Enabled)
@@ -144,21 +240,27 @@ public sealed class LlmModule : IModule
                 return Results.BadRequest(new { message = $"Provider {provider} 未启用" });
             }
 
+            fileLogWriter.Write("LLM-AUDIT", $"traceId={traceId} stage=request-stream provider={provider} model={request.Model ?? settings.Model ?? string.Empty} useInternet={request.UseInternet} prompt={EscapeForAudit(request.Prompt)}");
+
             context.Response.Headers.CacheControl = "no-cache";
             context.Response.Headers.Connection = "keep-alive";
             context.Response.ContentType = "text/event-stream";
 
             try
             {
-                await foreach (var chunk in providerImpl.StreamChatAsync(settings, new LlmChatRequest(request.Prompt, request.Model, request.Temperature, request.UseInternet), context.RequestAborted))
+                var fullContent = new StringBuilder();
+                await foreach (var chunk in providerImpl.StreamChatAsync(settings, new LlmChatRequest(request.Prompt, request.Model, request.Temperature, request.UseInternet, traceId), context.RequestAborted))
                 {
+                    fullContent.Append(chunk);
                     await context.Response.WriteAsync($"data: {chunk}\n\n", context.RequestAborted);
                     await context.Response.Body.FlushAsync(context.RequestAborted);
                 }
                 await context.Response.WriteAsync("data: [DONE]\n\n", context.RequestAborted);
+                fileLogWriter.Write("LLM-AUDIT", $"traceId={traceId} stage=response-stream provider={provider} content={EscapeForAudit(fullContent.ToString())}");
             }
             catch (Exception ex)
             {
+                fileLogWriter.Write("LLM-AUDIT", $"traceId={traceId} stage=error-stream provider={provider} type={ex.GetType().Name} message={EscapeForAudit(ex.Message)}");
                 await context.Response.WriteAsync($"data: {ex.Message}\n\n", context.RequestAborted);
             }
 
@@ -199,5 +301,34 @@ public sealed class LlmModule : IModule
         }
 
         return $"{trimmed[..4]}****{trimmed[^4..]}";
+    }
+
+    private static string EscapeForAudit(string? value)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return string.Empty;
+        }
+
+        const int maxLength = 4000;
+        var normalized = value
+            .Replace("\r", "\\r", StringComparison.Ordinal)
+            .Replace("\n", "\\n", StringComparison.Ordinal);
+
+        return normalized.Length <= maxLength
+            ? normalized
+            : normalized[..maxLength] + "...(truncated)";
+    }
+
+    private static int NormalizePage(int? page)
+    {
+        var normalized = page.GetValueOrDefault(1);
+        return normalized <= 0 ? 1 : normalized;
+    }
+
+    private static int NormalizePageSize(int? pageSize)
+    {
+        var size = pageSize.GetValueOrDefault(20);
+        return Math.Clamp(size, 1, 100);
     }
 }

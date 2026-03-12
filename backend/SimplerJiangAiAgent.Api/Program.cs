@@ -22,13 +22,18 @@ builder.Services.AddCors(options =>
 });
 
 builder.Services.AddMemoryCache();
+builder.Services.AddHttpClient();
 builder.Services.Configure<DatabaseOptions>(builder.Configuration.GetSection(DatabaseOptions.SectionName));
 builder.Services.Configure<StockSyncOptions>(builder.Configuration.GetSection(StockSyncOptions.SectionName));
+builder.Services.Configure<SourceGovernanceOptions>(builder.Configuration.GetSection(SourceGovernanceOptions.SectionName));
 builder.Services.Configure<ConfigCenterOptions>(builder.Configuration.GetSection(ConfigCenterOptions.SectionName));
 builder.Services.Configure<PermissionOptions>(builder.Configuration.GetSection(PermissionOptions.SectionName));
 builder.Services.Configure<AdminOptions>(builder.Configuration.GetSection(AdminOptions.SectionName));
 builder.Services.AddSingleton<IPermissionService, PermissionService>();
 builder.Services.AddScoped<IStockSyncService, StockSyncService>();
+builder.Services.AddScoped<ISourceGovernanceService, SourceGovernanceService>();
+builder.Services.AddScoped<ISourceGovernanceReadService, SourceGovernanceReadService>();
+builder.Services.AddSingleton<ICommandRunner, ProcessCommandRunner>();
 builder.Services.AddSingleton<IFileLogWriter, FileLogWriter>();
 
 var databaseOptions = builder.Configuration.GetSection(DatabaseOptions.SectionName).Get<DatabaseOptions>() ?? new DatabaseOptions();
@@ -48,6 +53,7 @@ else
 }
 
 builder.Services.AddHostedService<StockSyncWorker>();
+builder.Services.AddHostedService<SourceGovernanceWorker>();
 
 builder.Services.AddModules(builder.Configuration);
 
@@ -58,6 +64,7 @@ using (var scope = app.Services.CreateScope())
 {
     var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     dbContext.Database.EnsureCreated();
+    await SourceGovernanceSchemaInitializer.EnsureAsync(dbContext);
 }
 
 // 中间件管道

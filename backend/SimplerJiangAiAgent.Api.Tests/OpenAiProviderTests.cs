@@ -68,6 +68,30 @@ public sealed class OpenAiProviderTests
         Assert.Equal(new[] { "你", "好" }, chunks);
     }
 
+    [Fact]
+    public async Task StreamChatAsync_IgnoresNullPartsPayload_WithoutThrowing()
+    {
+        var handler = new NullPartsStreamHandler();
+        var httpClient = new HttpClient(handler);
+        var provider = new OpenAiProvider(httpClient, new FakeLogWriter());
+        var settings = new LlmProviderSettings
+        {
+            Provider = "openai",
+            ApiKey = "key",
+            BaseUrl = "https://www.dmxapi.cn/v1",
+            SystemPrompt = "你是股票助手",
+            ForceChinese = true
+        };
+
+        var chunks = new List<string>();
+        await foreach (var chunk in provider.StreamChatAsync(settings, new LlmChatRequest("hello", "gemini-3-pro-preview", 0.1, true)))
+        {
+            chunks.Add(chunk);
+        }
+
+        Assert.Empty(chunks);
+    }
+
     private sealed class CaptureHandler : HttpMessageHandler
     {
         public string? LastRequestBody { get; private set; }
@@ -103,6 +127,22 @@ public sealed class OpenAiProviderTests
     {
         public void Write(string category, string message)
         {
+        }
+    }
+
+    private sealed class NullPartsStreamHandler : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var sse = "data: {\"candidates\":[{\"content\":{\"parts\":null}}]}\n\n" +
+                      "data: [DONE]\n\n";
+
+            var response = new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(sse)
+            };
+
+            return Task.FromResult(response);
         }
     }
 }

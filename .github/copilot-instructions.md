@@ -108,8 +108,10 @@
 - 对 P0-R1 开发者模式交付，测试完成前必须在后端托管前端页面上执行交互脚本，至少覆盖管理员登录、开发者模式开关、trace 检索及 API 状态码检查。
 - For Playwright Edge checks on dense dashboard layouts, use resilient click strategy (`force` click when pointer interception appears) and allow empty-state tolerant branches so validation remains stable across different seed datasets.
 - For frontend LLM audit views, never expose raw log lines as the primary list model when pairing matters; aggregate backend records by `traceId` first so request/response/error are deterministically correlated.
+- For GOAL-012 stock terminal refinements, keep the symbol query/history controls in a compact sticky or inline toolbar and prioritize remaining vertical viewport space for K-line and minute charts.
 - 对于密集仪表盘布局的 Playwright Edge 校验，遇到点击被遮挡时使用稳健点击策略（必要时 `force`），并为“空数据”场景提供容错分支，保证不同种子数据下校验稳定。
 - 对于前端 LLM 审计视图，只要存在“请求-返回配对”需求，就不能以前端逐行猜测 raw 日志；必须先由后端按 `traceId` 聚合，再展示确定性会话记录。
+- 对于 GOAL-012 股票终端后续优化，标的查询/历史控制必须保持紧凑的 sticky 或内联工具条形态，并优先把剩余纵向视口空间让给 K 线与分时图。
 
 # Agent Collaboration & Product Manager Workflow
 - **角色定位 (Persona)**: 我 (当前AI) 是系统的产品经理 (Product Manager)、架构师 (Architect) 和质量监督员 (QA/Reviewer)。我不负责直接编写大量业务代码，而是对项目功能、系统架构和最终质量负责。

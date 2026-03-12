@@ -36,12 +36,12 @@ public sealed class OpenAiProvider : ILlmProvider
         }
 
         var systemPrompt = BuildSystemPrompt(settings.SystemPrompt, settings.ForceChinese);
-        LogInfo($"request provider=openai model={model} useInternet={request.UseInternet} baseUrl={baseUrl} promptChars={SafeLength(request.Prompt)} systemChars={SafeLength(systemPrompt)}");
-        LogPrompt("openai", model, request.Prompt, systemPrompt);
+        LogInfo($"request provider=openai model={model} useInternet={request.UseInternet} baseUrl={baseUrl} promptChars={SafeLength(request.Prompt)} systemChars={SafeLength(systemPrompt)}", request.TraceId);
+        LogPrompt("openai", model, request.Prompt, systemPrompt, request.TraceId);
 
         if (request.UseInternet && ShouldUseGeminiInternet(baseUrl, model))
         {
-            LogInfo($"route=gemini provider=openai model={model} promptChars={SafeLength(request.Prompt)} systemChars={SafeLength(systemPrompt)}");
+            LogInfo($"route=gemini provider=openai model={model} promptChars={SafeLength(request.Prompt)} systemChars={SafeLength(systemPrompt)}", request.TraceId);
             return await ChatWithGeminiInternetAsync(settings, request, baseUrl, model, cancellationToken);
         }
 
@@ -76,7 +76,7 @@ public sealed class OpenAiProvider : ILlmProvider
         var responseText = await response.Content.ReadAsStringAsync(cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
-            LogError($"error provider=openai model={model} status={response.StatusCode} body={responseText}");
+            LogError($"error provider=openai model={model} status={response.StatusCode} body={responseText}", request.TraceId);
             throw new InvalidOperationException($"OpenAI 请求失败: {response.StatusCode} {responseText}");
         }
 
@@ -88,8 +88,8 @@ public sealed class OpenAiProvider : ILlmProvider
         }
 
         var content = choices[0].GetProperty("message").GetProperty("content").GetString() ?? string.Empty;
-        LogInfo($"response provider=openai model={model} status=ok");
-        LogResponse("openai", model, content);
+        LogInfo($"response provider=openai model={model} status=ok", request.TraceId);
+        LogResponse("openai", model, content, request.TraceId);
         return new LlmChatResult(content.Trim());
     }
 
@@ -138,8 +138,8 @@ public sealed class OpenAiProvider : ILlmProvider
 
         var systemPrompt = BuildSystemPrompt(settings.SystemPrompt, settings.ForceChinese);
         var prompt = request.Prompt;
-        LogInfo($"request provider=gemini model={model} useInternet={request.UseInternet} promptChars={SafeLength(prompt)} systemChars={SafeLength(systemPrompt)}");
-        LogPrompt("gemini", model, prompt, systemPrompt);
+        LogInfo($"request provider=gemini model={model} useInternet={request.UseInternet} promptChars={SafeLength(prompt)} systemChars={SafeLength(systemPrompt)}", request.TraceId);
+        LogPrompt("gemini", model, prompt, systemPrompt, request.TraceId);
 
         var forceJson = ShouldForceJsonResponse(prompt, systemPrompt);
         var generationConfig = new Dictionary<string, object?>
@@ -179,7 +179,7 @@ public sealed class OpenAiProvider : ILlmProvider
         if (request.UseInternet)
         {
             payload["tools"] = BuildGeminiTools(model);
-            LogTools(payload["tools"], "gemini", model);
+            LogTools(payload["tools"], "gemini", model, request.TraceId);
         }
 
         message.Content = JsonContent.Create(payload);
@@ -188,7 +188,7 @@ public sealed class OpenAiProvider : ILlmProvider
         var responseText = await response.Content.ReadAsStringAsync(cancellationToken);
         if (!response.IsSuccessStatusCode && request.UseInternet && responseText.Contains("tool_type", StringComparison.OrdinalIgnoreCase))
         {
-            LogInfo($"retry provider=gemini model={model} reason=tool_type");
+            LogInfo($"retry provider=gemini model={model} reason=tool_type", request.TraceId);
             var retryPayload = new Dictionary<string, object?>(payload)
             {
                 ["tools"] = BuildGeminiToolsFallback(model)
@@ -200,31 +200,38 @@ public sealed class OpenAiProvider : ILlmProvider
             responseText = await retryResponse.Content.ReadAsStringAsync(cancellationToken);
             if (!retryResponse.IsSuccessStatusCode)
             {
-                LogError($"error provider=gemini model={model} status={retryResponse.StatusCode} body={responseText}");
+                LogError($"error provider=gemini model={model} status={retryResponse.StatusCode} body={responseText}", request.TraceId);
                 throw new InvalidOperationException($"Gemini 联网请求失败: {retryResponse.StatusCode} {responseText}");
             }
         }
         else if (!response.IsSuccessStatusCode)
         {
-            LogError($"error provider=gemini model={model} status={response.StatusCode} body={responseText}");
+            LogError($"error provider=gemini model={model} status={response.StatusCode} body={responseText}", request.TraceId);
             throw new InvalidOperationException($"Gemini 联网请求失败: {response.StatusCode} {responseText}");
         }
 
         using var doc = JsonDocument.Parse(responseText);
-        if (!doc.RootElement.TryGetProperty("candidates", out var candidates) || candidates.GetArrayLength() == 0)
+        if (!doc.RootElement.TryGetProperty("candidates", out var candidates)
+            || candidates.ValueKind != JsonValueKind.Array
+            || candidates.GetArrayLength() == 0)
         {
             return new LlmChatResult(string.Empty);
         }
 
-        var contentNode = candidates[0].GetProperty("content");
-        if (!contentNode.TryGetProperty("parts", out var parts) || parts.GetArrayLength() == 0)
+        var firstCandidate = candidates[0];
+        if (firstCandidate.ValueKind != JsonValueKind.Object
+            || !firstCandidate.TryGetProperty("content", out var contentNode)
+            || contentNode.ValueKind != JsonValueKind.Object
+            || !contentNode.TryGetProperty("parts", out var parts)
+            || parts.ValueKind != JsonValueKind.Array
+            || parts.GetArrayLength() == 0)
         {
             return new LlmChatResult(string.Empty);
         }
 
         var text = parts[0].GetProperty("text").GetString() ?? string.Empty;
-        LogInfo($"response provider=gemini model={model} status=ok");
-        LogResponse("gemini", model, text);
+        LogInfo($"response provider=gemini model={model} status=ok", request.TraceId);
+        LogResponse("gemini", model, text, request.TraceId);
         return new LlmChatResult(text.Trim());
     }
 
@@ -249,12 +256,12 @@ public sealed class OpenAiProvider : ILlmProvider
         }
 
         var streamSystemPrompt = BuildSystemPrompt(settings.SystemPrompt, settings.ForceChinese);
-        LogInfo($"request-stream provider=openai model={model} useInternet={request.UseInternet} baseUrl={baseUrl} promptChars={SafeLength(request.Prompt)} systemChars={SafeLength(streamSystemPrompt)}");
-        LogPrompt("openai-stream", model, request.Prompt, streamSystemPrompt);
+        LogInfo($"request-stream provider=openai model={model} useInternet={request.UseInternet} baseUrl={baseUrl} promptChars={SafeLength(request.Prompt)} systemChars={SafeLength(streamSystemPrompt)}", request.TraceId);
+        LogPrompt("openai-stream", model, request.Prompt, streamSystemPrompt, request.TraceId);
 
         if (request.UseInternet && ShouldUseGeminiInternet(baseUrl, model))
         {
-            LogInfo($"route=gemini-stream provider=openai model={model} promptChars={SafeLength(request.Prompt)} systemChars={SafeLength(streamSystemPrompt)}");
+            LogInfo($"route=gemini-stream provider=openai model={model} promptChars={SafeLength(request.Prompt)} systemChars={SafeLength(streamSystemPrompt)}", request.TraceId);
             await foreach (var chunk in StreamGeminiAsync(settings, request, baseUrl, model, cancellationToken))
             {
                 yield return chunk;
@@ -313,8 +320,8 @@ public sealed class OpenAiProvider : ILlmProvider
         {
             payload["response_mime_type"] = "application/json";
         }
-        LogInfo($"request provider=gemini-stream model={model} useInternet={request.UseInternet} promptChars={SafeLength(prompt)} systemChars={SafeLength(systemPrompt)}");
-        LogPrompt("gemini-stream", model, prompt, systemPrompt);
+        LogInfo($"request provider=gemini-stream model={model} useInternet={request.UseInternet} promptChars={SafeLength(prompt)} systemChars={SafeLength(systemPrompt)}", request.TraceId);
+        LogPrompt("gemini-stream", model, prompt, systemPrompt, request.TraceId);
 
         if (!string.IsNullOrWhiteSpace(systemPrompt))
         {
@@ -327,7 +334,7 @@ public sealed class OpenAiProvider : ILlmProvider
         if (request.UseInternet)
         {
             payload["tools"] = BuildGeminiTools(model);
-            LogTools(payload["tools"], "gemini-stream", model);
+            LogTools(payload["tools"], "gemini-stream", model, request.TraceId);
         }
 
         message.Content = JsonContent.Create(payload);
@@ -338,7 +345,7 @@ public sealed class OpenAiProvider : ILlmProvider
             var errorText = await response.Content.ReadAsStringAsync(cancellationToken);
             if (request.UseInternet && errorText.Contains("tool_type", StringComparison.OrdinalIgnoreCase))
             {
-                LogInfo($"retry provider=gemini-stream model={model} reason=tool_type");
+                LogInfo($"retry provider=gemini-stream model={model} reason=tool_type", request.TraceId);
                 var retryPayload = new Dictionary<string, object?>(payload)
                 {
                     ["tools"] = BuildGeminiToolsFallback(model)
@@ -349,7 +356,7 @@ public sealed class OpenAiProvider : ILlmProvider
                 if (!retryResponse.IsSuccessStatusCode)
                 {
                     var retryError = await retryResponse.Content.ReadAsStringAsync(cancellationToken);
-                    LogError($"error provider=gemini-stream model={model} status={retryResponse.StatusCode} body={retryError}");
+                    LogError($"error provider=gemini-stream model={model} status={retryResponse.StatusCode} body={retryError}", request.TraceId);
                     throw new InvalidOperationException($"Gemini 联网流式请求失败: {retryResponse.StatusCode} {retryError}");
                 }
 
@@ -360,7 +367,7 @@ public sealed class OpenAiProvider : ILlmProvider
                 yield break;
             }
 
-            LogError($"error provider=gemini-stream model={model} status={response.StatusCode} body={errorText}");
+            LogError($"error provider=gemini-stream model={model} status={response.StatusCode} body={errorText}", request.TraceId);
             throw new InvalidOperationException($"Gemini 联网流式请求失败: {response.StatusCode} {errorText}");
         }
         await foreach (var chunk in StreamGeminiResponseAsync(response, cancellationToken))
@@ -372,13 +379,20 @@ public sealed class OpenAiProvider : ILlmProvider
     private static List<string> ExtractGeminiChunks(string json)
     {
         using var doc = JsonDocument.Parse(json);
-        if (!doc.RootElement.TryGetProperty("candidates", out var candidates) || candidates.GetArrayLength() == 0)
+        if (!doc.RootElement.TryGetProperty("candidates", out var candidates)
+            || candidates.ValueKind != JsonValueKind.Array
+            || candidates.GetArrayLength() == 0)
         {
             return new List<string>();
         }
 
-        var content = candidates[0].GetProperty("content");
-        if (!content.TryGetProperty("parts", out var parts) || parts.GetArrayLength() == 0)
+        var firstCandidate = candidates[0];
+        if (firstCandidate.ValueKind != JsonValueKind.Object
+            || !firstCandidate.TryGetProperty("content", out var content)
+            || content.ValueKind != JsonValueKind.Object
+            || !content.TryGetProperty("parts", out var parts)
+            || parts.ValueKind != JsonValueKind.Array
+            || parts.GetArrayLength() == 0)
         {
             return new List<string>();
         }
@@ -386,7 +400,9 @@ public sealed class OpenAiProvider : ILlmProvider
         var result = new List<string>();
         foreach (var part in parts.EnumerateArray())
         {
-            if (part.TryGetProperty("text", out var textNode))
+            if (part.ValueKind == JsonValueKind.Object
+                && part.TryGetProperty("text", out var textNode)
+                && textNode.ValueKind == JsonValueKind.String)
             {
                 var text = textNode.GetString();
                 if (!string.IsNullOrWhiteSpace(text))
@@ -399,17 +415,17 @@ public sealed class OpenAiProvider : ILlmProvider
         return result;
     }
 
-    private void LogInfo(string message)
+    private void LogInfo(string message, string? traceId = null)
     {
-        _fileLogWriter.Write("LLM", message);
+        _fileLogWriter.Write("LLM", PrefixTraceId(traceId, message));
     }
 
-    private void LogError(string message)
+    private void LogError(string message, string? traceId = null)
     {
-        _fileLogWriter.Write("LLM", message);
+        _fileLogWriter.Write("LLM", PrefixTraceId(traceId, message));
     }
 
-    private void LogTools(object? tools, string provider, string model)
+    private void LogTools(object? tools, string provider, string model, string? traceId = null)
     {
         if (tools is null)
         {
@@ -419,11 +435,11 @@ public sealed class OpenAiProvider : ILlmProvider
         try
         {
             var text = JsonSerializer.Serialize(tools);
-            _fileLogWriter.Write("LLM", $"tools provider={provider} model={model} payload={text}");
+            _fileLogWriter.Write("LLM", PrefixTraceId(traceId, $"tools provider={provider} model={model} payload={text}"));
         }
         catch (Exception ex)
         {
-            _fileLogWriter.Write("LLM", $"tools provider={provider} model={model} error={ex.Message}");
+            _fileLogWriter.Write("LLM", PrefixTraceId(traceId, $"tools provider={provider} model={model} error={ex.Message}"));
         }
     }
 
@@ -432,15 +448,25 @@ public sealed class OpenAiProvider : ILlmProvider
         return string.IsNullOrEmpty(value) ? 0 : value.Length;
     }
 
-    private void LogPrompt(string provider, string model, string? prompt, string? systemPrompt)
+    private void LogPrompt(string provider, string model, string? prompt, string? systemPrompt, string? traceId = null)
     {
-        _fileLogWriter.Write("LLM", $"prompt provider={provider} model={model} systemPrompt={systemPrompt ?? string.Empty}");
-        _fileLogWriter.Write("LLM", $"prompt provider={provider} model={model} userPrompt={prompt ?? string.Empty}");
+        _fileLogWriter.Write("LLM", PrefixTraceId(traceId, $"prompt provider={provider} model={model} systemPrompt={systemPrompt ?? string.Empty}"));
+        _fileLogWriter.Write("LLM", PrefixTraceId(traceId, $"prompt provider={provider} model={model} userPrompt={prompt ?? string.Empty}"));
     }
 
-    private void LogResponse(string provider, string model, string? content)
+    private void LogResponse(string provider, string model, string? content, string? traceId = null)
     {
-        _fileLogWriter.Write("LLM", $"response provider={provider} model={model} content={content ?? string.Empty}");
+        _fileLogWriter.Write("LLM", PrefixTraceId(traceId, $"response provider={provider} model={model} content={content ?? string.Empty}"));
+    }
+
+    private static string PrefixTraceId(string? traceId, string message)
+    {
+        if (string.IsNullOrWhiteSpace(traceId) || message.Contains("traceId=", StringComparison.OrdinalIgnoreCase))
+        {
+            return message;
+        }
+
+        return $"traceId={traceId} {message}";
     }
 
     private static bool ShouldForceJsonResponse(string? prompt, string? systemPrompt)

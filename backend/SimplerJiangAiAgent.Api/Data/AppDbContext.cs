@@ -18,6 +18,12 @@ public sealed class AppDbContext : DbContext
     public DbSet<StockAgentAnalysisHistory> StockAgentAnalysisHistories => Set<StockAgentAnalysisHistory>();
     public DbSet<StockChatSession> StockChatSessions => Set<StockChatSession>();
     public DbSet<StockChatMessage> StockChatMessages => Set<StockChatMessage>();
+    public DbSet<NewsSourceRegistry> NewsSourceRegistries => Set<NewsSourceRegistry>();
+    public DbSet<NewsSourceHealthDaily> NewsSourceHealthDailies => Set<NewsSourceHealthDaily>();
+    public DbSet<NewsSourceCandidate> NewsSourceCandidates => Set<NewsSourceCandidate>();
+    public DbSet<NewsSourceVerificationRun> NewsSourceVerificationRuns => Set<NewsSourceVerificationRun>();
+    public DbSet<CrawlerChangeQueue> CrawlerChangeQueues => Set<CrawlerChangeQueue>();
+    public DbSet<CrawlerChangeRun> CrawlerChangeRuns => Set<CrawlerChangeRun>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -57,6 +63,44 @@ public sealed class AppDbContext : DbContext
             .HasOne(x => x.Session)
             .WithMany(x => x.Messages)
             .HasForeignKey(x => x.SessionId);
+
+        modelBuilder.Entity<NewsSourceRegistry>()
+            .HasIndex(x => x.Domain)
+            .IsUnique();
+
+        modelBuilder.Entity<NewsSourceRegistry>()
+            .HasIndex(x => new { x.Status, x.Tier });
+
+        modelBuilder.Entity<NewsSourceHealthDaily>()
+            .HasIndex(x => new { x.SourceId, x.HealthDate })
+            .IsUnique();
+
+        modelBuilder.Entity<NewsSourceCandidate>()
+            .HasIndex(x => new { x.Domain, x.Status });
+
+        modelBuilder.Entity<NewsSourceVerificationRun>()
+            .HasIndex(x => new { x.Domain, x.ExecutedAt });
+
+        modelBuilder.Entity<NewsSourceVerificationRun>()
+            .HasIndex(x => x.TraceId);
+
+        modelBuilder.Entity<CrawlerChangeQueue>()
+            .HasIndex(x => new { x.SourceId, x.Status });
+
+        modelBuilder.Entity<CrawlerChangeQueue>()
+            .HasIndex(x => x.TraceId);
+
+        modelBuilder.Entity<CrawlerChangeRun>()
+            .HasIndex(x => new { x.QueueId, x.ExecutedAt });
+
+        modelBuilder.Entity<CrawlerChangeRun>()
+            .HasIndex(x => x.TraceId);
+
+        modelBuilder.Entity<NewsSourceHealthDaily>()
+            .HasOne(x => x.Source)
+            .WithMany(x => x.HealthDailies)
+            .HasForeignKey(x => x.SourceId)
+            .OnDelete(DeleteBehavior.Cascade);
 
         foreach (var entityType in modelBuilder.Model.GetEntityTypes())
         {

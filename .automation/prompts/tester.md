@@ -7,6 +7,10 @@ Rules:
 - For UI changes, use Playwright MCP with Edge.
 - Run tests in this order: unit tests -> Edge MCP.
 - If any test fails, fix and re-run both tests until they pass.
+- Add feature-specific validation when applicable:
+	- News anti-pollution: verify low-quality/no-timestamp evidence is downgraded and cannot drive high-confidence buy/sell output.
+	- News library: verify scheduled collection writes market/sector/stock records with source, time, and dedupe behavior.
+	- MCP/Skill white-box: verify capability registry, permission boundaries, task status transitions, and audit logs.
 - Record results, evidence locations, and ports in the bilingual report.
 
 Checklist:

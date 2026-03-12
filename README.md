@@ -3,8 +3,10 @@
 面向真实交易决策的智能化炒股助手。目标是把“行情 + 事件 + 指标 + 研报 + 资金面 + 你的交易习惯”整合到一个可追踪、可解释、可持续演进的系统里，输出更可靠的交易辅助判断。
 
 ## 项目架构
+- 高内聚数据底层（Local-First）：系统级多渠道爬虫 + 本地数据库闭环，剥离LLM的直接联网依赖，保障事实绝对准确。
+- 终端界面双轨制：专业看盘主终端（大图大字、极致响应） + AI协驾副屏（自然语言投研）。
 - 后端：ASP.NET 8 Web API（模块化、可扩展）
-- 前端：Vue 3 + Vite（Tab 分页，模块隔离）
+- 前端：Vue 3 + Vite（网格化解耦，模块隔离）
 - 桌面：WinForms (.NET 8) + WebView2（内嵌前端）
 
 ## 已实现功能
@@ -25,11 +27,13 @@
 - /api/admin/login 管理员登录
 - /api/admin/llm/settings/{provider} LLM 配置读取/更新（需管理员 token）
 - /api/admin/llm/test/{provider} LLM 调用测试（需管理员 token）
+- 统一 AI 对话审计日志：所有 AI 请求/响应/错误统一记录到 `backend/SimplerJiangAiAgent.Api/App_Data/logs/llm-requests.txt`（含 traceId、耗时与截断保护）
 
 ### 前端
 - Stock Tabs 基础框架
 - LLM 设置页签（管理员配置）
 - K线/分时图 AI 关键价位叠加（突破线/支撑线，来源于多Agent分析）
+- 治理开发者模式：参数说明、治理链路 Trace 查询、以及按 traceId 聚合的 LLM 对话会话前端可视化（请求/返回/异常一一对应，支持 JSON 美化）
 
 ### 桌面端
 - WinForms 容器 + WebView2 载入前端
@@ -37,6 +41,10 @@
 ## 数据同步与配置
 - 后台定时任务按 appsettings.json 的 StockSync 配置抓取并落库
 - 默认账号：admin / admin123（可在 backend/SimplerJiangAiAgent.Api/appsettings.json 的 Admin 段落中修改）
+
+## 日志位置
+- LLM 对话审计日志文件：`backend/SimplerJiangAiAgent.Api/App_Data/logs/llm-requests.txt`
+- 前端“治理开发者模式”中的 LLM 对话记录，读取的也是这份后端日志文件（经 `/api/admin/source-governance/llm-logs` 聚合后返回）
 
 ## 测试
 - 后端单元测试：dotnet test backend/SimplerJiangAiAgent.Api.Tests/SimplerJiangAiAgent.Api.Tests.csproj
@@ -87,8 +95,21 @@ opencode
 - [x] GOAL-004 个性化风控与仓位建议
 - [x] GOAL-005 专业行情图升级（K线+成交量副图、分时专业渲染、数据精确映射）
 - [x] GOAL-006 图表增强（二期：分时成交量副图 + K线 MA5/MA10 叠加线）
+- [x] GOAL-012 界面重构与“专业看盘/AI辅屏”解耦（股票信息页已拆为 TerminalView 主终端 + CopilotPanel 侧栏，并支持专注模式）
+- [x] ISSUE-20260310 提示词增强（新闻抗污染策略 + 新闻库定时采集约束 + 白盒 MCP/Skill 任务执行规范）
+- [x] ISSUE-20260310-P0 动态来源治理基座（LLM每日候选源发现 + 自动新增爬取地址/流程 + 爬虫失效自动修复发布 + 程序化验证与自动隔离）
+- [x] ISSUE-20260310-P0-R1 P0剩余计划：开发者模式可视化收口（治理仪表盘 + 最小查询接口 + 过滤/详情展开/trace跳转 + 可观测审计）
+- [ ] ISSUE-20260310-P1 建立事实vs情绪资讯矩阵（来源分层、小作文高波动标识、FactChecker假消息防伪与降级）
+- [ ] ISSUE-20260310-P2 交易作息驱动(盘前/盘中/盘后)的知识库与题材生命周期（酝酿/发酵/退潮）推演引擎
+- [ ] ISSUE-20260310-P3 白盒能力与交易员化自动SOP（授权AI根据盘中异动自动触发研报溯源/资金复盘的动态任务）
 
 ## 下一阶段候选目标（逐项讨论、逐项设计）
+- [ ] GOAL-013 双轨数据中枢（Local+Global Dual-Track）与 LLM 职能调度中心
+- 双轨制数据策略：摒弃纯本地或纯外网搜的极端化，按任务类型分流数据获取管线，LLM将作为调度裁判选择合适的工具。
+- 国内内轨（C# 本地管线）：定时由爬虫将同花顺/东方财富的国内公告、研报与个股情绪存入本地 SQL。严格限制 LLM 查询国内A股事实必须经过本地库，从根本上杜绝A股事实幻觉。
+- 国际外轨（LLM 动态管线）：为 LLM 保留 Google 搜索 / Web 抓取等外网能力，并定向限制其仅能用于全球宏观经济、重大外媒消息及美股映射查询。
+- 大模型职能重塑：模型接收到指令后，首要职责是判断查询范围并分发查询路由（本地查询还是外网检索），随后再利用获取的带时间戳数据负责脱水摘要与交易逻辑推演。
+
 - [x] GOAL-007 LLM 联网个股研判与交易目标建议（核心差异化，阶段一已完成）
 	- 输出结构统一：结论、证据来源、置信度、触发条件、失效条件、风险上限、目标动作。
 	- 证据链可追溯：新闻/公告/财报/资金/技术面必须带来源与时间戳。

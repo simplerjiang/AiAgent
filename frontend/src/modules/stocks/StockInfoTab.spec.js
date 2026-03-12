@@ -99,6 +99,39 @@ describe('StockInfoTab', () => {
     expect(button.exists()).toBe(true)
   })
 
+  it('renders terminal workspace with copilot sidebar', () => {
+    const wrapper = mount(StockInfoTab)
+
+    expect(wrapper.text()).toContain('TerminalView')
+    expect(wrapper.text()).toContain('CopilotPanel')
+    expect(wrapper.find('.workspace-grid').exists()).toBe(true)
+    expect(wrapper.find('.sticky-toolbar').exists()).toBe(true)
+  })
+
+  it('starts search when pressing Enter in symbol input', async () => {
+    const { fetchMock } = createChatFetchMock({
+      handle: async (url) => {
+        if (url.startsWith('/api/stocks/search?')) {
+          return makeResponse({ ok: true, status: 200, json: async () => ([]) })
+        }
+        return null
+      }
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    const wrapper = mount(StockInfoTab)
+    const searchInput = wrapper.find('.search-field input')
+
+    await searchInput.setValue('平安银行')
+    await searchInput.trigger('keydown.enter')
+    await flushPromises()
+
+    const searchCall = fetchMock.mock.calls.find(args => String(args[0]).startsWith('/api/stocks/search?'))
+    expect(searchCall).toBeTruthy()
+    expect(searchCall[0]).toContain('q=%E5%B9%B3%E5%AE%89%E9%93%B6%E8%A1%8C')
+  })
+
   it('sends chat prompt with selected stock context', async () => {
     const { fetchMock } = createChatFetchMock({
       handle: async (url) => {
@@ -450,5 +483,28 @@ describe('StockInfoTab', () => {
 
     expect(wrapper.text()).toContain('资讯影响')
     expect(wrapper.text()).toContain('利好偏多')
+  })
+
+  it('supports focus mode by collapsing the copilot sidebar', async () => {
+    const { fetchMock } = createChatFetchMock()
+    vi.stubGlobal('fetch', fetchMock)
+
+    const wrapper = mount(StockInfoTab)
+    wrapper.vm.detail = {
+      quote: { name: '深科技', symbol: 'sz000021', price: 31.1, change: 0, changePercent: 0 },
+      kLines: [],
+      minuteLines: [],
+      messages: []
+    }
+    await wrapper.vm.$nextTick()
+    await flushPromises()
+
+    expect(wrapper.findComponent({ name: 'ChatWindow' }).exists()).toBe(true)
+
+    await wrapper.find('.focus-toggle').trigger('click')
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.text()).toContain('AI 对话、事件信号和多 Agent 分析已收拢到侧栏。')
+    expect(wrapper.findComponent({ name: 'ChatWindow' }).exists()).toBe(false)
   })
 })

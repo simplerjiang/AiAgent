@@ -2,6 +2,8 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import StockCharts from './StockCharts.vue'
 import StockAgentPanels from './StockAgentPanels.vue'
+import TerminalView from './TerminalView.vue'
+import CopilotPanel from './CopilotPanel.vue'
 import ChatWindow from '../../components/ChatWindow.vue'
 
 const symbol = ref('')
@@ -47,6 +49,7 @@ const selectedAgentHistoryId = ref('')
 const newsImpact = ref(null)
 const newsImpactLoading = ref(false)
 const newsImpactError = ref('')
+const copilotPanelOpen = ref(localStorage.getItem('stock_copilot_panel_open') !== 'false')
 
 const upsertAgentResult = result => {
   const agentId = result?.agentId ?? result?.AgentId ?? ''
@@ -642,6 +645,13 @@ const onSymbolInput = () => {
   selectedSymbol.value = ''
 }
 
+const onSymbolEnter = event => {
+  if (event?.isComposing) {
+    return
+  }
+  fetchQuote()
+}
+
 const selectSearchResult = item => {
   isSelecting = true
   symbol.value = item.code || item.Code || item.symbol || item.Symbol || ''
@@ -812,6 +822,10 @@ watch(monochromeMode, value => {
   localStorage.setItem('stock_monochrome_mode', String(value))
 })
 
+watch(copilotPanelOpen, value => {
+  localStorage.setItem('stock_copilot_panel_open', String(value))
+})
+
 watch(
   () => detail.value?.quote?.symbol,
   () => {
@@ -826,235 +840,264 @@ watch(
 <template>
   <section class="panel" :class="{ monochrome: monochromeMode }">
     <div class="panel-header">
-      <h2>股票信息</h2>
-      <button class="mode-toggle" @click="monochromeMode = !monochromeMode">
-        {{ monochromeMode ? '彩色模式' : '黑白模式' }}
-      </button>
-    </div>
-    <div class="history">
-      <h3>历史查询</h3>
-      <div class="field">
-        <label class="muted">更新频率</label>
-        <select v-model.number="historyRefreshSeconds">
-          <option :value="10">10 秒</option>
-          <option :value="15">15 秒</option>
-          <option :value="30">30 秒</option>
-          <option :value="60">60 秒</option>
-        </select>
-        <label class="muted">
-          <input type="checkbox" v-model="historyAutoRefresh" /> 自动更新
-        </label>
-        <button @click="refreshHistory" :disabled="historyLoading">刷新</button>
+      <div>
+        <p class="panel-kicker">GOAL-012</p>
+        <h2>股票信息终端</h2>
+        <p class="muted panel-subtitle">左侧聚焦行情与图表，右侧收纳 AI 对话和事件信号。</p>
       </div>
-
-      <p class="muted">
-        历史更新：{{ historyAutoRefresh ? `每 ${historyRefreshSeconds} 秒` : '手动刷新' }}
-      </p>
-
-      <p v-if="historyError" class="muted">{{ historyError }}</p>
-      <p v-if="historyLoading && !historyList.length" class="muted">历史数据刷新中...</p>
-
-      <table v-if="historyList.length" class="history-table">
-        <thead>
-          <tr>
-            <th @click="toggleSort('symbol')">代码</th>
-            <th @click="toggleSort('name')">名称</th>
-            <th @click="toggleSort('price')">价格</th>
-            <th @click="toggleSort('changePercent')">涨幅%</th>
-            <th @click="toggleSort('turnoverRate')">换手率%</th>
-            <th @click="toggleSort('peRatio')">市盈率</th>
-            <th @click="toggleSort('speed')">涨速</th>
-            <th @click="toggleSort('high')">高</th>
-            <th @click="toggleSort('low')">低</th>
-            <th @click="toggleSort('updatedAt')">更新时间</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr
-            v-for="item in sortedHistoryList"
-            :key="item.id || item.Id"
-            @click="applyHistorySymbol(item)"
-            @contextmenu="openContextMenu($event, item)"
-          >
-            <td>{{ item.symbol ?? item.Symbol }}</td>
-            <td>{{ item.name ?? item.Name }}</td>
-            <td :class="getPriceClass(item)">{{ item.price ?? item.Price }}</td>
-            <td :class="getChangeClass(item.changePercent ?? item.ChangePercent)">{{ formatPercent(item.changePercent ?? item.ChangePercent) }}</td>
-            <td>{{ formatPercent(item.turnoverRate ?? item.TurnoverRate) }}</td>
-            <td>{{ item.peRatio ?? item.PeRatio }}</td>
-            <td>{{ item.speed ?? item.Speed }}</td>
-            <td :class="getHighClass(item)">{{ item.high ?? item.High }}</td>
-            <td :class="getLowClass(item)">{{ item.low ?? item.Low }}</td>
-            <td>{{ formatDate(item.updatedAt ?? item.UpdatedAt) }}</td>
-          </tr>
-        </tbody>
-      </table>
-
-      <div
-        v-if="contextMenu.visible"
-        class="context-menu"
-        :style="{ left: `${contextMenu.x}px`, top: `${contextMenu.y}px` }"
-      >
-        <button @click="deleteHistoryItem">删除</button>
-      </div>
-
-      <p v-if="!historyLoading && !historyError && !historyList.length" class="muted">暂无历史数据。</p>
-    </div>
-
-    <div class="field search-field">
-      <input
-        v-model="symbol"
-        placeholder="输入股票代码/名称/拼音缩写"
-        @input="onSymbolInput"
-      />
-      <button @click="fetchQuote" :disabled="loading">查询</button>
-    </div>
-
-    <div v-if="searchOpen" class="search-modal" @click.self="closeSearch">
-      <div class="search-modal-content">
-        <div class="search-modal-header">
-          <span>搜索结果</span>
-          <button class="close-btn" @click="closeSearch">关闭</button>
-        </div>
-        <p v-if="searchError" class="muted">{{ searchError }}</p>
-        <p v-else-if="searchLoading" class="muted">搜索中...</p>
-        <ul v-else class="search-list">
-          <li
-            v-for="item in searchResults"
-            :key="item.symbol || item.Symbol"
-            @click="selectSearchResult(item)"
-          >
-            <div class="result-name">{{ item.name ?? item.Name }}</div>
-            <div class="result-code">{{ item.symbol ?? item.Symbol }}</div>
-          </li>
-        </ul>
-        <p v-if="!searchLoading && !searchError && !searchResults.length" class="muted">暂无匹配结果</p>
+      <div class="panel-actions">
+        <button class="mode-toggle" @click="monochromeMode = !monochromeMode">
+          {{ monochromeMode ? '彩色模式' : '黑白模式' }}
+        </button>
+        <button class="mode-toggle focus-toggle" @click="copilotPanelOpen = !copilotPanelOpen">
+          {{ copilotPanelOpen ? '专注模式' : '显示 AI 侧栏' }}
+        </button>
       </div>
     </div>
-
-    <div class="field">
-      <label class="muted">数据来源</label>
-      <select v-model="selectedSource">
-        <option value="">自动</option>
-        <option v-for="item in sources" :key="item" :value="item">{{ item }}</option>
-      </select>
-    </div>
-
-    <div class="field">
-      <label class="muted">刷新(秒)</label>
-      <input type="number" min="5" v-model.number="refreshSeconds" />
-      <label class="muted">
-        <input type="checkbox" v-model="autoRefresh" /> 自动刷新
-      </label>
-    </div>
-
-    <p class="muted">
-      数据刷新：{{ autoRefresh ? `每 ${refreshSeconds} 秒` : '手动刷新' }}
-    </p>
-
-    <p v-if="error" class="muted">{{ error }}</p>
-    <p v-else-if="loading && !detail" class="muted">查询中...</p>
-
-    <div v-if="detail">
-      <p><strong>{{ detail.quote.name }}</strong>（{{ detail.quote.symbol }}）</p>
-      <p>当前价：{{ detail.quote.price }}</p>
-      <p>涨跌：{{ detail.quote.change }}（{{ detail.quote.changePercent }}%）</p>
-      <p class="muted">盘中消息：{{ detail.messages.length }} 条</p>
-
-      <ul v-if="detail.messages.length" class="messages">
-        <li v-for="item in detail.messages.slice(0, 5)" :key="item.title">
-          {{ item.title }} - {{ item.source }}
-        </li>
-      </ul>
-
-      <section class="news-impact">
-        <div class="news-impact-header">
-          <div>
-            <h3>资讯影响</h3>
-            <p class="muted">对近期资讯做情绪与影响评估。</p>
-          </div>
-          <button @click="fetchNewsImpact" :disabled="newsImpactLoading">刷新</button>
-        </div>
-
-        <p v-if="newsImpactError" class="muted error">{{ newsImpactError }}</p>
-        <p v-else-if="newsImpactLoading" class="muted">分析中...</p>
-
-        <div v-else-if="newsImpact" class="news-impact-content">
-          <div class="news-impact-summary">
-            <span>利好 {{ newsImpact.summary.positive }}</span>
-            <span>中性 {{ newsImpact.summary.neutral }}</span>
-            <span>利空 {{ newsImpact.summary.negative }}</span>
-            <span class="overall">总体：{{ newsImpact.summary.overall }}</span>
+    <div class="compact-toolbar">
+      <section class="toolbar-shell sticky-toolbar">
+        <div class="toolbar-main-row">
+          <div class="toolbar-title">
+            <strong>标的查询</strong>
+            <span class="muted">顶部快速切换，不再占用图表纵向空间。</span>
           </div>
 
-          <ul v-if="newsImpact.events?.length" class="news-impact-list">
-            <li v-for="item in newsImpact.events.slice(0, 6)" :key="item.title">
-              <span class="impact-tag" :class="getImpactClass(item.category)">{{ item.category }}</span>
-              <span class="impact-title">{{ item.title }}</span>
-              <span class="impact-score">{{ formatImpactScore(item.impactScore) }}</span>
-            </li>
-          </ul>
-          <p v-else class="muted">暂无资讯影响数据。</p>
+          <div class="field search-field toolbar-search-field">
+            <input
+              v-model="symbol"
+              placeholder="输入股票代码/名称/拼音缩写"
+              @input="onSymbolInput"
+              @keydown.enter.prevent="onSymbolEnter"
+            />
+            <button @click="fetchQuote" :disabled="loading">查询</button>
+            <div v-if="searchOpen" class="search-dropdown">
+              <div class="search-modal-header">
+                <span>搜索结果</span>
+                <button class="close-btn" @click="closeSearch">关闭</button>
+              </div>
+              <p v-if="searchError" class="muted">{{ searchError }}</p>
+              <p v-else-if="searchLoading" class="muted">搜索中...</p>
+              <ul v-else class="search-list">
+                <li
+                  v-for="item in searchResults"
+                  :key="item.symbol || item.Symbol"
+                  @click="selectSearchResult(item)"
+                >
+                  <div class="result-name">{{ item.name ?? item.Name }}</div>
+                  <div class="result-code">{{ item.symbol ?? item.Symbol }}</div>
+                </li>
+              </ul>
+              <p v-if="!searchLoading && !searchError && !searchResults.length" class="muted">暂无匹配结果</p>
+            </div>
+          </div>
+
+          <div class="toolbar-settings">
+            <div class="toolbar-select-group">
+              <label class="muted">来源</label>
+              <select v-model="selectedSource">
+                <option value="">自动</option>
+                <option v-for="item in sources" :key="item" :value="item">{{ item }}</option>
+              </select>
+            </div>
+
+            <div class="toolbar-select-group narrow-group">
+              <label class="muted">刷新</label>
+              <input type="number" min="5" v-model.number="refreshSeconds" />
+            </div>
+
+            <label class="muted inline-check toolbar-check">
+              <input type="checkbox" v-model="autoRefresh" /> 自动
+            </label>
+          </div>
         </div>
 
-        <p v-else class="muted">暂无资讯影响数据。</p>
-      </section>
+        <div class="toolbar-sub-row">
+          <p class="muted toolbar-status">
+            数据刷新：{{ autoRefresh ? `每 ${refreshSeconds} 秒` : '手动刷新' }}
+          </p>
+          <p v-if="error" class="muted toolbar-status error-text">{{ error }}</p>
+          <p v-else-if="loading && !detail" class="muted toolbar-status">查询中...</p>
 
-      <StockCharts
-        :k-lines="detail.kLines"
-        :minute-lines="detail.minuteLines"
-        :base-price="Number(detail.quote.price) - Number(detail.quote.change)"
-        :ai-levels="aiLevels"
-        :interval="interval"
-        @update:interval="interval = $event"
-      />
-
-      <StockAgentPanels
-        :agents="agentResults"
-        :loading="agentLoading"
-        :error="agentError"
-        :last-updated="agentUpdatedAt"
-        :history-options="agentHistoryOptions"
-        :selected-history-id="selectedAgentHistoryId"
-        :history-loading="agentHistoryLoading"
-        :history-error="agentHistoryError"
-        @select-history="selectAgentHistory"
-        @run="runAgents"
-      />
-
-      <ChatWindow
-        ref="chatRef"
-        title="股票助手"
-        :build-prompt="buildChatPrompt"
-        :history-key="chatHistoryKey"
-        :enable-history="true"
-        :history-adapter="chatHistoryAdapter"
-        expandable
-        expanded-storage-key="stock_chat_expanded"
-        placeholder="请输入关于该股票的问题"
-        empty-text="可以询问该股票的走势、风险或盘面解读。"
-        max-height="320px"
-        expanded-height="600px"
-      >
-        <template #header-extra>
-          <div class="chat-session">
-            <p class="muted">当前：{{ currentStockLabel }}</p>
-            <select v-model="selectedChatSession" :disabled="!chatSessionOptions.length">
-              <option v-for="item in chatSessionOptions" :key="item.key" :value="item.key">
-                {{ item.label }}
-              </option>
+          <div class="toolbar-history-actions">
+            <span class="muted">历史：{{ historyAutoRefresh ? `每 ${historyRefreshSeconds} 秒` : '手动' }}</span>
+            <select v-model.number="historyRefreshSeconds">
+              <option :value="10">10 秒</option>
+              <option :value="15">15 秒</option>
+              <option :value="30">30 秒</option>
+              <option :value="60">60 秒</option>
             </select>
-            <button class="chat-session-new" @click="startNewChat" :disabled="!chatSymbolKey">
-              新建对话
+            <label class="muted inline-check toolbar-check">
+              <input type="checkbox" v-model="historyAutoRefresh" /> 自动更新
+            </label>
+            <button @click="refreshHistory" :disabled="historyLoading">刷新历史</button>
+          </div>
+        </div>
+
+        <div class="history-ribbon">
+          <p class="muted history-ribbon-title">最近查询</p>
+          <div v-if="historyList.length" class="history-chip-row">
+            <button
+              v-for="item in sortedHistoryList.slice(0, 10)"
+              :key="item.id || item.Id"
+              class="history-chip"
+              @click="applyHistorySymbol(item)"
+              @contextmenu="openContextMenu($event, item)"
+            >
+              <span>{{ item.name ?? item.Name }}</span>
+              <strong>{{ item.symbol ?? item.Symbol }}</strong>
+              <small :class="getChangeClass(item.changePercent ?? item.ChangePercent)">
+                {{ formatPercent(item.changePercent ?? item.ChangePercent) || '0%' }}
+              </small>
             </button>
           </div>
-        </template>
-      </ChatWindow>
+          <p v-else class="muted">暂无历史数据。</p>
+          <p v-if="historyError" class="muted error-text">{{ historyError }}</p>
+          <p v-if="historyLoading && !historyList.length" class="muted">历史数据刷新中...</p>
+        </div>
+
+        <div
+          v-if="contextMenu.visible"
+          class="context-menu"
+          :style="{ left: `${contextMenu.x}px`, top: `${contextMenu.y}px` }"
+        >
+          <button @click="deleteHistoryItem">删除</button>
+        </div>
+      </section>
     </div>
 
-    <p v-if="!detail" class="muted">
-      数据来源：腾讯 / 新浪 / 百度（后端爬虫占位）
-    </p>
+    <div class="workspace-grid" :class="{ focused: !copilotPanelOpen }">
+      <TerminalView :quote="detail?.quote ?? null" :monochrome="monochromeMode">
+        <template #summary>
+          <div v-if="detail" class="terminal-summary-grid">
+            <div class="quote-card">
+              <p><strong>{{ detail.quote.name }}</strong>（{{ detail.quote.symbol }}）</p>
+              <p>当前价：{{ detail.quote.price }}</p>
+              <p>涨跌：{{ detail.quote.change }}（{{ detail.quote.changePercent }}%）</p>
+              <p class="muted">更新时间：{{ formatDate(detail.quote.timestamp) }}</p>
+            </div>
+
+            <div class="quote-card tape-card">
+              <div class="quote-card-header">
+                <h4>盘中消息带</h4>
+                <span class="muted">{{ detail.messages.length }} 条</span>
+              </div>
+              <ul v-if="detail.messages.length" class="messages">
+                <li v-for="item in detail.messages.slice(0, 5)" :key="item.title">
+                  <span>{{ item.title }}</span>
+                  <small>{{ item.source }}</small>
+                </li>
+              </ul>
+              <p v-else class="muted">暂无盘中消息。</p>
+            </div>
+          </div>
+
+          <div v-else class="terminal-empty">
+            <h4>等待加载股票</h4>
+            <p>主视区只保留价格、分时、K 线、量价指标与消息带。</p>
+            <p class="muted">数据来源：腾讯 / 新浪 / 百度（后端爬虫占位）</p>
+          </div>
+        </template>
+
+        <template #chart>
+          <StockCharts
+            v-if="detail"
+            :k-lines="detail.kLines"
+            :minute-lines="detail.minuteLines"
+            :base-price="Number(detail.quote.price) - Number(detail.quote.change)"
+            :ai-levels="aiLevels"
+            :interval="interval"
+            @update:interval="interval = $event"
+          />
+          <div v-else class="chart-placeholder">
+            <p>查询股票后，这里会以终端视图显示 K 线、分时、成交量和均线。</p>
+          </div>
+        </template>
+      </TerminalView>
+
+      <CopilotPanel :open="copilotPanelOpen" :current-stock-label="currentStockLabel" @toggle="copilotPanelOpen = !copilotPanelOpen">
+        <section class="copilot-card news-impact">
+          <div class="news-impact-header">
+            <div>
+              <h3>资讯影响</h3>
+              <p class="muted">事件信号在右侧集中查看，不遮挡 K 线。</p>
+            </div>
+            <button @click="fetchNewsImpact" :disabled="newsImpactLoading || !detail">刷新</button>
+          </div>
+
+          <p v-if="newsImpactError" class="muted error">{{ newsImpactError }}</p>
+          <p v-else-if="newsImpactLoading" class="muted">分析中...</p>
+
+          <div v-else-if="newsImpact" class="news-impact-content">
+            <div class="news-impact-summary">
+              <span>利好 {{ newsImpact.summary.positive }}</span>
+              <span>中性 {{ newsImpact.summary.neutral }}</span>
+              <span>利空 {{ newsImpact.summary.negative }}</span>
+              <span class="overall">总体：{{ newsImpact.summary.overall }}</span>
+            </div>
+
+            <ul v-if="newsImpact.events?.length" class="news-impact-list">
+              <li v-for="item in newsImpact.events.slice(0, 6)" :key="item.title">
+                <span class="impact-tag" :class="getImpactClass(item.category)">{{ item.category }}</span>
+                <span class="impact-title">{{ item.title }}</span>
+                <span class="impact-score">{{ formatImpactScore(item.impactScore) }}</span>
+              </li>
+            </ul>
+            <p v-else class="muted">暂无资讯影响数据。</p>
+          </div>
+
+          <p v-else class="muted">选择股票后在此查看事件影响。</p>
+        </section>
+
+        <StockAgentPanels
+          :agents="agentResults"
+          :loading="agentLoading"
+          :error="agentError"
+          :last-updated="agentUpdatedAt"
+          :history-options="agentHistoryOptions"
+          :selected-history-id="selectedAgentHistoryId"
+          :history-loading="agentHistoryLoading"
+          :history-error="agentHistoryError"
+          @select-history="selectAgentHistory"
+          @run="runAgents"
+        />
+
+        <div class="copilot-card">
+          <ChatWindow
+            v-if="detail"
+            ref="chatRef"
+            title="股票助手"
+            :build-prompt="buildChatPrompt"
+            :history-key="chatHistoryKey"
+            :enable-history="true"
+            :history-adapter="chatHistoryAdapter"
+            expandable
+            expanded-storage-key="stock_chat_expanded"
+            placeholder="请输入关于该股票的问题"
+            empty-text="可以询问该股票的走势、风险或盘面解读。"
+            max-height="320px"
+            expanded-height="600px"
+          >
+            <template #header-extra>
+              <div class="chat-session">
+                <p class="muted">当前：{{ currentStockLabel }}</p>
+                <select v-model="selectedChatSession" :disabled="!chatSessionOptions.length">
+                  <option v-for="item in chatSessionOptions" :key="item.key" :value="item.key">
+                    {{ item.label }}
+                  </option>
+                </select>
+                <button class="chat-session-new" @click="startNewChat" :disabled="!chatSymbolKey">
+                  新建对话
+                </button>
+              </div>
+            </template>
+          </ChatWindow>
+          <div v-else class="terminal-empty compact-empty">
+            <h4>AI Copilot 已待命</h4>
+            <p>先在左侧加载股票，再在这里查看事件信号或发起对话。</p>
+          </div>
+        </div>
+      </CopilotPanel>
+    </div>
   </section>
 </template>
 
@@ -1066,6 +1109,8 @@ watch(
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
   border-radius: 16px;
   padding: 1.5rem;
+  display: grid;
+  gap: 1rem;
 }
 
 .panel-header {
@@ -1073,12 +1118,30 @@ watch(
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  margin-bottom: 1rem;
 }
 
 .panel h2 {
   margin-bottom: 0;
   color: #0f172a;
+}
+
+.panel-kicker {
+  margin: 0 0 0.3rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #2563eb;
+}
+
+.panel-subtitle {
+  margin: 0.3rem 0 0;
+}
+
+.panel-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .mode-toggle {
@@ -1088,6 +1151,222 @@ watch(
   background: #e2e8f0;
   color: #0f172a;
   cursor: pointer;
+}
+
+.focus-toggle {
+  background: #0f172a;
+  color: #f8fafc;
+}
+
+.toolbar-shell,
+.quote-card-header {
+  display: flex;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.compact-toolbar {
+  position: relative;
+}
+
+.sticky-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  padding: 0.85rem 1rem;
+  border-radius: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+}
+
+.toolbar-main-row,
+.toolbar-sub-row {
+  display: grid;
+  grid-template-columns: auto minmax(320px, 1fr) auto;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.toolbar-title {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.toolbar-title strong {
+  color: #0f172a;
+}
+
+.toolbar-search-field {
+  margin-bottom: 0;
+}
+
+.toolbar-search-field input {
+  min-width: 0;
+  flex: 1 1 260px;
+}
+
+.toolbar-settings {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.toolbar-select-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.toolbar-select-group select,
+.toolbar-select-group input {
+  width: auto;
+  min-width: 86px;
+}
+
+.narrow-group input {
+  max-width: 84px;
+}
+
+.toolbar-check {
+  white-space: nowrap;
+}
+
+.toolbar-sub-row {
+  grid-template-columns: auto 1fr auto;
+}
+
+.toolbar-status {
+  margin: 0;
+}
+
+.toolbar-history-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.history-ribbon {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.history-ribbon-title {
+  margin: 0;
+}
+
+.history-chip-row {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  padding-bottom: 0.1rem;
+}
+
+.history-chip {
+  display: grid;
+  gap: 0.1rem;
+  min-width: 124px;
+  padding: 0.5rem 0.65rem;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(248, 250, 252, 0.96);
+  text-align: left;
+}
+
+.history-chip span,
+.history-chip strong,
+.history-chip small {
+  display: block;
+}
+
+.history-chip strong {
+  color: #0f172a;
+}
+
+.error-text {
+  color: #b91c1c;
+}
+
+.compact-field {
+  margin-bottom: 0;
+}
+
+.inline-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.workspace-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(0, 1.75fr) minmax(320px, 0.95fr);
+  align-items: start;
+  min-height: calc(100vh - 238px);
+}
+
+.workspace-grid.focused {
+  grid-template-columns: minmax(0, 1fr) 280px;
+}
+
+.terminal-summary-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(220px, 0.75fr) minmax(0, 1.25fr);
+}
+
+.quote-card {
+  padding: 1rem;
+  border-radius: 16px;
+  background: rgba(15, 23, 42, 0.34);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.quote-card p,
+.terminal-empty p {
+  margin: 0.2rem 0;
+}
+
+.tape-card {
+  min-width: 0;
+}
+
+.terminal-empty {
+  display: grid;
+  gap: 0.35rem;
+  min-height: 140px;
+  align-content: center;
+}
+
+.terminal-empty h4 {
+  margin: 0;
+  color: #f8fafc;
+}
+
+.compact-empty h4 {
+  color: #0f172a;
+}
+
+.chart-placeholder {
+  display: grid;
+  place-items: center;
+  min-height: 100%;
+  border-radius: 18px;
+  border: 1px dashed rgba(148, 163, 184, 0.35);
+  color: #cbd5e1;
+}
+
+.copilot-card {
+  padding: 1rem;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.16);
 }
 
 .field {
@@ -1120,25 +1399,20 @@ watch(
   position: relative;
 }
 
-.search-modal {
-  position: fixed;
-  inset: 0;
-  background: rgba(15, 23, 42, 0.35);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 50;
-  padding: 1rem;
-}
-
-.search-modal-content {
-  width: min(560px, 100%);
+.search-dropdown {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  left: 0;
+  right: 0;
+  width: 100%;
+  max-width: 560px;
   background: rgba(255, 255, 255, 0.95);
   border-radius: 16px;
   padding: 1rem 1.25rem;
   box-shadow: 0 20px 40px rgba(15, 23, 42, 0.2);
   backdrop-filter: blur(12px);
   border: 1px solid rgba(148, 163, 184, 0.2);
+  z-index: 50;
 }
 
 .search-modal-header {
@@ -1227,46 +1501,6 @@ watch(
   cursor: pointer;
 }
 
-.history {
-  margin-bottom: 2rem;
-  padding: 1rem;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.7);
-  border: 1px solid rgba(148, 163, 184, 0.2);
-}
-
-.history-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.9rem;
-  margin-top: 0.5rem;
-  background: rgba(255, 255, 255, 0.9);
-  border-radius: 12px;
-  overflow: hidden;
-}
-
-.history-table th,
-.history-table td {
-  border-bottom: 1px solid #e5e7eb;
-  padding: 0.5rem;
-  text-align: left;
-}
-
-.history-table th {
-  background: rgba(37, 99, 235, 0.08);
-  color: #1e293b;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.history-table tbody tr {
-  cursor: pointer;
-}
-
-.history-table tbody tr:hover {
-  background: #f8fafc;
-}
-
 .text-rise {
   color: #ef4444;
   font-weight: 600;
@@ -1294,7 +1528,7 @@ watch(
 .panel.monochrome .field select,
 .panel.monochrome .history,
 .panel.monochrome .history-table,
-.panel.monochrome .search-modal-content {
+.panel.monochrome .search-dropdown {
   background: #ffffff;
   color: #000000;
 }
@@ -1321,5 +1555,188 @@ watch(
   color: #ef4444;
   padding: 0.4rem 0.8rem;
   cursor: pointer;
+}
+
+.messages {
+  list-style: none;
+  padding: 0;
+  margin: 0.65rem 0 0;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.messages li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding-bottom: 0.55rem;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.messages small {
+  color: #94a3b8;
+}
+
+.news-impact {
+  margin-top: 0;
+}
+
+.news-impact-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.news-impact-header h3 {
+  margin: 0;
+}
+
+.news-impact-content {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.news-impact-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.news-impact-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.news-impact-list li {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 0.75rem;
+  align-items: start;
+}
+
+.impact-tag {
+  padding: 0.2rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.impact-positive {
+  background: rgba(239, 68, 68, 0.12);
+  color: #b91c1c;
+}
+
+.impact-negative {
+  background: rgba(34, 197, 94, 0.14);
+  color: #166534;
+}
+
+.impact-neutral {
+  background: rgba(148, 163, 184, 0.18);
+  color: #475569;
+}
+
+.impact-score {
+  font-weight: 600;
+}
+
+.chat-session {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.chat-session p {
+  margin: 0;
+}
+
+.history-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.history-table th,
+.history-table td {
+  padding: 0.6rem 0.55rem;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.9);
+  text-align: left;
+}
+
+.history-table th {
+  color: #475569;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.history-table tbody tr {
+  cursor: pointer;
+}
+
+.history-table tbody tr:hover {
+  background: rgba(241, 245, 249, 0.9);
+}
+
+.text-rise {
+  color: #dc2626;
+}
+
+.text-fall {
+  color: #16a34a;
+}
+
+.context-menu {
+  position: fixed;
+  z-index: 80;
+  padding: 0.4rem;
+  border-radius: 12px;
+  background: #0f172a;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.24);
+}
+
+.context-menu button {
+  background: transparent;
+  color: #f8fafc;
+}
+
+@media (max-width: 1180px) {
+  .workspace-grid,
+  .terminal-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .toolbar-main-row,
+  .toolbar-sub-row {
+    grid-template-columns: 1fr;
+  }
+
+  .toolbar-settings,
+  .toolbar-history-actions {
+    justify-content: flex-start;
+  }
+
+  .workspace-grid.focused {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .panel-header,
+  .deck-card-header,
+  .quote-card-header,
+  .news-impact-header {
+    flex-direction: column;
+  }
+
+  .panel-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
 }
 </style>

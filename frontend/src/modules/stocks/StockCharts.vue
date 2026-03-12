@@ -693,15 +693,20 @@ watch(() => [props.kLines, props.minuteLines, props.basePrice, props.aiLevels], 
 .charts {
   display: grid;
   grid-template-columns: 1fr;
+  grid-template-rows: minmax(360px, 1.25fr) minmax(280px, 0.85fr);
   gap: 1rem;
   width: 100%;
+  min-height: min(78vh, 980px);
 }
 
 .chart-wrapper {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
   width: 100%;
   min-width: 0;
   overflow: visible;
   position: relative;
+  min-height: 0;
 }
 
 .chart-header {
@@ -718,7 +723,8 @@ watch(() => [props.kLines, props.minuteLines, props.basePrice, props.aiLevels], 
 
 .chart {
   width: 100%;
-  height: 280px;
+  height: 100%;
+  min-height: 280px;
   display: block;
 }
 
@@ -743,5 +749,12 @@ watch(() => [props.kLines, props.minuteLines, props.basePrice, props.aiLevels], 
   font-size: 0.8rem;
   pointer-events: none;
   white-space: nowrap;
+}
+
+@media (max-width: 1180px) {
+  .charts {
+    grid-template-rows: minmax(320px, 1fr) minmax(240px, 0.8fr);
+    min-height: auto;
+  }
 }
 </style>

@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using SimplerJiangAiAgent.Api.Infrastructure.Llm;
+using SimplerJiangAiAgent.Api.Infrastructure.Logging;
 using Xunit;
 
 namespace SimplerJiangAiAgent.Api.Tests;
@@ -19,12 +20,15 @@ public sealed class LlmServiceTests
             ForceChinese = true
         });
         var provider = new FakeProvider();
-        var service = new LlmService(store, new[] { provider });
+        var logs = new FakeLogWriter();
+        var service = new LlmService(store, new[] { provider }, logs);
 
         var result = await service.ChatAsync("openai", new LlmChatRequest("hello", null, null, true), CancellationToken.None);
 
         Assert.Equal("echo:hello\n\n请使用中文回答。", result.Content);
         Assert.Equal("hello\n\n请使用中文回答。", provider.LastPrompt);
+        Assert.Contains(logs.Entries, item => item.Contains("stage=request", StringComparison.Ordinal));
+        Assert.Contains(logs.Entries, item => item.Contains("stage=response", StringComparison.Ordinal));
     }
 
     private sealed class FakeSettingsStore : ILlmSettingsStore
@@ -55,6 +59,16 @@ public sealed class LlmServiceTests
         {
             LastPrompt = request.Prompt;
             return Task.FromResult(new LlmChatResult($"echo:{request.Prompt}"));
+        }
+    }
+
+    private sealed class FakeLogWriter : IFileLogWriter
+    {
+        public List<string> Entries { get; } = new();
+
+        public void Write(string category, string message)
+        {
+            Entries.Add($"{category}:{message}");
         }
     }
 }

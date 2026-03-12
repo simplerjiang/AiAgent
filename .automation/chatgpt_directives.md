@@ -16,8 +16,8 @@
    * **纠偏**: 原有的界面布局必须推倒重组为 **Grid（网格屏）布局**。左侧 `70%+` 的绝对空间只保留 `lightweight-charts` 和数据挂件；AI Copilot (例如你生成的对话和建议) **一律放入右侧 / 侧边 Drawer**，只有用户显式需要时才通过交互面板查阅。绝不能让 AI 弹窗阻挡 K 线。
 
 2. **过度依赖大语言模型抓取动态数据 (违反了最新的 GOAL-013 本地优先理念):**
-   * **现象**: 旧的 P1~P3 计划或以往的 Agent 实现中，系统倾向通过给 LLM 注入外部 Search 权限或 MCP 插件实时向外网请求新闻和研报。这不仅慢、且产生严重的幻觉、时效污染。
-   * **纠偏**: 全面褫夺 LLM 在运行时的公网直接抓取权限！以后的行情、新闻、研报获取，**全部改由 C# 的 `SimplerJiangAiAgent.Api` 编写稳定的 Background Service 爬虫定时去东方财富/同花顺获取，并在 SQL Server / Sqlite 库中落地**。LLM `StockAgent` 等角色，仅限查询 `AppDbContext` 里的表、输出分析，再反馈给客户端。
+   * **现象**: 旧的 P1~P3 计划或以往的 Agent 实现中，系统倾向通过给 LLM 注入外部 Search 权限或 MCP 插件实时向外网请求各种新闻。这不仅慢、且在国内A股等确定性事实上容易产生幻觉污染。
+   * **纠偏 (双轨制数据策略)**: 建立内外有别的“双轨数据流”。对于**中国A股公告、预告、国内财经资讯**，必须由 C# 的 `SimplerJiangAiAgent.Api` 编写稳定的 Background Service 定时去东方财富/同花顺抓取以结构化存入本地 SQL 库，限制 LLM 对此部分数据的直接外网查询；而对于**海外宏观、美股映射资金、国际政经新闻**，由于无法固定抓取池，需为 AI 继续保留搜索工具的动态外网权限，但要求 LLM 进行严格场景判断后方可使用。
 
 ---
 
@@ -62,12 +62,17 @@
 > 
 > 接下来，**必须严格进入 Step 2：C# 本地数据中枢基建建立 (推进 GOAL-013) 的开发。**
 >
-> **你的开发任务 (Step 2)**:
-> 1. **数据库扩充**: 在 `backend/SimplerJiangAiAgent.Api/Data/Entities` 新增 `LocalStockNews` 和 `LocalSectorReport` 实体类，并在 `AppDbContext` 中注册 DbSet。完成后请使用 EF Core 生成 Migration 进行数据库结构的演进。
->    - 核心强字段要求包含：`Id`, `Symbol` (标的代码), `Title`, `Content` (降噪后的文本), `Source` (来源机构), `PublishTime` (新闻实际发布时间, 关键!), `CreatedAt` (入库时间)。
-> 2. **后端采集底层**: 在 Infrastructure 层实现强类型的 `IHostedService` (`BackgroundService`)，比如 `MarketDataScraperWorker`：周期性通过原生 HttpClient/爬虫拉取新闻和研报，并`SaveChanges`存入本地。彻底取代由 LLM 请求直接向外网抓取的逻辑。
-> 3. **清理旧 Agent 权限**: 检查现有的 Agent Tools/Plugins，如果存在直接调用外网搜索引擎或临时爬取特定网页内容的 Tool（会导致严重的幻觉且极不稳定），将其移出 Tool 清单或直接废弃！
-> 4. **赋予受控新能力**: 为 Agent 编写一个且唯一的新 Tool，如 `QueryLocalFactDatabaseTool`。让 LLM 只能以受限查表/全文索引的方式检索本地 `LocalStockNews` 里爬虫已筛洗好的数据，进行投研推演。
-> 5. **自测与回执**: 完成后端 C# 业务和 Migration 并确保 `dotnet build` 且 `dotnet test` 通过后，**清空下方旧的回执，编写新的 `Step 2 开发完成回执`** 提醒用户进行 Review。
+> **你的开发任务 (Step 2 - 双轨制数据中心)**:
+> 1. **数据库扩充 (内轨基石)**: 在 `backend/SimplerJiangAiAgent.Api/Data/Entities` 新增 `LocalStockNews` 和 `LocalSectorReport` 实体类，包含强字段 `Symbol`、`PublishTime` 等，注册 DbSet 并生成 Migration。
+> 2. **后端采集管线 (内轨 - 严格按此规则)**: 在 Infrastructure 层实现强类型 `IHostedService`。
+>    * **🚨 PM 实测排雷警告**: 我刚刚亲自测试了数据源。**同花顺(10jqka)** 的所有 ajax 接口（如 `/ajax/code/...`）带有严格的 `v` 动态 Cookie 校验，单纯的 `HttpClient` 会直接被 `403 Forbidden` 拦截。因此 **绝对禁止** 开发人员脑补和编写毫无作用的同花顺采集代码！
+>    * **🟢 指定使用东方财富 (Eastmoney) API**: 东方财富的公告 API 非常干净友好，直出的 JSON 且无防爬。你必须使用如下 URL 结构进行个股信息拉取：
+>      `GET https://np-anotice-stock.eastmoney.com/api/security/ann?page_size=30&page_index=1&ann_type=A&client_source=web&stock_list={Symbol}`
+>      (只需解析返回的 `data.list` 数组，提取 `title`, `display_time`, `art_code` 即可，**不要乱发明不存在的 API**)。
+>    * **综合使用**: 结合现有的 `SinaCompanyNewsParser` 和上面指定的东财强类型 JSON API，完善后台定时抓取任务。
+> 3. **AI Search 路由逻辑 (外轨 & 调度)**: 检视现有 Agent Tools/Plugins 中直接调用外网的搜索工具。**不要停用或废弃它**，而是为其加上严格的系统 Prompt 或代码级策略控制（如：当查询请求不包含国内特定单只A股代码，或者明确含有“海外、宏观、美股映射”等标签时才允许外网查）。
+> 4. **赋予受控新能力**: 为 Agent 编写新的 Tool `QueryLocalFactDatabaseTool`。引导 LLM 在处理“A股研报分析”、“股票公告查询”时强制切向本地 SQL 事实库检索。
+> 5. **前端数据联动与精准过滤 (解决无关新闻占位问题)**: UI 层面已预留了新闻坑位，但目前展示的数据是全局且无关的。你需要开发/改造对应的查询 API（如 `GET /api/news?symbol={代码}&level=stock/sector/market`），并在前端页面确保这些新闻组件 **严格跟随当前选中的标的代码 (Symbol)、其所属板块，以及大盘环境** 进行请求和渲染，禁止显示毫不相关的噪音新闻。
+> 6. **自测与回执**: 完成 C# 业务和 Migration，且保障 `dotnet test` 后，清空此回执，编写 `Step 2 开发完成回执`。 
 >
-> *(收到此指令后，请立即开始编写 C# 后端代码并排查 Agent 工具侧代码！切勿修改前端页面。)*
+> *(收到此指令后，请立即开始编写 直到完成任务)*
