@@ -90,3 +90,31 @@
 - 对指挥者一致性升级，仅向 Commander 注入 3-7 天历史上下文（禁止注入子 Agent），并在方向/评级变化时强制输出结构化 revision 改判说明。
 - For commander consistency guardrails, always run deterministic unit tests covering divergence tagging, hysteresis suppression on low-confidence flips, and strong-counter-evidence override before marking Problem-2 work complete.
 - 对 Commander 一致性守护改动，完工前必须执行确定性单测，覆盖分歧态标注、低置信度改判滞后抑制、强反证覆盖三类场景。
+- For any LLM logging enhancement, keep a single sink file with stable `traceId` request/response/error records and content truncation to prevent oversized logs.
+- 对任何 LLM 日志增强，必须保持单一落地日志文件，并记录稳定 `traceId` 的请求/响应/错误链路，同时对内容做截断以防日志膨胀。
+- For any prompt updates involving news analysis, explicitly require source tiering (authoritative/preferred/fallback/blocked) and enforce neutral downgrade when only blocked or untimestamped evidence is available.
+- 对涉及新闻分析的提示词更新，必须显式定义来源分层（权威/优选/回退/屏蔽），且当仅有屏蔽源或无时间戳证据时，结论必须降级为中性。
+- For dynamic news-source reliability, maintain a source registry with daily automated health scoring, and allow LLM-discovered sources into production only after programmatic verification and auto-quarantine safeguards.
+- 针对动态资讯源稳定性，必须维护来源注册表并执行每日自动健康评分；LLM 新发现来源只有通过程序化验证并具备自动隔离保护后，才可进入生产链路。
+- For Gemini/OpenAI JSON parsing (especially streaming SSE chunks), always validate `JsonElement.ValueKind` before `GetArrayLength`/`EnumerateArray`, and gracefully treat `null`/non-array nodes as empty data.
+- 对 Gemini/OpenAI 的 JSON 解析（尤其流式 SSE 分片），在调用 `GetArrayLength`/`EnumerateArray` 前必须先校验 `JsonElement.ValueKind`，并将 `null` 或非数组节点按空数据兜底处理。
+- Before running backend `dotnet test`, stop any active API process that locks `backend/SimplerJiangAiAgent.Api/bin/Debug/net8.0/SimplerJiangAiAgent.Api.exe` to avoid MSB3021/MSB3027 copy failures.
+- 在执行后端 `dotnet test` 前，先停止占用 `backend/SimplerJiangAiAgent.Api/bin/Debug/net8.0/SimplerJiangAiAgent.Api.exe` 的 API 进程，避免 MSB3021/MSB3027 文件锁失败。
+- After adding new columns to existing tables via schema initializer, always run SQLCMD column-level checks (`sys.columns`) and apply ALTER patches locally if columns are missing before declaring completion.
+- 当通过 schema initializer 为已有表新增字段后，必须使用 SQLCMD 做 `sys.columns` 列级校验；若本地缺列，需先执行 ALTER 补齐再判定任务完成。
+- For roadmap requests that promote a future item into current scope, create a dedicated remaining-scope task ID (e.g., `*-R1`) and sync README/tasks/state/report in the same change.
+- 对于将“后续计划”前置到当前范围的需求，必须创建独立剩余范围任务ID（如 `*-R1`），并在同一提交内同步 README/tasks/state/report。
+- For P0-R1 developer mode deliveries, always verify backend-served frontend with an interaction script covering admin login, developer-mode toggle, trace search, and API status checks before marking test done.
+- 对 P0-R1 开发者模式交付，测试完成前必须在后端托管前端页面上执行交互脚本，至少覆盖管理员登录、开发者模式开关、trace 检索及 API 状态码检查。
+- For Playwright Edge checks on dense dashboard layouts, use resilient click strategy (`force` click when pointer interception appears) and allow empty-state tolerant branches so validation remains stable across different seed datasets.
+- For frontend LLM audit views, never expose raw log lines as the primary list model when pairing matters; aggregate backend records by `traceId` first so request/response/error are deterministically correlated.
+- 对于密集仪表盘布局的 Playwright Edge 校验，遇到点击被遮挡时使用稳健点击策略（必要时 `force`），并为“空数据”场景提供容错分支，保证不同种子数据下校验稳定。
+- 对于前端 LLM 审计视图，只要存在“请求-返回配对”需求，就不能以前端逐行猜测 raw 日志；必须先由后端按 `traceId` 聚合，再展示确定性会话记录。
+
+# Agent Collaboration & Product Manager Workflow
+- **角色定位 (Persona)**: 我 (当前AI) 是系统的产品经理 (Product Manager)、架构师 (Architect) 和质量监督员 (QA/Reviewer)。我不负责直接编写大量业务代码，而是对项目功能、系统架构和最终质量负责。
+- **开发人员定位**: ChatGPT-5.4 扮演“一线开发人员 (Developer)”。它必须听从我的安排并完成我布置的任务。
+- **我的核心工作流 (My Responsibilities)**:
+  1. **整理需求与设计步骤**: 接收用户的原始需求，审查是否符合 `README.md` 的架构愿景（例如：UI/AI解耦、Local-First 存储等）。将需求转化为架构设计和详细的步骤指令。
+  2. **任务下发与文件交接**: 将设计好的详细开发任务写入至专属指令文件（如 `.automation/chatgpt_directives.md` 或 `.automation/ai_review_tracker.md`），以此指挥 ChatGPT-5.4。发现以往 GOAL 设置不合理时，须在此文件中出具重构/纠偏方案。
+  3. **验收反馈 (Review)**: 当 ChatGPT-5.4 完成开发后，用户会开启一个新 Session 让我进行“提测”。我必须对照 `ai_review_tracker.md` 中的标准验收代码，并在此记录发现的问题要求其返工，直到测试通过。
