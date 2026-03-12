@@ -14,6 +14,8 @@ public sealed class AppDbContext : DbContext
     public DbSet<KLinePointEntity> KLinePoints => Set<KLinePointEntity>();
     public DbSet<MinuteLinePointEntity> MinuteLinePoints => Set<MinuteLinePointEntity>();
     public DbSet<IntradayMessageEntity> IntradayMessages => Set<IntradayMessageEntity>();
+    public DbSet<LocalStockNews> LocalStockNews => Set<LocalStockNews>();
+    public DbSet<LocalSectorReport> LocalSectorReports => Set<LocalSectorReport>();
     public DbSet<StockQueryHistory> StockQueryHistories => Set<StockQueryHistory>();
     public DbSet<StockAgentAnalysisHistory> StockAgentAnalysisHistories => Set<StockAgentAnalysisHistory>();
     public DbSet<StockChatSession> StockChatSessions => Set<StockChatSession>();
@@ -41,6 +43,18 @@ public sealed class AppDbContext : DbContext
 
         modelBuilder.Entity<IntradayMessageEntity>()
             .HasIndex(x => new { x.Symbol, x.PublishedAt });
+
+        modelBuilder.Entity<LocalStockNews>()
+            .HasIndex(x => new { x.Symbol, x.PublishTime });
+
+        modelBuilder.Entity<LocalStockNews>()
+            .HasIndex(x => new { x.Symbol, x.SourceTag });
+
+        modelBuilder.Entity<LocalSectorReport>()
+            .HasIndex(x => new { x.Symbol, x.Level, x.PublishTime });
+
+        modelBuilder.Entity<LocalSectorReport>()
+            .HasIndex(x => new { x.Level, x.PublishTime });
 
         modelBuilder.Entity<StockQueryHistory>()
             .HasIndex(x => x.Symbol)

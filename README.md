@@ -20,6 +20,7 @@
 - /api/stocks/detail 组合详情
 - /api/stocks/detail/cache 组合详情（缓存）
 - /api/stocks/sync 手动触发同步
+- /api/news 本地事实新闻查询（按 symbol + level=stock/sector/market 精准过滤）
 - /api/stocks/news/impact 资讯影响评估（公告/研报/新闻分级、来源可信度、同主题合并去重）
 - /api/stocks/signals 事件驱动信号（证据/反证、历史对齐）
 - /api/stocks/position-guidance 个性化风险与仓位建议
@@ -40,6 +41,7 @@
 
 ## 数据同步与配置
 - 后台定时任务按 appsettings.json 的 StockSync 配置抓取并落库
+- GOAL-013 已新增本地事实采集链路：东方财富公告/公司资料 + 新浪公司新闻/滚动资讯会进入本地 SQL（`LocalStockNews` / `LocalSectorReports`），供 `/api/news` 与 Stock Agents 读取
 - 默认账号：admin / admin123（可在 backend/SimplerJiangAiAgent.Api/appsettings.json 的 Admin 段落中修改）
 
 ## 日志位置
@@ -96,6 +98,7 @@ opencode
 - [x] GOAL-005 专业行情图升级（K线+成交量副图、分时专业渲染、数据精确映射）
 - [x] GOAL-006 图表增强（二期：分时成交量副图 + K线 MA5/MA10 叠加线）
 - [x] GOAL-012 界面重构与“专业看盘/AI辅屏”解耦（股票信息页已拆为 TerminalView 主终端 + CopilotPanel 侧栏，并支持专注模式）
+- [x] GOAL-013 双轨数据中枢（Local+Global Dual-Track）与 LLM 职能调度中心（已完成 Step 2：本地事实库、受控外网路由与新闻精准过滤）
 - [x] ISSUE-20260310 提示词增强（新闻抗污染策略 + 新闻库定时采集约束 + 白盒 MCP/Skill 任务执行规范）
 - [x] ISSUE-20260310-P0 动态来源治理基座（LLM每日候选源发现 + 自动新增爬取地址/流程 + 爬虫失效自动修复发布 + 程序化验证与自动隔离）
 - [x] ISSUE-20260310-P0-R1 P0剩余计划：开发者模式可视化收口（治理仪表盘 + 最小查询接口 + 过滤/详情展开/trace跳转 + 可观测审计）
@@ -104,11 +107,6 @@ opencode
 - [ ] ISSUE-20260310-P3 白盒能力与交易员化自动SOP（授权AI根据盘中异动自动触发研报溯源/资金复盘的动态任务）
 
 ## 下一阶段候选目标（逐项讨论、逐项设计）
-- [ ] GOAL-013 双轨数据中枢（Local+Global Dual-Track）与 LLM 职能调度中心
-- 双轨制数据策略：摒弃纯本地或纯外网搜的极端化，按任务类型分流数据获取管线，LLM将作为调度裁判选择合适的工具。
-- 国内内轨（C# 本地管线）：定时由爬虫将同花顺/东方财富的国内公告、研报与个股情绪存入本地 SQL。严格限制 LLM 查询国内A股事实必须经过本地库，从根本上杜绝A股事实幻觉。
-- 国际外轨（LLM 动态管线）：为 LLM 保留 Google 搜索 / Web 抓取等外网能力，并定向限制其仅能用于全球宏观经济、重大外媒消息及美股映射查询。
-- 大模型职能重塑：模型接收到指令后，首要职责是判断查询范围并分发查询路由（本地查询还是外网检索），随后再利用获取的带时间戳数据负责脱水摘要与交易逻辑推演。
 
 - [x] GOAL-007 LLM 联网个股研判与交易目标建议（核心差异化，阶段一已完成）
 	- 输出结构统一：结论、证据来源、置信度、触发条件、失效条件、风险上限、目标动作。

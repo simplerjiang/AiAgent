@@ -49,7 +49,16 @@ const selectedAgentHistoryId = ref('')
 const newsImpact = ref(null)
 const newsImpactLoading = ref(false)
 const newsImpactError = ref('')
+const localNewsBuckets = ref({ stock: null, sector: null, market: null })
+const localNewsLoading = ref(false)
+const localNewsError = ref('')
 const copilotPanelOpen = ref(localStorage.getItem('stock_copilot_panel_open') !== 'false')
+
+const newsSections = [
+  { key: 'stock', title: '个股事实' },
+  { key: 'sector', title: '板块上下文' },
+  { key: 'market', title: '大盘环境' }
+]
 
 const upsertAgentResult = result => {
   const agentId = result?.agentId ?? result?.AgentId ?? ''
@@ -101,6 +110,29 @@ const getImpactClass = category => {
   if (category === '利好') return 'impact-positive'
   if (category === '利空') return 'impact-negative'
   return 'impact-neutral'
+}
+
+const normalizeLocalNewsItem = item => ({
+  title: item?.title ?? item?.Title ?? '',
+  source: item?.source ?? item?.Source ?? '',
+  sourceTag: item?.sourceTag ?? item?.SourceTag ?? '',
+  category: item?.category ?? item?.Category ?? '',
+  sentiment: item?.sentiment ?? item?.Sentiment ?? '中性',
+  publishTime: item?.publishTime ?? item?.PublishTime ?? '',
+  crawledAt: item?.crawledAt ?? item?.CrawledAt ?? '',
+  url: item?.url ?? item?.Url ?? ''
+})
+
+const normalizeNewsBucket = (level, payload) => ({
+  level,
+  symbol: payload?.symbol ?? payload?.Symbol ?? '',
+  sectorName: payload?.sectorName ?? payload?.SectorName ?? '',
+  items: Array.isArray(payload?.items ?? payload?.Items) ? (payload.items ?? payload.Items).map(normalizeLocalNewsItem) : []
+})
+
+const openExternal = url => {
+  if (!url) return
+  window.open(url, '_blank', 'noopener,noreferrer')
 }
 
 const buildStockContext = currentDetail => {
@@ -547,6 +579,38 @@ const fetchNewsImpact = async () => {
   }
 }
 
+const fetchLocalNews = async () => {
+  const symbolValue = detail.value?.quote?.symbol
+  if (!symbolValue) {
+    localNewsBuckets.value = { stock: null, sector: null, market: null }
+    localNewsError.value = ''
+    return
+  }
+
+  localNewsLoading.value = true
+  localNewsError.value = ''
+  try {
+    const buckets = await Promise.all(
+      newsSections.map(async section => {
+        const params = new URLSearchParams({ symbol: symbolValue, level: section.key })
+        const response = await fetch(`/api/news?${params.toString()}`)
+        if (!response.ok) {
+          throw new Error('本地新闻加载失败')
+        }
+        const payload = await response.json()
+        return [section.key, normalizeNewsBucket(section.key, payload)]
+      })
+    )
+
+    localNewsBuckets.value = Object.fromEntries(buckets)
+  } catch (err) {
+    localNewsError.value = err.message || '本地新闻加载失败'
+    localNewsBuckets.value = { stock: null, sector: null, market: null }
+  } finally {
+    localNewsLoading.value = false
+  }
+}
+
 const runAgents = async () => {
   if (!detail.value?.quote?.symbol) {
     agentError.value = '请先选择股票'
@@ -833,6 +897,7 @@ watch(
     agentError.value = ''
     agentUpdatedAt.value = ''
     fetchNewsImpact()
+    fetchLocalNews()
   }
 )
 </script>
@@ -982,9 +1047,14 @@ watch(
                 <span class="muted">{{ detail.messages.length }} 条</span>
               </div>
               <ul v-if="detail.messages.length" class="messages">
-                <li v-for="item in detail.messages.slice(0, 5)" :key="item.title">
+                <li
+                  v-for="item in detail.messages"
+                  :key="`${item.title}-${item.publishedAt ?? item.PublishedAt ?? ''}`"
+                  :class="{ clickable: !!(item.url ?? item.Url) }"
+                  @click="openExternal(item.url ?? item.Url)"
+                >
                   <span>{{ item.title }}</span>
-                  <small>{{ item.source }}</small>
+                  <small>{{ item.source }} · {{ formatDate(item.publishedAt ?? item.PublishedAt) }}</small>
                 </li>
               </ul>
               <p v-else class="muted">暂无盘中消息。</p>
@@ -1024,25 +1094,53 @@ watch(
             <button @click="fetchNewsImpact" :disabled="newsImpactLoading || !detail">刷新</button>
           </div>
 
-          <p v-if="newsImpactError" class="muted error">{{ newsImpactError }}</p>
-          <p v-else-if="newsImpactLoading" class="muted">分析中...</p>
-
-          <div v-else-if="newsImpact" class="news-impact-content">
-            <div class="news-impact-summary">
+          <div v-if="detail" class="news-impact-content">
+            <p v-if="newsImpactError" class="muted error">{{ newsImpactError }}</p>
+            <p v-else-if="newsImpactLoading" class="muted">分析中...</p>
+            <div v-else-if="newsImpact" class="news-impact-summary">
               <span>利好 {{ newsImpact.summary.positive }}</span>
               <span>中性 {{ newsImpact.summary.neutral }}</span>
               <span>利空 {{ newsImpact.summary.negative }}</span>
               <span class="overall">总体：{{ newsImpact.summary.overall }}</span>
             </div>
+            <p v-else class="muted">资讯影响待生成。</p>
 
-            <ul v-if="newsImpact.events?.length" class="news-impact-list">
+            <div class="news-buckets">
+              <article v-for="section in newsSections" :key="section.key" class="news-bucket-card">
+                <div class="news-bucket-header">
+                  <strong>{{ section.title }}</strong>
+                  <span v-if="section.key === 'sector' && localNewsBuckets[section.key]?.sectorName" class="muted">
+                    {{ localNewsBuckets[section.key]?.sectorName }}
+                  </span>
+                </div>
+
+                <p v-if="localNewsLoading" class="muted">加载中...</p>
+                <ul v-else-if="localNewsBuckets[section.key]?.items?.length" class="news-bucket-list">
+                  <li v-for="item in localNewsBuckets[section.key].items" :key="`${section.key}-${item.title}-${item.publishTime}`">
+                    <span class="impact-tag" :class="getImpactClass(item.sentiment)">{{ item.sentiment }}</span>
+                    <a v-if="item.url ?? item.Url" :href="item.url ?? item.Url" target="_blank" rel="noreferrer">
+                      {{ item.title }}
+                    </a>
+                    <span v-else>{{ item.title }}</span>
+                    <small>
+                      {{ item.source }} · {{ formatDate(item.publishTime) }}
+                    </small>
+                  </li>
+                </ul>
+                <p v-else class="muted">暂无匹配资讯。</p>
+              </article>
+            </div>
+
+            <p v-if="localNewsError" class="muted error">{{ localNewsError }}</p>
+
+            <ul v-if="newsImpact?.events?.length" class="news-impact-list">
               <li v-for="item in newsImpact.events.slice(0, 6)" :key="item.title">
                 <span class="impact-tag" :class="getImpactClass(item.category)">{{ item.category }}</span>
                 <span class="impact-title">{{ item.title }}</span>
                 <span class="impact-score">{{ formatImpactScore(item.impactScore) }}</span>
               </li>
             </ul>
-            <p v-else class="muted">暂无资讯影响数据。</p>
+            <p v-else-if="!newsImpactLoading" class="muted">暂无资讯影响数据。</p>
           </div>
 
           <p v-else class="muted">选择股票后在此查看事件影响。</p>
@@ -1563,6 +1661,9 @@ watch(
   margin: 0.65rem 0 0;
   display: grid;
   gap: 0.55rem;
+  max-height: 18rem;
+  overflow-y: auto;
+  padding-right: 0.25rem;
 }
 
 .messages li {
@@ -1572,6 +1673,14 @@ watch(
   gap: 0.75rem;
   padding-bottom: 0.55rem;
   border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.messages li.clickable {
+  cursor: pointer;
+}
+
+.messages li.clickable:hover {
+  color: #0f172a;
 }
 
 .messages small {
@@ -1596,6 +1705,54 @@ watch(
 .news-impact-content {
   display: grid;
   gap: 0.85rem;
+}
+
+.news-buckets {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.news-bucket-card {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.7rem 0.8rem;
+  border-radius: 12px;
+  background: rgba(148, 163, 184, 0.09);
+}
+
+.news-bucket-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.news-bucket-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.45rem;
+  max-height: 18rem;
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+
+.news-bucket-list li {
+  display: grid;
+  align-items: start;
+  gap: 0.15rem;
+}
+
+.news-bucket-list a,
+.news-bucket-list span {
+  color: #0f172a;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.news-bucket-list small {
+  color: #64748b;
 }
 
 .news-impact-summary {

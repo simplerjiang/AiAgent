@@ -245,13 +245,13 @@
         {
             "id": "GOAL-013",
             "title": "Dual-Track Data Strategy (Local A-Share + Global Web Search)",
-            "status": "todo",
+            "status": "done",
             "stages": {
                 "plan": "done",
-                "dev": "todo",
-                "test": "todo"
+                "dev": "done",
+                "test": "done"
             },
-            "notes": "系统级双轨数据策略：1.国内A股事实与个股公告走本地定点采集管线（C#后台存取SQL，杜绝A股幻觉）；2.海外宏观与外媒消息走动态AI管线（保留并限制LLM外网搜索权限，定向用于特定涉外或宏观查询）。大模型升级为查询前置调度与内容脱水清洗中心。"
+            "notes": "已完成 Step 2 与 Step 2.1：新增 LocalStockNews / LocalSectorReport 两张本地事实表与 Migration；新增 LocalFactIngestionWorker 定时采集东财公告、东财公司资料行业字段、Sina 公司新闻与滚动资讯板块/大盘上下文；新增 QueryLocalFactDatabaseTool，并让 A 股单标的 Stock Agents 默认走本地事实库、关闭外网搜索；新增 `/api/news?symbol={代码}&level=stock|sector|market`；股票页右侧新闻区已切为严格跟随当前标的的个股/板块/大盘三层本地资讯。Step 2.1 返工补充：修复 HTML/非 JSON LLM 响应容错、移除本地新闻/消息带硬截断、增加利好/中性/利空标签、修复 sector/market 并发刷新与展示、消息带支持点击打开详情，并将本地新闻卡片从 `news/impact` 成功条件中解耦。验证通过：后端回归 12/12、后端并发重构定向 10/10、前端单测 17/17、`npm --prefix frontend run build`、`node frontend/scripts/edge-check-goal013.mjs`。"
         }
     ]
 }

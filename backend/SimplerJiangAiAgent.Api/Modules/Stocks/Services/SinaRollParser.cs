@@ -32,7 +32,7 @@ internal static class SinaRollParser
 
         if (string.IsNullOrWhiteSpace(code))
         {
-            return list.Take(10).ToArray();
+            return list;
         }
 
         var filtered = list.Where(x => x.Title.Contains(code, StringComparison.OrdinalIgnoreCase)).ToArray();

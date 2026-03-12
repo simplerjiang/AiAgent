@@ -80,7 +80,7 @@ public sealed class OpenAiProvider : ILlmProvider
             throw new InvalidOperationException($"OpenAI 请求失败: {response.StatusCode} {responseText}");
         }
 
-        using var doc = JsonDocument.Parse(responseText);
+        using var doc = ParseResponseDocument(responseText, "OpenAI", request.TraceId);
         var choices = doc.RootElement.GetProperty("choices");
         if (choices.GetArrayLength() == 0)
         {
@@ -210,7 +210,7 @@ public sealed class OpenAiProvider : ILlmProvider
             throw new InvalidOperationException($"Gemini 联网请求失败: {response.StatusCode} {responseText}");
         }
 
-        using var doc = JsonDocument.Parse(responseText);
+        using var doc = ParseResponseDocument(responseText, "Gemini", request.TraceId);
         if (!doc.RootElement.TryGetProperty("candidates", out var candidates)
             || candidates.ValueKind != JsonValueKind.Array
             || candidates.GetArrayLength() == 0)
@@ -378,6 +378,11 @@ public sealed class OpenAiProvider : ILlmProvider
 
     private static List<string> ExtractGeminiChunks(string json)
     {
+        if (!LooksLikeJson(json))
+        {
+            return new List<string>();
+        }
+
         using var doc = JsonDocument.Parse(json);
         if (!doc.RootElement.TryGetProperty("candidates", out var candidates)
             || candidates.ValueKind != JsonValueKind.Array
@@ -495,6 +500,51 @@ public sealed class OpenAiProvider : ILlmProvider
     private static object[] BuildGeminiToolsFallback(string model)
     {
         return new[] { new { google_search = new { } } };
+    }
+
+    private JsonDocument ParseResponseDocument(string content, string providerName, string? traceId)
+    {
+        if (!LooksLikeJson(content))
+        {
+            LogError($"error provider={providerName} responseType=non-json preview={BuildPreview(content)}", traceId);
+            throw new InvalidOperationException($"{providerName} 返回了非 JSON 内容，可能是网关或 HTML 错页");
+        }
+
+        try
+        {
+            return JsonDocument.Parse(content);
+        }
+        catch (JsonException ex)
+        {
+            LogError($"error provider={providerName} responseType=invalid-json message={ex.Message} preview={BuildPreview(content)}", traceId);
+            throw new InvalidOperationException($"{providerName} 返回 JSON 解析失败: {ex.Message}", ex);
+        }
+    }
+
+    private static bool LooksLikeJson(string? content)
+    {
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            return false;
+        }
+
+        var trimmed = content.TrimStart();
+        return trimmed.StartsWith("{", StringComparison.Ordinal) || trimmed.StartsWith("[", StringComparison.Ordinal);
+    }
+
+    private static string BuildPreview(string? content)
+    {
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            return string.Empty;
+        }
+
+        var normalized = content
+            .Replace("\r", " ", StringComparison.Ordinal)
+            .Replace("\n", " ", StringComparison.Ordinal)
+            .Trim();
+
+        return normalized.Length <= 160 ? normalized : normalized[..160];
     }
 
     private static async IAsyncEnumerable<string> StreamGeminiResponseAsync(

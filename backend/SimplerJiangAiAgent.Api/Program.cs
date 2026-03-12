@@ -53,6 +53,7 @@ else
 }
 
 builder.Services.AddHostedService<StockSyncWorker>();
+builder.Services.AddHostedService<LocalFactIngestionWorker>();
 builder.Services.AddHostedService<SourceGovernanceWorker>();
 
 builder.Services.AddModules(builder.Configuration);
@@ -64,6 +65,7 @@ using (var scope = app.Services.CreateScope())
 {
     var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     dbContext.Database.EnsureCreated();
+    await LocalFactSchemaInitializer.EnsureAsync(dbContext);
     await SourceGovernanceSchemaInitializer.EnsureAsync(dbContext);
 }
 

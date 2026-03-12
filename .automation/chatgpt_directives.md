@@ -76,3 +76,40 @@
 > 6. **自测与回执**: 完成 C# 业务和 Migration，且保障 `dotnet test` 后，清空此回执，编写 `Step 2 开发完成回执`。 
 >
 > *(收到此指令后，请立即开始编写 直到完成任务)*
+
+---
+
+## 🔴 Reviewer 验收指令: Step 2 需整改，启动 Step 2.1 返工 (2026-03-12)
+
+> **致 ChatGPT-5.4**:
+> 原本的 Step 2 在 API 测试阶段虽然跑通了，但用户在真实环境进行人工测试时，发现了 4 个严重的 Bug 和逻辑缺失。
+> 作为架构师，我现在将你的上次提交打回！请你立即启动 **Step 2.1 (Bug 修复与打磨)**。
+> 
+> **你的开发任务 (Step 2.1 - 修复以下 4 个缺陷)**:
+> 1. **修复多 Agent LLM 分析的 JSON 解析报错**: 用户点击多 Agent 分析后大面积报错 ` '<' is an invalid start of a value. LineNumber: 0 | BytePositionInLine: 0.` 根据后台 `llm-requests.txt` 日志排查，这是因为调用的某个 Agent 或 LLM 后端出现网络异常/网关拦截时返回了 `<html>`，而 `StockAgentOrchestrator` 等在解析时没有防御性容错。请使用 `try-catch` 或检查文本是否以 `{` 或 `[` 开头来进行拦截或优雅降级报错，坚决不能让程序直接抛出 JsonException 致崩溃！
+> 2. **前端新闻框滚动或分页**: `StockInfoTab.vue` 中在查本地新闻时过度截断了数据（如用了代码 `.slice(0, 3)`），这导致超出部分无法查看。请你去掉此等硬编码，加入 CSS 的 `overflow-y: auto`, `max-height` 或引入一个前端分页组件，让用户能完整查阅所有新闻。
+> 3. **补充新闻情感标签与修复大盘落库**: 
+>    - 当前新闻区纯文本，丧失了导向。请修改 API 下发逻辑，增加通过规则匹配或 AI 的方式给出类似于 `利好/中性/利空` 的标签并在 Vue 前端红绿展示。
+>    - 前端发现 `level=sector` 和 `level=market` 返回是空的。请必须修复 `LocalFactIngestionWorker / Service`，确保行业板块和大盘的新闻也能随着 `Symbol` 或 `BackgroundService` 被实时完整地获取和落地保存在 SQL 库。
+> 4. **盘中跑马灯消息带支持点击弹窗**: UI 中的盘中游动消息带目前虽然显示了文本但不可点。请补充 `@click="window.open(item.url, '_blank')"` 并为其配置 `cursor: pointer` 和悬停态 CSS，使得用户可直接点击开启 Web 新窗口查阅详情。
+> 
+> **请你直接在编辑器里按上述 4 点修复代码并自测后，编写新的 `Step 2.1 开发完成回执` 提醒我重新验视！不要遗漏任何一项。**
+
+## ✅ Step 2.1 开发完成回执 (2026-03-12)
+
+### 已完成修复
+1. 已在 `OpenAiProvider` 与 `StockAgentJsonParser` 增加 HTML/非 JSON 防御，LLM/网关异常不再直接抛 `JsonException` 导致多 Agent 分析崩溃。
+2. 已移除 `StockInfoTab.vue` 中本地新闻与盘中消息带的硬编码截断，改为 `max-height + overflow-y:auto` 可滚动展示全部内容。
+3. 已为 `/api/news` 下发的本地新闻增加 `Sentiment` 字段，并在前端以 `利好/中性/利空` 标签显示；同时修复 `LocalFactIngestionService` 的行业/大盘本地事实刷新与并发竞态，`level=sector`、`level=market` 现已稳定返回并落库。
+4. 已为盘中消息带补充点击打开详情能力，使用新窗口打开原始链接，并添加手型与悬停态样式。
+5. 已将本地新闻卡片从 `news/impact` 成功条件中解耦，即使资讯影响分析仍在加载或失败，本地 facts 仍会显示。
+
+### 自测结果
+- 后端回归单测：`dotnet test backend/SimplerJiangAiAgent.Api.Tests/SimplerJiangAiAgent.Api.Tests.csproj --filter "FullyQualifiedName~OpenAiProviderTests|FullyQualifiedName~StockAgentJsonParserTests|FullyQualifiedName~QueryLocalFactDatabaseToolTests|FullyQualifiedName~SinaRollParserTests|FullyQualifiedName~LocalFactIngestionServiceTests"` 通过（12/12）
+- 后端并发重构定向单测：`dotnet test backend/SimplerJiangAiAgent.Api.Tests/SimplerJiangAiAgent.Api.Tests.csproj --filter "FullyQualifiedName~LocalFactIngestionServiceTests|FullyQualifiedName~QueryLocalFactDatabaseToolTests|FullyQualifiedName~OpenAiProviderTests|FullyQualifiedName~StockAgentJsonParserTests"` 通过（10/10）
+- 前端单测：`npm --prefix frontend run test:unit -- src/modules/stocks/StockInfoTab.spec.js` 通过（17/17）
+- 前端构建：`npm --prefix frontend run build` 通过
+- Edge 校验：`node frontend/scripts/edge-check-goal013.mjs` 通过
+
+### 结论
+Step 2.1 已按 4 项整改要求修复完成，请进行重新验视。

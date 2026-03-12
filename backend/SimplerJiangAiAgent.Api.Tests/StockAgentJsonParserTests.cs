@@ -30,4 +30,16 @@ public sealed class StockAgentJsonParserTests
         Assert.False(data.HasValue);
         Assert.NotNull(error);
     }
+
+    [Fact]
+    public void TryParse_ReturnsGatewayErrorForHtml()
+    {
+        var content = "<html><body>502 Bad Gateway</body></html>";
+
+        var ok = StockAgentJsonParser.TryParse(content, out var data, out var error);
+
+        Assert.False(ok);
+        Assert.False(data.HasValue);
+        Assert.Equal("LLM 返回了 HTML/网关错误页，已降级处理", error);
+    }
 }

@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Caching.Memory;
+using SimplerJiangAiAgent.Api.Infrastructure.Jobs;
 using SimplerJiangAiAgent.Api.Modules.Stocks.Models;
 
 namespace SimplerJiangAiAgent.Api.Modules.Stocks.Services;
@@ -7,12 +8,21 @@ public sealed class StockDataService : IStockDataService
 {
     private readonly IMemoryCache _cache;
     private readonly IStockCrawler _defaultCrawler;
+    private readonly ILocalFactIngestionService _localFactIngestionService;
+    private readonly IQueryLocalFactDatabaseTool _queryLocalFactDatabaseTool;
     private readonly IEnumerable<IStockCrawlerSource> _sources;
 
-    public StockDataService(IMemoryCache cache, IStockCrawler defaultCrawler, IEnumerable<IStockCrawlerSource> sources)
+    public StockDataService(
+        IMemoryCache cache,
+        IStockCrawler defaultCrawler,
+        ILocalFactIngestionService localFactIngestionService,
+        IQueryLocalFactDatabaseTool queryLocalFactDatabaseTool,
+        IEnumerable<IStockCrawlerSource> sources)
     {
         _cache = cache;
         _defaultCrawler = defaultCrawler;
+        _localFactIngestionService = localFactIngestionService;
+        _queryLocalFactDatabaseTool = queryLocalFactDatabaseTool;
         _sources = sources;
     }
 
@@ -70,6 +80,16 @@ public sealed class StockDataService : IStockDataService
 
     public async Task<IReadOnlyList<IntradayMessageDto>> GetIntradayMessagesAsync(string symbol, string? source = null, CancellationToken cancellationToken = default)
     {
+        await _localFactIngestionService.EnsureFreshAsync(symbol, cancellationToken);
+
+        var localBucket = await _queryLocalFactDatabaseTool.QueryLevelAsync(symbol, "stock", cancellationToken);
+        if (localBucket.Items.Count > 0)
+        {
+            return localBucket.Items
+                .Select(item => new IntradayMessageDto(item.Title, item.Source, item.PublishTime, item.Url))
+                .ToArray();
+        }
+
         var crawler = ResolveSource(source);
         var cacheKey = $"messages:{crawler.SourceName}:{symbol}";
         var result = await _cache.GetOrCreateAsync(cacheKey, async entry =>

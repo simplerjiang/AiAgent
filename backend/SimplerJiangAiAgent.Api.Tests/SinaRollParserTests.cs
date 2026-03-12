@@ -13,4 +13,16 @@ public class SinaRollParserTests
         Assert.Single(list);
         Assert.Contains("600000", list[0].Title);
     }
+
+    [Fact]
+    public void ParseRollMessages_WhenCodeIsEmpty_ShouldReturnFullList()
+    {
+        var items = string.Join(',', Enumerable.Range(1, 12)
+            .Select(index => $"{{\"title\":\"消息{index}\",\"url\":\"https://example.com/{index}\",\"media_name\":\"新浪财经\",\"ctime\":\"2025-01-01 10:{index:00}:00\"}}"));
+        var json = $"{{\"result\":{{\"data\":[{items}]}}}}";
+
+        var list = SinaRollParser.ParseRollMessages(json, string.Empty);
+
+        Assert.Equal(12, list.Count);
+    }
 }

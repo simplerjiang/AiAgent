@@ -109,9 +109,13 @@
 - For Playwright Edge checks on dense dashboard layouts, use resilient click strategy (`force` click when pointer interception appears) and allow empty-state tolerant branches so validation remains stable across different seed datasets.
 - For frontend LLM audit views, never expose raw log lines as the primary list model when pairing matters; aggregate backend records by `traceId` first so request/response/error are deterministically correlated.
 - For GOAL-012 stock terminal refinements, keep the symbol query/history controls in a compact sticky or inline toolbar and prioritize remaining vertical viewport space for K-line and minute charts.
+- For GOAL-013 database work in this repo, if a freshly generated EF migration captures schema-initializer-managed legacy tables, trim the migration back to the feature tables, then verify the final tables/columns/indexes with SQLCMD before concluding.
+- For GOAL-013 stock news pages, render local fact buckets independently from slower `/api/stocks/news/impact` analysis, and protect concurrent `/api/news` refreshes with per-symbol plus market-level locks so they do not race into 500s.
 - 对于密集仪表盘布局的 Playwright Edge 校验，遇到点击被遮挡时使用稳健点击策略（必要时 `force`），并为“空数据”场景提供容错分支，保证不同种子数据下校验稳定。
 - 对于前端 LLM 审计视图，只要存在“请求-返回配对”需求，就不能以前端逐行猜测 raw 日志；必须先由后端按 `traceId` 聚合，再展示确定性会话记录。
 - 对于 GOAL-012 股票终端后续优化，标的查询/历史控制必须保持紧凑的 sticky 或内联工具条形态，并优先把剩余纵向视口空间让给 K 线与分时图。
+- 对于本仓库的 GOAL-013 数据库变更，如果新生成的 EF migration 误把 schema initializer 管理的历史表也带上，必须先把 migration 收敛回本次功能表，再用 SQLCMD 校验最终表/字段/索引后才可结束任务。
+- 对于 GOAL-013 股票新闻页，本地事实 buckets 必须独立于较慢的 `/api/stocks/news/impact` 分析接口渲染，且 `/api/news` 并发刷新必须采用“每个 symbol + 大盘级别”的锁，避免并发写库打出 500。
 
 # Agent Collaboration & Product Manager Workflow
 - **角色定位 (Persona)**: 我 (当前AI) 是系统的产品经理 (Product Manager)、架构师 (Architect) 和质量监督员 (QA/Reviewer)。我不负责直接编写大量业务代码，而是对项目功能、系统架构和最终质量负责。

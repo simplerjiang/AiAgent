@@ -26,7 +26,9 @@ public sealed class StocksModule : IModule
         services.AddTransient<IStockCrawlerSource, BaiduStockCrawler>();
         services.AddTransient<IStockCrawlerSource, EastmoneyStockCrawler>();
         services.AddSingleton<IStockCrawler, CompositeStockCrawler>();
-        services.AddSingleton<IStockDataService, StockDataService>();
+        services.AddScoped<ILocalFactIngestionService, LocalFactIngestionService>();
+        services.AddScoped<IQueryLocalFactDatabaseTool, QueryLocalFactDatabaseTool>();
+        services.AddScoped<IStockDataService, StockDataService>();
         services.AddScoped<IStockHistoryService, StockHistoryService>();
         services.AddTransient<IStockSearchService, StockSearchService>();
         services.AddScoped<IStockAgentOrchestrator, StockAgentOrchestrator>();
@@ -152,6 +154,27 @@ public sealed class StocksModule : IModule
             return Results.Ok(impact);
         })
         .WithName("GetNewsImpact")
+        .WithOpenApi();
+
+        app.MapGet("/api/news", async (string symbol, string? level, ILocalFactIngestionService ingestionService, IQueryLocalFactDatabaseTool queryTool) =>
+        {
+            if (string.IsNullOrWhiteSpace(symbol))
+            {
+                return Results.BadRequest(new { message = "symbol 不能为空" });
+            }
+
+            var normalizedLevel = string.IsNullOrWhiteSpace(level) ? "stock" : level.Trim().ToLowerInvariant();
+            if (normalizedLevel is not ("stock" or "sector" or "market"))
+            {
+                return Results.BadRequest(new { message = "level 仅支持 stock/sector/market" });
+            }
+
+            var target = symbol.Trim();
+            await ingestionService.EnsureFreshAsync(target);
+            var result = await queryTool.QueryLevelAsync(target, normalizedLevel);
+            return Results.Ok(result);
+        })
+        .WithName("GetLocalNews")
         .WithOpenApi();
 
         // 事件驱动信号（含证据/反证与历史对齐）

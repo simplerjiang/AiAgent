@@ -26,17 +26,20 @@ public sealed class StockAgentOrchestrator : IStockAgentOrchestrator
     private readonly ILlmService _llmService;
     private readonly IFileLogWriter _fileLogWriter;
     private readonly IStockAgentHistoryService _agentHistoryService;
+    private readonly IQueryLocalFactDatabaseTool _queryLocalFactDatabaseTool;
 
     public StockAgentOrchestrator(
         IStockDataService dataService,
         ILlmService llmService,
         IFileLogWriter fileLogWriter,
-        IStockAgentHistoryService agentHistoryService)
+        IStockAgentHistoryService agentHistoryService,
+        IQueryLocalFactDatabaseTool queryLocalFactDatabaseTool)
     {
         _dataService = dataService;
         _llmService = llmService;
         _fileLogWriter = fileLogWriter;
         _agentHistoryService = agentHistoryService;
+        _queryLocalFactDatabaseTool = queryLocalFactDatabaseTool;
     }
 
     public async Task<StockAgentResponseDto> RunAsync(StockAgentRequestDto request, CancellationToken cancellationToken = default)
@@ -50,7 +53,7 @@ public sealed class StockAgentOrchestrator : IStockAgentOrchestrator
         var interval = string.IsNullOrWhiteSpace(request.Interval) ? "day" : request.Interval.Trim();
         var count = Math.Clamp(request.Count ?? 60, 10, 120);
 
-        var context = await BuildContextAsync(symbol, interval, count, request.Source, cancellationToken);
+        var context = await BuildContextAsync(symbol, interval, count, request.Source, request.UseInternet, cancellationToken);
         var quote = context.Quote;
 
         var subAgents = new[]
@@ -98,7 +101,7 @@ public sealed class StockAgentOrchestrator : IStockAgentOrchestrator
         var interval = string.IsNullOrWhiteSpace(request.Interval) ? "day" : request.Interval.Trim();
         var count = Math.Clamp(request.Count ?? 60, 10, 120);
 
-        var context = await BuildContextAsync(symbol, interval, count, request.Source, cancellationToken);
+        var context = await BuildContextAsync(symbol, interval, count, request.Source, request.UseInternet, cancellationToken);
         var contextJson = kind == StockAgentKind.Commander
             ? SerializeCommanderContext(context, await BuildCommanderHistoryAsync(symbol, cancellationToken))
             : SerializeContext(kind, context);
@@ -119,6 +122,7 @@ public sealed class StockAgentOrchestrator : IStockAgentOrchestrator
         string interval,
         int count,
         string? source,
+        bool requestedUseInternet,
         CancellationToken cancellationToken)
     {
         var quote = await _dataService.GetQuoteAsync(symbol, source);
@@ -126,6 +130,8 @@ public sealed class StockAgentOrchestrator : IStockAgentOrchestrator
         var minuteLines = await _dataService.GetMinuteLineAsync(symbol, source);
         var messages = await _dataService.GetIntradayMessagesAsync(symbol, source);
         var newsContext = StockAgentNewsContextPolicy.Apply(messages, DateTime.Now);
+        var localFacts = await _queryLocalFactDatabaseTool.QueryAsync(symbol, cancellationToken);
+        var queryPolicy = StockAgentInternetRoutingPolicy.Build(symbol, requestedUseInternet);
 
         return new StockAgentContextDto(
             quote,
@@ -133,6 +139,8 @@ public sealed class StockAgentOrchestrator : IStockAgentOrchestrator
             minuteLines.OrderBy(item => item.Date).ThenBy(item => item.Time).TakeLast(120).ToArray(),
             newsContext.Messages,
             newsContext.Policy,
+            localFacts,
+            queryPolicy,
             DateTime.Now);
     }
 
@@ -146,12 +154,13 @@ public sealed class StockAgentOrchestrator : IStockAgentOrchestrator
         var definition = StockAgentCatalog.GetDefinition(kind);
         var prompt = StockAgentPromptBuilder.BuildPrompt(kind, contextJson, dependencyResults);
         var provider = string.IsNullOrWhiteSpace(request.Provider) ? "openai" : request.Provider.Trim();
+        var allowInternet = StockAgentInternetRoutingPolicy.ResolveUseInternet(request.Symbol, kind, request.UseInternet);
 
         try
         {
             var result = await _llmService.ChatAsync(
                 provider,
-                new LlmChatRequest(prompt, request.Model, 0.4, request.UseInternet),
+            new LlmChatRequest(prompt, request.Model, 0.4, allowInternet),
                 cancellationToken);
 
             var raw = result.Content?.Trim() ?? string.Empty;
@@ -213,6 +222,8 @@ public sealed class StockAgentOrchestrator : IStockAgentOrchestrator
         IReadOnlyList<MinuteLinePointDto> MinuteLines,
         IReadOnlyList<IntradayMessageDto> Messages,
         StockAgentNewsPolicyDto NewsPolicy,
+        LocalFactPackageDto LocalFacts,
+        StockAgentQueryPolicyDto QueryPolicy,
         DateTime RequestTime
     );
 
@@ -227,6 +238,8 @@ public sealed class StockAgentOrchestrator : IStockAgentOrchestrator
             context.Quote,
             context.Messages,
             context.NewsPolicy,
+            context.LocalFacts,
+            context.QueryPolicy,
             context.RequestTime);
 
         return JsonSerializer.Serialize(slimContext, JsonOptions);
@@ -238,6 +251,8 @@ public sealed class StockAgentOrchestrator : IStockAgentOrchestrator
             context.Quote,
             context.Messages,
             context.NewsPolicy,
+            context.LocalFacts,
+            context.QueryPolicy,
             commanderHistory,
             context.KLines.TakeLast(30).ToArray(),
             context.RequestTime);
@@ -249,6 +264,8 @@ public sealed class StockAgentOrchestrator : IStockAgentOrchestrator
         StockQuoteDto Quote,
         IReadOnlyList<IntradayMessageDto> Messages,
         StockAgentNewsPolicyDto NewsPolicy,
+        LocalFactPackageDto LocalFacts,
+        StockAgentQueryPolicyDto QueryPolicy,
         DateTime RequestTime
     );
 
@@ -256,6 +273,8 @@ public sealed class StockAgentOrchestrator : IStockAgentOrchestrator
         StockQuoteDto Quote,
         IReadOnlyList<IntradayMessageDto> Messages,
         StockAgentNewsPolicyDto NewsPolicy,
+        LocalFactPackageDto LocalFacts,
+        StockAgentQueryPolicyDto QueryPolicy,
         StockAgentCommanderHistoryPackageDto CommanderHistory,
         IReadOnlyList<KLinePointDto> KLines,
         DateTime RequestTime
@@ -802,11 +821,12 @@ internal static class StockAgentPromptBuilder
     private static string BuildStockNewsPrompt(string contextJson)
     {
         const string template =
-            "你是个股资讯Agent。请联网获取当前及近期该股票的重要消息，并做情绪统计。\n" +
+            "你是个股资讯Agent。请优先使用上下文里的 localFacts.stockNews / localFacts.marketReports 本地事实库，处理当前及近期该股票的重要消息并做情绪统计。\n" +
             "要求：\n" +
             "1. 必须输出严格JSON，不要Markdown，不要代码块，不要多余文字。\n" +
             "2. 所有字段必须存在；没有数据用null或空数组。\n" +
             "3. 百分比字段用数值，不带%符号。\n" +
+            "3.1 queryPolicy.allowInternet=false 时，禁止跳过本地事实库自行联网搜索 A 股公告/研报。\n" +
             "4. 证据默认只允许最近72小时；若有效证据不足可扩窗到7天，并在summary中明确标注“扩窗到7天”。\n" +
             "5. 禁止将无来源或无发布时间（publishedAt）的内容作为核心证据。\n" +
             "6. evidence中每条都必须包含source、publishedAt、crawledAt（抓取时间）。\n\n" +
@@ -855,11 +875,12 @@ internal static class StockAgentPromptBuilder
     private static string BuildSectorNewsPrompt(string contextJson)
     {
         const string template =
-            "你是板块资讯Agent。请联网获取该股票所属板块的最新资讯和同板块个股涨跌。\n" +
+            "你是板块资讯Agent。请优先使用上下文里的 localFacts.sectorReports / localFacts.marketReports，本地分析该股票所属板块的最新资讯和市场环境。\n" +
             "要求：\n" +
             "1. 必须输出严格JSON，不要Markdown，不要代码块，不要多余文字。\n" +
             "2. 所有字段必须存在；没有数据用null或空数组。\n" +
             "3. 百分比字段用数值，不带%符号。\n" +
+            "3.1 queryPolicy.allowInternet=false 时，只能基于本地事实库输出，不得擅自联网补齐 A 股板块消息。\n" +
             "4. 证据默认只允许最近72小时；若有效证据不足可扩窗到7天，并在summary中明确标注“扩窗到7天”。\n" +
             "5. 禁止将无来源或无发布时间（publishedAt）的内容作为核心证据。\n" +
             "6. evidence中每条都必须包含source、publishedAt、crawledAt（抓取时间）。\n\n" +
@@ -902,7 +923,7 @@ internal static class StockAgentPromptBuilder
     private static string BuildFinancialPrompt(string contextJson)
     {
         const string template =
-            "你是个股分析Agent。请联网获取近期财报并重点分析扣非利润、机构持仓、估值。\n" +
+            "你是个股分析Agent。请优先使用上下文里的 localFacts.stockNews / localFacts.sectorReports 进行 A 股个股事实分析；仅当 queryPolicy.allowInternet=true 时才允许补充海外/宏观信息。\n" +
             "要求：\n" +
             "1. 必须输出严格JSON，不要Markdown，不要代码块，不要多余文字。\n" +
             "2. 所有字段必须存在；没有数据用null或空数组。\n" +
@@ -1218,6 +1239,13 @@ internal static class StockAgentJsonParser
         if (string.IsNullOrWhiteSpace(content))
         {
             error = "LLM 返回为空";
+            return false;
+        }
+
+        var trimmed = content.TrimStart();
+        if (trimmed.StartsWith("<", StringComparison.Ordinal))
+        {
+            error = "LLM 返回了 HTML/网关错误页，已降级处理";
             return false;
         }
 

@@ -92,6 +92,24 @@ public sealed class OpenAiProviderTests
         Assert.Empty(chunks);
     }
 
+    [Fact]
+    public async Task ChatAsync_WhenGatewayReturnsHtml_ShouldThrowReadableError()
+    {
+        var handler = new HtmlResponseHandler();
+        var httpClient = new HttpClient(handler);
+        var provider = new OpenAiProvider(httpClient, new FakeLogWriter());
+        var settings = new LlmProviderSettings
+        {
+            Provider = "openai",
+            ApiKey = "key",
+            BaseUrl = "https://api.example.com/v1"
+        };
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => provider.ChatAsync(settings, new LlmChatRequest("hello", "gpt-4o-mini", 0.1, false), CancellationToken.None));
+
+        Assert.Contains("非 JSON 内容", ex.Message);
+    }
+
     private sealed class CaptureHandler : HttpMessageHandler
     {
         public string? LastRequestBody { get; private set; }
@@ -143,6 +161,17 @@ public sealed class OpenAiProviderTests
             };
 
             return Task.FromResult(response);
+        }
+    }
+
+    private sealed class HtmlResponseHandler : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("<html><body>gateway</body></html>")
+            });
         }
     }
 }
