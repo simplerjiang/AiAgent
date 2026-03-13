@@ -1,257 +1,265 @@
 {
-    "tasks": [
-        {
-            "id": "AUTO-001",
-            "title": "Bootstrap multi-agent automation",
-            "status": "done",
-            "stages": {
-                "plan": "done",
-                "dev": "done",
-                "test": "done"
-            },
-            "notes": ""
-        },
-        {
-            "id": "GOAL-002",
-            "title": "Multi-source events with weighted impact",
-            "status": "done",
-            "stages": {
-                "plan": "done",
-                "dev": "done",
-                "test": "done"
-            },
-            "notes": "已实现公告/研报/新闻分级权重；来源可信度评分；同主题事件合并去重；新增后端单测"
-        },
-        {
-            "id": "GOAL-003",
-            "title": "Event-driven signals with explanations",
-            "status": "done",
-            "stages": {
-                "plan": "done",
-                "dev": "done",
-                "test": "done"
-            },
-            "notes": "已实现事件影响->信号输出；证据与反证清单；与近期K线趋势的历史对齐评分；新增后端接口与单测"
-        },
-        {
-            "id": "GOAL-004",
-            "title": "Personalized risk + position guidance",
-            "status": "done",
-            "stages": {
-                "plan": "done",
-                "dev": "done",
-                "test": "done"
-            },
-            "notes": "已实现按风险档位（稳健/平衡/激进）的仓位建议、止损止盈与最大回撤约束；新增后端接口与单测"
-        },
-        {
-            "id": "OPS-005",
-            "title": "OpenCode + GLM-5 project setup",
-            "status": "done",
-            "stages": {
-                "plan": "done",
-                "dev": "done",
-                "test": "done"
-            },
-            "notes": "新增 AGENTS.md 与 opencode.json；配置 GLM-5(OpenAI-compatible) provider；将 API Key 改为环境变量；补充 README 使用说明"
-        },
-        {
-            "id": "OPS-006",
-            "title": "OpenCode supervised launch + E2E",
-            "status": "todo",
-            "stages": {
-                "plan": "done",
-                "dev": "todo",
-                "test": "todo"
-            },
-            "notes": "由 OpenCode 执行者完成项目启动与端到端联调；执行者先自测并汇报，再由我按既有规则复测验收"
-        },
-        {
-            "id": "GOAL-005",
-            "title": "Professional K-line + minute charts",
-            "status": "done",
-            "stages": {
-                "plan": "done",
-                "dev": "done",
-                "test": "done"
-            },
-            "notes": "前端 StockCharts 升级为 lightweight-charts；K线图增加成交量副图；分时图升级为专业面积线；完善数据解析与单测"
-        },
-        {
-            "id": "GOAL-006",
-            "title": "Minute volume subplot + Kline MA overlays",
-            "status": "done",
-            "stages": {
-                "plan": "done",
-                "dev": "done",
-                "test": "done"
-            },
-            "notes": "已新增分时图成交量副图（分钟量柱）与 K线 MA5/MA10 叠加线；补充前端测试与 Edge UI 验证"
-        },
-        {
-            "id": "GOAL-007",
-            "title": "LLM online stock evaluation + action targets",
-            "status": "done",
-            "stages": {
-                "plan": "done",
-                "dev": "done",
-                "test": "done"
-            },
-            "notes": "已完成：后端运行时标准化并强制补齐结构化字段（证据/置信度/触发/失效/风险上限/目标动作）；前端现有面板完成可读性增强；K线/分时图新增 AI 突破线与支撑线叠加（优先 commander 目标/止损，回退 trend 预测区间）；新增与更新前端/后端单测；Edge 交互脚本已验证点击与等待流程，并检查前端控制台与后端日志无运行时崩溃"
-        },
-        {
-            "id": "OPS-007",
-            "title": "Unified AI request conversation logging",
-            "status": "done",
-            "stages": {
-                "plan": "done",
-                "dev": "done",
-                "test": "done"
-            },
-            "notes": "已实现统一 AI 审计日志：在 LlmService 记录所有非流式调用的 request/response/error（含 traceId、耗时、截断保护），并在 /api/llm/chat/stream 记录流式请求与完整响应摘要；统一落地到 backend/SimplerJiangAiAgent.Api/App_Data/logs/llm-requests.txt"
-        },
-        {
-            "id": "ISSUE-20260302",
-            "title": "Fix stale news and contradictory analysis",
-            "status": "todo",
-            "stages": {
-                "plan": "done",
-                "dev": "done",
-                "test": "todo"
-            },
-            "notes": "已完成问题拆解与分阶段方案；Phase 1（问题1）已完成。Phase 2（问题2）本轮已完成：Commander多周期融合(1D/1W/1M)+分歧态标注、状态机(延续/震荡/反转)、低置信度滞后抑制与强反证覆盖、revision改判原因自动补齐；后端单测通过（定向11/11，全量44/44）。剩余：场景回放验收“无解释改判比例趋近0”。"
-        },
-        {
-            "id": "ISSUE-20260310",
-            "title": "Prompt hardening for news quality and automation",
-            "status": "done",
-            "stages": {
-                "plan": "done",
-                "dev": "done",
-                "test": "done"
-            },
-            "notes": "根据 20260310 周记完成提示词增强：新增新闻抗污染证据策略、市场/板块/个股新闻库与定时采集约束、白盒 MCP/Skill 与未完成任务定时执行要求；已同步 planner/developer/tester 提示词。"
-        },
-        {
-            "id": "ISSUE-20260310-P0",
-            "title": "Dynamic source governance baseline",
-            "status": "done",
-            "stages": {
-                "plan": "done",
-                "dev": "done",
-                "test": "done"
-            },
-            "notes": "P0已完整收口：实现来源治理闭环（LLM候选源发现->程序化验证->评分晋级/隔离->爬虫修复队列->补丁提案->沙箱校验->真实发布->健康回滚）；补齐发布前 build+test+replay 三闸门；补齐严格白名单目录控制；补齐真实补丁应用与部署备份/自动回滚；补齐 duplicate/contentDepth/crossSourceAgreement 评分维度；新增/扩展SourceGovernanceServiceTests与PolicyTests；SourceGovernance定向7/7通过，后端全量52/52通过；sqlcmd已验证6张P0表与新增列完整。P1/P2/P3可继续推进。"
-        },
-        {
-            "id": "ISSUE-20260310-P0-R1",
-            "title": "P0 remaining: frontend developer mode visualization",
-            "status": "done",
-            "stages": {
-                "plan": "done",
-                "dev": "done",
-                "test": "done"
-            },
-            "notes": "已完成 P0-R1：后端新增管理员只读治理接口（overview/sources/candidates/changes/{id}/errors/trace/llm-logs），补齐 traceId 全链路串联（验证/队列/执行/LLM provider 普通日志）与时间线检索；`llm-logs` 已升级为按 traceId 聚合的会话视图，请求/返回/异常可一一对应；前端治理开发者模式补齐过滤、详情展开、trace 跳转、replay/snapshot 只读展示，并新增参数说明区与 LLM 对话会话面板（前端可成组查看 request/response/error 与 JSON 美化）；后端定向单测4/4通过，前端定向单测7/7通过。"
-        },
-        {
-            "id": "ISSUE-20260310-P1",
-            "title": "Anti-pollution evidence guardrails & Sentiment Matrix",
-            "status": "todo",
-            "stages": {
-                "plan": "done",
-                "dev": "todo",
-                "test": "todo"
-            },
-            "notes": "问题1升级：不仅是阻断污染，更要建立“事实vs情绪”的资讯分类矩阵。包含：来源分层(官方/研报/主流/社媒)、时效门槛。对于非官方“小作文”不一味屏蔽，而是标记为“高波动情绪驱动”，并配套防伪交叉验证(Fact-Checker)，结合当前市场风格(价值/投机)动态权重。无来源时降级标识风险。"
-        },
-        {
-            "id": "ISSUE-20260310-P2",
-            "title": "Trading-clock driven knowledge base & Narrative tracking",
-            "status": "todo",
-            "stages": {
-                "plan": "done",
-                "dev": "todo",
-                "test": "todo"
-            },
-            "notes": "问题2升级：将单一的定时采集升级为“交易钟驱动(盘前/盘中/盘后)”。建立双轨数据体系（个股事实库+主线情报库）。重点追踪“题材生命周期”(酝酿/发酵/分歧/高潮/退潮)，不仅存新闻，更要结合量价与情绪发酵推演。"
-        },
-        {
-            "id": "ISSUE-20260310-P3",
-            "title": "White-box MCP/Skill runtime & Autonomous Trading SOP",
-            "status": "todo",
-            "stages": {
-                "plan": "done",
-                "dev": "todo",
-                "test": "todo"
-            },
-            "notes": "问题3升级：白盒能力注册与调度。除跑任务外，要为AI注入“交易员SOP”：盘中捕捉异动并授权AI动态切入“自动发起研报溯源/资金复盘任务”。后台可视且可追溯traceId。"
-        },
-        {
-            "id": "GOAL-008",
-            "title": "Trading plan engine",
-            "status": "todo",
-            "stages": {
-                "plan": "todo",
-                "dev": "todo",
-                "test": "todo"
-            },
-            "notes": "盘前候选池与计划模板；盘中触发与失效管理；防冲动交易"
-        },
-        {
-            "id": "GOAL-009",
-            "title": "Market sentiment cycle + sector rotation",
-            "status": "todo",
-            "stages": {
-                "plan": "todo",
-                "dev": "todo",
-                "test": "todo"
-            },
-            "notes": "连板高度、涨跌停与炸板率、成交额结构、主线持续性与扩散度"
-        },
-        {
-            "id": "GOAL-010",
-            "title": "Execution risk gates",
-            "status": "todo",
-            "stages": {
-                "plan": "todo",
-                "dev": "todo",
-                "test": "todo"
-            },
-            "notes": "单票亏损阈值、单日回撤、连续亏损降仓、尾盘禁开新仓"
-        },
-        {
-            "id": "GOAL-011",
-            "title": "Trade review closed loop",
-            "status": "todo",
-            "stages": {
-                "plan": "todo",
-                "dev": "todo",
-                "test": "todo"
-            },
-            "notes": "交易自动归因与违规检查，形成周/月度可执行改进清单"
-        },
-        {
-            "id": "GOAL-012",
-            "title": "UI/UX decouple redesign: Pro Stock Terminal vs AI Copilot",
-            "status": "done",
-            "stages": {
-                "plan": "done",
-                "dev": "done",
-                "test": "done"
-            },
-            "notes": "已完成 Step 1 与 Step 1.1 返工：股票信息页改造成 Grid 终端布局，新增 TerminalView 与 CopilotPanel 两个独立组件；顶部查询区进一步压缩为 sticky toolbar + history ribbon，把更多纵向空间让给 K 线/分时图；支持一键专注模式隐藏 AI 侧栏；前端单测与构建均通过（`npm --prefix frontend run test:unit -- src/modules/stocks/StockInfoTab.spec.js`，13/13；`npm --prefix frontend run build` 通过）。"
-        },
-        {
-            "id": "GOAL-013",
-            "title": "Dual-Track Data Strategy (Local A-Share + Global Web Search)",
-            "status": "done",
-            "stages": {
-                "plan": "done",
-                "dev": "done",
-                "test": "done"
-            },
-            "notes": "已完成 Step 2、Step 2.1、Step 2.2、Step 2.3、Step 2.4、Step 2.5 与 Step 2.6：新增 LocalStockNews / LocalSectorReport 两张本地事实表与 Migration；新增 LocalFactIngestionWorker 定时采集东财公告、东财公司资料行业字段、Sina 公司新闻与本地资讯；新增 QueryLocalFactDatabaseTool，并让 A 股单标的 Stock Agents 默认走本地事实库、关闭外网搜索；新增 `/api/news?symbol={代码}&level=stock|sector|market`。Step 2.1 返工补充：修复 HTML/非 JSON LLM 响应容错、移除本地新闻/消息带硬截断、增加利好/中性/利空标签、修复 sector/market 并发刷新与展示、消息带支持点击打开详情，并将本地新闻卡片从 `news/impact` 成功条件中解耦。Step 2.2 补充：修复 TerminalView 高度被 AI 侧栏撑开的排版问题，修复侧栏切换时 K 线/分时图 resize 不及时与越界重叠问题，并为 OpenAI provider 增加 BaseUrl `/v1` 容错、完整请求 URI/头部诊断和可读网络异常；同时完成 Task 4 的标准/Pro 模型分流，普通分析默认切到 `gemini-3.1-flash-lite-preview-thinking-high`，前端新增 `Pro 深度分析` 触发，后端统一强制 Pro 路由到 `gemini-3.1-pro-preview-thinking-medium`，并对非 Pro 请求禁用 Pro 模型。Step 2.3 重做后：板块资讯改为新浪财经搜索页 HTML 定向抓取，不再依赖东财搜索 API；大盘环境改为 WSJ/NYT Business RSS 与新浪滚动宏观资讯合并落库；查询历史改为完整可滚动展示，不再硬截断。Step 2.4 新增 `LocalFactAiEnrichmentService`，按 5-20 条批量调用 `gemini-2.5-flash-lite` 清洗未处理的本地事实新闻，写入 `TranslatedTitle` / `AiSentiment` / `AiTarget` / `AiTags` / `IsAiProcessed`；LLM 失败时保持原始入库成功且默认 `中性`，并保留未处理状态以下轮重试；`/api/news` 改为展示 AI 清洗结果；Stock Agents 改为使用隔离投影，仅保留原题/译题/来源/时间，不携带这些廉价 AI 标签。Step 2.5 收口：大盘资讯改为页面流内嵌卡片并新增“展开阅读”弹窗，不再使用悬浮式 sticky 条带；外媒 RSS 读取增加时间戳去缓存、30 天硬时效过滤与严格倒序保留最新；`EnsureMarketFreshAsync` / `EnsureFreshAsync` 在“数据已新鲜”时仍会补跑 `IsAiProcessed=false` 的 market/stock/sector AI 重试。Step 2.6 收口：新浪大盘源切到纯财经流并过滤 `自媒体` 污染，失效 WSJ/NYT 改为 CNBC/Seeking Alpha/CoinTelegraph/TechCrunch/The Hill，新增 `/api/news/archive` 与 `全量资讯库` 标签页，支持关键字/层级/情绪筛选、分页、译题优先与原文跳转。验证通过：后端目标单测 14/14、前端单测 25/25、`npm run build`、SQL 结构校验、`node frontend/scripts/edge-check-goal013.mjs`。"
-        }
-    ]
+  "tasks": [
+    {
+      "id": "AUTO-001",
+      "title": "Bootstrap multi-agent automation",
+      "status": "done",
+      "stages": {
+        "plan": "done",
+        "dev": "done",
+        "test": "done"
+      },
+      "notes": ""
+    },
+    {
+      "id": "GOAL-002",
+      "title": "Multi-source events with weighted impact",
+      "status": "done",
+      "stages": {
+        "plan": "done",
+        "dev": "done",
+        "test": "done"
+      },
+      "notes": "已实现公告/研报/新闻分级权重；来源可信度评分；同主题事件合并去重；新增后端单测"
+    },
+    {
+      "id": "GOAL-003",
+      "title": "Event-driven signals with explanations",
+      "status": "done",
+      "stages": {
+        "plan": "done",
+        "dev": "done",
+        "test": "done"
+      },
+      "notes": "已实现事件影响->信号输出；证据与反证清单；与近期K线趋势的历史对齐评分；新增后端接口与单测"
+    },
+    {
+      "id": "GOAL-004",
+      "title": "Personalized risk + position guidance",
+      "status": "done",
+      "stages": {
+        "plan": "done",
+        "dev": "done",
+        "test": "done"
+      },
+      "notes": "已实现按风险档位（稳健/平衡/激进）的仓位建议、止损止盈与最大回撤约束；新增后端接口与单测"
+    },
+    {
+      "id": "OPS-005",
+      "title": "OpenCode + GLM-5 project setup",
+      "status": "done",
+      "stages": {
+        "plan": "done",
+        "dev": "done",
+        "test": "done"
+      },
+      "notes": "新增 AGENTS.md 与 opencode.json；配置 GLM-5(OpenAI-compatible) provider；将 API Key 改为环境变量；补充 README 使用说明"
+    },
+    {
+      "id": "OPS-006",
+      "title": "OpenCode supervised launch + E2E",
+      "status": "todo",
+      "stages": {
+        "plan": "done",
+        "dev": "todo",
+        "test": "todo"
+      },
+      "notes": "由 OpenCode 执行者完成项目启动与端到端联调；执行者先自测并汇报，再由我按既有规则复测验收"
+    },
+    {
+      "id": "GOAL-005",
+      "title": "Professional K-line + minute charts",
+      "status": "done",
+      "stages": {
+        "plan": "done",
+        "dev": "done",
+        "test": "done"
+      },
+      "notes": "前端 StockCharts 升级为 lightweight-charts；K线图增加成交量副图；分时图升级为专业面积线；完善数据解析与单测"
+    },
+    {
+      "id": "GOAL-006",
+      "title": "Minute volume subplot + Kline MA overlays",
+      "status": "done",
+      "stages": {
+        "plan": "done",
+        "dev": "done",
+        "test": "done"
+      },
+      "notes": "已新增分时图成交量副图（分钟量柱）与 K线 MA5/MA10 叠加线；补充前端测试与 Edge UI 验证"
+    },
+    {
+      "id": "GOAL-007",
+      "title": "LLM online stock evaluation + action targets",
+      "status": "done",
+      "stages": {
+        "plan": "done",
+        "dev": "done",
+        "test": "done"
+      },
+      "notes": "已完成：后端运行时标准化并强制补齐结构化字段（证据/置信度/触发/失效/风险上限/目标动作）；前端现有面板完成可读性增强；K线/分时图新增 AI 突破线与支撑线叠加（优先 commander 目标/止损，回退 trend 预测区间）；新增与更新前端/后端单测；Edge 交互脚本已验证点击与等待流程，并检查前端控制台与后端日志无运行时崩溃"
+    },
+    {
+      "id": "OPS-007",
+      "title": "Unified AI request conversation logging",
+      "status": "done",
+      "stages": {
+        "plan": "done",
+        "dev": "done",
+        "test": "done"
+      },
+      "notes": "已实现统一 AI 审计日志：在 LlmService 记录所有非流式调用的 request/response/error（含 traceId、耗时、截断保护），并在 /api/llm/chat/stream 记录流式请求与完整响应摘要；统一落地到 backend/SimplerJiangAiAgent.Api/App_Data/logs/llm-requests.txt"
+    },
+    {
+      "id": "ISSUE-20260302",
+      "title": "Fix stale news and contradictory analysis",
+      "status": "todo",
+      "stages": {
+        "plan": "done",
+        "dev": "done",
+        "test": "todo"
+      },
+      "notes": "已完成问题拆解与分阶段方案；Phase 1（问题1）已完成。Phase 2（问题2）本轮已完成：Commander多周期融合(1D/1W/1M)+分歧态标注、状态机(延续/震荡/反转)、低置信度滞后抑制与强反证覆盖、revision改判原因自动补齐；后端单测通过（定向11/11，全量44/44）。剩余：场景回放验收“无解释改判比例趋近0”。"
+    },
+    {
+      "id": "ISSUE-20260310",
+      "title": "Prompt hardening for news quality and automation",
+      "status": "done",
+      "stages": {
+        "plan": "done",
+        "dev": "done",
+        "test": "done"
+      },
+      "notes": "根据 20260310 周记完成提示词增强：新增新闻抗污染证据策略、市场/板块/个股新闻库与定时采集约束、白盒 MCP/Skill 与未完成任务定时执行要求；已同步 planner/developer/tester 提示词。"
+    },
+    {
+      "id": "ISSUE-20260310-P0",
+      "title": "Dynamic source governance baseline",
+      "status": "done",
+      "stages": {
+        "plan": "done",
+        "dev": "done",
+        "test": "done"
+      },
+      "notes": "P0已完整收口：实现来源治理闭环（LLM候选源发现->程序化验证->评分晋级/隔离->爬虫修复队列->补丁提案->沙箱校验->真实发布->健康回滚）；补齐发布前 build+test+replay 三闸门；补齐严格白名单目录控制；补齐真实补丁应用与部署备份/自动回滚；补齐 duplicate/contentDepth/crossSourceAgreement 评分维度；新增/扩展SourceGovernanceServiceTests与PolicyTests；SourceGovernance定向7/7通过，后端全量52/52通过；sqlcmd已验证6张P0表与新增列完整。P1/P2/P3可继续推进。"
+    },
+    {
+      "id": "ISSUE-20260310-P0-R1",
+      "title": "P0 remaining: frontend developer mode visualization",
+      "status": "done",
+      "stages": {
+        "plan": "done",
+        "dev": "done",
+        "test": "done"
+      },
+      "notes": "已完成 P0-R1：后端新增管理员只读治理接口（overview/sources/candidates/changes/{id}/errors/trace/llm-logs），补齐 traceId 全链路串联（验证/队列/执行/LLM provider 普通日志）与时间线检索；`llm-logs` 已升级为按 traceId 聚合的会话视图，请求/返回/异常可一一对应；前端治理开发者模式补齐过滤、详情展开、trace 跳转、replay/snapshot 只读展示，并新增参数说明区与 LLM 对话会话面板（前端可成组查看 request/response/error 与 JSON 美化）；后端定向单测4/4通过，前端定向单测7/7通过。"
+    },
+    {
+      "id": "ISSUE-20260310-P1",
+      "title": "Anti-pollution evidence guardrails & Sentiment Matrix",
+      "status": "todo",
+      "stages": {
+        "plan": "done",
+        "dev": "todo",
+        "test": "todo"
+      },
+      "notes": "问题1升级：不仅是阻断污染，更要建立“事实vs情绪”的资讯分类矩阵。包含：来源分层(官方/研报/主流/社媒)、时效门槛。对于非官方“小作文”不一味屏蔽，而是标记为“高波动情绪驱动”，并配套防伪交叉验证(Fact-Checker)，结合当前市场风格(价值/投机)动态权重。无来源时降级标识风险。"
+    },
+    {
+      "id": "ISSUE-20260310-P2",
+      "title": "Trading-clock driven knowledge base & Narrative tracking",
+      "status": "todo",
+      "stages": {
+        "plan": "done",
+        "dev": "todo",
+        "test": "todo"
+      },
+      "notes": "问题2升级：将单一的定时采集升级为“交易钟驱动(盘前/盘中/盘后)”。建立双轨数据体系（个股事实库+主线情报库）。重点追踪“题材生命周期”(酝酿/发酵/分歧/高潮/退潮)，不仅存新闻，更要结合量价与情绪发酵推演。"
+    },
+    {
+      "id": "ISSUE-20260310-P3",
+      "title": "White-box MCP/Skill runtime & Autonomous Trading SOP",
+      "status": "todo",
+      "stages": {
+        "plan": "done",
+        "dev": "todo",
+        "test": "todo"
+      },
+      "notes": "问题3升级：白盒能力注册与调度。除跑任务外，要为AI注入“交易员SOP”：盘中捕捉异动并授权AI动态切入“自动发起研报溯源/资金复盘任务”。后台可视且可追溯traceId。"
+    },
+    {
+      "id": "GOAL-008",
+      "title": "Trading plan engine",
+      "status": "todo",
+      "stages": {
+        "plan": "todo",
+        "dev": "todo",
+        "test": "todo"
+      },
+      "notes": "盘前候选池与计划模板；盘中触发与失效管理；防冲动交易"
+    },
+    {
+      "id": "GOAL-009",
+      "title": "Market sentiment cycle + sector rotation",
+      "status": "todo",
+      "stages": {
+        "plan": "todo",
+        "dev": "todo",
+        "test": "todo"
+      },
+      "notes": "连板高度、涨跌停与炸板率、成交额结构、主线持续性与扩散度"
+    },
+    {
+      "id": "GOAL-010",
+      "title": "Execution risk gates",
+      "status": "todo",
+      "stages": {
+        "plan": "todo",
+        "dev": "todo",
+        "test": "todo"
+      },
+      "notes": "单票亏损阈值、单日回撤、连续亏损降仓、尾盘禁开新仓"
+    },
+    {
+      "id": "GOAL-011",
+      "title": "Trade review closed loop",
+      "status": "todo",
+      "stages": {
+        "plan": "todo",
+        "dev": "todo",
+        "test": "todo"
+      },
+      "notes": "交易自动归因与违规检查，形成周/月度可执行改进清单"
+    },
+    {
+      "id": "GOAL-012",
+      "title": "UI/UX decouple redesign: Pro Stock Terminal vs AI Copilot",
+      "status": "done",
+      "stages": {
+        "plan": "done",
+        "dev": "done",
+        "test": "done"
+      },
+      "notes": "已完成 Step 1 与 Step 1.1 返工：股票信息页改造成 Grid 终端布局，新增 TerminalView 与 CopilotPanel 两个独立组件；顶部查询区进一步压缩为 sticky toolbar + history ribbon，把更多纵向空间让给 K 线/分时图；支持一键专注模式隐藏 AI 侧栏；前端单测与构建均通过（`npm --prefix frontend run test:unit -- src/modules/stocks/StockInfoTab.spec.js`，13/13；`npm --prefix frontend run build` 通过）。"
+    },
+    {
+      "id": "GOAL-013",
+      "title": "Dual-Track Data Strategy (Local A-Share + Global Web Search)",
+      "status": "done",
+      "stages": {
+        "plan": "done",
+        "dev": "done",
+        "test": "done"
+      },
+      "notes": "已完成 Step 2、Step 2.1、Step 2.2、Step 2.3、Step 2.4、Step 2.5 与 Step 2.6：新增 LocalStockNews / LocalSectorReport 两张本地事实表与 Migration；新增 LocalFactIngestionWorker 定时采集东财公告、东财公司资料行业字段、Sina 公司新闻与本地资讯；新增 QueryLocalFactDatabaseTool，并让 A 股单标的 Stock Agents 默认走本地事实库、关闭外网搜索；新增 `/api/news?symbol={代码}&level=stock|sector|market`。Step 2.1 返工补充：修复 HTML/非 JSON LLM 响应容错、移除本地新闻/消息带硬截断、增加利好/中性/利空标签、修复 sector/market 并发刷新与展示、消息带支持点击打开详情，并将本地新闻卡片从 `news/impact` 成功条件中解耦。Step 2.2 补充：修复 TerminalView 高度被 AI 侧栏撑开的排版问题，修复侧栏切换时 K 线/分时图 resize 不及时与越界重叠问题，并为 OpenAI provider 增加 BaseUrl `/v1` 容错、完整请求 URI/头部诊断和可读网络异常；同时完成 Task 4 的标准/Pro 模型分流，普通分析默认切到 `gemini-3.1-flash-lite-preview-thinking-high`，前端新增 `Pro 深度分析` 触发，后端统一强制 Pro 路由到 `gemini-3.1-pro-preview-thinking-medium`，并对非 Pro 请求禁用 Pro 模型。Step 2.3 重做后：板块资讯改为新浪财经搜索页 HTML 定向抓取，不再依赖东财搜索 API；大盘环境改为 WSJ/NYT Business RSS 与新浪滚动宏观资讯合并落库；查询历史改为完整可滚动展示，不再硬截断。Step 2.4 新增 `LocalFactAiEnrichmentService`，按 5-20 条批量调用 `gemini-2.5-flash-lite` 清洗未处理的本地事实新闻，写入 `TranslatedTitle` / `AiSentiment` / `AiTarget` / `AiTags` / `IsAiProcessed`；LLM 失败时保持原始入库成功且默认 `中性`，并保留未处理状态以下轮重试；`/api/news` 改为展示 AI 清洗结果；Stock Agents 改为使用隔离投影，仅保留原题/译题/来源/时间，不携带这些廉价 AI 标签。Step 2.5 收口：大盘资讯改为页面流内嵌卡片并新增“展开阅读”弹窗，不再使用悬浮式 sticky 条带；外媒 RSS 读取增加时间戳去缓存、30 天硬时效过滤与严格倒序保留最新；`EnsureMarketFreshAsync` / `EnsureFreshAsync` 在“数据已新鲜”时仍会补跑 `IsAiProcessed=false` 的 market/stock/sector AI 重试。Step 2.6 收口：新浪大盘源切到纯财经流并过滤 `自媒体` 污染，失效 WSJ/NYT 改为 CNBC/Seeking Alpha/CoinTelegraph/TechCrunch/The Hill，新增 `/api/news/archive` 与 `全量资讯库` 标签页，支持关键字/层级/情绪筛选、分页、译题优先与原文跳转。验证通过：后端目标单测 14/14、前端单测 25/25、`npm run build`、SQL 结构校验、`node frontend/scripts/edge-check-goal013.mjs`。"
+    },
+    {
+      "id": "GOAL-014",
+      "title": "跨网网络穿透与前端分离部署",
+      "description": "基于 Cloudflare Tunnels 解决家庭宽带无公网 IP 和公司网络限制问题，实现后端在家常驻抓取，前端在公司/公网独立部署的无缝看盘架构。",
+      "status": "todo",
+      "type": "architecture",
+      "priority": "future"
+    }
+  ]
 }
