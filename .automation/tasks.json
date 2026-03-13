@@ -12,6 +12,17 @@
       "notes": ""
     },
     {
+      "id": "GOAL-015",
+      "title": "Deep quote fundamentals + agent schema redesign",
+      "status": "todo",
+      "stages": {
+        "plan": "done",
+        "dev": "done",
+        "test": "todo"
+      },
+      "notes": "Step 3 开发已完成：扩充流通市值/动态市盈率/量比/股东人数/所属板块，补齐东财实时 + F10 + 股东研究抓取与缓存，重构 commander schema 为 analysis_opinion + confidence_score + trigger_conditions + invalid_conditions + risk_warning，并同步股票信息页与 AI 面板。已通过后端单测 92/92、前端定向单测 28/28、前端 build、EF migration 生成；本机已完成 SQLCMD 建库、`dotnet ef database update`、表字段校验与 `/api/health` 启动验证。剩余主要是 Edge/UI 验收，以及本地 LLM provider 定价配置未补齐时后台 AI/资讯任务仍会报配置告警。"
+    },
+    {
       "id": "GOAL-002",
       "title": "Multi-source events with weighted impact",
       "status": "done",

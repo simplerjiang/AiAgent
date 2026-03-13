@@ -10,6 +10,7 @@ public sealed class AppDbContext : DbContext
     }
 
     public DbSet<StockQuoteSnapshot> StockQuoteSnapshots => Set<StockQuoteSnapshot>();
+    public DbSet<StockCompanyProfile> StockCompanyProfiles => Set<StockCompanyProfile>();
     public DbSet<MarketIndexSnapshot> MarketIndexSnapshots => Set<MarketIndexSnapshot>();
     public DbSet<KLinePointEntity> KLinePoints => Set<KLinePointEntity>();
     public DbSet<MinuteLinePointEntity> MinuteLinePoints => Set<MinuteLinePointEntity>();
@@ -31,6 +32,34 @@ public sealed class AppDbContext : DbContext
     {
         modelBuilder.Entity<StockQuoteSnapshot>()
             .HasIndex(x => new { x.Symbol, x.Timestamp });
+
+        modelBuilder.Entity<StockQuoteSnapshot>()
+            .Property(x => x.Symbol)
+            .HasMaxLength(32);
+
+        modelBuilder.Entity<StockQuoteSnapshot>()
+            .Property(x => x.Name)
+            .HasMaxLength(128);
+
+        modelBuilder.Entity<StockQuoteSnapshot>()
+            .Property(x => x.SectorName)
+            .HasMaxLength(128);
+
+        modelBuilder.Entity<StockCompanyProfile>()
+            .HasIndex(x => x.Symbol)
+            .IsUnique();
+
+        modelBuilder.Entity<StockCompanyProfile>()
+            .Property(x => x.Symbol)
+            .HasMaxLength(32);
+
+        modelBuilder.Entity<StockCompanyProfile>()
+            .Property(x => x.Name)
+            .HasMaxLength(128);
+
+        modelBuilder.Entity<StockCompanyProfile>()
+            .Property(x => x.SectorName)
+            .HasMaxLength(128);
 
         modelBuilder.Entity<MarketIndexSnapshot>()
             .HasIndex(x => new { x.Symbol, x.Timestamp });

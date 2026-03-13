@@ -178,8 +178,13 @@ const buildStockContext = currentDetail => {
   const changePercent = quote.changePercent ?? ''
   const high = quote.high ?? ''
   const low = quote.low ?? ''
+  const peRatio = quote.peRatio ?? ''
+  const floatMarketCap = quote.floatMarketCap ?? ''
+  const volumeRatio = quote.volumeRatio ?? ''
+  const shareholderCount = quote.shareholderCount ?? ''
+  const sectorName = quote.sectorName ?? ''
   const timestamp = quote.timestamp ?? ''
-  return `股票：${name}（${symbol})\n价格：${price}\n涨跌：${change}（${changePercent}%）\n高：${high} 低：${low}\n时间：${formatDate(timestamp)}`
+  return `股票：${name}（${symbol})\n价格：${price}\n涨跌：${change}（${changePercent}%）\n高：${high} 低：${low}\n市盈率：${peRatio}\n流通市值：${floatMarketCap}\n量比：${volumeRatio}\n股东户数：${shareholderCount}\n所属板块：${sectorName}\n时间：${formatDate(timestamp)}`
 }
 
 const chatSymbolKey = computed(() => {
@@ -401,14 +406,35 @@ const parseLevelNumber = value => {
   return Number.isFinite(number) ? number : null
 }
 
+const extractTaggedPriceLevels = (value, patterns) => {
+  const text = String(value || '')
+  const results = []
+  patterns.forEach(pattern => {
+    const matches = text.matchAll(pattern)
+    for (const match of matches) {
+      const number = Number(match[1])
+      if (Number.isFinite(number)) {
+        results.push(number)
+      }
+    }
+  })
+  return results
+}
+
 const aiLevels = computed(() => {
   const list = Array.isArray(agentResults.value) ? agentResults.value : []
   const commanderData = getAgentData(list.find(item => getAgentId(item) === 'commander'))
   const trendData = getAgentData(list.find(item => getAgentId(item) === 'trend_analysis'))
 
-  const recommendation = commanderData?.recommendation ?? {}
-  const resistanceFromRecommendation = parseLevelNumber(recommendation.targetPrice ?? recommendation.takeProfitPrice)
-  const supportFromRecommendation = parseLevelNumber(recommendation.stopLossPrice)
+  const resistancePatterns = [/突破\s*([0-9]+(?:\.[0-9]+)?)/g, /站上\s*([0-9]+(?:\.[0-9]+)?)/g, /目标\s*([0-9]+(?:\.[0-9]+)?)/g]
+  const supportPatterns = [/跌破\s*([0-9]+(?:\.[0-9]+)?)/g, /失守\s*([0-9]+(?:\.[0-9]+)?)/g, /止损\s*([0-9]+(?:\.[0-9]+)?)/g, /支撑\s*([0-9]+(?:\.[0-9]+)?)/g]
+  const triggerLevels = extractTaggedPriceLevels(commanderData?.trigger_conditions, resistancePatterns)
+  const invalidLevels = extractTaggedPriceLevels(commanderData?.invalid_conditions, supportPatterns)
+  const riskLevels = extractTaggedPriceLevels(commanderData?.risk_warning, supportPatterns)
+  const analysisLevels = extractTaggedPriceLevels(commanderData?.analysis_opinion, [...resistancePatterns, ...supportPatterns])
+
+  const resistanceFromRecommendation = triggerLevels[0] ?? analysisLevels[0] ?? null
+  const supportFromRecommendation = invalidLevels[0] ?? riskLevels[0] ?? null
 
   const forecast = Array.isArray(trendData?.forecast) ? trendData.forecast : []
   const forecastPrices = forecast
@@ -1153,6 +1179,18 @@ watch(
               <p class="muted">更新时间：{{ formatDate(detail.quote.timestamp) }}</p>
             </div>
 
+            <div class="quote-card">
+              <div class="quote-card-header">
+                <h4>基本面快照</h4>
+                <span class="muted">Step 3</span>
+              </div>
+              <p>流通市值：{{ detail.quote.floatMarketCap ? `${(Number(detail.quote.floatMarketCap) / 100000000).toFixed(2)} 亿` : '-' }}</p>
+              <p>市盈率：{{ detail.quote.peRatio ?? '-' }}</p>
+              <p>量比：{{ detail.quote.volumeRatio ?? '-' }}</p>
+              <p>股东户数：{{ detail.quote.shareholderCount ? Number(detail.quote.shareholderCount).toLocaleString('zh-CN') : '-' }}</p>
+              <p>所属板块：{{ detail.quote.sectorName || '-' }}</p>
+            </div>
+
             <div class="quote-card tape-card">
               <div class="quote-card-header">
                 <h4>盘中消息带</h4>
@@ -1535,7 +1573,7 @@ watch(
 .terminal-summary-grid {
   display: grid;
   gap: 1rem;
-  grid-template-columns: minmax(220px, 0.75fr) minmax(0, 1.25fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .market-news-panel {

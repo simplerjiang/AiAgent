@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Logging.EventLog;
 using SimplerJiangAiAgent.Api.Data;
 using SimplerJiangAiAgent.Api.Infrastructure.Config;
 using SimplerJiangAiAgent.Api.Infrastructure.Jobs;
@@ -10,6 +11,10 @@ using SimplerJiangAiAgent.Api.Modules;
 var builder = WebApplication.CreateBuilder(args);
 
 System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
+if (OperatingSystem.IsWindows())
+{
+    builder.Logging.AddFilter<EventLogLoggerProvider>(null, LogLevel.None);
+}
 
 // 服务注册
 builder.Services.AddEndpointsApiExplorer();
@@ -65,6 +70,7 @@ using (var scope = app.Services.CreateScope())
 {
     var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     dbContext.Database.EnsureCreated();
+    await StockMarketDataSchemaInitializer.EnsureAsync(dbContext);
     await LocalFactSchemaInitializer.EnsureAsync(dbContext);
     await SourceGovernanceSchemaInitializer.EnsureAsync(dbContext);
 }

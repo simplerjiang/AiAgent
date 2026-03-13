@@ -42,6 +42,7 @@ public sealed class StockSyncService : IStockSyncService
             var messages = await _crawler.GetIntradayMessagesAsync(target, cancellationToken);
 
             _dbContext.StockQuoteSnapshots.Add(MapQuote(quote));
+            await UpsertCompanyProfileAsync(_dbContext, quote, cancellationToken);
             await UpsertKLineAsync(_dbContext, target, "day", kline, cancellationToken);
             await UpsertMinuteLineAsync(_dbContext, target, minute, cancellationToken);
             await UpsertMessagesAsync(_dbContext, target, messages, cancellationToken);
@@ -60,6 +61,7 @@ public sealed class StockSyncService : IStockSyncService
         var symbol = StockSymbolNormalizer.Normalize(detail.Quote.Symbol);
 
         _dbContext.StockQuoteSnapshots.Add(MapQuote(detail.Quote with { Symbol = symbol }));
+    await UpsertCompanyProfileAsync(_dbContext, detail.Quote with { Symbol = symbol }, cancellationToken);
         await UpsertKLineAsync(_dbContext, symbol, interval, detail.KLines, cancellationToken);
         await UpsertMinuteLineAsync(_dbContext, symbol, detail.MinuteLines, cancellationToken);
         await UpsertMessagesAsync(_dbContext, symbol, detail.Messages, cancellationToken);
@@ -89,8 +91,41 @@ public sealed class StockSyncService : IStockSyncService
             Price = dto.Price,
             Change = dto.Change,
             ChangePercent = dto.ChangePercent,
+            PeRatio = dto.PeRatio,
+            FloatMarketCap = dto.FloatMarketCap,
+            VolumeRatio = dto.VolumeRatio,
+            ShareholderCount = dto.ShareholderCount,
+            SectorName = dto.SectorName,
             Timestamp = dto.Timestamp
         };
+    }
+
+    private static async Task UpsertCompanyProfileAsync(AppDbContext dbContext, StockQuoteDto quote, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(quote.SectorName) && !quote.ShareholderCount.HasValue)
+        {
+            return;
+        }
+
+        var symbol = StockSymbolNormalizer.Normalize(quote.Symbol);
+        var existing = await dbContext.StockCompanyProfiles.FirstOrDefaultAsync(x => x.Symbol == symbol, cancellationToken);
+        if (existing is null)
+        {
+            dbContext.StockCompanyProfiles.Add(new StockCompanyProfile
+            {
+                Symbol = symbol,
+                Name = quote.Name,
+                SectorName = quote.SectorName,
+                ShareholderCount = quote.ShareholderCount,
+                UpdatedAt = quote.Timestamp
+            });
+            return;
+        }
+
+        existing.Name = quote.Name;
+        existing.SectorName = quote.SectorName ?? existing.SectorName;
+        existing.ShareholderCount = quote.ShareholderCount ?? existing.ShareholderCount;
+        existing.UpdatedAt = quote.Timestamp;
     }
 
     private static async Task UpsertKLineAsync(AppDbContext dbContext, string symbol, string interval, IReadOnlyList<KLinePointDto> points, CancellationToken cancellationToken)

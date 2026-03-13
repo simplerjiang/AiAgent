@@ -35,6 +35,8 @@ public class StockSyncServiceTests
 
         var stored = dbContext.StockQuoteSnapshots.First();
         Assert.Equal("sh600000", stored.Symbol);
+        Assert.Single(dbContext.StockCompanyProfiles);
+        Assert.Equal("银行", dbContext.StockCompanyProfiles.First().SectorName);
     }
 
     [Fact]
@@ -50,7 +52,7 @@ public class StockSyncServiceTests
 
         var service = new StockSyncService(dbContext, crawler, syncOptions);
         var detail = new StockDetailDto(
-            new StockQuoteDto("sh600000", "示例", 1m, 0m, 0m, 0m, 0m, 0m, 0m, 0m, DateTime.UtcNow, Array.Empty<StockNewsDto>(), Array.Empty<StockIndicatorDto>()),
+            new StockQuoteDto("sh600000", "示例", 1m, 0m, 0m, 0m, 0m, 0m, 0m, 0m, DateTime.UtcNow, Array.Empty<StockNewsDto>(), Array.Empty<StockIndicatorDto>(), 100000000m, 1.1m, 8888, "银行"),
             new List<KLinePointDto> { new(DateTime.UtcNow.Date, 1m, 1m, 1m, 1m, 100m) },
             new List<MinuteLinePointDto> { new(DateOnly.FromDateTime(DateTime.Today), new TimeSpan(9, 30, 0), 1m, 1m, 10m) },
             new List<IntradayMessageDto> { new("消息", "来源", DateTime.UtcNow, null) }
@@ -59,6 +61,7 @@ public class StockSyncServiceTests
         await service.SaveDetailAsync(detail, "day");
 
         Assert.Single(dbContext.StockQuoteSnapshots);
+        Assert.Single(dbContext.StockCompanyProfiles);
         Assert.Single(dbContext.KLinePoints);
         Assert.Single(dbContext.MinuteLinePoints);
         Assert.Single(dbContext.IntradayMessages);
@@ -83,7 +86,11 @@ public class StockSyncServiceTests
                 0m,
                 DateTime.UtcNow,
                 Array.Empty<StockNewsDto>(),
-                Array.Empty<StockIndicatorDto>()
+                Array.Empty<StockIndicatorDto>(),
+                123456789m,
+                1.2m,
+                1200,
+                "银行"
             ));
         }
 

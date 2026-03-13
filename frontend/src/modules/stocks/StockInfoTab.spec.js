@@ -255,6 +255,37 @@ describe('StockInfoTab', () => {
     expect(body.useInternet).toBe(true)
   })
 
+  it('renders Step3 fundamentals in terminal summary', async () => {
+    const wrapper = mount(StockInfoTab)
+    wrapper.vm.detail = {
+      quote: {
+        name: '深科技',
+        symbol: 'sz000021',
+        price: 31.1,
+        change: -0.72,
+        changePercent: -2.26,
+        high: 32,
+        low: 30,
+        peRatio: 18.3,
+        floatMarketCap: 12340000000,
+        volumeRatio: 1.42,
+        shareholderCount: 56000,
+        sectorName: '半导体',
+        timestamp: '2026-01-29T00:00:00Z'
+      },
+      kLines: [],
+      minuteLines: [],
+      messages: []
+    }
+
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.text()).toContain('基本面快照')
+    expect(wrapper.text()).toContain('市盈率：18.3')
+    expect(wrapper.text()).toContain('量比：1.42')
+    expect(wrapper.text()).toContain('所属板块：半导体')
+  })
+
   it('sends pro flag when triggering Pro analysis', async () => {
     const agentCalls = []
     const { fetchMock } = createChatFetchMock({

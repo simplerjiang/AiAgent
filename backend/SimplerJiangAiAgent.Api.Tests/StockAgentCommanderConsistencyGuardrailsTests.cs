@@ -14,7 +14,8 @@ public sealed class StockAgentCommanderConsistencyGuardrailsTests
         {
           "agent": "commander",
           "summary": "ok",
-          "recommendation": { "action": "观察", "confidence": 70 },
+          "analysis_opinion": "当前更适合观察，等待确认。",
+          "confidence_score": 70,
           "revision": { "required": false, "reason": null, "previousDirection": null },
           "signals": [],
           "invalidations": []
@@ -59,10 +60,11 @@ public sealed class StockAgentCommanderConsistencyGuardrailsTests
         {
           "agent": "commander",
           "summary": "ok",
-          "recommendation": { "action": "加仓", "confidence": 55 },
+          "analysis_opinion": "倾向加仓，但确认还不充分。",
+          "confidence_score": 55,
           "revision": { "required": false, "reason": null, "previousDirection": null },
           "signals": [],
-          "invalidations": ["量能未确认"]
+          "invalid_conditions": "量能未确认"
         }
         """);
 
@@ -84,7 +86,7 @@ public sealed class StockAgentCommanderConsistencyGuardrailsTests
 
         var guarded = StockAgentCommanderConsistencyGuardrails.Apply(commanderData.RootElement, deps, contextJson);
 
-        Assert.Equal("观察", guarded.GetProperty("recommendation").GetProperty("action").GetString());
+        Assert.Contains("观察", guarded.GetProperty("analysis_opinion").GetString());
         Assert.True(guarded.GetProperty("marketState").GetProperty("hysteresisApplied").GetBoolean());
         Assert.True(guarded.GetProperty("revision").GetProperty("required").GetBoolean());
         Assert.Equal("观察", guarded.GetProperty("revision").GetProperty("previousDirection").GetString());
@@ -97,10 +99,11 @@ public sealed class StockAgentCommanderConsistencyGuardrailsTests
         {
           "agent": "commander",
           "summary": "ok",
-          "recommendation": { "action": "减仓", "confidence": 58 },
+          "analysis_opinion": "应当减仓，防止继续破位。",
+          "confidence_score": 58,
           "revision": { "required": false, "reason": null, "previousDirection": null },
           "signals": [],
-          "invalidations": ["关键位跌破", "止损条件触发"]
+          "invalid_conditions": "关键位跌破；止损条件触发"
         }
         """);
 
@@ -122,7 +125,7 @@ public sealed class StockAgentCommanderConsistencyGuardrailsTests
 
         var guarded = StockAgentCommanderConsistencyGuardrails.Apply(commanderData.RootElement, deps, contextJson);
 
-        Assert.Equal("减仓", guarded.GetProperty("recommendation").GetProperty("action").GetString());
+        Assert.Contains("减仓", guarded.GetProperty("analysis_opinion").GetString());
         Assert.True(guarded.GetProperty("marketState").GetProperty("strongCounterEvidence").GetBoolean());
         Assert.Equal("强反证触发，允许方向变更", guarded.GetProperty("marketState").GetProperty("overrideReason").GetString());
         Assert.True(guarded.GetProperty("revision").GetProperty("required").GetBoolean());

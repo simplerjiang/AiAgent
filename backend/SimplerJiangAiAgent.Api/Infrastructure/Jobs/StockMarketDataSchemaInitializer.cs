@@ -1,0 +1,34 @@
+using Microsoft.EntityFrameworkCore;
+using SimplerJiangAiAgent.Api.Data;
+
+namespace SimplerJiangAiAgent.Api.Infrastructure.Jobs;
+
+public static class StockMarketDataSchemaInitializer
+{
+    public static async Task EnsureAsync(AppDbContext dbContext, CancellationToken cancellationToken = default)
+    {
+        await dbContext.Database.ExecuteSqlRawAsync(
+            "IF COL_LENGTH('dbo.StockQuoteSnapshots','PeRatio') IS NULL ALTER TABLE dbo.StockQuoteSnapshots ADD PeRatio DECIMAL(18,2) NOT NULL CONSTRAINT DF_StockQuoteSnapshots_PeRatio DEFAULT(0); " +
+            "IF COL_LENGTH('dbo.StockQuoteSnapshots','FloatMarketCap') IS NULL ALTER TABLE dbo.StockQuoteSnapshots ADD FloatMarketCap DECIMAL(18,2) NOT NULL CONSTRAINT DF_StockQuoteSnapshots_FloatMarketCap DEFAULT(0); " +
+            "IF COL_LENGTH('dbo.StockQuoteSnapshots','VolumeRatio') IS NULL ALTER TABLE dbo.StockQuoteSnapshots ADD VolumeRatio DECIMAL(18,2) NOT NULL CONSTRAINT DF_StockQuoteSnapshots_VolumeRatio DEFAULT(0); " +
+            "IF COL_LENGTH('dbo.StockQuoteSnapshots','ShareholderCount') IS NULL ALTER TABLE dbo.StockQuoteSnapshots ADD ShareholderCount INT NULL; " +
+            "IF COL_LENGTH('dbo.StockQuoteSnapshots','SectorName') IS NULL ALTER TABLE dbo.StockQuoteSnapshots ADD SectorName NVARCHAR(128) NULL;",
+            cancellationToken);
+
+        await dbContext.Database.ExecuteSqlRawAsync(
+            "IF OBJECT_ID('dbo.StockCompanyProfiles', 'U') IS NULL " +
+            "BEGIN " +
+            "CREATE TABLE dbo.StockCompanyProfiles(" +
+            "Id BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_StockCompanyProfiles PRIMARY KEY, " +
+            "Symbol NVARCHAR(32) NOT NULL, " +
+            "Name NVARCHAR(128) NOT NULL, " +
+            "SectorName NVARCHAR(128) NULL, " +
+            "ShareholderCount INT NULL, " +
+            "UpdatedAt DATETIME2 NOT NULL" +
+            "); " +
+            "END; " +
+            "IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_StockCompanyProfiles_Symbol' AND object_id = OBJECT_ID('dbo.StockCompanyProfiles')) " +
+            "CREATE UNIQUE INDEX IX_StockCompanyProfiles_Symbol ON dbo.StockCompanyProfiles(Symbol);",
+            cancellationToken);
+    }
+}

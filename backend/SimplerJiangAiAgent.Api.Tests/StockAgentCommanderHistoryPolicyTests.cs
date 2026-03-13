@@ -62,13 +62,11 @@ public sealed class StockAgentCommanderHistoryPolicyTests
                       "agentId": "commander",
                       "data": {
                         "summary": "结论摘要",
-                        "recommendation": {
-                          "action": "减仓",
-                          "confidence": 66.5
-                        },
-                        "triggers": ["跌破20日均线"],
-                        "invalidations": ["放量站回20日均线"],
-                        "riskLimits": ["单日回撤不超过2%"],
+                        "analysis_opinion": "减仓为主，等待下一个确认信号。",
+                        "confidence_score": 66.5,
+                        "trigger_conditions": "跌破20日均线",
+                        "invalid_conditions": "放量站回20日均线",
+                        "risk_warning": "单日回撤不超过2%",
                         "evidence": [
                           { "point": "北向资金净流出", "source": "交易所" },
                           { "point": "板块强度回落", "source": "资讯" }
@@ -87,7 +85,7 @@ public sealed class StockAgentCommanderHistoryPolicyTests
         var item = result.Items[0];
         Assert.Equal("减仓", item.Direction);
         Assert.Equal(66.5m, item.Confidence);
-        Assert.Equal("结论摘要", item.Summary);
+        Assert.Equal("减仓为主，等待下一个确认信号。", item.Summary);
         Assert.Contains("跌破20日均线", item.Triggers);
         Assert.Contains("放量站回20日均线", item.Invalidations);
         Assert.Contains("单日回撤不超过2%", item.RiskLimits);
@@ -108,13 +106,11 @@ public sealed class StockAgentCommanderHistoryPolicyTests
                   "agentId": "commander",
                   "data": {
                     "summary": "历史{{action}}",
-                    "recommendation": {
-                      "action": "{{action}}",
-                      "confidence": {{confidence}}
-                    },
-                    "triggers": ["触发{{action}}"],
-                    "invalidations": ["失效{{action}}"],
-                    "riskLimits": ["风控{{action}}"],
+                    "analysis_opinion": "{{action}}为主，等待下一步确认。",
+                    "confidence_score": {{confidence}},
+                    "trigger_conditions": "触发{{action}}",
+                    "invalid_conditions": "失效{{action}}",
+                    "risk_warning": "风控{{action}}",
                     "evidence": [
                       { "point": "证据{{action}}", "source": "source" }
                     ]

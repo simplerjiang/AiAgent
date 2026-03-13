@@ -15,7 +15,25 @@ public sealed class CompositeStockCrawler : IStockCrawler
 
     public async Task<StockQuoteDto> GetQuoteAsync(string symbol, CancellationToken cancellationToken = default)
     {
-        var baseQuote = await TryGetAsync(c => c.GetQuoteAsync(symbol, cancellationToken))
+        var quotes = new List<StockQuoteDto>();
+        foreach (var crawler in _crawlers)
+        {
+            try
+            {
+                var quote = await crawler.GetQuoteAsync(symbol, cancellationToken);
+                if (IsUsableQuote(quote))
+                {
+                    quotes.Add(quote);
+                }
+            }
+            catch
+            {
+                // 忽略单一来源错误
+            }
+        }
+
+        var baseQuote = quotes.FirstOrDefault(item => item.Price > 0m)
+            ?? quotes.FirstOrDefault()
             ?? new StockQuoteDto(
                 symbol,
                 $"{symbol} 示例名称",
@@ -32,10 +50,11 @@ public sealed class CompositeStockCrawler : IStockCrawler
                 Array.Empty<StockIndicatorDto>()
             );
 
-        // TODO: 这里可合并多来源数据
-        return baseQuote with
+        var mergedQuote = quotes.Aggregate(baseQuote, MergeQuote);
+
+        return mergedQuote with
         {
-            News = BuildPlaceholderNews(baseQuote.Symbol),
+            News = BuildPlaceholderNews(mergedQuote.Symbol),
             Indicators = BuildPlaceholderIndicators()
         };
     }
@@ -125,5 +144,60 @@ public sealed class CompositeStockCrawler : IStockCrawler
             new("MA10", 0m, null),
             new("RSI", 0m, null)
         };
+    }
+
+    private static bool IsUsableQuote(StockQuoteDto quote)
+    {
+        return quote.Price > 0m
+            || quote.Change != 0m
+            || quote.ChangePercent != 0m
+            || quote.TurnoverRate != 0m
+            || quote.PeRatio != 0m
+            || quote.High != 0m
+            || quote.Low != 0m
+            || quote.Speed != 0m
+            || quote.FloatMarketCap != 0m
+            || quote.VolumeRatio != 0m
+            || quote.ShareholderCount.HasValue
+            || !string.IsNullOrWhiteSpace(quote.SectorName)
+            || (!string.IsNullOrWhiteSpace(quote.Name) && !quote.Name.Contains("示例", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static StockQuoteDto MergeQuote(StockQuoteDto current, StockQuoteDto candidate)
+    {
+        return current with
+        {
+            Name = PreferText(current.Name, candidate.Name, current.Symbol) ?? current.Name,
+            Price = PreferDecimal(current.Price, candidate.Price),
+            Change = PreferDecimal(current.Change, candidate.Change),
+            ChangePercent = PreferDecimal(current.ChangePercent, candidate.ChangePercent),
+            TurnoverRate = PreferDecimal(current.TurnoverRate, candidate.TurnoverRate),
+            PeRatio = PreferDecimal(current.PeRatio, candidate.PeRatio),
+            High = PreferDecimal(current.High, candidate.High),
+            Low = PreferDecimal(current.Low, candidate.Low),
+            Speed = PreferDecimal(current.Speed, candidate.Speed),
+            Timestamp = current.Timestamp >= candidate.Timestamp ? current.Timestamp : candidate.Timestamp,
+            FloatMarketCap = PreferDecimal(current.FloatMarketCap, candidate.FloatMarketCap),
+            VolumeRatio = PreferDecimal(current.VolumeRatio, candidate.VolumeRatio),
+            ShareholderCount = current.ShareholderCount ?? candidate.ShareholderCount,
+            SectorName = PreferText(current.SectorName, candidate.SectorName, current.Symbol)
+        };
+    }
+
+    private static decimal PreferDecimal(decimal current, decimal candidate)
+    {
+        return current != 0m ? current : candidate;
+    }
+
+    private static string? PreferText(string? current, string? candidate, string symbol)
+    {
+        if (!string.IsNullOrWhiteSpace(current)
+            && !string.Equals(current, symbol, StringComparison.OrdinalIgnoreCase)
+            && !current.Contains("示例", StringComparison.OrdinalIgnoreCase))
+        {
+            return current;
+        }
+
+        return string.IsNullOrWhiteSpace(candidate) ? current : candidate;
     }
 }

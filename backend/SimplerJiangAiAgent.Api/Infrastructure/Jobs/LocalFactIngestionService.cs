@@ -228,9 +228,24 @@ public sealed class LocalFactIngestionService : ILocalFactIngestionService
     {
         var marketPrefix = symbol.StartsWith("sh", StringComparison.OrdinalIgnoreCase) ? "SH" : "SZ";
         var code = symbol[2..];
-        var url = $"https://emweb.securities.eastmoney.com/PC_HSF10/CompanySurvey/CompanySurveyAjax?code={marketPrefix}{code}";
-        var json = await _httpClient.GetStringAsync(url, cancellationToken);
-        return EastmoneyCompanyProfileParser.Parse(symbol, json);
+        var surveyUrl = $"https://emweb.securities.eastmoney.com/PC_HSF10/CompanySurvey/CompanySurveyAjax?code={marketPrefix}{code}";
+        var shareholderUrl = $"https://emweb.securities.eastmoney.com/PC_HSF10/ShareholderResearch/PageAjax?code={marketPrefix}{code}";
+        var surveyTask = _httpClient.GetStringAsync(surveyUrl, cancellationToken);
+        var shareholderTask = TryGetStringAsync(shareholderUrl, cancellationToken);
+        await Task.WhenAll(new Task[] { surveyTask, shareholderTask });
+        return EastmoneyCompanyProfileParser.Parse(symbol, await surveyTask, await shareholderTask);
+    }
+
+    private async Task<string?> TryGetStringAsync(string url, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await _httpClient.GetStringAsync(url, cancellationToken);
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private async Task<IReadOnlyList<IntradayMessageDto>> FetchRollMessagesAsync(CancellationToken cancellationToken)

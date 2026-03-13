@@ -46,4 +46,33 @@ describe('StockAgentPanels', () => {
 
     expect(wrapper.emitted('run')).toEqual([[false], [true]])
   })
+
+  it('renders commander opinion schema fields', () => {
+    const wrapper = mount(StockAgentPanels, {
+      props: {
+        agents: [
+          {
+            agentId: 'commander',
+            agentName: '指挥Agent',
+            success: true,
+            data: {
+              summary: '偏谨慎',
+              analysis_opinion: '当前更适合观察，等待放量突破。',
+              confidence_score: 72,
+              trigger_conditions: '放量突破 12.60',
+              invalid_conditions: '跌破 11.90',
+              risk_warning: '单笔亏损控制在 2% 以内',
+              evidence: [],
+              signals: [],
+              risks: []
+            }
+          }
+        ]
+      }
+    })
+
+    expect(wrapper.text()).toContain('分析结论')
+    expect(wrapper.text()).toContain('放量突破 12.60')
+    expect(wrapper.text()).toContain('跌破 11.90')
+  })
 })

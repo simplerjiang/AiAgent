@@ -2,12 +2,22 @@ const percentKeys = ['percent', 'rate', 'ratio']
 const labelMap = {
   agent: 'Agent',
   summary: '摘要',
+  analysis_opinion: '分析结论',
+  confidence_score: '置信度',
+  trigger_conditions: '触发条件',
+  invalid_conditions: '失效条件',
+  risk_warning: '风险提示',
   price: '价格',
   changePercent: '涨跌幅',
   turnoverRate: '换手率',
+  peRatio: '市盈率',
+  floatMarketCap: '流通市值',
+  volumeRatio: '量比',
+  shareholderCount: '股东户数',
   innerVolume: '内盘',
   outerVolume: '外盘',
   sector: '行业板块',
+  sectorName: '行业板块',
   date: '日期',
   entryScore: '入场评分',
   valuationScore: '估值评分',
@@ -61,6 +71,15 @@ export const formatMetricValue = (value, key = '') => {
       if (num > 1 && num <= 100) {
         return `${num.toFixed(0)}%`
       }
+    }
+    if (keyText === 'volumeratio') {
+      return num.toFixed(2)
+    }
+    if (keyText === 'floatmarketcap') {
+      return `${(num / 100000000).toFixed(2)} 亿`
+    }
+    if (keyText === 'shareholdercount') {
+      return num.toLocaleString('zh-CN')
     }
     const isPercent = percentKeys.some(term => keyText.includes(term))
     return isPercent ? `${num}%` : num

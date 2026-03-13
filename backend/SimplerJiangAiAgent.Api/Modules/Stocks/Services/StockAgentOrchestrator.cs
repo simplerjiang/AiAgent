@@ -381,12 +381,12 @@ internal static class StockAgentCommanderHistoryPolicy
             }
 
             var direction = GetDirection(commanderData);
-            var confidence = TryGetNumber(commanderData, "recommendation", "confidence");
-            var triggers = ReadStringArray(commanderData, "triggers");
-            var invalidations = ReadStringArray(commanderData, "invalidations");
-            var riskLimits = ReadStringArray(commanderData, "riskLimits");
+            var confidence = TryGetNumber(commanderData, "confidence_score");
+            var triggers = ReadCommanderConditionList(commanderData, "trigger_conditions", "triggers");
+            var invalidations = ReadCommanderConditionList(commanderData, "invalid_conditions", "invalidations");
+            var riskLimits = ReadCommanderConditionList(commanderData, "risk_warning", "riskLimits");
             var evidence = ReadEvidencePoints(commanderData);
-            var summary = TryGetString(commanderData, "summary");
+            var summary = TryGetString(commanderData, "analysis_opinion") ?? TryGetString(commanderData, "summary");
 
             return new StockAgentCommanderHistoryItemDto(
                 entry.CreatedAt,
@@ -439,14 +439,34 @@ internal static class StockAgentCommanderHistoryPolicy
 
     private static string GetDirection(JsonElement commanderData)
     {
-        var action = TryGetString(commanderData, "recommendation", "action");
-        if (!string.IsNullOrWhiteSpace(action))
+        var explicitBias = TryGetString(commanderData, "directional_bias");
+        if (!string.IsNullOrWhiteSpace(explicitBias))
         {
-            return action;
+            return explicitBias;
         }
 
-        var rating = TryGetString(commanderData, "recommendation", "rating");
-        return string.IsNullOrWhiteSpace(rating) ? "未知" : rating;
+        var opinion = TryGetString(commanderData, "analysis_opinion") ?? TryGetString(commanderData, "summary");
+        if (string.IsNullOrWhiteSpace(opinion))
+        {
+            return "未知";
+        }
+
+        if (ContainsAny(opinion, "清仓", "减仓", "看空", "回避", "转弱", "下行", "破位"))
+        {
+            return "减仓";
+        }
+
+        if (ContainsAny(opinion, "加仓", "试仓", "看多", "偏多", "突破", "转强", "上行"))
+        {
+            return "加仓";
+        }
+
+        if (ContainsAny(opinion, "观察", "观望", "等待", "震荡", "中性"))
+        {
+            return "观察";
+        }
+
+        return "未知";
     }
 
     private static IReadOnlyList<string> ReadEvidencePoints(JsonElement commanderData)
@@ -495,6 +515,27 @@ internal static class StockAgentCommanderHistoryPolicy
             .Select(item => item!)
             .Take(5)
             .ToArray();
+    }
+
+    private static IReadOnlyList<string> ReadCommanderConditionList(JsonElement root, string singularProperty, string fallbackArrayProperty)
+    {
+        var single = TryGetString(root, singularProperty);
+        if (!string.IsNullOrWhiteSpace(single))
+        {
+            return new[] { single };
+        }
+
+        return ReadStringArray(root, fallbackArrayProperty);
+    }
+
+    private static decimal? TryGetNumber(JsonElement root, string property)
+    {
+        if (!TryGetPropertyIgnoreCase(root, property, out var node) || node.ValueKind != JsonValueKind.Number)
+        {
+            return null;
+        }
+
+        return node.TryGetDecimal(out var value) ? value : null;
     }
 
     private static decimal? TryGetNumber(JsonElement root, string parentProperty, string property)
@@ -546,6 +587,11 @@ internal static class StockAgentCommanderHistoryPolicy
         }
 
         return false;
+    }
+
+    private static bool ContainsAny(string text, params string[] keywords)
+    {
+        return keywords.Any(keyword => text.Contains(keyword, StringComparison.OrdinalIgnoreCase));
     }
 }
 
@@ -778,7 +824,8 @@ internal static class StockAgentPromptBuilder
             "5. 所有建议必须给出证据来源、触发条件、失效条件和风险上限。\n" +
             "6. 你会收到仅供指挥Agent使用的近3-7天历史结论（默认5天）。若本次方向/评级与最近一次明显变化，必须给出改判原因。\n\n" +
             "7. 必须执行多周期融合：综合1D/1W/1M信号；若短中周期冲突，consistency.status 必须为“分歧态”。\n" +
-            "8. 必须执行状态机与滞后机制：状态=延续/震荡/反转；单日波动不应轻易翻转方向，除非出现强反证（如关键失效条件触发）。\n\n" +
+            "8. 必须执行状态机与滞后机制：状态=延续/震荡/反转；单日波动不应轻易翻转方向，除非出现强反证（如关键失效条件触发）。\n" +
+            "9. 必须把流通市值、市盈率、量比、股东户数、所属板块纳入推理和结论。\n\n" +
             "输出JSON结构：\n" +
             "{\n" +
             "  \"agent\": \"commander\",\n" +
@@ -787,24 +834,18 @@ internal static class StockAgentPromptBuilder
             "    \"price\": number,\n" +
             "    \"changePercent\": number,\n" +
             "    \"turnoverRate\": number,\n" +
-            "    \"innerVolume\": number|null,\n" +
-            "    \"outerVolume\": number|null,\n" +
+            "    \"peRatio\": number|null,\n" +
+            "    \"floatMarketCap\": number|null,\n" +
+            "    \"volumeRatio\": number|null,\n" +
+            "    \"shareholderCount\": number|null,\n" +
             "    \"sector\": \"string|null\",\n" +
             "    \"date\": \"YYYY-MM-DD\"\n" +
             "  },\n" +
-            "  \"recommendation\": {\n" +
-            "    \"action\": \"观察|试仓|加仓|减仓|清仓\",\n" +
-            "    \"targetPrice\": number|null,\n" +
-            "    \"takeProfitPrice\": number|null,\n" +
-            "    \"stopLossPrice\": number|null,\n" +
-            "    \"timeHorizon\": \"string|null\",\n" +
-            "    \"positionPercent\": number|null,\n" +
-            "    \"entryScore\": number,\n" +
-            "    \"valuationScore\": number,\n" +
-            "    \"confidence\": number,\n" +
-            "    \"rating\": \"string\"\n" +
-            "  },\n" +
-            "  \"reasons\": [\"string\"],\n" +
+            "  \"analysis_opinion\": \"深度的逻辑推理与走势判断\",\n" +
+            "  \"confidence_score\": number,\n" +
+            "  \"trigger_conditions\": \"明确写出什么价格/指标发生意味着看多/看空信号触发\",\n" +
+            "  \"invalid_conditions\": \"什么事件发生意味着该逻辑失效\",\n" +
+            "  \"risk_warning\": \"明确指出潜在风险点上限控制\",\n" +
             "  \"evidence\": [\n" +
             "    {\n" +
             "      \"point\": \"string\",\n" +
@@ -813,9 +854,6 @@ internal static class StockAgentPromptBuilder
             "      \"url\": \"string|null\"\n" +
             "    }\n" +
             "  ],\n" +
-            "  \"triggers\": [\"string\"],\n" +
-            "  \"invalidations\": [\"string\"],\n" +
-            "  \"riskLimits\": [\"string\"],\n" +
             "  \"revision\": {\n" +
             "    \"required\": boolean,\n" +
             "    \"reason\": \"string|null\",\n" +
@@ -1061,24 +1099,18 @@ internal static class StockAgentPromptBuilder
                 "    \"price\": number,\n" +
                 "    \"changePercent\": number,\n" +
                 "    \"turnoverRate\": number,\n" +
-                "    \"innerVolume\": number|null,\n" +
-                "    \"outerVolume\": number|null,\n" +
+                "    \"peRatio\": number|null,\n" +
+                "    \"floatMarketCap\": number|null,\n" +
+                "    \"volumeRatio\": number|null,\n" +
+                "    \"shareholderCount\": number|null,\n" +
                 "    \"sector\": \"string|null\",\n" +
                 "    \"date\": \"YYYY-MM-DD\"\n" +
                 "  },\n" +
-                "  \"recommendation\": {\n" +
-                "    \"action\": \"观察|试仓|加仓|减仓|清仓\",\n" +
-                "    \"targetPrice\": number|null,\n" +
-                "    \"takeProfitPrice\": number|null,\n" +
-                "    \"stopLossPrice\": number|null,\n" +
-                "    \"timeHorizon\": \"string|null\",\n" +
-                "    \"positionPercent\": number|null,\n" +
-                "    \"entryScore\": number,\n" +
-                "    \"valuationScore\": number,\n" +
-                "    \"confidence\": number,\n" +
-                "    \"rating\": \"string\"\n" +
-                "  },\n" +
-                "  \"reasons\": [\"string\"],\n" +
+                "  \"analysis_opinion\": \"string\",\n" +
+                "  \"confidence_score\": number,\n" +
+                "  \"trigger_conditions\": \"string\",\n" +
+                "  \"invalid_conditions\": \"string\",\n" +
+                "  \"risk_warning\": \"string\",\n" +
                 "  \"evidence\": [\n" +
                 "    {\n" +
                 "      \"point\": \"string\",\n" +
@@ -1087,9 +1119,6 @@ internal static class StockAgentPromptBuilder
                 "      \"url\": \"string|null\"\n" +
                 "    }\n" +
                 "  ],\n" +
-                "  \"triggers\": [\"string\"],\n" +
-                "  \"invalidations\": [\"string\"],\n" +
-                "  \"riskLimits\": [\"string\"],\n" +
                 "  \"revision\": {\n" +
                 "    \"required\": boolean,\n" +
                 "    \"reason\": \"string|null\",\n" +
@@ -1389,15 +1418,14 @@ internal static class StockAgentCommanderConsistencyGuardrails
     public static JsonElement Apply(JsonElement commanderData, IReadOnlyList<StockAgentResultDto> dependencyResults, string contextJson)
     {
         var root = JsonNode.Parse(commanderData.GetRawText()) as JsonObject ?? new JsonObject();
-        var recommendation = EnsureObject(root, "recommendation");
         var revision = EnsureObject(root, "revision");
         var consistency = EnsureObject(root, "consistency");
         var marketState = EnsureObject(root, "marketState");
 
         var history = ParseCommanderHistory(contextJson);
         var previousDirection = history.FirstOrDefault()?.Direction;
-        var currentDirection = TryReadString(recommendation, "action") ?? TryReadString(recommendation, "rating") ?? "未知";
-        var confidence = TryReadDecimal(recommendation, "confidence") ?? 50m;
+        var currentDirection = GetCurrentDirection(root);
+        var confidence = TryReadDecimal(root, "confidence_score") ?? 50m;
 
         var (shortTrend, midTrend, divergence) = EvaluateTimeframeConsistency(dependencyResults);
         consistency["shortTermTrend"] = shortTrend;
@@ -1422,9 +1450,9 @@ internal static class StockAgentCommanderConsistencyGuardrails
         var hysteresisApplied = false;
         if (changed && confidence < 65m && !strongCounterEvidence)
         {
-            recommendation["action"] = previousDirection;
             currentDirection = previousDirection;
             hysteresisApplied = true;
+            root["analysis_opinion"] = BuildHysteresisOpinion(previousDirection, TryReadString(root, "analysis_opinion"));
             marketState["overrideReason"] = "触发滞后机制：低置信度变更被抑制";
             AppendUniqueSignal(root, "滞后机制生效：方向暂不翻转");
         }
@@ -1580,7 +1608,7 @@ internal static class StockAgentCommanderConsistencyGuardrails
 
     private static bool HasStrongCounterEvidence(JsonObject root)
     {
-        var invalidations = ReadStringArray(root, "invalidations");
+        var invalidations = ReadCommanderConditionList(root, "invalid_conditions", "invalidations");
         if (invalidations.Count >= 2)
         {
             return true;
@@ -1589,6 +1617,46 @@ internal static class StockAgentCommanderConsistencyGuardrails
         return invalidations.Any(item => item.Contains("跌破", StringComparison.OrdinalIgnoreCase)
             || item.Contains("破位", StringComparison.OrdinalIgnoreCase)
             || item.Contains("失效", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string GetCurrentDirection(JsonObject root)
+    {
+        var explicitBias = TryReadString(root, "directional_bias");
+        if (!string.IsNullOrWhiteSpace(explicitBias))
+        {
+            return explicitBias;
+        }
+
+        var opinion = TryReadString(root, "analysis_opinion") ?? TryReadString(root, "summary") ?? string.Empty;
+        if (opinion.Contains("减仓", StringComparison.OrdinalIgnoreCase)
+            || opinion.Contains("清仓", StringComparison.OrdinalIgnoreCase)
+            || opinion.Contains("看空", StringComparison.OrdinalIgnoreCase))
+        {
+            return "减仓";
+        }
+
+        if (opinion.Contains("加仓", StringComparison.OrdinalIgnoreCase)
+            || opinion.Contains("试仓", StringComparison.OrdinalIgnoreCase)
+            || opinion.Contains("看多", StringComparison.OrdinalIgnoreCase))
+        {
+            return "加仓";
+        }
+
+        if (opinion.Contains("观察", StringComparison.OrdinalIgnoreCase)
+            || opinion.Contains("观望", StringComparison.OrdinalIgnoreCase)
+            || opinion.Contains("等待", StringComparison.OrdinalIgnoreCase))
+        {
+            return "观察";
+        }
+
+        return "未知";
+    }
+
+    private static string BuildHysteresisOpinion(string? previousDirection, string? currentOpinion)
+    {
+        var preservedDirection = string.IsNullOrWhiteSpace(previousDirection) ? "原方向" : previousDirection;
+        var rawOpinion = string.IsNullOrWhiteSpace(currentOpinion) ? "本次改判置信度不足。" : currentOpinion;
+        return $"按滞后机制暂维持{preservedDirection}。{rawOpinion}";
     }
 
     private static IReadOnlyList<StockAgentCommanderHistoryItemDto> ParseCommanderHistory(string contextJson)
@@ -1750,6 +1818,17 @@ internal static class StockAgentCommanderConsistencyGuardrails
             .Select(item => item!)
             .ToArray();
     }
+
+    private static IReadOnlyList<string> ReadCommanderConditionList(JsonObject root, string singularKey, string fallbackArrayKey)
+    {
+        var single = TryReadString(root, singularKey);
+        if (!string.IsNullOrWhiteSpace(single))
+        {
+            return new[] { single };
+        }
+
+        return ReadStringArray(root, fallbackArrayKey);
+    }
 }
 
 internal static class StockAgentResultNormalizer
@@ -1798,24 +1877,18 @@ internal static class StockAgentResultNormalizer
         EnsureProperty(metrics, "price", null);
         EnsureProperty(metrics, "changePercent", null);
         EnsureProperty(metrics, "turnoverRate", null);
-        EnsureProperty(metrics, "innerVolume", null);
-        EnsureProperty(metrics, "outerVolume", null);
+        EnsureProperty(metrics, "peRatio", null);
+        EnsureProperty(metrics, "floatMarketCap", null);
+        EnsureProperty(metrics, "volumeRatio", null);
+        EnsureProperty(metrics, "shareholderCount", null);
         EnsureProperty(metrics, "sector", null);
         EnsureProperty(metrics, "date", null);
 
-        var recommendation = EnsureObject(root, "recommendation");
-        EnsureProperty(recommendation, "action", null);
-        EnsureProperty(recommendation, "targetPrice", null);
-        EnsureProperty(recommendation, "takeProfitPrice", null);
-        EnsureProperty(recommendation, "stopLossPrice", null);
-        EnsureProperty(recommendation, "timeHorizon", null);
-        EnsureProperty(recommendation, "positionPercent", null);
-        EnsureProperty(recommendation, "entryScore", null);
-        EnsureProperty(recommendation, "valuationScore", null);
-        EnsureProperty(recommendation, "confidence", null);
-        EnsureProperty(recommendation, "rating", null);
-
-        EnsureArray(root, "reasons");
+        EnsureProperty(root, "analysis_opinion", null);
+        EnsureProperty(root, "confidence_score", null);
+        EnsureProperty(root, "trigger_conditions", null);
+        EnsureProperty(root, "invalid_conditions", null);
+        EnsureProperty(root, "risk_warning", null);
 
         var revision = EnsureObject(root, "revision");
         EnsureProperty(revision, "required", false);
@@ -1833,6 +1906,37 @@ internal static class StockAgentResultNormalizer
         EnsureProperty(marketState, "hysteresisApplied", false);
         EnsureProperty(marketState, "strongCounterEvidence", false);
         EnsureProperty(marketState, "overrideReason", null);
+
+        TryReadString(root, "analysis_opinion", out var analysisOpinion);
+        TryReadString(root, "summary", out var summaryText);
+
+        if (!string.IsNullOrWhiteSpace(analysisOpinion) && string.IsNullOrWhiteSpace(summaryText))
+        {
+            root["summary"] = analysisOpinion;
+        }
+
+        if (string.IsNullOrWhiteSpace(analysisOpinion) && !string.IsNullOrWhiteSpace(summaryText))
+        {
+            root["analysis_opinion"] = summaryText;
+        }
+
+        if ((!TryReadString(root, "trigger_conditions", out var triggerText) || string.IsNullOrWhiteSpace(triggerText))
+            && root["triggers"] is JsonArray triggers && triggers.Count > 0)
+        {
+            root["trigger_conditions"] = triggers[0]?.GetValue<string>();
+        }
+
+        if ((!TryReadString(root, "invalid_conditions", out var invalidText) || string.IsNullOrWhiteSpace(invalidText))
+            && root["invalidations"] is JsonArray invalidations && invalidations.Count > 0)
+        {
+            root["invalid_conditions"] = invalidations[0]?.GetValue<string>();
+        }
+
+        if ((!TryReadString(root, "risk_warning", out var riskText) || string.IsNullOrWhiteSpace(riskText))
+            && root["riskLimits"] is JsonArray riskLimits && riskLimits.Count > 0)
+        {
+            root["risk_warning"] = riskLimits[0]?.GetValue<string>();
+        }
     }
 
     private static void NormalizeStockNews(JsonObject root)

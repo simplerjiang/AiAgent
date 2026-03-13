@@ -167,7 +167,33 @@ public sealed class LocalFactAiEnrichmentService : ILocalFactAiEnrichmentService
 
     private static Dictionary<string, NewsEnrichmentResult> ParseBatchResult(string content)
     {
-        using var document = JsonDocument.Parse(content);
+        var jsonSpan = content.AsSpan().Trim();
+        if (jsonSpan.StartsWith("```json", StringComparison.OrdinalIgnoreCase))
+        {
+            jsonSpan = jsonSpan.Slice(7);
+        }
+        else if (jsonSpan.StartsWith("```", StringComparison.OrdinalIgnoreCase))
+        {
+            jsonSpan = jsonSpan.Slice(3);
+        }
+
+        if (jsonSpan.EndsWith("```", StringComparison.OrdinalIgnoreCase))
+        {
+            jsonSpan = jsonSpan.Slice(0, jsonSpan.Length - 3);
+        }
+
+        jsonSpan = jsonSpan.Trim();
+        var cleaned = jsonSpan.ToString();
+
+        // 进一步尝试定位第一个 '[' 和最后一个 ']'
+        var arrayStart = cleaned.IndexOf('[');
+        var arrayEnd = cleaned.LastIndexOf(']');
+        if (arrayStart >= 0 && arrayEnd >= arrayStart)
+        {
+            cleaned = cleaned.Substring(arrayStart, arrayEnd - arrayStart + 1);
+        }
+
+        using var document = JsonDocument.Parse(cleaned);
         if (document.RootElement.ValueKind != JsonValueKind.Array)
         {
             return new Dictionary<string, NewsEnrichmentResult>(StringComparer.OrdinalIgnoreCase);

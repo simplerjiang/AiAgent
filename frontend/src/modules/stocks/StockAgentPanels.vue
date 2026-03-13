@@ -54,30 +54,23 @@ const buildListSections = data => {
 
 const buildMetrics = data => {
   if (!data) return []
-  return buildMetricRows(data.metrics, data.recommendation, data.sentiment)
-}
-
-const getRecommendation = data => {
-  if (!data || typeof data !== 'object') return null
-  return data.recommendation && typeof data.recommendation === 'object' ? data.recommendation : null
-}
-
-const getRecommendationRows = data => {
-  const recommendation = getRecommendation(data)
-  if (!recommendation) return []
-  const keys = ['action', 'rating', 'targetPrice', 'takeProfitPrice', 'stopLossPrice', 'timeHorizon', 'positionPercent']
-  return keys
-    .filter(key => recommendation[key] !== undefined && recommendation[key] !== null && recommendation[key] !== '')
-    .map(key => ({ key, value: recommendation[key] }))
+  return buildMetricRows(data.metrics, data.sentiment)
 }
 
 const getConfidence = data => {
   if (!data || typeof data !== 'object') return null
-  const recommendation = getRecommendation(data)
-  if (recommendation && recommendation.confidence != null) {
-    return recommendation.confidence
+  if (data.confidence_score != null) {
+    return data.confidence_score
   }
   return data.confidence ?? null
+}
+
+const getNarrativeRows = data => {
+  if (!data || typeof data !== 'object') return []
+  const keys = ['analysis_opinion', 'trigger_conditions', 'invalid_conditions', 'risk_warning']
+  return keys
+    .filter(key => data[key] !== undefined && data[key] !== null && data[key] !== '')
+    .map(key => ({ key, value: data[key] }))
 }
 
 const buildTagList = (data, key) => {
@@ -167,10 +160,10 @@ const getCellText = (section, row, col) => {
         <div v-if="getAgentData(agent)" class="agent-content">
           <p class="summary">{{ getAgentData(agent).summary }}</p>
 
-          <div v-if="getRecommendationRows(getAgentData(agent)).length" class="recommendation-block">
-            <h5>操作计划</h5>
+          <div v-if="getNarrativeRows(getAgentData(agent)).length" class="recommendation-block">
+            <h5>核心判断</h5>
             <div class="metrics">
-              <div v-for="row in getRecommendationRows(getAgentData(agent))" :key="`rec-${row.key}`" class="metric-row">
+              <div v-for="row in getNarrativeRows(getAgentData(agent))" :key="`rec-${row.key}`" class="metric-row narrative-row">
                 <span class="metric-key">{{ formatMetricLabel(row.key) }}</span>
                 <span class="metric-value">{{ formatMetricValue(row.value, row.key) }}</span>
               </div>
@@ -334,6 +327,11 @@ const getCellText = (section, row, col) => {
   background: rgba(59, 130, 246, 0.12);
   border-radius: 999px;
   padding: 0.2rem 0.55rem;
+}
+
+.narrative-row {
+  grid-template-columns: 92px 1fr;
+  align-items: flex-start;
 }
 
 .raw-toggle {

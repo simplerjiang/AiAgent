@@ -18,12 +18,15 @@ internal static class EastmoneyStockParser
         var price = ParseScaledDecimal(dataNode, "f43");
         var prevClose = ParseScaledDecimal(dataNode, "f60");
         var percent = ParseScaledDecimal(dataNode, "f170");
+        var floatMarketCap = ParseDecimal(dataNode, "f117");
+        var peRatio = ParseScaledDecimal(dataNode, "f162");
+        var volumeRatio = ParseScaledDecimal(dataNode, "f10");
 
         var change = price - prevClose;
         var changePercent = prevClose == 0 ? percent : Math.Round(change / prevClose * 100, 2);
 
-        return new StockQuoteDto(symbol, name, price, change, changePercent, 0m, 0m, 0m, 0m, 0m, DateTime.UtcNow,
-            Array.Empty<StockNewsDto>(), Array.Empty<StockIndicatorDto>());
+        return new StockQuoteDto(symbol, name, price, change, changePercent, 0m, peRatio, 0m, 0m, 0m, DateTime.UtcNow,
+            Array.Empty<StockNewsDto>(), Array.Empty<StockIndicatorDto>(), floatMarketCap, volumeRatio, null, null);
     }
 
     public static IReadOnlyList<MinuteLinePointDto> ParseTrends(string symbol, string json)
@@ -83,6 +86,26 @@ internal static class EastmoneyStockParser
         if (node.ValueKind == JsonValueKind.String && decimal.TryParse(node.GetString(), out var textValue))
         {
             return textValue / 100m;
+        }
+
+        return 0m;
+    }
+
+    private static decimal ParseDecimal(JsonElement dataNode, string field)
+    {
+        if (!dataNode.TryGetProperty(field, out var node))
+        {
+            return 0m;
+        }
+
+        if (node.ValueKind == JsonValueKind.Number && node.TryGetDecimal(out var value))
+        {
+            return value;
+        }
+
+        if (node.ValueKind == JsonValueKind.String && decimal.TryParse(node.GetString(), out var textValue))
+        {
+            return textValue;
         }
 
         return 0m;

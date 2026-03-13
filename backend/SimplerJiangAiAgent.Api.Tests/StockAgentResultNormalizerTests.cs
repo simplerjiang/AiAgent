@@ -7,29 +7,23 @@ namespace SimplerJiangAiAgent.Api.Tests;
 public sealed class StockAgentResultNormalizerTests
 {
     [Fact]
-    public void Normalize_CommanderAddsMissingGoal007Fields()
+    public void Normalize_CommanderAddsMissingStep3Fields()
     {
         using var input = JsonDocument.Parse("""
         {
           "agent": "commander",
           "summary": "ok",
-          "recommendation": {
-            "confidence": 0.7
-          }
+          "confidence_score": 70
         }
         """);
 
         var normalized = StockAgentResultNormalizer.Normalize(StockAgentKind.Commander, input.RootElement);
 
         Assert.True(normalized.TryGetProperty("evidence", out _));
-        Assert.True(normalized.TryGetProperty("triggers", out _));
-        Assert.True(normalized.TryGetProperty("invalidations", out _));
-        Assert.True(normalized.TryGetProperty("riskLimits", out _));
-
-        var recommendation = normalized.GetProperty("recommendation");
-        Assert.True(recommendation.TryGetProperty("action", out _));
-        Assert.True(recommendation.TryGetProperty("targetPrice", out _));
-        Assert.True(recommendation.TryGetProperty("stopLossPrice", out _));
+        Assert.True(normalized.TryGetProperty("analysis_opinion", out _));
+        Assert.True(normalized.TryGetProperty("trigger_conditions", out _));
+        Assert.True(normalized.TryGetProperty("invalid_conditions", out _));
+        Assert.True(normalized.TryGetProperty("risk_warning", out _));
 
         Assert.True(normalized.TryGetProperty("revision", out var revision));
         Assert.True(revision.TryGetProperty("required", out _));

@@ -511,6 +511,10 @@ public sealed class StocksModule : IModule
                 .OrderByDescending(x => x.Timestamp)
                 .FirstOrDefaultAsync();
 
+            var companyProfile = await dbContext.StockCompanyProfiles
+                .Where(x => x.Symbol == target)
+                .FirstOrDefaultAsync();
+
             if (quote is null)
             {
                 return Results.NotFound();
@@ -540,7 +544,8 @@ public sealed class StocksModule : IModule
                 .ToListAsync();
 
             var quoteDto = new StockQuoteDto(quote.Symbol, quote.Name, quote.Price, quote.Change, quote.ChangePercent,
-                0m, 0m, 0m, 0m, 0m, quote.Timestamp, Array.Empty<StockNewsDto>(), Array.Empty<StockIndicatorDto>());
+                0m, quote.PeRatio, 0m, 0m, 0m, quote.Timestamp, Array.Empty<StockNewsDto>(), Array.Empty<StockIndicatorDto>(),
+                quote.FloatMarketCap, quote.VolumeRatio, quote.ShareholderCount ?? companyProfile?.ShareholderCount, quote.SectorName ?? companyProfile?.SectorName);
 
             return Results.Ok(new StockDetailDto(quoteDto, kline, minute, messages));
         })

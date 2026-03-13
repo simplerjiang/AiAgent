@@ -13,7 +13,11 @@ public sealed record StockQuoteDto(
     decimal Speed,
     DateTime Timestamp,
     IReadOnlyList<StockNewsDto> News,
-    IReadOnlyList<StockIndicatorDto> Indicators
+    IReadOnlyList<StockIndicatorDto> Indicators,
+    decimal FloatMarketCap = 0m,
+    decimal VolumeRatio = 0m,
+    int? ShareholderCount = null,
+    string? SectorName = null
 );
 
 public sealed record MarketIndexDto(

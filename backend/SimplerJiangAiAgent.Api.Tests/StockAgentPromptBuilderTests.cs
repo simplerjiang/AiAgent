@@ -7,19 +7,20 @@ namespace SimplerJiangAiAgent.Api.Tests;
 public sealed class StockAgentPromptBuilderTests
 {
     [Fact]
-    public void BuildPrompt_CommanderContainsGoal007StructuredFields()
+    public void BuildPrompt_CommanderContainsStep3StructuredFields()
     {
         var prompt = StockAgentPromptBuilder.BuildPrompt(
             StockAgentKind.Commander,
             "{}",
             Array.Empty<StockAgentResultDto>());
 
-        Assert.Contains("\"action\"", prompt);
-        Assert.Contains("\"targetPrice\"", prompt);
+        Assert.Contains("\"analysis_opinion\"", prompt);
+        Assert.Contains("\"confidence_score\"", prompt);
+        Assert.Contains("\"trigger_conditions\"", prompt);
+        Assert.Contains("\"invalid_conditions\"", prompt);
+        Assert.Contains("\"risk_warning\"", prompt);
+        Assert.Contains("流通市值", prompt);
         Assert.Contains("\"evidence\"", prompt);
-        Assert.Contains("\"triggers\"", prompt);
-        Assert.Contains("\"invalidations\"", prompt);
-        Assert.Contains("\"riskLimits\"", prompt);
         Assert.Contains("\"revision\"", prompt);
         Assert.Contains("\"consistency\"", prompt);
         Assert.Contains("\"marketState\"", prompt);

@@ -30,5 +30,6 @@ internal sealed record LocalSectorReportSeed(
 internal sealed record EastmoneyCompanyProfileDto(
     string Symbol,
     string Name,
-    string? SectorName
+    string? SectorName,
+    int? ShareholderCount
 );

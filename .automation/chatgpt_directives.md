@@ -379,3 +379,53 @@ ecommendation 里面带有机械化 "action": "加仓/清仓" 这类粗暴字段
 * **适配前端 AI 回复展示面板**：在 Vue 中，修改渲染逻辑以完美展现新的 JSON 结构！让 “**分析意见**”、“**触发条件**”、“**风险限制**” 作为核心视觉呈现，成为人机协作辅助决策的基础。
 
 请按照这三项完整落位后，进行功能自测（特别是确保 Prompt 打通后大模型不再报 Schema 或者是 JSON Exception）。完成后，向我提交 Step 3 综合扩维完成回执！
+
+---
+
+## 🟢 Reviewer 验收指令: Step 3 完美验证，正式启动下一阶段 (Step 4: 交易计划引擎与风控雏形 GOAL-008)
+
+> **致 ChatGPT-5.4**:
+> 出色完成！经过系统级 Review，你在 Step 3 提交的代码质量极高：C# 的底层数据扩维（Entity、Migrations、Crawler）做到位了，且考虑到了多数据源之间的按字段安全合并（Composite合并策略）；前端的 Vue 呈现和正则提取价格锚点的降级方案也非常鲁棒；多 Agent Prompt 的结构重写十分符合投顾核心诉求。
+> 
+> 现在系统已经拥有了**非常干净的本地数据**、**丰富的盘面基本面**、以及**结构化的 AI 行动建议**。
+> 我们正式进军下一个重点领域：**Step 4 (GOAL-008) 交易计划引擎设计**，我们要克制用户“随时随地开仓”的冲动，让之前的系统成果形成闭环。
+> 
+> **你的开发任务 (Step 4 - 纪律与计划闭环)**:
+> 
+> **任务 1. 盘前计划池模型建立 (后端 C#)**
+> * 新增 `TradingPlan` 实体与库表（字段应包括：标的代码、计划方向[多/空]、预期触发条件[如突破XXX价格]、预期失效条件、计划创建日期、状态[Pending/Active/Cancelled]）。通过 EF Core 生成 Migration。
+> * **联动多 Agent 产出**：在用户确认上一阶段（Step 3）多 Agent 给出的“操作建议”后，提供一个保存 API `/api/trading-plans`，允许前端直接把那段 JSON （含触发价和控制线）一键存为“今日/明日”打板候选计划。
+> 
+> **任务 2. 盘中计划触达与预警机制 (后端 HostedService)**
+> * 构建一个实时的 `TradingPlanTriggerService` 后台监听：读取数据库里挂在 `Pending` 的计划。
+> * 拿实时抓取到的 `StockQuoteSnapshot` 价格，与计划里的 `TriggerConditions` 或 `InvalidConditions` 进行规则比对。
+> * 由于条件内容目前是“文本自然语言”(比如 `放量突破 12.60`)，可以使用更强力准确的正则表达式去匹配数字，一旦发现当前股价越过该数字，推送一条警报结构写入一张新的 `TradeAlerts` 表。
+> 
+> **任务 3. 前端执行约束看板 (Vue)**
+> * 在看盘端新增独立页签/面板或弹窗：《交易计划执行板》。
+> * **功能要求**：界面左右分栏，左侧罗列“昨天的功课（盘前计划池）”；右侧是“盘中触发实况”。重点在 UI 上打出强烈的纪律感，比如：一旦计划失效条件被跌破，整条计划自动标成红色【拒绝交易/观望】，制止用户主观上脑。
+> 
+> 开发完成后请进行自测。收到此指令后，请立即开始编写 Step 4 直到完成任务，并最后向我回复 `Step 4 开发完成回执`！
+
+---
+
+## 🚨 紧急插队任务: LLM 多通道与官方 Gemini 切换设计 (请优先执行此任务后再做 Step4)
+
+> **致 ChatGPT-5.4**:
+> 用户下发了最高优先级的紧急任务：需要在现有的系统中支持多 LLM 接口通道的随时切换（特别是新增真实的 Google Gemini 官方渠道）。由于 Google 目前原生支持 OpenAI 兼容 API，所以方案如下：
+
+**任务 1: 更新后端多通道配置结构与秘钥录入 (C#)**
+* 修改或审查涉及 LLM 配置存储的地方 (如 `llm-settings.json` / `llm-settings.local.json` 或底层的 Options 映射)。引入主开关 `ActiveProviderKey` （可以是 `"default"` 或 `"gemini_official"`）。
+* 确保在 `Providers` 的键值对支持：
+  1. `default`: 之前的配置。
+  2. `gemini_official`: ProviderType 依旧算作 `openai`，但 `BaseUrl` 固定为 `https://generativelanguage.googleapis.com/v1beta/openai/`。
+* **非常重要**：运用配置写入或 `user-secrets` 将用户新的 API Key `"AIzaSyArYjphpBKjt2-965WeMnfJ4XPESJW4jh4"` 绑定到本地 `gemini_official` 的 api key 配置中，**绝不能**明文 commit 到 tracked 的文件！
+
+**任务 2: 后端路由动态切换寻址 (C#)**
+* 修改 `backend/SimplerJiangAiAgent.Api/Infrastructure/Llm/OpenAiProvider.cs` 等涉及的服务的注册和获取逻辑。改变原先写死读取 default 或 openai provider 的模式，现在必须首先读取全局激活的配置名 `ActiveProviderKey`，然后再取出对应字典下的配置去发起请求。
+
+**任务 3: 前端设置页面升级 (Vue)**
+* 在 `frontend/src/modules/admin/LlmSettingsTab.vue`（或者相应的 LLM 管理页面）顶部增加一个“激活通道切换 (Active Endpoint)”组件或下拉框。
+* 允许用户无缝在 Default 接口和 Gemini 官方接口之间切换控制 `ActiveProviderKey`，确保切换后，后续的本地数据清洗、股票大模型推演都在新切换的通道上执行。
+
+请优先完成本《紧急插队任务》，提交 `LLM 通道切换完成回执` 后再继续进行 Step 4 的开发。
