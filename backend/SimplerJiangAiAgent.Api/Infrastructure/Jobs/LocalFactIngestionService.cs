@@ -18,6 +18,7 @@ public interface ILocalFactIngestionService
 public sealed class LocalFactIngestionService : ILocalFactIngestionService
 {
     private const string SinaRollUrl = "https://feed.mix.sina.com.cn/api/roll/get?pageid=155&lid=1686&num=60&versionNumber=1.2.8.1";
+    private const int MarketNewsMaxAcceptedAgeDays = 30;
     private static readonly SemaphoreSlim MarketRefreshGate = new(1, 1);
     private static readonly ConcurrentDictionary<string, SemaphoreSlim> SymbolRefreshGates = new(StringComparer.OrdinalIgnoreCase);
     private static readonly (string Url, string Source, string SourceTag)[] MarketRssFeeds =
@@ -113,6 +114,11 @@ public sealed class LocalFactIngestionService : ILocalFactIngestionService
 
             if (hasFreshStockNews && hasFreshSector)
             {
+                if (await HasPendingSymbolAiAsync(normalized, cancellationToken))
+                {
+                    await _aiEnrichmentService.ProcessSymbolPendingAsync(normalized, cancellationToken);
+                }
+
                 return;
             }
 
@@ -139,6 +145,11 @@ public sealed class LocalFactIngestionService : ILocalFactIngestionService
 
             if (hasFreshMarket)
             {
+                if (await HasPendingMarketAiAsync(cancellationToken))
+                {
+                    await _aiEnrichmentService.ProcessMarketPendingAsync(cancellationToken);
+                }
+
                 return;
             }
 
@@ -311,7 +322,7 @@ public sealed class LocalFactIngestionService : ILocalFactIngestionService
     {
         try
         {
-            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            using var request = new HttpRequestMessage(HttpMethod.Get, BuildCacheBustedUrl(url, crawledAt));
             request.Headers.TryAddWithoutValidation("Accept", "application/rss+xml,application/xml,text/xml,*/*");
             request.Headers.TryAddWithoutValidation("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0 Safari/537.36");
 
@@ -336,6 +347,12 @@ public sealed class LocalFactIngestionService : ILocalFactIngestionService
     private static string BuildSectorSearchUrl(string sectorName)
     {
         return $"https://search.sina.com.cn/?q={Uri.EscapeDataString(sectorName)}&c=news";
+    }
+
+    private static string BuildCacheBustedUrl(string url, DateTime crawledAt)
+    {
+        var separator = url.Contains('?', StringComparison.Ordinal) ? "&" : "?";
+        return $"{url}{separator}t={EnsureUtc(crawledAt):yyyyMMddHHmmss}";
     }
 
     private async Task UpsertStockNewsAsync(string symbol, IReadOnlyList<LocalStockNewsSeed> items, CancellationToken cancellationToken)
@@ -486,7 +503,9 @@ public sealed class LocalFactIngestionService : ILocalFactIngestionService
         IReadOnlyList<IntradayMessageDto> rollMessages,
         DateTime crawledAt)
     {
+        var minPublishTime = EnsureUtc(crawledAt).AddDays(-MarketNewsMaxAcceptedAgeDays);
         var matched = rollMessages
+            .Where(item => EnsureUtc(item.PublishedAt) >= minPublishTime)
             .Where(item => MarketKeywords.Any(keyword => item.Title.Contains(keyword, StringComparison.OrdinalIgnoreCase)))
             .OrderByDescending(item => item.PublishedAt)
             .Take(12)
@@ -494,7 +513,11 @@ public sealed class LocalFactIngestionService : ILocalFactIngestionService
 
         var source = matched.Length > 0
             ? matched
-            : rollMessages.OrderByDescending(item => item.PublishedAt).Take(12).ToArray();
+            : rollMessages
+                .Where(item => EnsureUtc(item.PublishedAt) >= minPublishTime)
+                .OrderByDescending(item => item.PublishedAt)
+                .Take(12)
+                .ToArray();
 
         return source
             .Select(item => new LocalSectorReportSeed(
@@ -509,5 +532,36 @@ public sealed class LocalFactIngestionService : ILocalFactIngestionService
                 crawledAt,
                 item.Url))
             .ToArray();
+    }
+
+    private Task<bool> HasPendingMarketAiAsync(CancellationToken cancellationToken)
+    {
+        return _dbContext.LocalSectorReports.AnyAsync(item => item.Level == "market" && !item.IsAiProcessed, cancellationToken);
+    }
+
+    private Task<bool> HasPendingSymbolAiAsync(string symbol, CancellationToken cancellationToken)
+    {
+        return _dbContext.LocalStockNews.AnyAsync(item => item.Symbol == symbol && !item.IsAiProcessed, cancellationToken)
+            .ContinueWith(async stockPendingTask =>
+            {
+                if (stockPendingTask.Result)
+                {
+                    return true;
+                }
+
+                return await _dbContext.LocalSectorReports.AnyAsync(
+                    item => item.Symbol == symbol && item.Level == "sector" && !item.IsAiProcessed,
+                    cancellationToken);
+            }, cancellationToken).Unwrap();
+    }
+
+    private static DateTime EnsureUtc(DateTime value)
+    {
+        return value.Kind switch
+        {
+            DateTimeKind.Utc => value,
+            DateTimeKind.Local => value.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(value, DateTimeKind.Utc)
+        };
     }
 }

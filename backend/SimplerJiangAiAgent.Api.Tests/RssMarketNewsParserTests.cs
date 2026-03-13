@@ -52,6 +52,35 @@ public sealed class RssMarketNewsParserTests
     }
 
     [Fact]
+    public void Parse_ShouldDropItemsOlderThanThirtyDays()
+    {
+        const string xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <rss version="2.0">
+          <channel>
+            <item>
+              <title>Year-old market recap</title>
+              <link>https://example.com/market-old</link>
+              <guid>guid-old</guid>
+              <pubDate>Fri, 24 Jan 2025 20:37:00 GMT</pubDate>
+            </item>
+            <item>
+              <title>Fresh market update</title>
+              <link>https://example.com/market-new</link>
+              <guid>guid-new</guid>
+              <pubDate>Thu, 12 Mar 2026 22:41:00 GMT</pubDate>
+            </item>
+          </channel>
+        </rss>
+        """;
+
+        var result = RssMarketNewsParser.Parse(xml, "WSJ US Business", "wsj-us-business-rss", new DateTime(2026, 3, 13, 0, 0, 0, DateTimeKind.Utc));
+
+        var item = Assert.Single(result);
+        Assert.Equal("guid-new", item.ExternalId);
+    }
+
+    [Fact]
     public void Parse_ShouldReturnEmptyForInvalidXml()
     {
         var result = RssMarketNewsParser.Parse("not xml", "WSJ US Business", "wsj-us-business-rss", DateTime.UtcNow);

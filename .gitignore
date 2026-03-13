@@ -12,6 +12,8 @@
 **/dist/
 **/.env
 **/.env.*
+backend/SimplerJiangAiAgent.Api/App_Data/llm-settings.local.json
+backend/SimplerJiangAiAgent.Api/App_Data/*.local.json
 
 # OS
 .DS_Store

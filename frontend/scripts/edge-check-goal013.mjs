@@ -76,7 +76,7 @@ const run = async () => {
   await page.waitForSelector('text=股票信息终端', { timeout: 20000 });
   await page.waitForFunction(() => document.querySelectorAll('.news-bucket-card').length >= 2, null, { timeout: 30000 });
   await page.waitForFunction(() => document.querySelectorAll('.news-bucket-card li').length >= 1, null, { timeout: 30000 });
-  await page.waitForFunction(() => document.querySelectorAll('.terminal-market-banner .market-banner-item').length >= 1, null, { timeout: 30000 });
+  await page.waitForFunction(() => document.querySelectorAll('.market-news-panel .market-news-item').length >= 1, null, { timeout: 30000 });
   await page.waitForSelector('.run-standard-button', { timeout: 20000 });
   await page.waitForSelector('.run-pro-button', { timeout: 20000 });
   await page.waitForTimeout(2000);
@@ -95,7 +95,7 @@ const run = async () => {
   const quoteText = await page.locator('.quote-card').first().textContent();
   const stockFactCount = await page.locator('.news-bucket-card').first().locator('li').count();
   const sentimentBadgeCount = await page.locator('.news-bucket-card .impact-tag').count();
-  const marketFactCount = await page.locator('.terminal-market-banner .market-banner-item').count();
+  const marketFactCount = await page.locator('.market-news-panel .market-news-item').count();
   const proButtonText = await page.locator('.run-pro-button').textContent();
   const clickableTicker = page.locator('.messages li.clickable').first();
   if (await clickableTicker.count()) {
@@ -123,7 +123,7 @@ const run = async () => {
   }
 
   if (marketFactCount < 1) {
-    throw new Error('Expected at least one market fact item in the floating terminal market banner');
+    throw new Error('Expected at least one market fact item in the embedded market news panel');
   }
 
   if (!proButtonText || !proButtonText.includes('Pro')) {

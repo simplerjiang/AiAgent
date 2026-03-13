@@ -53,6 +53,7 @@ const localNewsBuckets = ref({ stock: null, sector: null, market: null })
 const localNewsLoading = ref(false)
 const localNewsError = ref('')
 const copilotPanelOpen = ref(localStorage.getItem('stock_copilot_panel_open') !== 'false')
+const marketNewsModalOpen = ref(false)
 
 const sidebarNewsSections = [
   { key: 'stock', title: '个股事实' },
@@ -128,6 +129,14 @@ const normalizeLocalNewsItem = item => ({
 })
 
 const getLocalNewsHeadline = item => item?.translatedTitle || item?.title || ''
+
+const openMarketNewsModal = () => {
+  marketNewsModalOpen.value = true
+}
+
+const closeMarketNewsModal = () => {
+  marketNewsModalOpen.value = false
+}
 
 const normalizeNewsBucket = (level, payload) => ({
   level,
@@ -405,6 +414,7 @@ const aiLevels = computed(() => {
 })
 
 const marketNewsItems = computed(() => localNewsBuckets.value.market?.items ?? [])
+const marketNewsPreviewItems = computed(() => marketNewsItems.value.slice(0, 3))
 
 const getChangeClass = value => {
   const number = Number(value)
@@ -1049,19 +1059,22 @@ watch(
       </section>
     </div>
 
-    <section class="terminal-market-banner" :class="{ empty: !detail && !localNewsLoading && !localNewsError && !marketNewsItems.length }">
-      <div class="market-banner-header">
+    <section class="market-news-panel" :class="{ empty: !detail && !localNewsLoading && !localNewsError && !marketNewsItems.length }">
+      <div class="market-news-header">
         <div>
-          <p class="market-banner-kicker">Market Wire</p>
+          <p class="market-news-kicker">Market Wire</p>
           <h3>大盘资讯</h3>
         </div>
-        <button class="market-banner-refresh" @click="fetchLocalNews" :disabled="localNewsLoading">刷新</button>
+        <div class="market-news-actions">
+          <button class="market-news-button" @click="fetchLocalNews" :disabled="localNewsLoading">刷新</button>
+          <button class="market-news-button" @click="openMarketNewsModal" :disabled="!marketNewsItems.length">展开阅读</button>
+        </div>
       </div>
 
       <p v-if="localNewsError" class="muted error-text">{{ localNewsError }}</p>
       <p v-else-if="localNewsLoading" class="muted">大盘资讯加载中...</p>
-      <div v-else-if="marketNewsItems.length" class="market-banner-strip">
-        <article v-for="item in marketNewsItems" :key="`market-${item.title}-${item.publishTime}`" class="market-banner-item">
+      <div v-else-if="marketNewsItems.length" class="market-news-preview-list">
+        <article v-for="item in marketNewsPreviewItems" :key="`market-${item.title}-${item.publishTime}`" class="market-news-item">
           <span class="impact-tag" :class="getImpactClass(item.sentiment)">{{ item.sentiment }}</span>
           <a v-if="item.url" :href="item.url" target="_blank" rel="noreferrer">
             {{ getLocalNewsHeadline(item) }}
@@ -1077,6 +1090,33 @@ watch(
       </div>
       <p v-else class="muted">暂无可展示的大盘资讯。</p>
     </section>
+
+    <div v-if="marketNewsModalOpen" class="market-news-modal-backdrop" @click.self="closeMarketNewsModal">
+      <section class="market-news-modal" role="dialog" aria-modal="true" aria-label="大盘资讯详情">
+        <div class="market-news-header">
+          <div>
+            <p class="market-news-kicker">Expanded Reader</p>
+            <h3>大盘资讯详情</h3>
+          </div>
+          <button class="market-news-button" @click="closeMarketNewsModal">关闭</button>
+        </div>
+        <div class="market-news-modal-list">
+          <article v-for="item in marketNewsItems" :key="`market-modal-${item.title}-${item.publishTime}`" class="market-news-item">
+            <span class="impact-tag" :class="getImpactClass(item.sentiment)">{{ item.sentiment }}</span>
+            <a v-if="item.url" :href="item.url" target="_blank" rel="noreferrer">
+              {{ getLocalNewsHeadline(item) }}
+            </a>
+            <span v-else>{{ getLocalNewsHeadline(item) }}</span>
+            <small v-if="item.translatedTitle && item.translatedTitle !== item.title">原题：{{ item.title }}</small>
+            <div v-if="item.aiTags?.length || item.aiTarget" class="local-news-meta-row">
+              <span v-if="item.aiTarget" class="local-news-target">{{ item.aiTarget }}</span>
+              <span v-for="tag in item.aiTags" :key="`market-modal-tag-${item.title}-${tag}`" class="local-news-tag">{{ tag }}</span>
+            </div>
+            <small>{{ item.source }} · {{ formatDate(item.publishTime) }}</small>
+          </article>
+        </div>
+      </section>
+    </div>
 
     <div class="workspace-grid" :class="{ focused: !copilotPanelOpen }">
       <TerminalView :quote="detail?.quote ?? null" :monochrome="monochromeMode">
@@ -1474,10 +1514,7 @@ watch(
   grid-template-columns: minmax(220px, 0.75fr) minmax(0, 1.25fr);
 }
 
-.terminal-market-banner {
-  position: sticky;
-  top: 5.75rem;
-  z-index: 24;
+.market-news-panel {
   display: grid;
   gap: 0.85rem;
   padding: 0.95rem 1.1rem;
@@ -1489,19 +1526,14 @@ watch(
   box-shadow: 0 18px 42px rgba(15, 23, 42, 0.14);
 }
 
-.terminal-market-banner.empty {
-  position: relative;
-  top: 0;
-}
-
-.market-banner-header {
+.market-news-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
 }
 
-.market-banner-kicker {
+.market-news-kicker {
   margin: 0 0 0.2rem;
   font-size: 0.7rem;
   letter-spacing: 0.16em;
@@ -1509,13 +1541,18 @@ watch(
   color: #7dd3fc;
 }
 
-.market-banner-header h3 {
+.market-news-header h3 {
   margin: 0;
   color: #f8fafc;
   font-size: 1.1rem;
 }
 
-.market-banner-refresh {
+.market-news-actions {
+  display: flex;
+  gap: 0.55rem;
+}
+
+.market-news-button {
   border: 1px solid rgba(148, 163, 184, 0.3);
   border-radius: 999px;
   padding: 0.35rem 0.75rem;
@@ -1524,21 +1561,18 @@ watch(
   cursor: pointer;
 }
 
-.market-banner-refresh:disabled {
+.market-news-button:disabled {
   opacity: 0.55;
   cursor: not-allowed;
 }
 
-.market-banner-strip {
+.market-news-preview-list,
+.market-news-modal-list {
   display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(260px, 1fr);
   gap: 0.85rem;
-  overflow-x: auto;
-  padding-bottom: 0.15rem;
 }
 
-.market-banner-item {
+.market-news-item {
   display: grid;
   gap: 0.18rem;
   min-width: 0;
@@ -1548,15 +1582,60 @@ watch(
   border: 1px solid rgba(148, 163, 184, 0.12);
 }
 
-.market-banner-item a,
-.market-banner-item span {
+.market-news-item a,
+.market-news-item span {
   color: #f8fafc;
   font-weight: 600;
   text-decoration: none;
 }
 
-.market-banner-item small {
+.market-news-item small {
   color: #94a3b8;
+}
+
+.market-news-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(15, 23, 42, 0.62);
+  backdrop-filter: blur(10px);
+  overflow: hidden;
+}
+
+.market-news-modal {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 1rem;
+  width: min(960px, 100%);
+  height: min(78vh, 820px);
+  max-height: min(78vh, 820px);
+  padding: 1.2rem;
+  border-radius: 24px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: linear-gradient(160deg, rgba(15, 23, 42, 0.98), rgba(15, 23, 42, 0.94));
+  overflow: hidden;
+}
+
+.market-news-modal-list {
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 0.35rem;
+}
+
+.market-news-modal-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.market-news-modal-list::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.45);
+}
+
+.market-news-modal-list::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.12);
 }
 
 .local-news-meta-row {
@@ -1789,28 +1868,29 @@ watch(
   color: #000000;
 }
 
-.panel.monochrome .market-banner-refresh {
+.panel.monochrome .market-news-button {
   background: rgba(255, 255, 255, 0.88);
   color: #111827;
 }
 
-.panel.monochrome .terminal-market-banner {
+.panel.monochrome .market-news-panel,
+.panel.monochrome .market-news-modal {
   background:
     radial-gradient(circle at top left, rgba(148, 163, 184, 0.12), transparent 28%),
     linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(241, 245, 249, 0.94));
 }
 
-.panel.monochrome .market-banner-item a,
-.panel.monochrome .market-banner-item span,
-.panel.monochrome .market-banner-header h3 {
+.panel.monochrome .market-news-item a,
+.panel.monochrome .market-news-item span,
+.panel.monochrome .market-news-header h3 {
   color: #111827;
 }
 
-.panel.monochrome .market-banner-kicker {
+.panel.monochrome .market-news-kicker {
   color: #0369a1;
 }
 
-.panel.monochrome .market-banner-item small {
+.panel.monochrome .market-news-item small {
   color: #4b5563;
 }
 

@@ -647,7 +647,7 @@ describe('StockInfoTab', () => {
     expect(wrapper.text()).toContain('标的12')
   })
 
-  it('keeps market news visible in the floating banner when the AI sidebar is collapsed', async () => {
+  it('keeps market news visible in the embedded panel when the AI sidebar is collapsed', async () => {
     const { fetchMock } = createChatFetchMock({
       handle: async (url) => {
         if (url.startsWith('/api/news?')) {
@@ -688,9 +688,52 @@ describe('StockInfoTab', () => {
     await wrapper.find('.focus-toggle').trigger('click')
     await wrapper.vm.$nextTick()
 
-    expect(wrapper.find('.terminal-market-banner').text()).toContain('全球宏观信号仍在左侧显示')
-    expect(wrapper.find('.workspace-grid').element.previousElementSibling?.classList.contains('terminal-market-banner')).toBe(true)
+    expect(wrapper.find('.market-news-panel').text()).toContain('全球宏观信号仍在左侧显示')
     expect(wrapper.findComponent({ name: 'ChatWindow' }).exists()).toBe(false)
+  })
+
+  it('opens market news in a modal for dense reading', async () => {
+    const { fetchMock } = createChatFetchMock({
+      handle: async (url) => {
+        if (url.startsWith('/api/news?')) {
+          const params = new URLSearchParams(url.split('?')[1])
+          const level = params.get('level') || 'stock'
+          return makeResponse({
+            ok: true,
+            status: 200,
+            json: async () => ({
+              symbol: 'sh600000',
+              level,
+              sectorName: level === 'sector' ? '银行' : null,
+              items: level === 'market'
+                ? [
+                    { title: '第一条市场资讯', source: 'WSJ US Business', sentiment: '中性', publishTime: '2026-03-12T09:00:00Z' },
+                    { title: '第二条市场资讯', source: 'NYT Business', sentiment: '利好', publishTime: '2026-03-12T09:10:00Z' },
+                    { title: '第三条市场资讯', source: '新浪', sentiment: '中性', publishTime: '2026-03-12T09:20:00Z' },
+                    { title: '第四条市场资讯', source: '新浪', sentiment: '利空', publishTime: '2026-03-12T09:30:00Z' }
+                  ]
+                : []
+            })
+          })
+        }
+
+        return null
+      }
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    const wrapper = mount(StockInfoTab)
+    await flushPromises()
+    await flushPromises()
+
+    expect(wrapper.find('.market-news-modal').exists()).toBe(false)
+
+    await wrapper.findAll('.market-news-button')[1].trigger('click')
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.find('.market-news-modal').exists()).toBe(true)
+    expect(wrapper.find('.market-news-modal').text()).toContain('第四条市场资讯')
   })
 
   it('renders all local news items with sentiment tags instead of truncating the list', async () => {

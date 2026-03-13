@@ -72,6 +72,36 @@ $env:GLM_API_KEY="你的GLM-5_API_KEY"
 
 如果需要长期生效，请在你的用户环境变量里配置 `GLM_API_KEY`。
 
+### 后端 LLM Key 本地存放
+后端运行时的 LLM key 也不要写入仓库。当前仓库采用两层配置：
+- 受控默认配置：`backend/SimplerJiangAiAgent.Api/App_Data/llm-settings.json`，只保存非敏感参数
+- 本地忽略覆盖：`backend/SimplerJiangAiAgent.Api/App_Data/llm-settings.local.json`，只保存 `apiKey`
+
+也支持环境变量覆盖：
+
+```powershell
+$env:OPENAI_API_KEY="你的运行时_API_KEY"
+```
+
+或按 provider 名称使用更明确的变量：
+
+```powershell
+$env:LLM__OPENAI__APIKEY="你的运行时_API_KEY"
+```
+
+本地忽略文件示例：
+
+```json
+{
+	"providers": {
+		"openai": {
+			"provider": "openai",
+			"apiKey": "你的运行时_API_KEY"
+		}
+	}
+}
+```
+
 ### 启动方式
 在项目根目录运行：
 
@@ -99,7 +129,7 @@ opencode
 - [x] GOAL-005 专业行情图升级（K线+成交量副图、分时专业渲染、数据精确映射）
 - [x] GOAL-006 图表增强（二期：分时成交量副图 + K线 MA5/MA10 叠加线）
 - [x] GOAL-012 界面重构与“专业看盘/AI辅屏”解耦（股票信息页已拆为 TerminalView 主终端 + CopilotPanel 侧栏，并支持专注模式）
-- [x] GOAL-013 双轨数据中枢（Local+Global Dual-Track）与 LLM 职能调度中心（已完成 Step 2：本地事实库、受控外网路由、新闻精准过滤、Step 2.2 Task 4 的标准/Pro 模型分流、Step 2.3 的新浪板块资讯抓取/大盘多源聚合/无选股即可查看的大盘资讯与完整查询历史展示，以及 Step 2.4 的本地事实批量 AI 清洗、翻译与标签隔离投喂）
+- [x] GOAL-013 双轨数据中枢（Local+Global Dual-Track）与 LLM 职能调度中心（已完成 Step 2：本地事实库、受控外网路由、新闻精准过滤、Step 2.2 Task 4 的标准/Pro 模型分流、Step 2.3 的新浪板块资讯抓取/大盘多源聚合/无选股即可查看的大盘资讯与完整查询历史展示、Step 2.4 的本地事实批量 AI 清洗/翻译/标签隔离投喂，以及 Step 2.5 的大盘资讯内嵌交互、外媒 RSS 时效清洗与本地事实 AI 重试补漏）
 - [x] ISSUE-20260310 提示词增强（新闻抗污染策略 + 新闻库定时采集约束 + 白盒 MCP/Skill 任务执行规范）
 - [x] ISSUE-20260310-P0 动态来源治理基座（LLM每日候选源发现 + 自动新增爬取地址/流程 + 爬虫失效自动修复发布 + 程序化验证与自动隔离）
 - [x] ISSUE-20260310-P0-R1 P0剩余计划：开发者模式可视化收口（治理仪表盘 + 最小查询接口 + 过滤/详情展开/trace跳转 + 可观测审计）

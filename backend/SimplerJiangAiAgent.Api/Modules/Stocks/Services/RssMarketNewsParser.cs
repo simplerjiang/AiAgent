@@ -5,6 +5,8 @@ namespace SimplerJiangAiAgent.Api.Modules.Stocks.Services;
 
 internal static class RssMarketNewsParser
 {
+    private const int MaxAcceptedAgeDays = 30;
+
     public static IReadOnlyList<LocalSectorReportSeed> Parse(
         string xml,
         string source,
@@ -18,6 +20,8 @@ internal static class RssMarketNewsParser
 
         try
         {
+            var utcCrawledAt = EnsureUtc(crawledAt);
+            var minPublishTime = utcCrawledAt.AddDays(-MaxAcceptedAgeDays);
             var document = XDocument.Parse(xml, LoadOptions.PreserveWhitespace);
             var items = document
                 .Descendants()
@@ -25,6 +29,7 @@ internal static class RssMarketNewsParser
                 .Select(item => BuildSeed(item, source, sourceTag, crawledAt))
                 .Where(item => item is not null)
                 .Select(item => item!)
+                .Where(item => item.PublishTime >= minPublishTime && item.PublishTime <= utcCrawledAt.AddMinutes(5))
                 .OrderByDescending(item => item.PublishTime)
                 .DistinctBy(item => item.Url ?? item.ExternalId ?? item.Title)
                 .Take(12)
@@ -94,7 +99,7 @@ internal static class RssMarketNewsParser
     {
         if (string.IsNullOrWhiteSpace(value))
         {
-            return DateTime.UtcNow;
+            return DateTime.MinValue;
         }
 
         if (DateTime.TryParse(value.Trim(), CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var parsed))
@@ -102,6 +107,16 @@ internal static class RssMarketNewsParser
             return parsed;
         }
 
-        return DateTime.UtcNow;
+        return DateTime.MinValue;
+    }
+
+    private static DateTime EnsureUtc(DateTime value)
+    {
+        return value.Kind switch
+        {
+            DateTimeKind.Utc => value,
+            DateTimeKind.Local => value.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(value, DateTimeKind.Utc)
+        };
     }
 }
