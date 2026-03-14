@@ -503,6 +503,56 @@ describe('StockCharts', () => {
     expect(chartMocks.klineIndicatorCalls.some(item => item.value?.name === 'BOLL')).toBe(true)
   })
 
+  it('shows floating strategy badges with hover help and supports hiding them', async () => {
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
+      configurable: true,
+      get() {
+        return 600
+      }
+    })
+    Object.defineProperty(HTMLElement.prototype, 'clientHeight', {
+      configurable: true,
+      get() {
+        return 320
+      }
+    })
+
+    const wrapper = mount(StockCharts, {
+      props: {
+        kLines: [
+          { date: '2026-01-01', open: 8, close: 9, low: 7, high: 10, volume: 800 },
+          { date: '2026-01-02', open: 10, close: 11, low: 9, high: 12, volume: 1200 },
+          { date: '2026-01-03', open: 11, close: 10, low: 9.8, high: 11.5, volume: 900 },
+          { date: '2026-01-04', open: 10, close: 10.8, low: 9.7, high: 11.1, volume: 880 },
+          { date: '2026-01-05', open: 10.8, close: 11.6, low: 10.4, high: 11.8, volume: 1360 }
+        ],
+        minuteLines: [],
+        aiLevels: { resistance: 13.5, support: 11.4 },
+        interval: 'day'
+      }
+    })
+
+    await nextTick()
+
+    expect(wrapper.findAll('.chart-floating-badge').some(button => button.text() === 'MA5')).toBe(true)
+    expect(wrapper.find('.chart-badge-toggle').text()).toBe('隐藏小标')
+
+    const ma5Badge = wrapper.findAll('.chart-floating-badge').find(button => button.text() === 'MA5')
+    await ma5Badge.trigger('mouseenter')
+    await nextTick()
+
+    expect(wrapper.find('.chart-floating-tooltip').text()).toContain('介绍：')
+    expect(wrapper.find('.chart-floating-tooltip').text()).toContain('5 日均线')
+    expect(wrapper.find('.chart-floating-tooltip').text()).toContain('最近 5 个交易日的平均成本')
+
+    await wrapper.find('.chart-badge-toggle').trigger('click')
+    await nextTick()
+
+    expect(wrapper.findAll('.chart-floating-badge')).toHaveLength(0)
+    expect(wrapper.find('.chart-floating-tooltip').exists()).toBe(false)
+    expect(wrapper.find('.chart-badge-toggle').text()).toBe('显示小标')
+  })
+
   it('enables minute vwap and orb strategies from grouped controls', async () => {
     Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
       configurable: true,

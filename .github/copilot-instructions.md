@@ -161,6 +161,7 @@
 - For GOAL-012 chart legend controls, drive chip active state from a single per-view visibility model and update both runtime chart styles and registry-managed indicators/overlays together; lock the behavior with unit tests that assert active/inactive classes after clicks.
 - For StockInfoTab polling or alert-surface changes, update the shared frontend fetch mock defaults for any newly added `/api/stocks/**` reads before asserting existing plan UI, otherwise older tests can fail by entering the generic error state instead of rendering the target card content.
 - For GOAL-008 Step 4.3 acceptance, the trigger engine must gate execution by `ActiveWatchlist`, dedupe warning events by ongoing condition rather than raw metadata string equality, and short-poll both the current-stock card and the global plan board before calling the task done.
+- For `StockInfoTab` polling tests that use fake timers, flush the mount-triggered async fetch chain with `await Promise.resolve()` plus `await vi.advanceTimersByTimeAsync(0)` before asserting initial request counts; otherwise the first board poll can appear to be missing.
 - 对于本地旧表里以字符串持久化的枚举值，禁止继续直接依赖 EF 默认字符串枚举转换；必须改为宽容解析，兼容已知历史值，并把未知值降级到安全状态，避免列表接口因旧数据直接崩溃。
 - 对于 beta 图表引擎替换，必须同时在 `package.json` 与 lockfile 精确锁版本，并把替换限制在既有 `charting/**` 适配层边界内，保证回滚成本可控。
 - 对于已确认落地的图表引擎替换，必须在同一变更里从前端依赖与 lockfile 中移除被替代的旧包，并优先在后端托管的新页面会话中做浏览器验收，不能把旧 tab 残留的控制台错误直接当作当前回归。
@@ -168,6 +169,7 @@
 - 对 GOAL-012 图表图例开关，必须用“按视图维度的单一 visibility 状态”驱动按钮 active 状态，并同步更新运行时图表样式与 registry 管理的指标/overlay；同时补单测断言点击后的 active/inactive class，避免再次退化成纯展示文案。
 - 对 StockInfoTab 这类带短轮询/告警面的页面，只要新增 `/api/stocks/**` 读取接口，就必须先同步更新前端共享 fetch mock 默认返回，再去断言既有计划卡片内容；否则老用例会先落入通用错误态，产生与真实功能无关的伪失败。
 - 对 GOAL-008 Step 4.3 的验收，触发引擎必须以 `ActiveWatchlist` 作为执行边界，warning 事件去重必须基于“持续条件”而不是原始 `MetadataJson` 字符串相等，且短轮询必须同时覆盖当前股票卡与交易计划总览，满足后才可判定完成。
+- 对使用 fake timers 的 `StockInfoTab` 轮询单测，断言首次请求计数前必须先用 `await Promise.resolve()` 加 `await vi.advanceTimersByTimeAsync(0)` 把挂载触发的异步链路 flush 完，否则容易把首次 board 轮询误判为未发出。
 
 
 # Agent Collaboration & Product Manager Workflow
@@ -180,5 +182,7 @@
 - ����AI���޸��ļ����½��ļ���ɾ���ļ�ʱ��������ѡʹ��VS Code Github Copilot�Դ��Ĺ��ߣ���replace_string_in_file, create_file�ȣ���������������ʹ���ն������У���Python�ű���Powershell������д�����ļ�������û��Ȩ�޻��������ع��ϡ�
 - For local startup scripts on fixed ports, make reruns idempotent: if the target health endpoint is already healthy, skip restart; if the port is occupied by the same app, stop it first; if occupied by another process, fail fast with a clear message instead of letting Kestrel crash noisily.
 - For repo startup scripts launched from shared terminals, prefer absolute script paths or explicitly verify cwd immediately before invocation; otherwise prior `Set-Location` drift can create false “script not found” failures.
+- For frontend npm commands in shared terminals, prefer `npm --prefix .\\frontend ...` or explicitly confirm cwd first; otherwise commands can silently target the repo root and fail on missing `package.json`.
 - 对于固定端口的本地启动脚本，重复执行必须幂等：若健康检查已通过则跳过重启；若端口被同一应用占用则先停止旧进程；若被其他进程占用则直接明确失败，避免放任 Kestrel 以噪声异常崩溃。
 - 对于在共享终端里执行的仓库启动脚本，优先使用绝对路径，或在调用前立刻确认 cwd；否则之前步骤造成的 `Set-Location` 漂移会制造“脚本不存在”的伪失败。
+- 对于共享终端里的前端 npm 命令，优先使用 `npm --prefix .\\frontend ...`，或在运行前显式确认 cwd；否则命令可能误打到仓库根目录并因缺少 `package.json` 失败。

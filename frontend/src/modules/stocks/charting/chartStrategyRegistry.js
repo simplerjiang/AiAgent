@@ -48,6 +48,12 @@ const createPriceLineOverlay = ({ groupId, value, color, textColor = color }) =>
 
 const createStrategyDefinition = definition => Object.freeze(definition)
 
+const createHelp = (description, interpretation, usage) => ({
+  description,
+  interpretation,
+  usage
+})
+
 const resolveLabel = (definition, viewId) => {
   if (typeof definition.label === 'function') {
     return definition.label(viewId)
@@ -88,6 +94,12 @@ const CHART_STRATEGIES = Object.freeze([
     label: PRICE_LABELS,
     category: 'core',
     kind: 'core',
+    accentColor: '#2563eb',
+    help: createHelp(
+      '展示当前主图的价格轨迹，分时视图显示分时线，K 线视图显示蜡烛。',
+      '这是识别趋势方向和波动节奏的主图层，关闭后更适合单独观察副图指标。',
+      '默认保持开启；只有在你想专注量能、MACD、RSI 等副图时再临时关闭。'
+    ),
     supportedViews: CHART_VIEW_OPTIONS.map(view => view.id),
     defaultVisible: true,
     requires: ['price'],
@@ -98,6 +110,12 @@ const CHART_STRATEGIES = Object.freeze([
     label: '量能',
     category: 'core',
     kind: 'indicator',
+    accentColor: '#64748b',
+    help: createHelp(
+      '显示每根 bar 对应的成交量柱，帮助判断放量、缩量和承接强弱。',
+      '价格上涨但量能跟不上时，趋势延续性往往会变差；放量突破则更可信。',
+      '建议与突破、回踩或 AI 价位线联动观察，不要只看价格不看量。'
+    ),
     supportedViews: CHART_VIEW_OPTIONS.map(view => view.id),
     defaultVisible: true,
     requires: ['volume'],
@@ -121,6 +139,12 @@ const CHART_STRATEGIES = Object.freeze([
     label: '昨收基线',
     category: 'core',
     kind: 'overlay',
+    accentColor: '#64748b',
+    help: createHelp(
+      '以昨收价为基准画出水平参考线。',
+      '分时价格站在昨收线上方，通常代表当日强于前一交易日；跌破则偏弱。',
+      '适合和 VWAP、量能一起看盘中强弱，不建议孤立使用。'
+    ),
     supportedViews: ['minute'],
     defaultVisible: true,
     requires: ['basePrice'],
@@ -141,6 +165,13 @@ const CHART_STRATEGIES = Object.freeze([
     label: 'AI 价位',
     category: 'core',
     kind: 'overlay',
+    accentColor: '#f97316',
+    accentSecondaryColor: '#10b981',
+    help: createHelp(
+      '显示 AI 推断的关键支撑位与压力位。',
+      '橙色通常对应压力，绿色通常对应支撑；越接近这些价位，市场反应越值得观察。',
+      '只能作为参考层，必须和真实量价、消息、趋势一起判断，不能单独当交易信号。'
+    ),
     supportedViews: CHART_VIEW_OPTIONS.map(view => view.id),
     defaultVisible: true,
     requires: ['aiLevels'],
@@ -162,6 +193,12 @@ const CHART_STRATEGIES = Object.freeze([
     label: 'MA5',
     category: 'trend',
     kind: 'indicator',
+    accentColor: '#f59e0b',
+    help: createHelp(
+      '5 日均线，代表最近 5 个交易日的平均成本。',
+      '对短线节奏最敏感，拐头速度快，适合观察超短和短线趋势变化。',
+      '建议和 MA10/MA20 对照使用；单独贴近价格时更容易被震荡反复打脸。'
+    ),
     supportedViews: KLINE_VIEW_IDS,
     defaultVisible: true,
     requires: ['close'],
@@ -172,6 +209,12 @@ const CHART_STRATEGIES = Object.freeze([
     label: 'MA10',
     category: 'trend',
     kind: 'indicator',
+    accentColor: '#8b5cf6',
+    help: createHelp(
+      '10 日均线，代表最近 10 个交易日的平均成本。',
+      '相对 MA5 更稳，常用于确认短线趋势是否真正延续。',
+      '适合和 MA5 做快慢线对照：MA5 上穿 MA10 常被视为短线转强参考。'
+    ),
     supportedViews: KLINE_VIEW_IDS,
     defaultVisible: true,
     requires: ['close'],
@@ -182,6 +225,12 @@ const CHART_STRATEGIES = Object.freeze([
     label: 'MA20',
     category: 'trend',
     kind: 'indicator',
+    accentColor: '#06b6d4',
+    help: createHelp(
+      '20 日均线，接近一个自然月的平均持仓成本。',
+      '常作为趋势股的重要支撑或压力带，跌破后中短期结构会明显变弱。',
+      '更适合波段视角；若只是看日内节奏，可临时关闭避免主图过密。'
+    ),
     supportedViews: KLINE_VIEW_IDS,
     defaultVisible: false,
     requires: ['close'],
@@ -192,6 +241,12 @@ const CHART_STRATEGIES = Object.freeze([
     label: 'MA60',
     category: 'trend',
     kind: 'indicator',
+    accentColor: '#ef4444',
+    help: createHelp(
+      '60 日均线，接近一个季度的平均成本。',
+      '常用于判断中期强弱分界，能明显区分“回调中的强趋势”和“趋势已坏”。',
+      '通常不需要一直开着；做中线趋势研判时打开价值更高。'
+    ),
     supportedViews: KLINE_VIEW_IDS,
     defaultVisible: false,
     requires: ['close'],
@@ -202,6 +257,12 @@ const CHART_STRATEGIES = Object.freeze([
     label: 'VWAP',
     category: 'trend',
     kind: 'indicator',
+    accentColor: '#0f766e',
+    help: createHelp(
+      'VWAP 是成交量加权平均价，强调真实成交重心。',
+      '价格站稳 VWAP 往往说明盘中承接更强；跌回 VWAP 下方则代表强度减弱。',
+      '主要用于分时图，适合和昨收线、量能、ORB 一起看盘中强弱。'
+    ),
     supportedViews: ['minute'],
     defaultVisible: true,
     requires: ['close', 'volume'],
@@ -212,6 +273,12 @@ const CHART_STRATEGIES = Object.freeze([
     label: 'BOLL',
     category: 'trend',
     kind: 'indicator',
+    accentColor: '#14b8a6',
+    help: createHelp(
+      '布林带由中轨和上下轨组成，用于观察波动率扩张与收敛。',
+      '开口扩大通常意味着趋势加速，通道收窄则常见于整理或变盘前。',
+      '不要把触碰上轨简单当成卖点，趋势行情里价格可以沿轨运行很久。'
+    ),
     supportedViews: KLINE_VIEW_IDS,
     defaultVisible: false,
     requires: ['high', 'low', 'close'],
@@ -222,6 +289,12 @@ const CHART_STRATEGIES = Object.freeze([
     label: 'Donchian',
     category: 'trend',
     kind: 'indicator',
+    accentColor: '#22c55e',
+    help: createHelp(
+      'Donchian 通道用最近一段时间的最高价和最低价构造突破区间。',
+      '价格突破上轨更容易被视为趋势延续，跌破下轨则代表弱化。',
+      '适合配合量能与突破信号一起看，单独使用容易被假突破欺骗。'
+    ),
     supportedViews: KLINE_VIEW_IDS,
     defaultVisible: false,
     requires: ['high', 'low'],
@@ -232,6 +305,12 @@ const CHART_STRATEGIES = Object.freeze([
     label: 'MACD',
     category: 'oscillator',
     kind: 'indicator',
+    accentColor: '#ec4899',
+    help: createHelp(
+      'MACD 用快慢均线差和柱体变化衡量趋势动能。',
+      'DIFF、DEA 与柱体同向扩张时，趋势延续性通常更高；背离则提示动能衰减。',
+      '适合和主图趋势一起用，少在纯震荡区间内把每次金叉都当成买点。'
+    ),
     supportedViews: KLINE_VIEW_IDS,
     defaultVisible: false,
     requires: ['close'],
@@ -242,6 +321,12 @@ const CHART_STRATEGIES = Object.freeze([
     label: 'RSI',
     category: 'oscillator',
     kind: 'indicator',
+    accentColor: '#f97316',
+    help: createHelp(
+      'RSI 衡量一段时间内上涨与下跌力度的相对强弱。',
+      '高位持续强势并不一定意味着马上见顶，真正要警惕的是高位背离。',
+      '更适合看强弱变化和背离，不建议把 70/30 当成机械化买卖线。'
+    ),
     supportedViews: KLINE_VIEW_IDS,
     defaultVisible: false,
     requires: ['close'],
@@ -252,6 +337,12 @@ const CHART_STRATEGIES = Object.freeze([
     label: 'KDJ',
     category: 'oscillator',
     kind: 'indicator',
+    accentColor: '#6366f1',
+    help: createHelp(
+      'KDJ 通过随机指标观察短线超买超卖与拐点。',
+      '对短线节奏反应很快，但噪音也更大，趋势强时容易连续钝化。',
+      '建议只把它当成辅助节奏工具，最好配合主趋势和量能一起判断。'
+    ),
     supportedViews: ['day'],
     defaultVisible: false,
     requires: ['high', 'low', 'close'],
@@ -262,6 +353,13 @@ const CHART_STRATEGIES = Object.freeze([
     label: 'ORB',
     category: 'signal',
     kind: 'overlay',
+    accentColor: '#0f766e',
+    accentSecondaryColor: '#dc2626',
+    help: createHelp(
+      'ORB 是开盘区间突破，通常取开盘后一段时间的高低点作为关键边界。',
+      '上破高点偏强，下破低点偏弱；如果很快回到区间内，往往是假突破预警。',
+      '更适合分时图观察，必须配合量能与 VWAP，不能只看价格一瞬间刺穿。'
+    ),
     supportedViews: ['minute'],
     defaultVisible: false,
     requires: ['high', 'low'],
@@ -424,10 +522,29 @@ export function getStrategyGroupsForView(viewId, visibilityState = {}) {
           id: item.id,
           label: item.resolvedLabel,
           active: visibilityState[item.id] !== false,
-          kind: item.kind
+          kind: item.kind,
+          accentColor: item.accentColor ?? '#2563eb',
+          accentSecondaryColor: item.accentSecondaryColor ?? null,
+          description: item.help?.description ?? '',
+          interpretation: item.help?.interpretation ?? '',
+          usage: item.help?.usage ?? ''
         }))
     }))
     .filter(group => group.items.length > 0)
+}
+
+export function getActiveStrategyBadgesForView(viewId, visibilityState = {}) {
+  return getChartStrategiesForView(viewId)
+    .filter(item => visibilityState[item.id] !== false)
+    .map(item => ({
+      id: item.id,
+      label: item.resolvedLabel,
+      accentColor: item.accentColor ?? '#2563eb',
+      accentSecondaryColor: item.accentSecondaryColor ?? null,
+      description: item.help?.description ?? '',
+      interpretation: item.help?.interpretation ?? '',
+      usage: item.help?.usage ?? ''
+    }))
 }
 
 export function getIndicatorFiltersForView(viewId) {

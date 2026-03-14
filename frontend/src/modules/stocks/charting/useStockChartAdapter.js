@@ -210,7 +210,10 @@ const buildChartStyles = (viewType, visibility = {}) => ({
     lines: [
       { color: '#f59e0b', size: 1, smooth: true },
       { color: '#a855f7', size: 1, smooth: true },
-      { color: '#38bdf8', size: 1, smooth: true }
+      { color: '#38bdf8', size: 1, smooth: true },
+      { color: '#ef4444', size: 1, smooth: true },
+      { color: '#14b8a6', size: 1, smooth: true },
+      { color: '#22c55e', size: 1, smooth: true }
     ]
   },
   xAxis: {

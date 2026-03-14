@@ -1,7 +1,7 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { CHART_VIEW_OPTIONS, isKlineChartView, normalizeKlineInterval, resolveInitialChartView } from './charting/chartViews'
-import { createStrategyVisibilityState, getStrategyGroupsForView } from './charting/chartStrategyRegistry'
+import { createStrategyVisibilityState, getActiveStrategyBadgesForView, getStrategyGroupsForView } from './charting/chartStrategyRegistry'
 import { useStockChartAdapter } from './charting/useStockChartAdapter'
 
 const props = defineProps({
@@ -36,6 +36,8 @@ let resizeObserver = null
 let resizeHandler = null
 const activeView = ref(resolveInitialChartView(props.interval))
 const featureVisibilityByView = ref(createStrategyVisibilityState())
+const showFloatingBadges = ref(true)
+const hoveredBadgeId = ref(null)
 
 const {
   aiLevelText,
@@ -52,6 +54,8 @@ const activeHover = computed(() => (activeView.value === 'minute' ? minuteHover.
 const activePlaceholder = computed(() => (activeView.value === 'minute' ? '暂无分时数据' : '暂无 K 线数据'))
 const hasActiveData = computed(() => (activeView.value === 'minute' ? props.minuteLines.length > 0 : props.kLines.length > 0))
 const strategyGroups = computed(() => getStrategyGroupsForView(activeView.value, featureVisibilityByView.value[activeView.value] ?? {}))
+const activeStrategyBadges = computed(() => getActiveStrategyBadgesForView(activeView.value, featureVisibilityByView.value[activeView.value] ?? {}))
+const hoveredStrategyBadge = computed(() => activeStrategyBadges.value.find(item => item.id === hoveredBadgeId.value) ?? null)
 
 const syncKlineInterval = interval => {
   const normalized = normalizeKlineInterval(interval)
@@ -130,6 +134,29 @@ watch(() => [props.kLines, props.minuteLines, props.basePrice, props.aiLevels], 
   queueResize()
 })
 
+const toggleFloatingBadges = () => {
+  showFloatingBadges.value = !showFloatingBadges.value
+  if (!showFloatingBadges.value) {
+    hoveredBadgeId.value = null
+  }
+}
+
+const setHoveredBadge = badgeId => {
+  hoveredBadgeId.value = badgeId
+}
+
+const clearHoveredBadge = badgeId => {
+  if (!badgeId || hoveredBadgeId.value === badgeId) {
+    hoveredBadgeId.value = null
+  }
+}
+
+const buildStrategySummary = item => [item.description, item.interpretation, item.usage].filter(Boolean).join(' ')
+
+const resolveBadgeSwatchStyle = item => item.accentSecondaryColor
+  ? { backgroundImage: `linear-gradient(135deg, ${item.accentColor}, ${item.accentSecondaryColor})` }
+  : { backgroundColor: item.accentColor }
+
 watch(featureVisibilityByView, async () => {
   renderAll()
   await nextTick()
@@ -163,6 +190,14 @@ watch(() => props.interval, interval => {
       </div>
       <div class="chart-meta">
         <span class="chart-mode">{{ activeTab.label }}</span>
+        <button
+          type="button"
+          class="chart-chip chart-chip-button chart-badge-toggle"
+          :class="{ active: showFloatingBadges }"
+          @click="toggleFloatingBadges"
+        >
+          {{ showFloatingBadges ? '隐藏小标' : '显示小标' }}
+        </button>
         <div
           v-for="group in strategyGroups"
           :key="group.id"
@@ -175,6 +210,7 @@ watch(() => props.interval, interval => {
             type="button"
             class="chart-chip chart-chip-button"
             :class="{ active: item.active }"
+            :title="buildStrategySummary(item)"
             @click="toggleFeature(item.id)"
           >
             {{ item.label }}
@@ -182,6 +218,28 @@ watch(() => props.interval, interval => {
         </div>
       </div>
       <div ref="chartShellRef" class="chart-shell">
+        <div v-if="showFloatingBadges && activeStrategyBadges.length" class="chart-floating-legend">
+          <button
+            v-for="item in activeStrategyBadges"
+            :key="item.id"
+            type="button"
+            class="chart-floating-badge"
+            :class="{ active: hoveredBadgeId === item.id }"
+            @mouseenter="setHoveredBadge(item.id)"
+            @mouseleave="clearHoveredBadge(item.id)"
+            @focus="setHoveredBadge(item.id)"
+            @blur="clearHoveredBadge(item.id)"
+          >
+            <span class="chart-floating-swatch" :style="resolveBadgeSwatchStyle(item)" />
+            <span>{{ item.label }}</span>
+          </button>
+        </div>
+        <div v-if="showFloatingBadges && hoveredStrategyBadge" class="chart-floating-tooltip">
+          <strong>{{ hoveredStrategyBadge.label }}</strong>
+          <p><span>介绍：</span>{{ hoveredStrategyBadge.description }}</p>
+          <p><span>解释：</span>{{ hoveredStrategyBadge.interpretation }}</p>
+          <p><span>用法：</span>{{ hoveredStrategyBadge.usage }}</p>
+        </div>
         <div ref="minuteRef" class="chart" :class="{ 'chart-hidden': activeView !== 'minute' }" />
         <div ref="klineRef" class="chart" :class="{ 'chart-hidden': activeView === 'minute' }" />
         <p v-if="!hasActiveData" class="placeholder">{{ activePlaceholder }}</p>
@@ -249,6 +307,10 @@ watch(() => props.interval, interval => {
   font-size: 0.75rem;
 }
 
+.chart-badge-toggle {
+  margin-left: 0.2rem;
+}
+
 .chart-mode,
 .chart-chip {
   padding: 0.22rem 0.58rem;
@@ -279,6 +341,77 @@ watch(() => props.interval, interval => {
     radial-gradient(circle at top right, rgba(59, 130, 246, 0.16), transparent 34%),
     linear-gradient(180deg, rgba(15, 23, 42, 0.04), rgba(15, 23, 42, 0.02));
   overflow: hidden;
+}
+
+.chart-floating-legend {
+  position: absolute;
+  top: 0.75rem;
+  left: 0.75rem;
+  right: 0.75rem;
+  z-index: 8;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  pointer-events: none;
+}
+
+.chart-floating-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
+  padding: 0.26rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  background: rgba(255, 255, 255, 0.82);
+  color: #0f172a;
+  font-size: 0.74rem;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(14px);
+  pointer-events: auto;
+  cursor: help;
+}
+
+.chart-floating-badge.active {
+  border-color: rgba(37, 99, 235, 0.32);
+  transform: translateY(-1px);
+}
+
+.chart-floating-swatch {
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 999px;
+  flex: 0 0 auto;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+}
+
+.chart-floating-tooltip {
+  position: absolute;
+  top: 3.15rem;
+  left: 0.75rem;
+  z-index: 9;
+  max-width: min(30rem, calc(100% - 1.5rem));
+  padding: 0.8rem 0.9rem;
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.92);
+  color: #e2e8f0;
+  box-shadow: 0 14px 36px rgba(15, 23, 42, 0.28);
+  backdrop-filter: blur(16px);
+}
+
+.chart-floating-tooltip strong {
+  display: block;
+  margin-bottom: 0.4rem;
+  color: #f8fafc;
+}
+
+.chart-floating-tooltip p {
+  margin: 0.22rem 0;
+  line-height: 1.45;
+}
+
+.chart-floating-tooltip span {
+  color: #93c5fd;
+  margin-right: 0.25rem;
 }
 
 .chart {
