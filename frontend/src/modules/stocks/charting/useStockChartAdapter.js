@@ -154,7 +154,7 @@ const calculateMovingAverage = (records, period) => {
   })
 }
 
-const buildChartStyles = viewType => ({
+const buildChartStyles = (viewType, visibility = {}) => ({
   grid: {
     horizontal: { show: true, color: 'rgba(148, 163, 184, 0.12)', style: 'dashed', size: 1, dashedValue: [4, 4] },
     vertical: { show: true, color: 'rgba(148, 163, 184, 0.12)', style: 'dashed', size: 1, dashedValue: [4, 4] }
@@ -163,12 +163,12 @@ const buildChartStyles = viewType => ({
     type: viewType === 'minute' ? 'area' : 'candle_solid',
     area: {
       lineSize: 2,
-      lineColor: '#2563eb',
+      lineColor: visibility.price === false ? 'rgba(37, 99, 235, 0)' : '#2563eb',
       value: 'close',
       smooth: true,
       backgroundColor: [
-        { offset: 0, color: 'rgba(37, 99, 235, 0.28)' },
-        { offset: 1, color: 'rgba(37, 99, 235, 0.05)' }
+        { offset: 0, color: visibility.price === false ? 'rgba(37, 99, 235, 0)' : 'rgba(37, 99, 235, 0.28)' },
+        { offset: 1, color: visibility.price === false ? 'rgba(37, 99, 235, 0)' : 'rgba(37, 99, 235, 0.05)' }
       ],
       point: {
         show: false
@@ -179,12 +179,12 @@ const buildChartStyles = viewType => ({
       upColor: '#ef4444',
       downColor: '#22c55e',
       noChangeColor: '#94a3b8',
-      upBorderColor: '#ef4444',
-      downBorderColor: '#22c55e',
-      noChangeBorderColor: '#94a3b8',
-      upWickColor: '#ef4444',
-      downWickColor: '#22c55e',
-      noChangeWickColor: '#94a3b8'
+      upBorderColor: visibility.price === false ? 'rgba(239, 68, 68, 0)' : '#ef4444',
+      downBorderColor: visibility.price === false ? 'rgba(34, 197, 94, 0)' : '#22c55e',
+      noChangeBorderColor: visibility.price === false ? 'rgba(148, 163, 184, 0)' : '#94a3b8',
+      upWickColor: visibility.price === false ? 'rgba(239, 68, 68, 0)' : '#ef4444',
+      downWickColor: visibility.price === false ? 'rgba(34, 197, 94, 0)' : '#22c55e',
+      noChangeWickColor: visibility.price === false ? 'rgba(148, 163, 184, 0)' : '#94a3b8'
     },
     tooltip: {
       showRule: 'none'
@@ -200,7 +200,11 @@ const buildChartStyles = viewType => ({
       showRule: 'none'
     },
     bars: [
-      { upColor: '#ef4444', downColor: '#22c55e', noChangeColor: '#94a3b8' }
+      {
+        upColor: visibility.volume === false ? 'rgba(239, 68, 68, 0)' : '#ef4444',
+        downColor: visibility.volume === false ? 'rgba(34, 197, 94, 0)' : '#22c55e',
+        noChangeColor: visibility.volume === false ? 'rgba(148, 163, 184, 0)' : '#94a3b8'
+      }
     ],
     lines: [
       { color: '#f59e0b', size: 1, smooth: true },
@@ -352,7 +356,7 @@ const buildRecordLookup = records => new Map(records.map(item => [item.timestamp
 
 const emptyHoverState = { visible: false, x: 0, y: 0, lines: [] }
 
-export function useStockChartAdapter({ props, klineRef, minuteRef }) {
+export function useStockChartAdapter({ props, klineRef, minuteRef, featureVisibilityByView }) {
   const klineHover = ref({ ...emptyHoverState })
   const minuteHover = ref({ ...emptyHoverState })
   const minuteBasePrice = ref(null)
@@ -376,7 +380,8 @@ export function useStockChartAdapter({ props, klineRef, minuteRef }) {
       chart = init(containerRef.value)
       if (!chart) return null
 
-      chart.setStyles(buildChartStyles(viewType))
+      const initialVisibility = featureVisibilityByView?.value?.[viewType === 'minute' ? 'minute' : normalizeKlineInterval(props.interval)] ?? {}
+      chart.setStyles(buildChartStyles(viewType, initialVisibility))
       chart.setFormatter?.({
         formatBigNumber: formatHands
       })
@@ -452,18 +457,22 @@ export function useStockChartAdapter({ props, klineRef, minuteRef }) {
       const instance = ensureChart()
       if (!instance) return
 
+      const visibility = featureVisibilityByView?.value?.[viewType === 'minute' ? 'minute' : periodKey] ?? {}
+
       dataList = toChartData(records)
       recordMap = buildRecordLookup(records)
 
+      instance.setStyles(buildChartStyles(viewType, visibility))
       instance.setSymbol(buildSymbol(records))
       instance.setPeriod(PERIOD_BY_VIEW[periodKey] ?? PERIOD_BY_VIEW.day)
       instance.resetData()
-      syncIndicatorRegistry(instance, viewType)
+      syncIndicatorRegistry(instance, viewType, visibility)
       syncOverlayRegistry(instance, {
         viewType,
         aiLevels,
         basePrice,
-        firstTimestamp: dataList[0]?.timestamp ?? null
+        firstTimestamp: dataList[0]?.timestamp ?? null,
+        visibility
       })
       syncMarkerSignalRegistry(instance, { viewType, markers: [] })
       instance.scrollToRealTime?.(0)

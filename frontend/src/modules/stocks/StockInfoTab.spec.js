@@ -118,6 +118,10 @@ const createChatFetchMock = (handlers = {}) => {
       })
     }
 
+    if (url.startsWith('/api/stocks/plans/alerts?')) {
+      return makeResponse({ ok: true, status: 200, json: async () => ([]) })
+    }
+
     if (url.startsWith('/api/news?')) {
       const params = new URLSearchParams(url.split('?')[1])
       const level = params.get('level') || 'stock'
@@ -2066,5 +2070,116 @@ describe('StockInfoTab', () => {
     expect(confirmSpy).toHaveBeenCalled()
     expect(fetchMock.mock.calls.some(args => args[0] === '/api/stocks/plans/7' && args[1]?.method === 'DELETE')).toBe(true)
     expect(wrapper.text()).toContain('暂无交易计划，可从 commander 分析一键起草。')
+  })
+
+  it('renders trading plan alerts and refreshes board summaries', async () => {
+    let boardAlertCalls = 0
+    let stockAlertCalls = 0
+    const planList = [{
+      id: 7,
+      symbol: 'sz000021',
+      name: '深科技',
+      direction: 'Long',
+      status: 'Pending',
+      triggerPrice: 12.6,
+      invalidPrice: 11.9,
+      stopLossPrice: 11.5,
+      takeProfitPrice: 13.4,
+      targetPrice: 14.2,
+      expectedCatalyst: '突破前高',
+      invalidConditions: '跌破支撑',
+      riskLimits: '单笔亏损不超过 2%',
+      analysisSummary: '等待突破确认',
+      analysisHistoryId: 42,
+      sourceAgent: 'commander',
+      userNote: '控制仓位',
+      updatedAt: '2026-03-14T09:00:00Z',
+      createdAt: '2026-03-14T08:30:00Z'
+    }]
+
+    const { fetchMock } = createChatFetchMock({
+      handle: async url => {
+        if (url.startsWith('/api/stocks/plans?symbol=sz000021')) {
+          return makeResponse({ ok: true, status: 200, json: async () => planList })
+        }
+
+        if (url.startsWith('/api/stocks/plans?take=20')) {
+          return makeResponse({ ok: true, status: 200, json: async () => planList })
+        }
+
+        if (url.startsWith('/api/stocks/plans/alerts?symbol=sz000021')) {
+          stockAlertCalls += 1
+          return makeResponse({
+            ok: true,
+            status: 200,
+            json: async () => ([{
+              id: stockAlertCalls,
+              planId: 7,
+              symbol: 'sz000021',
+              eventType: 'Warning',
+              severity: 'Warning',
+              message: '价格接近触发位',
+              snapshotPrice: 12.48,
+              occurredAt: '2026-03-14T09:30:00Z'
+            }])
+          })
+        }
+
+        if (url.startsWith('/api/stocks/plans/alerts?take=20')) {
+          boardAlertCalls += 1
+          return makeResponse({
+            ok: true,
+            status: 200,
+            json: async () => ([{
+              id: boardAlertCalls + 10,
+              planId: 7,
+              symbol: 'sz000021',
+              eventType: boardAlertCalls >= 2 ? 'Invalidated' : 'Warning',
+              severity: boardAlertCalls >= 2 ? 'Critical' : 'Info',
+              message: boardAlertCalls >= 2 ? '价格跌破失效位' : '计划进入重点盯盘',
+              snapshotPrice: boardAlertCalls >= 2 ? 11.88 : 12.4,
+              occurredAt: '2026-03-14T09:35:00Z'
+            }])
+          })
+        }
+
+        return null
+      }
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    const wrapper = mount(StockInfoTab)
+    await flushPromises()
+    await flushPromises()
+
+    const boardCard = wrapper.find('.trading-plan-board-card')
+    expect(boardCard.text()).toContain('Warning')
+    expect(boardCard.text()).toContain('计划进入重点盯盘')
+
+    wrapper.vm.detail = {
+      quote: { name: '深科技', symbol: 'sz000021', price: 31.1, change: 0, changePercent: 0 },
+      kLines: [],
+      minuteLines: [],
+      messages: []
+    }
+
+    await wrapper.vm.$nextTick()
+    await flushPromises()
+    await flushPromises()
+
+    let currentPlanCard = wrapper.findAll('section').find(section => section.text().includes('当前交易计划'))
+    expect(currentPlanCard.text()).toContain('Warning')
+    expect(currentPlanCard.text()).toContain('价格接近触发位')
+
+    expect(stockAlertCalls).toBeGreaterThanOrEqual(1)
+
+    await boardCard.find('.plan-refresh-button').trigger('click')
+    await flushPromises()
+    await flushPromises()
+
+    expect(boardAlertCalls).toBeGreaterThanOrEqual(2)
+    expect(boardCard.text()).toContain('Invalidated')
+    expect(boardCard.text()).toContain('价格跌破失效位')
   })
 })

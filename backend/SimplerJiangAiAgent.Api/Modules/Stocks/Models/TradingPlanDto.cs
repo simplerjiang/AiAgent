@@ -83,3 +83,15 @@ public sealed record TradingPlanItemDto(
     DateTime? CancelledAt,
     bool? WatchlistEnsured
 );
+
+public sealed record TradingPlanEventItemDto(
+    long Id,
+    long PlanId,
+    string Symbol,
+    string EventType,
+    string Severity,
+    string Message,
+    decimal? SnapshotPrice,
+    string? MetadataJson,
+    DateTime OccurredAt
+);

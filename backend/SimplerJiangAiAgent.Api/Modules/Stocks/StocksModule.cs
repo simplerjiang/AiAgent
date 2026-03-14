@@ -28,6 +28,7 @@ public sealed class StocksModule : IModule
         services.AddTransient<IStockFundamentalSnapshotService, EastmoneyFundamentalSnapshotService>();
         services.AddSingleton<IStockCrawler, CompositeStockCrawler>();
         services.Configure<HighFrequencyQuoteOptions>(configuration.GetSection(HighFrequencyQuoteOptions.SectionName));
+        services.Configure<TradingPlanTriggerOptions>(configuration.GetSection(TradingPlanTriggerOptions.SectionName));
         services.AddScoped<IActiveWatchlistService, ActiveWatchlistService>();
         services.AddScoped<ILocalFactIngestionService, LocalFactIngestionService>();
         services.AddScoped<ILocalFactAiEnrichmentService, LocalFactAiEnrichmentService>();
@@ -39,10 +40,12 @@ public sealed class StocksModule : IModule
         services.AddScoped<IStockAgentHistoryService, StockAgentHistoryService>();
         services.AddScoped<ITradingPlanDraftService, TradingPlanDraftService>();
         services.AddScoped<ITradingPlanService, TradingPlanService>();
+        services.AddScoped<ITradingPlanTriggerService, TradingPlanTriggerService>();
         services.AddScoped<IStockChatHistoryService, StockChatHistoryService>();
         services.AddScoped<IStockNewsImpactService, StockNewsImpactService>();
         services.AddScoped<IStockSignalService, StockSignalService>();
         services.AddScoped<IStockPositionGuidanceService, StockPositionGuidanceService>();
+        services.AddHostedService<TradingPlanTriggerWorker>();
     }
 
     public void MapEndpoints(IEndpointRouteBuilder app)
@@ -517,6 +520,14 @@ public sealed class StocksModule : IModule
         .WithName("GetTradingPlans")
         .WithOpenApi();
 
+        group.MapGet("/plans/alerts", async (string? symbol, long? planId, int? take, ITradingPlanTriggerService tradingPlanTriggerService) =>
+        {
+            var list = await tradingPlanTriggerService.GetEventsAsync(symbol, planId, take ?? 20);
+            return Results.Ok(list.Select(item => MapTradingPlanEventDto(item)).ToArray());
+        })
+        .WithName("GetTradingPlanAlerts")
+        .WithOpenApi();
+
         group.MapGet("/plans/{id:long}", async (long id, ITradingPlanService tradingPlanService) =>
         {
             var item = await tradingPlanService.GetByIdAsync(id);
@@ -811,6 +822,20 @@ public sealed class StocksModule : IModule
             item.InvalidatedAt,
             item.CancelledAt,
             watchlistEnsured);
+    }
+
+    private static TradingPlanEventItemDto MapTradingPlanEventDto(Data.Entities.TradingPlanEvent item)
+    {
+        return new TradingPlanEventItemDto(
+            item.Id,
+            item.PlanId,
+            item.Symbol,
+            item.EventType.ToString(),
+            item.Severity.ToString(),
+            item.Message,
+            item.SnapshotPrice,
+            item.MetadataJson,
+            item.OccurredAt);
     }
 
     private static Data.Entities.TradingPlanStatus NormalizeTradingPlanStatus(Data.Entities.TradingPlanStatus status)

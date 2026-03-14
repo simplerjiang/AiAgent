@@ -41,4 +41,5 @@ public sealed class TradingPlan
     public DateTime? CancelledAt { get; set; }
 
     public StockAgentAnalysisHistory? AnalysisHistory { get; set; }
+    public ICollection<TradingPlanEvent> Events { get; set; } = new List<TradingPlanEvent>();
 }

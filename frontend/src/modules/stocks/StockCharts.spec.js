@@ -10,6 +10,12 @@ const chartMocks = vi.hoisted(() => ({
   minuteIndicatorCalls: [],
   klineOverlayCalls: [],
   minuteOverlayCalls: [],
+  klineRemoveIndicatorCalls: [],
+  minuteRemoveIndicatorCalls: [],
+  klineRemoveOverlayCalls: [],
+  minuteRemoveOverlayCalls: [],
+  klineStyleCalls: [],
+  minuteStyleCalls: [],
   klineResizeMock: vi.fn(),
   minuteResizeMock: vi.fn(),
   klineSubscribeActionMock: vi.fn(),
@@ -28,6 +34,9 @@ vi.mock('klinecharts', () => {
     const targetLoads = kind === 'kline' ? chartMocks.klineDataLoads : chartMocks.minuteDataLoads
     const targetIndicators = kind === 'kline' ? chartMocks.klineIndicatorCalls : chartMocks.minuteIndicatorCalls
     const targetOverlays = kind === 'kline' ? chartMocks.klineOverlayCalls : chartMocks.minuteOverlayCalls
+    const targetRemoveIndicators = kind === 'kline' ? chartMocks.klineRemoveIndicatorCalls : chartMocks.minuteRemoveIndicatorCalls
+    const targetRemoveOverlays = kind === 'kline' ? chartMocks.klineRemoveOverlayCalls : chartMocks.minuteRemoveOverlayCalls
+    const targetStyles = kind === 'kline' ? chartMocks.klineStyleCalls : chartMocks.minuteStyleCalls
     const targetResize = kind === 'kline' ? chartMocks.klineResizeMock : chartMocks.minuteResizeMock
     const targetSubscribe = kind === 'kline' ? chartMocks.klineSubscribeActionMock : chartMocks.minuteSubscribeActionMock
     let loader = null
@@ -48,7 +57,9 @@ vi.mock('klinecharts', () => {
     }
 
     return {
-      setStyles: vi.fn(),
+      setStyles: vi.fn(styles => {
+        targetStyles.push(styles)
+      }),
       setFormatter: vi.fn(),
       setDataLoader: vi.fn(nextLoader => {
         loader = nextLoader
@@ -68,12 +79,18 @@ vi.mock('klinecharts', () => {
         targetIndicators.push({ value, isStack, paneOptions })
         return `${kind}-indicator-${targetIndicators.length}`
       }),
-      removeIndicator: vi.fn(() => true),
+      removeIndicator: vi.fn(filter => {
+        targetRemoveIndicators.push(filter)
+        return true
+      }),
       createOverlay: vi.fn(value => {
         targetOverlays.push(...(Array.isArray(value) ? value : [value]))
         return `${kind}-overlay-${targetOverlays.length}`
       }),
-      removeOverlay: vi.fn(() => true),
+      removeOverlay: vi.fn(filter => {
+        targetRemoveOverlays.push(filter)
+        return true
+      }),
       subscribeAction: vi.fn((type, callback) => {
         targetSubscribe(type, callback)
       }),
@@ -100,6 +117,12 @@ describe('StockCharts', () => {
     chartMocks.minuteIndicatorCalls.length = 0
     chartMocks.klineOverlayCalls.length = 0
     chartMocks.minuteOverlayCalls.length = 0
+    chartMocks.klineRemoveIndicatorCalls.length = 0
+    chartMocks.minuteRemoveIndicatorCalls.length = 0
+    chartMocks.klineRemoveOverlayCalls.length = 0
+    chartMocks.minuteRemoveOverlayCalls.length = 0
+    chartMocks.klineStyleCalls.length = 0
+    chartMocks.minuteStyleCalls.length = 0
     chartMocks.klineResizeMock.mockClear()
     chartMocks.minuteResizeMock.mockClear()
     chartMocks.klineSubscribeActionMock.mockClear()
@@ -320,6 +343,100 @@ describe('StockCharts', () => {
     await tabs[2].trigger('click')
     expect(wrapper.find('.tab.active').text()).toBe('月K图')
     expect(wrapper.emitted('update:interval')).toEqual([['month']])
+  })
+
+  it('toggles minute legend chips to control visible layers', async () => {
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
+      configurable: true,
+      get() {
+        return 600
+      }
+    })
+    Object.defineProperty(HTMLElement.prototype, 'clientHeight', {
+      configurable: true,
+      get() {
+        return 300
+      }
+    })
+
+    const wrapper = mount(StockCharts, {
+      props: {
+        kLines: [],
+        minuteLines: [{ date: '2026-01-01', time: '09:30:00', price: 9, volume: 500 }],
+        basePrice: 8.8,
+        aiLevels: { resistance: 9.3, support: 8.4 },
+        interval: 'day'
+      }
+    })
+
+    await nextTick()
+
+    const minuteTab = wrapper.findAll('.tab').find(tab => tab.text() === '分时图')
+    await minuteTab.trigger('click')
+    await nextTick()
+
+    const chipButtons = wrapper.findAll('.chart-chip-button')
+    const volumeChip = chipButtons.find(button => button.text() === '量能')
+    const baseLineChip = chipButtons.find(button => button.text() === '昨收基线')
+    const priceChip = chipButtons.find(button => button.text() === '分时')
+
+    await volumeChip.trigger('click')
+    await baseLineChip.trigger('click')
+    await priceChip.trigger('click')
+    await nextTick()
+
+    expect(volumeChip.classes()).not.toContain('active')
+    expect(baseLineChip.classes()).not.toContain('active')
+    expect(priceChip.classes()).not.toContain('active')
+    expect(chartMocks.minuteRemoveIndicatorCalls.at(-1)).toEqual({ paneId: 'volume_pane', name: 'VOL' })
+    expect(chartMocks.minuteRemoveOverlayCalls.some(item => item?.groupId === 'minute-base-line')).toBe(true)
+    expect(chartMocks.minuteStyleCalls.at(-1)?.candle?.area?.lineColor).toBe('rgba(37, 99, 235, 0)')
+  })
+
+  it('toggles kline MA and AI chips to control overlays', async () => {
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
+      configurable: true,
+      get() {
+        return 600
+      }
+    })
+    Object.defineProperty(HTMLElement.prototype, 'clientHeight', {
+      configurable: true,
+      get() {
+        return 300
+      }
+    })
+
+    const wrapper = mount(StockCharts, {
+      props: {
+        kLines: [
+          { date: '2026-01-01', open: 8, close: 9, low: 7, high: 10, volume: 800 },
+          { date: '2026-01-02', open: 10, close: 11, low: 9, high: 12, volume: 1200 },
+          { date: '2026-01-03', open: 11, close: 10, low: 9.8, high: 11.5, volume: 900 },
+          { date: '2026-01-04', open: 10, close: 10.8, low: 9.7, high: 11.1, volume: 880 },
+          { date: '2026-01-05', open: 10.8, close: 11.6, low: 10.4, high: 11.8, volume: 1360 }
+        ],
+        minuteLines: [],
+        aiLevels: { resistance: 13.5, support: 11.4 },
+        interval: 'day'
+      }
+    })
+
+    await nextTick()
+
+    const chipButtons = wrapper.findAll('.chart-chip-button')
+    const ma10Chip = chipButtons.find(button => button.text() === 'MA10')
+    const aiChip = chipButtons.find(button => button.text() === 'AI 价位')
+
+    await ma10Chip.trigger('click')
+    await aiChip.trigger('click')
+    await nextTick()
+
+    expect(ma10Chip.classes()).not.toContain('active')
+    expect(aiChip.classes()).not.toContain('active')
+    const lastMaCall = chartMocks.klineIndicatorCalls.filter(item => item.value?.name === 'MA').at(-1)
+    expect(lastMaCall?.value?.calcParams).toEqual([5])
+    expect(chartMocks.klineRemoveOverlayCalls.some(item => item?.groupId === 'kline-ai-levels')).toBe(true)
   })
 
   it('resizes charts after ResizeObserver reports sidebar layout changes', async () => {

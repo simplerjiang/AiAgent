@@ -9,6 +9,12 @@ public sealed class AppDbContext : DbContext
     private static readonly ValueConverter<TradingPlanStatus, string> TradingPlanStatusConverter = new(
         status => status.ToString(),
         value => ParseTradingPlanStatus(value));
+    private static readonly ValueConverter<TradingPlanEventType, string> TradingPlanEventTypeConverter = new(
+        value => value.ToString(),
+        value => ParseTradingPlanEventType(value));
+    private static readonly ValueConverter<TradingPlanEventSeverity, string> TradingPlanEventSeverityConverter = new(
+        value => value.ToString(),
+        value => ParseTradingPlanEventSeverity(value));
 
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options)
     {
@@ -26,6 +32,7 @@ public sealed class AppDbContext : DbContext
     public DbSet<StockQueryHistory> StockQueryHistories => Set<StockQueryHistory>();
     public DbSet<StockAgentAnalysisHistory> StockAgentAnalysisHistories => Set<StockAgentAnalysisHistory>();
     public DbSet<TradingPlan> TradingPlans => Set<TradingPlan>();
+    public DbSet<TradingPlanEvent> TradingPlanEvents => Set<TradingPlanEvent>();
     public DbSet<StockChatSession> StockChatSessions => Set<StockChatSession>();
     public DbSet<StockChatMessage> StockChatMessages => Set<StockChatMessage>();
     public DbSet<NewsSourceRegistry> NewsSourceRegistries => Set<NewsSourceRegistry>();
@@ -166,6 +173,32 @@ public sealed class AppDbContext : DbContext
             .HasForeignKey(x => x.AnalysisHistoryId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        modelBuilder.Entity<TradingPlanEvent>()
+            .HasIndex(x => new { x.PlanId, x.OccurredAt });
+
+        modelBuilder.Entity<TradingPlanEvent>()
+            .HasIndex(x => new { x.Symbol, x.OccurredAt });
+
+        modelBuilder.Entity<TradingPlanEvent>()
+            .Property(x => x.Symbol)
+            .HasMaxLength(32);
+
+        modelBuilder.Entity<TradingPlanEvent>()
+            .Property(x => x.EventType)
+            .HasConversion(TradingPlanEventTypeConverter)
+            .HasMaxLength(32);
+
+        modelBuilder.Entity<TradingPlanEvent>()
+            .Property(x => x.Severity)
+            .HasConversion(TradingPlanEventSeverityConverter)
+            .HasMaxLength(16);
+
+        modelBuilder.Entity<TradingPlanEvent>()
+            .HasOne(x => x.Plan)
+            .WithMany(x => x.Events)
+            .HasForeignKey(x => x.PlanId)
+            .OnDelete(DeleteBehavior.Cascade);
+
         modelBuilder.Entity<StockChatSession>()
             .HasIndex(x => x.SessionKey)
             .IsUnique();
@@ -245,5 +278,19 @@ public sealed class AppDbContext : DbContext
         }
 
         return TradingPlanStatus.Cancelled;
+    }
+
+    internal static TradingPlanEventType ParseTradingPlanEventType(string? value)
+    {
+        return Enum.TryParse<TradingPlanEventType>(value, true, out var parsed)
+            ? parsed
+            : TradingPlanEventType.VolumeDivergenceWarning;
+    }
+
+    internal static TradingPlanEventSeverity ParseTradingPlanEventSeverity(string? value)
+    {
+        return Enum.TryParse<TradingPlanEventSeverity>(value, true, out var parsed)
+            ? parsed
+            : TradingPlanEventSeverity.Warning;
     }
 }

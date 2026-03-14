@@ -13,6 +13,7 @@ const autoRefresh = ref(localStorage.getItem('stock_auto_refresh') === 'true')
 const sources = ref([])
 const selectedSource = ref(localStorage.getItem('stock_source') || '')
 let refreshTimer = null
+let planRefreshTimer = null
 const selectedSymbol = ref('')
 const searchResults = ref([])
 const searchOpen = ref(false)
@@ -77,10 +78,15 @@ const createWorkspace = symbolKey => reactive({
   planModalOpen: false,
   planForm: null,
   planList: [],
+  planAlerts: [],
   planListLoading: false,
+  planAlertsLoading: false,
   planListLoaded: false,
+  planAlertsLoaded: false,
   planListRequestToken: 0,
-  planListAbortController: null
+  planAlertsRequestToken: 0,
+  planListAbortController: null,
+  planAlertsAbortController: null
 })
 
 const stockWorkspaces = reactive({})
@@ -333,6 +339,18 @@ const normalizeTradingPlan = item => ({
   watchlistEnsured: item?.watchlistEnsured ?? item?.WatchlistEnsured ?? null
 })
 
+const normalizeTradingPlanAlert = item => ({
+  id: item?.id ?? item?.Id ?? '',
+  planId: item?.planId ?? item?.PlanId ?? '',
+  symbol: item?.symbol ?? item?.Symbol ?? '',
+  eventType: item?.eventType ?? item?.EventType ?? '',
+  severity: item?.severity ?? item?.Severity ?? 'Info',
+  message: item?.message ?? item?.Message ?? '',
+  snapshotPrice: normalizePlanNumber(item?.snapshotPrice ?? item?.SnapshotPrice),
+  metadataJson: item?.metadataJson ?? item?.MetadataJson ?? '',
+  occurredAt: item?.occurredAt ?? item?.OccurredAt ?? ''
+})
+
 const createTradingPlanForm = item => ({
   id: item?.id ?? '',
   symbol: item?.symbol ?? '',
@@ -360,6 +378,23 @@ const normalizeOptionalText = value => {
 const formatPlanPrice = value => {
   const number = normalizePlanNumber(value)
   return Number.isFinite(number) ? Number(number).toFixed(2) : '待补录'
+}
+
+const getLatestPlanAlert = (workspace, planId) => {
+  if (!workspace || !planId) return null
+  return (Array.isArray(workspace.planAlerts) ? workspace.planAlerts : []).find(item => String(item.planId) === String(planId)) || null
+}
+
+const getPlanAlertClass = severity => {
+  if (severity === 'Critical') return 'plan-alert-critical'
+  if (severity === 'Warning') return 'plan-alert-warning'
+  return 'plan-alert-info'
+}
+
+const formatPlanAlertSummary = alert => {
+  if (!alert) return ''
+  const occurredAt = formatDate(alert.occurredAt)
+  return occurredAt ? `${alert.message} · ${occurredAt}` : alert.message
 }
 
 const parseResponseMessage = async (response, fallback) => {
@@ -692,6 +727,71 @@ const fetchTradingPlans = async (symbolKey = currentStockKey.value, options = {}
   }
 }
 
+const fetchTradingPlanAlerts = async (symbolKey = currentStockKey.value, options = {}) => {
+  const isBoard = Boolean(options.global)
+  const workspace = isBoard ? rootWorkspace : getWorkspace(symbolKey)
+  const symbolValue = isBoard ? '' : (workspace?.detail?.quote?.symbol ?? symbolKey)
+  if (!workspace || (!isBoard && !symbolValue)) {
+    return
+  }
+
+  const force = Boolean(options.force)
+  if (!force && (workspace.planAlertsLoaded || workspace.planAlertsLoading)) {
+    return
+  }
+
+  const requestToken = ++workspace.planAlertsRequestToken
+  const controller = replaceAbortController(workspace.planAlertsAbortController)
+  workspace.planAlertsAbortController = controller
+  workspace.planAlertsLoading = true
+  try {
+    const params = new URLSearchParams()
+    if (symbolValue) {
+      params.set('symbol', symbolValue)
+    }
+    if (options.planId) {
+      params.set('planId', String(options.planId))
+    }
+    if (options.take) {
+      params.set('take', String(options.take))
+    }
+    const response = await fetch(`/api/stocks/plans/alerts?${params.toString()}`, { signal: controller.signal })
+    if (!response.ok) {
+      throw new Error(await parseResponseMessage(response, '交易计划告警加载失败'))
+    }
+    const list = await response.json()
+    if (requestToken !== workspace.planAlertsRequestToken) {
+      return
+    }
+    workspace.planAlerts = Array.isArray(list) ? list.map(normalizeTradingPlanAlert) : []
+    workspace.planAlertsLoaded = true
+  } catch (err) {
+    if (isAbortError(err)) {
+      return
+    }
+    workspace.planError = err.message || '交易计划告警加载失败'
+    workspace.planAlerts = []
+    workspace.planAlertsLoaded = false
+  } finally {
+    if (requestToken === workspace.planAlertsRequestToken) {
+      workspace.planAlertsLoading = false
+      if (workspace.planAlertsAbortController === controller) {
+        workspace.planAlertsAbortController = null
+      }
+    }
+  }
+}
+
+const refreshTradingPlanBoard = async (force = false) => {
+  await fetchTradingPlans('', { force, global: true, take: 20 })
+  await fetchTradingPlanAlerts('', { force, global: true, take: 20 })
+}
+
+const refreshTradingPlanSection = async (symbolKey = currentStockKey.value, force = false) => {
+  await fetchTradingPlans(symbolKey, { force })
+  await fetchTradingPlanAlerts(symbolKey, { force, take: 20 })
+}
+
 const closeTradingPlanModal = symbolKey => {
   const workspace = getWorkspace(symbolKey)
   if (!workspace) {
@@ -816,8 +916,8 @@ const saveTradingPlan = async (symbolKey = currentStockKey.value) => {
       symbol: workspace.detail?.quote?.symbol ?? '',
       name: workspace.detail?.quote?.name ?? ''
     })
-    await fetchTradingPlans(symbolKey, { force: true })
-    await fetchTradingPlans('', { force: true, global: true, take: 20 })
+    await refreshTradingPlanSection(symbolKey, true)
+    await refreshTradingPlanBoard(true)
     if (saved?.id) {
       workspace.planList = [saved, ...workspace.planList.filter(item => item.id !== saved.id)]
     }
@@ -847,8 +947,9 @@ const deleteTradingPlan = async (symbolKey, item) => {
     }
 
     workspace.planList = workspace.planList.filter(plan => String(plan.id) !== String(item.id))
-    await fetchTradingPlans(symbolKey, { force: true })
-    await fetchTradingPlans('', { force: true, global: true, take: 20 })
+    workspace.planAlerts = workspace.planAlerts.filter(plan => String(plan.planId) !== String(item.id))
+    await refreshTradingPlanSection(symbolKey, true)
+    await refreshTradingPlanBoard(true)
   } catch (err) {
     workspace.planError = err.message || '交易计划删除失败'
   } finally {
@@ -1508,6 +1609,22 @@ const setupRefresh = () => {
   }
 }
 
+const setupPlanRefresh = () => {
+  if (planRefreshTimer) {
+    clearInterval(planRefreshTimer)
+    planRefreshTimer = null
+  }
+
+  if (refreshSeconds.value > 0 && currentStockKey.value) {
+    planRefreshTimer = setInterval(() => {
+      const workspace = getWorkspace(currentStockKey.value)
+      if (workspace && !workspace.planListLoading && !workspace.planAlertsLoading) {
+        refreshTradingPlanSection(currentStockKey.value, true)
+      }
+    }, Math.max(15, refreshSeconds.value) * 1000)
+  }
+}
+
 watch(interval, value => {
   localStorage.setItem('stock_interval', value)
   if (symbol.value.trim()) {
@@ -1518,6 +1635,7 @@ watch(interval, value => {
 watch(refreshSeconds, value => {
   localStorage.setItem('stock_refresh_seconds', String(value))
   setupRefresh()
+  setupPlanRefresh()
 })
 
 watch(autoRefresh, value => {
@@ -1561,14 +1679,18 @@ onMounted(() => {
   setupRefresh()
   fetchHistory()
   fetchMarketNews()
-  fetchTradingPlans('', { global: true, take: 20 })
+  refreshTradingPlanBoard()
   setupHistoryRefresh()
+  setupPlanRefresh()
   window.addEventListener('click', closeContextMenu)
 })
 
 onUnmounted(() => {
   if (refreshTimer) {
     clearInterval(refreshTimer)
+  }
+  if (planRefreshTimer) {
+    clearInterval(planRefreshTimer)
   }
   if (historyTimer) {
     clearInterval(historyTimer)
@@ -1580,6 +1702,7 @@ onUnmounted(() => {
     workspace.chatSessionsAbortController?.abort()
     workspace.agentHistoryAbortController?.abort()
     workspace.planListAbortController?.abort()
+    workspace.planAlertsAbortController?.abort()
   })
   rootWorkspace.detailAbortController?.abort()
   rootWorkspace.newsImpactAbortController?.abort()
@@ -1587,6 +1710,7 @@ onUnmounted(() => {
   rootWorkspace.chatSessionsAbortController?.abort()
   rootWorkspace.agentHistoryAbortController?.abort()
   rootWorkspace.planListAbortController?.abort()
+  rootWorkspace.planAlertsAbortController?.abort()
   window.removeEventListener('click', closeContextMenu)
 })
 
@@ -1606,9 +1730,13 @@ watch(
     }
     fetchNewsImpact(symbolKey)
     fetchLocalNews(symbolKey)
-    fetchTradingPlans(symbolKey)
+    refreshTradingPlanSection(symbolKey)
   }
 )
+
+watch(currentStockKey, () => {
+  setupPlanRefresh()
+})
 </script>
 
 <template>
@@ -1878,7 +2006,7 @@ watch(
               <h3>交易计划总览</h3>
               <p class="muted">不选股也能直接查看最近交易计划，并快速跳转到对应标的。</p>
             </div>
-            <button class="market-news-button plan-refresh-button" @click="fetchTradingPlans('', { force: true, global: true, take: 20 })" :disabled="rootWorkspace.planListLoading">
+            <button class="market-news-button plan-refresh-button" @click="refreshTradingPlanBoard(true)" :disabled="rootWorkspace.planListLoading || rootWorkspace.planAlertsLoading">
               刷新
             </button>
           </div>
@@ -1895,6 +2023,14 @@ watch(
                 <button class="plan-link-button" @click="jumpToPlanSymbol(item.symbol)">查看股票</button>
               </div>
               <p>{{ item.analysisSummary || item.expectedCatalyst || '等待补充计划摘要' }}</p>
+              <div
+                v-if="getLatestPlanAlert(rootWorkspace, item.id)"
+                class="plan-alert"
+                :class="getPlanAlertClass(getLatestPlanAlert(rootWorkspace, item.id).severity)"
+              >
+                <strong>{{ getLatestPlanAlert(rootWorkspace, item.id).eventType }}</strong>
+                <span>{{ formatPlanAlertSummary(getLatestPlanAlert(rootWorkspace, item.id)) }}</span>
+              </div>
               <div class="plan-pill-row">
                 <span class="plan-pill">方向 {{ item.direction }}</span>
                 <span class="plan-pill">触发 {{ formatPlanPrice(item.triggerPrice) }}</span>
@@ -2000,7 +2136,7 @@ watch(
                   <h3>当前交易计划</h3>
                   <p class="muted">当前股票的全部交易计划都可在这里编辑或删除。</p>
                 </div>
-                <button class="market-news-button plan-refresh-button" @click="fetchTradingPlans(workspace.symbolKey, { force: true })" :disabled="workspace.planListLoading || !workspace.detail">
+                <button class="market-news-button plan-refresh-button" @click="refreshTradingPlanSection(workspace.symbolKey, true)" :disabled="workspace.planListLoading || workspace.planAlertsLoading || !workspace.detail">
                   刷新
                 </button>
               </div>
@@ -2022,6 +2158,14 @@ watch(
                     </div>
                   </div>
                   <p>{{ item.analysisSummary || item.expectedCatalyst || '等待补充计划摘要' }}</p>
+                  <div
+                    v-if="getLatestPlanAlert(workspace, item.id)"
+                    class="plan-alert"
+                    :class="getPlanAlertClass(getLatestPlanAlert(workspace, item.id).severity)"
+                  >
+                    <strong>{{ getLatestPlanAlert(workspace, item.id).eventType }}</strong>
+                    <span>{{ formatPlanAlertSummary(getLatestPlanAlert(workspace, item.id)) }}</span>
+                  </div>
                   <div class="plan-pill-row">
                     <span class="plan-pill">方向 {{ item.direction }}</span>
                     <span class="plan-pill">触发 {{ formatPlanPrice(item.triggerPrice) }}</span>
@@ -2656,6 +2800,40 @@ watch(
 .plan-item p,
 .plan-item small {
   margin: 0;
+}
+
+.plan-alert {
+  display: grid;
+  gap: 0.18rem;
+  margin: 0.35rem 0 0.15rem;
+  padding: 0.55rem 0.7rem;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  font-size: 0.82rem;
+}
+
+.plan-alert strong {
+  font-size: 0.74rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.plan-alert-warning {
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.24);
+  color: #92400e;
+}
+
+.plan-alert-critical {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.24);
+  color: #991b1b;
+}
+
+.plan-alert-info {
+  background: rgba(14, 165, 233, 0.12);
+  border-color: rgba(14, 165, 233, 0.24);
+  color: #0c4a6e;
 }
 
 .plan-pill-row {

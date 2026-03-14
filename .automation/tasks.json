@@ -215,10 +215,10 @@
       "status": "todo",
       "stages": {
         "plan": "done",
-        "dev": "todo",
-        "test": "todo"
+        "dev": "done",
+        "test": "done"
       },
-      "notes": "Step 4 已按架构指令拆解；Step 4.0（股票切换与加载性能深度优化）已完成：后端 /api/stocks/detail 改为并发拉取 quote/kline/minute/messages，前端优先命中 /api/stocks/detail/cache 实现缓存秒开，并用 request token 防止快速切股时旧响应覆盖新标的；同时移除股票终端 agent/history 对 openai 的前端硬编码，改为跟随后端 active provider。Step 4.1 reviewer 阻塞项已于 2026-03-14 收口：`ChinaAStockMarketClock` 已补齐 2026 法定休市日门控，`EastmoneyStockCrawler.GetIntradayMessagesAsync(...)` 已接入东财 `details/get` 逐笔明细，`HighFrequencyQuoteService` 已支持消息源失败降级为空结果而不影响 quote/minute 落库；后端全量单测 105/105、前端 `StockInfoTab` 单测 33/33、frontend build 与 Edge 校验脚本均已通过。Step 4.2 已于 2026-03-14 完成：新增 `TradingPlan` 实体、后端 `/api/stocks/plans` 与 `/api/stocks/plans/draft`、基于 `StockAgentAnalysisHistory` commander 结果的确定性草稿生成、前端 commander 起草按钮/可编辑弹窗/当前计划列表，以及保存后自动 upsert `ActiveWatchlist`。同日 R1 可用性增强也已完成：计划新增 `TakeProfitPrice` / `TargetPrice`、已保存 `Pending` 计划支持编辑与硬删除、`/api/stocks/plans` 支持无 `symbol` 的总览查询，前端新增跨股票“交易计划总览”，并按 commander 图表字段 -> financial `institutionTargetPrice` -> trend forecast 极值优先级确定性预填止损/止盈/目标价。由于本地库存在旧版 `TradingPlans` 表，本轮同时补齐了兼容补列、索引以及 `PlanKey`/`Title` 默认约束；本次复核已再次通过后端 `TradingPlanServicesTests` 9/9、前端 `StockAgentPanels.spec.js` + `StockInfoTab.spec.js` 39/39、SQLCMD 的 `TradingPlans` 字段/索引校验。下一步主线聚焦 Step 4.3：仅做确定性价格触发/失效状态机、计划事件审计落库与前端短轮询告警，不在该步引入 SignalR 或 LLM 语义复核。"
+      "notes": "Step 4 已按架构指令拆解；Step 4.0（股票切换与加载性能深度优化）已完成：后端 /api/stocks/detail 改为并发拉取 quote/kline/minute/messages，前端优先命中 /api/stocks/detail/cache 实现缓存秒开，并用 request token 防止快速切股时旧响应覆盖新标的；同时移除股票终端 agent/history 对 openai 的前端硬编码，改为跟随后端 active provider。Step 4.1 reviewer 阻塞项已于 2026-03-14 收口：`ChinaAStockMarketClock` 已补齐 2026 法定休市日门控，`EastmoneyStockCrawler.GetIntradayMessagesAsync(...)` 已接入东财 `details/get` 逐笔明细，`HighFrequencyQuoteService` 已支持消息源失败降级为空结果而不影响 quote/minute 落库；后端全量单测 105/105、前端 `StockInfoTab` 单测 33/33、frontend build 与 Edge 校验脚本均已通过。Step 4.2 已于 2026-03-14 完成：新增 `TradingPlan` 实体、后端 `/api/stocks/plans` 与 `/api/stocks/plans/draft`、基于 `StockAgentAnalysisHistory` commander 结果的确定性草稿生成、前端 commander 起草按钮/可编辑弹窗/当前计划列表，以及保存后自动 upsert `ActiveWatchlist`。同日 R1 可用性增强也已完成：计划新增 `TakeProfitPrice` / `TargetPrice`、已保存 `Pending` 计划支持编辑与硬删除、`/api/stocks/plans` 支持无 `symbol` 的总览查询，前端新增跨股票“交易计划总览”，并按 commander 图表字段 -> financial `institutionTargetPrice` -> trend forecast 极值优先级确定性预填止损/止盈/目标价。由于本地库存在旧版 `TradingPlans` 表，本轮同时补齐了兼容补列、索引以及 `PlanKey`/`Title` 默认约束；本次复核已再次通过后端 `TradingPlanServicesTests` 9/9、前端 `StockAgentPanels.spec.js` + `StockInfoTab.spec.js` 39/39、SQLCMD 的 `TradingPlans` 字段/索引校验。Step 4.3 已于 2026-03-14 完成：新增 `TradingPlanTriggerService` / `TradingPlanTriggerWorker`、`TradingPlanEvents` 审计表与 `/api/stocks/plans/alerts` 接口，纯消费本地 quote/minute 缓存实现 `Pending -> Triggered/Invalid` 的确定性状态机，并在前端交易计划总览与当前计划卡接入短轮询告警摘要。验证已通过后端定向单测 18/18、前端 `StockInfoTab.spec.js` 36/36、frontend build、SQLCMD 对 `TradingPlanEvents` 表/索引校验，以及后端托管页面 Browser MCP 的总览/当前计划刷新验收；本步未引入 SignalR 或 LLM 语义复核。"
     },
     {
       "id": "GOAL-009",
@@ -284,7 +284,18 @@
         "dev": "done",
         "test": "done"
       },
-      "notes": "Dev2 并行任务已完成：在不干扰 Dev1 Step 4.2 的前提下，将 `frontend/src/modules/stocks/charting/useStockChartAdapter.js` 底层实现替换为 `klinecharts`，新增 `klinechartsRegistry.js` 统一管理 MA/VOL 指标与 AI 价位线 overlay，并为后续策略标记层预留 `syncMarkerSignalRegistry(...)` 入口；`StockCharts.vue` 父层 contract 保持不变，仍支持“分时图 / 日K图 / 月K图 / 年K图”统一切换。依赖已精确锁定 `klinecharts@10.0.0-beta1`，并已从前端依赖中移除旧 `lightweight-charts` 包。后续回归已修复三项图表问题：`klinecharts` 时间戳统一改为毫秒制以消除日K 1971 横轴错误；月线/年线在真实页面重新验证为可见且接口分别返回 60/26 根 K 线；分时成交量改为累计量差值并统一按“手/万手/亿手”格式显示。验证已通过 `npm --prefix frontend run test:unit -- --run src/modules/stocks/StockCharts.spec.js`、`npm --prefix frontend run test:unit -- src/modules/stocks/StockInfoTab.spec.js`、`npm --prefix frontend run build`，以及后端托管页面 `http://localhost:5119/` 的 Browser MCP 查股 + 日K/月K/年K 切换验收；当前结论是该引擎替换已可作为现行生产路径继续使用，但仍需后续关注 beta 版本稳定性。"
+      "notes": "Dev2 并行任务已完成：在不干扰 Dev1 Step 4.2 的前提下，将 `frontend/src/modules/stocks/charting/useStockChartAdapter.js` 底层实现替换为 `klinecharts`，新增 `klinechartsRegistry.js` 统一管理 MA/VOL 指标与 AI 价位线 overlay，并为后续策略标记层预留 `syncMarkerSignalRegistry(...)` 入口；`StockCharts.vue` 父层 contract 保持不变，仍支持“分时图 / 日K图 / 月K图 / 年K图”统一切换。依赖已精确锁定 `klinecharts@10.0.0-beta1`，并已从前端依赖中移除旧 `lightweight-charts` 包。后续回归已修复三项图表问题：`klinecharts` 时间戳统一改为毫秒制以消除日K 1971 横轴错误；月线/年线在真实页面重新验证为可见且接口分别返回 60/26 根 K 线；分时成交量改为累计量差值并统一按“手/万手/亿手”格式显示。最新一轮又将图表图例改为真实交互开关：分时图可切换主线/量能/昨收基线/AI 价位，K 线可切换蜡烛/量能/MA5/MA10/AI 价位，并补齐对应单测断言 active/inactive 状态与 registry 行为。验证已通过 `npm run test:unit -- src/modules/stocks/StockCharts.spec.js src/modules/stocks/StockInfoTab.spec.js`、`npm run build`，以及后端托管页面 `http://localhost:5119/` 的 Browser MCP 查股 + 图例点击验收；当前结论是该引擎替换已可作为现行生产路径继续使用，但仍需后续关注 beta 版本稳定性。"
+    },
+    {
+      "id": "GOAL-012-R3",
+      "title": "Strategy registry and multi-signal overlays",
+      "status": "todo",
+      "stages": {
+        "plan": "done",
+        "dev": "todo",
+        "test": "todo"
+      },
+      "notes": "Dev2 下一步并行任务，在 GOAL-012-R2 收口后立即开始：基于现有 `frontend/src/modules/stocks/charting/**` 与 `klinechartsRegistry.js` 建立统一 chart strategy registry，按 `overlay`/`indicator`/`marker`/`signal` 分类接入策略，并通过按钮/芯片在 `minute/day/month/year` 视图中按需切换。计划已覆盖完整策略目录：MA5/10/20/60、VWAP、BOLL、Donchian、MACD、KDJ、RSI、ATR、神奇九转/TD Sequential、MA/MACD/KDJ 金叉死叉、放量突破/假突破、缺口、量价背离、VWAP 强弱、开盘区间突破（ORB），同时把现有 AI 支撑/突破线、昨收基准线、成交量副图并入同一 registry/renderer 体系。要求保持父层 contract 不变，只修改前端 charting 边界，并补齐单测、build 与 Browser MCP 多策略交互验收。"
     },
     {
       "id": "GOAL-013",

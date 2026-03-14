@@ -158,10 +158,15 @@
 - For beta chart-engine replacements, pin the exact package version in both `package.json` and lockfile, and keep the swap isolated behind the existing `charting/**` adapter boundary so rollback remains cheap.
 - For accepted chart-engine replacements, remove the superseded frontend package from the manifest/lockfile in the same change, and validate on a fresh backend-served page load before treating browser console errors from older tabs as current regressions.
 - For `klinecharts` in this repo, always feed timestamps in Unix milliseconds and normalize minute-line cumulative volumes into per-bar hand counts before rendering the volume pane.
+- For GOAL-012 chart legend controls, drive chip active state from a single per-view visibility model and update both runtime chart styles and registry-managed indicators/overlays together; lock the behavior with unit tests that assert active/inactive classes after clicks.
+- For StockInfoTab polling or alert-surface changes, update the shared frontend fetch mock defaults for any newly added `/api/stocks/**` reads before asserting existing plan UI, otherwise older tests can fail by entering the generic error state instead of rendering the target card content.
 - 对于本地旧表里以字符串持久化的枚举值，禁止继续直接依赖 EF 默认字符串枚举转换；必须改为宽容解析，兼容已知历史值，并把未知值降级到安全状态，避免列表接口因旧数据直接崩溃。
 - 对于 beta 图表引擎替换，必须同时在 `package.json` 与 lockfile 精确锁版本，并把替换限制在既有 `charting/**` 适配层边界内，保证回滚成本可控。
 - 对于已确认落地的图表引擎替换，必须在同一变更里从前端依赖与 lockfile 中移除被替代的旧包，并优先在后端托管的新页面会话中做浏览器验收，不能把旧 tab 残留的控制台错误直接当作当前回归。
 - 对本仓库的 `klinecharts`，时间戳必须使用 Unix 毫秒；分时接口若返回累计成交量，渲染副图前必须先转换成逐 bar 的“手”数量。
+- 对 GOAL-012 图表图例开关，必须用“按视图维度的单一 visibility 状态”驱动按钮 active 状态，并同步更新运行时图表样式与 registry 管理的指标/overlay；同时补单测断言点击后的 active/inactive class，避免再次退化成纯展示文案。
+- 对 StockInfoTab 这类带短轮询/告警面的页面，只要新增 `/api/stocks/**` 读取接口，就必须先同步更新前端共享 fetch mock 默认返回，再去断言既有计划卡片内容；否则老用例会先落入通用错误态，产生与真实功能无关的伪失败。
+
 
 # Agent Collaboration & Product Manager Workflow
 - **角色定位 (Persona)**: 我 (当前AI) 是系统的产品经理 (Product Manager)、架构师 (Architect) 和质量监督员 (QA/Reviewer)。我不负责直接编写大量业务代码，而是对项目功能、系统架构和最终质量负责。

@@ -3,6 +3,13 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { CHART_VIEW_OPTIONS, isKlineChartView, normalizeKlineInterval, resolveInitialChartView } from './charting/chartViews'
 import { useStockChartAdapter } from './charting/useStockChartAdapter'
 
+const createLegendState = () => Object.fromEntries(
+  CHART_VIEW_OPTIONS.map(view => [
+    view.id,
+    Object.fromEntries(view.legend.map(item => [item.id, true]))
+  ])
+)
+
 const props = defineProps({
   kLines: {
     type: Array,
@@ -34,6 +41,7 @@ const minuteRef = ref(null)
 let resizeObserver = null
 let resizeHandler = null
 const activeView = ref(resolveInitialChartView(props.interval))
+const featureVisibilityByView = ref(createLegendState())
 
 const {
   aiLevelText,
@@ -43,13 +51,14 @@ const {
   mountCharts,
   queueResize,
   renderAll
-} = useStockChartAdapter({ props, chartShellRef, klineRef, minuteRef })
+} = useStockChartAdapter({ props, chartShellRef, klineRef, minuteRef, featureVisibilityByView })
 
 const activeTab = computed(() => CHART_VIEW_OPTIONS.find(item => item.id === activeView.value) ?? CHART_VIEW_OPTIONS[0])
 const activeHover = computed(() => (activeView.value === 'minute' ? minuteHover.value : klineHover.value))
 const activePlaceholder = computed(() => (activeView.value === 'minute' ? '暂无分时数据' : '暂无 K 线数据'))
 const hasActiveData = computed(() => (activeView.value === 'minute' ? props.minuteLines.length > 0 : props.kLines.length > 0))
 const overlaySlots = computed(() => activeTab.value.legend)
+const activeFeatureState = computed(() => featureVisibilityByView.value[activeView.value] ?? {})
 
 const syncKlineInterval = interval => {
   const normalized = normalizeKlineInterval(interval)
@@ -66,6 +75,19 @@ const selectView = async viewId => {
   if (isKlineChartView(viewId) && viewId !== props.interval) {
     emit('update:interval', viewId)
   }
+  await nextTick()
+  queueResize()
+}
+
+const toggleFeature = async featureId => {
+  featureVisibilityByView.value = {
+    ...featureVisibilityByView.value,
+    [activeView.value]: {
+      ...featureVisibilityByView.value[activeView.value],
+      [featureId]: !featureVisibilityByView.value[activeView.value]?.[featureId]
+    }
+  }
+  renderAll()
   await nextTick()
   queueResize()
 }
@@ -115,6 +137,12 @@ watch(() => [props.kLines, props.minuteLines, props.basePrice, props.aiLevels], 
   queueResize()
 })
 
+watch(featureVisibilityByView, async () => {
+  renderAll()
+  await nextTick()
+  queueResize()
+}, { deep: true })
+
 watch(() => props.interval, interval => {
   syncKlineInterval(interval)
 })
@@ -142,7 +170,16 @@ watch(() => props.interval, interval => {
       </div>
       <div class="chart-meta">
         <span class="chart-mode">{{ activeTab.label }}</span>
-        <span v-for="item in overlaySlots" :key="item" class="chart-chip">{{ item }}</span>
+        <button
+          v-for="item in overlaySlots"
+          :key="item.id"
+          type="button"
+          class="chart-chip chart-chip-button"
+          :class="{ active: activeFeatureState[item.id] !== false }"
+          @click="toggleFeature(item.id)"
+        >
+          {{ item.label }}
+        </button>
       </div>
       <div ref="chartShellRef" class="chart-shell">
         <div ref="minuteRef" class="chart" :class="{ 'chart-hidden': activeView !== 'minute' }" />
@@ -205,6 +242,19 @@ watch(() => props.interval, interval => {
   padding: 0.22rem 0.58rem;
   border-radius: 999px;
   background: rgba(15, 23, 42, 0.06);
+}
+
+.chart-chip-button {
+  border: 1px solid transparent;
+  color: inherit;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+.chart-chip-button.active {
+  background: rgba(37, 99, 235, 0.14);
+  border-color: rgba(37, 99, 235, 0.35);
+  color: #1d4ed8;
 }
 
 .chart-shell {

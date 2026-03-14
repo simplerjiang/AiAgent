@@ -50,23 +50,38 @@ export function ensureKLineChartsRegistry() {
   return REGISTRY
 }
 
-export function syncIndicatorRegistry(chart, viewType) {
+export function syncIndicatorRegistry(chart, viewType, visibility = {}) {
   const registry = ensureKLineChartsRegistry()[viewType]
   chart.removeIndicator({ paneId: CANDLE_PANE_ID, name: 'MA' })
   chart.removeIndicator({ paneId: VOLUME_PANE_ID, name: 'VOL' })
 
   registry.indicators.forEach(item => {
     if (item.name === 'MA') {
+      const calcParams = []
+      if (visibility.ma5 !== false) {
+        calcParams.push(5)
+      }
+      if (visibility.ma10 !== false) {
+        calcParams.push(10)
+      }
+      if (!calcParams.length) {
+        return
+      }
+
       chart.createIndicator(
         {
           name: 'MA',
           shortName: 'MA',
-          calcParams: item.calcParams,
+          calcParams,
           series: 'price'
         },
         false,
         item.paneOptions
       )
+      return
+    }
+
+    if (item.name === 'VOL' && visibility.volume === false) {
       return
     }
 
@@ -84,7 +99,7 @@ export function syncIndicatorRegistry(chart, viewType) {
   return registry
 }
 
-export function syncOverlayRegistry(chart, { viewType, aiLevels, basePrice, firstTimestamp }) {
+export function syncOverlayRegistry(chart, { viewType, aiLevels, basePrice, firstTimestamp, visibility = {} }) {
   const aiGroupId = `${viewType}-ai-levels`
   const baseLineGroupId = `${viewType}-base-line`
   chart.removeOverlay({ groupId: aiGroupId })
@@ -98,7 +113,7 @@ export function syncOverlayRegistry(chart, { viewType, aiLevels, basePrice, firs
   const resistance = parseLevelValue(aiLevels?.resistance)
   const support = parseLevelValue(aiLevels?.support)
 
-  if (Number.isFinite(resistance)) {
+  if (visibility.aiLevels !== false && Number.isFinite(resistance)) {
     overlays.push(buildPriceLineOverlay({
       groupId: aiGroupId,
       timestamp: firstTimestamp,
@@ -107,7 +122,7 @@ export function syncOverlayRegistry(chart, { viewType, aiLevels, basePrice, firs
     }))
   }
 
-  if (Number.isFinite(support)) {
+  if (visibility.aiLevels !== false && Number.isFinite(support)) {
     overlays.push(buildPriceLineOverlay({
       groupId: aiGroupId,
       timestamp: firstTimestamp,
@@ -116,7 +131,7 @@ export function syncOverlayRegistry(chart, { viewType, aiLevels, basePrice, firs
     }))
   }
 
-  if (viewType === 'minute' && Number.isFinite(basePrice)) {
+  if (viewType === 'minute' && visibility.baseLine !== false && Number.isFinite(basePrice)) {
     overlays.push(buildPriceLineOverlay({
       groupId: baseLineGroupId,
       timestamp: firstTimestamp,

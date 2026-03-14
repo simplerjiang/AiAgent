@@ -21,7 +21,7 @@
 6. Step 4.2：人机协同交易计划，已完成最小闭环并通过本轮验证。
 
 ### 当前活跃范围
-1. Dev2 并行任务：执行 GOAL-012-R2 `klinecharts` 受控替换试验，必须继续与主线隔离推进。
+1. Dev2 下一步并行任务：在 GOAL-012-R2 收口后立即启动 GOAL-012-R3 图表策略注册表与多策略叠加工程，继续与 Dev1 主线隔离推进。
 2. Dev1 下一步主线：Step 4.3 盘中定量规则盯盘引擎，作为 GOAL-008 当前优先开发目标。
 3. Step 4.4 - Step 4.5：继续保留为后续 backlog，不提前扩 scope。
 4. 已完成步骤（Step 4.1 / 4.2）仅保留归档说明与复用约束，不再按“进行中”处理。
@@ -203,52 +203,48 @@
 
 ---
 
-## Dev2 并行任务：图表终端组件升级与多周期 Tab 改造
+## Dev2 并行任务：图表终端升级归档与下一步策略工程
 
-状态标签：`已完成，待 PM 分派后续任务`
+### 已归档完成：GOAL-012-R2 `klinecharts` 受控替换试验
 
-### 最新回执（2026-03-14）
-1. Dev2 图表终端改造已完成并验证：主图已改为统一 Tab 单视口，按钮为 `分时图 / 日K图 / 月K图 / 年K图`。
-2. 已完成组件选型补充调研，结论已写入 `.automation/reports/GOAL-012-R1-RESEARCH-20260314.md`。
-3. 调研结论：
-   - `SuHangWeb/tradingview-vue` 不适合当前仓库，原因是 Vue 2 / 模板工程属性过重、集成成本高、对当前 Vue 3 + Vite 形态不友好。
-   - `vue-tradingview-widgets` 更适合嵌 TradingView 官方 widget，不适合作为本地 `minuteLines` / `kLines` 主图内核。
-   - `vue3-apexcharts` 可用但偏通用报表图，不是股票终端主图优先解。
-   - 若 PM 仍想继续试验换库，唯一值得继续原型验证的候选是 `klinecharts`。
-4. 当前建议：保持 `lightweight-charts + 自建 charting adapter` 作为生产路径；若安排下一步任务，应优先在现有适配层之上补成交量副图、MA/BOLL/KDJ、标记层等专业终端能力，或单独安排 `klinecharts` POC。
+状态标签：`已完成（归档基线）`
 
-### PM 决策（2026-03-14）
-1. 用户已明确要求替换组件，因此 Dev2 下一步不再继续抽象调研，而是执行 `klinecharts` 受控替换试验。
-2. `TradingView-vue` 不进入下一步开发：当前调研已确认它不适合当前 Vue 3 + Vite 工程。
-3. 下一步替换目标确定为 `klinecharts`，但必须继续通过现有 `charting/**` 适配层完成，不得直接打散父层 contract。
+1. Dev2 已完成 `klinecharts` 底层替换，父层 contract 维持兼容，当前生产路径继续沿用 `frontend/src/modules/stocks/charting/**` 适配层。
+2. 已建立现成扩展边界：
+   - `useStockChartAdapter.js` 作为父层入口
+   - `klinechartsRegistry.js` 作为 indicator / overlay / marker 注册点
+   - `StockCharts.vue` 已具备按视图切换与按钮式 feature toggle UI
+3. R2 之后的所有策略能力，一律在现有 registry 边界上扩展，禁止重新把计算和渲染逻辑硬编码回 `StockCharts.vue`。
 
-### Dev2 下一步任务：GOAL-012-R2 `klinecharts` 受控替换试验
+### Dev2 下一步任务：GOAL-012-R3 图表策略注册表与多策略叠加工程
 
-状态标签：`待开发`
+状态标签：`待开发（R2 收口后立即开始）`
 
 #### 目标
-在不干扰 Dev1 的 Step 4.2 交易计划主线的前提下，把当前图表适配层底层引擎从 `lightweight-charts` 受控替换为 `klinecharts`，验证其是否足以成为未来专业终端的主图内核。
+在不干扰 Dev1 Step 4.3 主线的前提下，把当前 `klinecharts` 终端升级为“可注册、可开关、可按视图适配”的策略图层系统。目标不是只补一个 KDJ 或九转，而是一次性建立后续所有技术策略的统一接入协议、统一按钮交互和统一渲染出口。
 
 #### 输入
 1. 当前图表终端基线：
    - `frontend/src/modules/stocks/StockCharts.vue`
    - `frontend/src/modules/stocks/charting/chartViews.js`
    - `frontend/src/modules/stocks/charting/useStockChartAdapter.js`
-2. 当前对外 contract：`minuteLines`、`kLines`、`basePrice`、`interval`、`aiLevels`、`update:interval`
-3. 已完成的组件调研结论：
-   - `TradingView-vue` 不适用
-   - `vue-tradingview-widgets` 不适合作为本地主图内核
-   - `vue3-apexcharts` 不适合作为股票终端主图优先方案
-   - `klinecharts` 是唯一值得继续替换试验的候选
-4. 公开组件资料依据：
-   - `klinecharts` README 明确声明内置多个 indicators、line drawing models、rich style configuration、highly scalable
-   - npm 元数据显示当前最新版本为 `10.0.0-beta1`
+   - `frontend/src/modules/stocks/charting/klinechartsRegistry.js`
+2. 当前已存在能力：
+   - `minute/day/month/year` 单主图视图切换
+   - MA / VOL / AI 价位线 / base line 的 registry 驱动能力
+   - `featureVisibilityByView` + `toggleFeature(...)` 的按钮交互模型
+3. 用户已确认需求：
+   - 分时图、日 K 图要支持更多策略
+   - 接口必须可扩展
+   - 点击按钮即可切换显示策略
+   - 已知策略需要全部进入计划，不再只讨论个别指标
 
 #### 输出
-1. 基于 `klinecharts` 的新图表适配器实现。
-2. 维持不变的父层数据与事件 contract。
-3. 针对未来神奇九转、KDJ 金叉、BOLL、标记层的 overlay / indicator 注册入口。
-4. 前端单测、build、浏览器切换验证，以及一份“是否正式切生产”的回执结论。
+1. 一个统一的 chart strategy registry contract。
+2. 一组按类别组织的按钮/芯片式策略开关 UI。
+3. 第一批可运行的策略叠加实现。
+4. 一份按阶段推进的策略目录，允许后续继续扩展而不改父层 contract。
+5. 对应前端单测、build 与浏览器交互验证。
 
 #### 与 Dev1 的隔离边界
 1. Dev2 只允许改：
@@ -257,101 +253,106 @@
    - `frontend/package.json`
    - 必要的前端测试文件
 2. Dev2 禁止改：
-   - `TradingPlan` 后端实体/API
-   - Step 4.2 的 draft/save 流
-   - `StockAgentAnalysisHistory` contract
-   - Dev1 正在推进的交易计划表单状态机
-3. 若必须触碰 `StockInfoTab.vue`，只能保持现有 props / emits / slot contract 向后兼容。
+   - Step 4.3 的后端触发/告警服务
+   - `TradingPlan` 实体/API 与计划状态机
+   - `StockAgentAnalysisHistory` 与 agent contract
+3. 若确需触碰 `StockInfoTab.vue`，只能做兼容式挂载调整，禁止把策略逻辑上推到页面层。
 
-#### 核心任务
-1. 安装并精确锁定 `klinecharts` 版本：
-   - 不允许使用浮动版本
-   - 由于当前最新为 beta，必须在回执中记录实际锁定版本与风险判断
-2. 新建 `klinecharts` 适配器，而不是直接把逻辑堆回 `StockCharts.vue`：
-   - 建议新增 `frontend/src/modules/stocks/charting/useKLineChartsAdapter.js`
-   - 原 `useStockChartAdapter.js` 可演进为统一入口或引擎分发层
-3. 保持父层 contract 不变：
-   - `StockCharts.vue` 对外 props / emits 保持兼容
-   - `chartViews.js` 的 `minute/day/month/year` 视图定义继续复用
-4. 完成单主图切换适配：
-   - `分时图` 映射到分钟数据视图
-   - `日K图 / 月K图 / 年K图` 映射到 K 线视图
-   - 不允许回退到双图并列布局
-5. 第一阶段只迁移已有能力：
-   - 主图渲染
-   - AI 支撑/突破线
-   - 现有 hover / crosshair 信息
-6. 第二阶段预留扩展点：
-   - overlay registry
-   - indicator registry
-   - marker / signal layer API
-   - 为神奇九转、KDJ 金叉、BOLL、MA 等后续能力预留挂载方式
+#### 统一策略接口要求
+1. 所有策略必须注册到统一 registry，不允许在 `StockCharts.vue` 内写分散的 if/else 分支。
+2. 每个策略定义至少包含：
+   - `id`
+   - `label`
+   - `category`
+   - `kind`：`overlay` / `indicator` / `marker` / `signal`
+   - `supportedViews`：如 `minute` / `day` / `month` / `year`
+   - `defaultVisible`
+   - `requires`：所需数据列，如 `price` / `volume` / `basePrice`
+   - `compute(context)`：返回标准化渲染结果
+3. `compute(context)` 的输出必须落到统一结果结构，例如：
+   - `indicators`
+   - `overlays`
+   - `markers`
+   - `signals`
+   - `legend`
+4. 策略计算与渲染必须解耦：
+   - strategy 文件只负责计算标准化结果
+   - registry 负责注册与启停
+   - `klinechartsRegistry.js` 负责把标准化结果映射到具体图表 API
 
-#### 文档约束
-1. 若 `klinecharts` 在分钟图、交叉线、性能或扩展点上不达标，Dev2 不得硬切生产，必须在回执中给出回退结论。
-2. 若 `klinecharts` 达标，也必须确保不破坏当前 `StockCharts.vue` 父层 contract，避免影响 Dev1。
+#### 策略目录（全部纳入计划）
+1. 趋势/均线类：
+   - MA5 / MA10 / MA20 / MA60
+   - VWAP / 分时均价线
+   - BOLL
+   - Donchian Channel
+2. 动量/摆动类：
+   - MACD
+   - KDJ
+   - RSI
+   - ATR
+3. 事件/信号标记类：
+   - 神奇九转 / TD Sequential
+   - MA 金叉 / 死叉
+   - MACD 金叉 / 死叉
+   - KDJ 金叉 / 死叉
+   - 放量突破 / 缩量假突破
+   - 缺口高开 / 低开 / 回补缺口
+   - 量价背离
+   - 分时 VWAP 回踩企稳 / 跌破转弱
+   - 开盘区间突破（ORB）
+4. 已存在能力也要并入同一体系：
+   - AI 支撑线 / 突破线
+   - 分时昨收基准线
+   - 成交量副图
 
-#### 验收
-1. 图表主引擎切换为 `klinecharts`，且 `分时图 / 日K图 / 月K图 / 年K图` 仍正常工作。
-2. `minuteLines`、`kLines`、`interval`、`aiLevels` 现有数据 contract 不变。
-3. 适配层具备清晰的 overlay / indicator 扩展入口。
-4. Dev2 改动不影响 Dev1 的 Step 4.2 交易计划流。
-5. 至少完成：
-   - 前端单测
+#### 视图适配原则
+1. 不是所有策略都在所有视图展示：
+   - `minute` 优先：VWAP、分时量价背离、ORB、分时金叉类
+   - `day` 优先：MA、BOLL、MACD、KDJ、RSI、九转、突破类
+   - `month/year` 先保留中长周期兼容指标：MA、BOLL、MACD、RSI、Donchian
+2. UI 只显示当前视图可用的策略按钮；不支持的策略不要渲染成不可用垃圾按钮。
+
+#### 实施阶段
+1. Phase A：策略注册表底座
+   - 抽出 `strategyRegistry` / `strategyDefinitions`
+   - 统一 feature state、button config、view gating
+   - 补 strategy compute contract 单测
+2. Phase B：基础指标落地
+   - MA 扩展为 5/10/20/60
+   - VWAP / base line 规范化
+   - BOLL、MACD、KDJ、RSI、ATR、Donchian
+3. Phase C：信号标记层
+   - 九转
+   - 金叉/死叉
+   - 放量突破 / 假突破
+   - 缺口与量价背离
+   - ORB 与 VWAP 强弱信号
+4. Phase D：交互与验收
+   - 按分类展示按钮/芯片
+   - 支持单独开关和默认组合
+   - 保证切换 `minute/day/month/year` 时状态与图层同步
+
+#### 测试与验收
+1. 单测必须覆盖：
+   - registry 对不同 view 的可用策略过滤
+   - 按钮点击后的 active/inactive 状态
+   - 关键策略的计算结果排序与映射正确
+   - 九转 / 金叉 / 突破类 marker 不重复落点
+2. 必须执行：
+   - 前端定向单测
    - `npm --prefix frontend run build`
-   - 浏览器交互验证（切换分时图、日K图、月K图、年K图）
+   - 后端托管页面 Browser MCP 验证
+3. Browser MCP 不允许只看静态渲染：
+   - 至少切换 `分时图 / 日K图 / 月K图 / 年K图`
+   - 至少点击多类策略按钮并等待图层变化
+   - 检查前端 console 与后端日志无新错误
 
-### 目标
-在不干扰 Dev1 正在推进的 Step 4.2 交易计划主线的前提下，独立升级股票终端图表区，寻找更高扩展性的 K 线/分时图组件方案，并把分时图放入与 K 线多周期一致的 Tab 切换中，为未来神奇九转、KDJ 金叉等策略叠加打基础。
-
-### 输入
-1. 当前前端图表实现：`frontend/src/modules/stocks/StockCharts.vue` 基于 `lightweight-charts`，分时图与 K 线图是并列渲染。
-2. 当前终端容器：`TerminalView.vue` / `StockInfoTab.vue`。
-3. 未来扩展需求：神奇九转、KDJ 金叉、更多指标叠加、更多周期与图层控制。
-4. 用户明确方向：尝试 `TradingView-vue` 或 TradingView 风格、具备高扩展性的 Vue 图表组件封装。
-
-### 输出
-1. 一个不影响 Step 4.2 的前端图表层改造方案。
-2. 分时图 / 日K图 / 月K图 / 年K图 的统一 Tab 切换 UI。
-3. 一个具备后续指标扩展能力的图表适配层或组件抽象。
-4. 组件选型结论、前端测试和可继续扩展的接口设计。
-
-### 与 Dev1 的隔离边界
-1. Dev1 负责 Step 4.2 主线：`TradingPlan` 实体、后端 API、计划弹窗、保存流、`ActiveWatchlist` 联动。
-2. Dev2 负责图表终端升级：优先改 `StockCharts.vue`、新增 `frontend/src/modules/stocks/charting/**`、必要时调整 `frontend/package.json`。
-3. Dev2 禁止改动：
-   - `TradingPlan` 后端实体与 API contract
-   - `StockAgentAnalysisHistory` / Step 4.2 草稿生成逻辑
-   - Dev1 正在开发中的交易计划表单状态流
-4. 若必须触碰 `StockInfoTab.vue`，只能保持现有 props / emits contract 向后兼容，且改动应限制在图表挂载方式，不得侵入交易计划区域。
-
-### 核心任务
-1. 调研并优先尝试高扩展性图表组件方案：
-   - 首选方向：`TradingView-vue` 或 TradingView 风格的 Vue 封装组件
-   - 对比当前 `lightweight-charts` 方案，重点评估：多指标叠加能力、绘图扩展点、Tab/周期切换能力、Vue 3 兼容性、未来策略标记扩展成本
-2. 重构图表区交互：
-   - 将分时图并入主图 Tab 切换
-   - 切换按钮统一为：`分时图`、`日K图`、`月K图`、`年K图`
-   - 确保切换后主图只保留一个图表视图，避免现有并列双图布局继续占用空间
-3. 建立扩展性抽象：
-   - 为未来神奇九转、KDJ 金叉、更多指标线、标注层提供统一挂载入口
-   - 优先通过图表适配层或独立 `charting` 子目录组织，而不是把所有逻辑继续堆进 `StockCharts.vue`
-4. 保持现有数据源兼容：
-   - 分时图继续使用 `minuteLines`
-   - K 线继续基于现有 `/api/stocks/kline` 数据
-   - 不要求 Dev2 改后端接口语义
-
-### 组件选型要求
-1. 若 `TradingView-vue` 可用且扩展性明显优于当前实现，应优先采用。
-2. 若 `TradingView-vue` 在 Vue 3、许可证、可控性或后续策略叠加上存在明显缺陷，Dev2 必须在回执中明确写出对比结论，并给出保留 `lightweight-charts + 自建适配层` 的理由。
-3. 最终目标不是“换库本身”，而是“获得更好的扩展性与更专业的图表交互形态”。
-
-### 验收
-1. 图表切换按钮变为：`分时图 / 日K图 / 月K图 / 年K图`。
-2. 分时图被纳入同一 Tab 切换容器，不再与 K 线图长期并列占位。
-3. 图表层代码具备明确扩展点，可继续叠加神奇九转、KDJ 金叉等策略图层。
-4. Dev2 改动不破坏 Dev1 的 Step 4.2 主线开发。
-5. 前端单测、构建、必要的浏览器交互验证通过。
+#### 约束
+1. 本任务只做前端图表策略层，不把策略结论回写交易计划，不与 Step 4.3 状态机耦合。
+2. 除既有 AI 价位线外，新增策略优先使用前端已有 `minuteLines` / `kLines` 数据计算；需要新后端数据时必须单独立项，不得隐式扩 scope。
+3. 所有策略必须先走统一 registry，再走统一 renderer，避免后续增加第 11、12 个策略时继续堆分支。
+4. 若某些高级策略在当前数据条件下无法可靠落地，允许在 R3 中先完成接口与按钮占位，但必须在回执里写清楚数据前提与未实现原因。
 
 ---
 
