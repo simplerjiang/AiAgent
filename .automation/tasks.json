@@ -262,7 +262,7 @@
         "dev": "done",
         "test": "done"
       },
-      "notes": "已完成 Step 1 与 Step 1.1 返工：股票信息页改造成 Grid 终端布局，新增 TerminalView 与 CopilotPanel 两个独立组件；顶部查询区进一步压缩为 sticky toolbar + history ribbon，把更多纵向空间让给 K 线/分时图；支持一键专注模式隐藏 AI 侧栏；前端单测与构建均通过（`npm --prefix frontend run test:unit -- src/modules/stocks/StockInfoTab.spec.js`，13/13；`npm --prefix frontend run build` 通过）。"
+      "notes": "GOAL-012 主界面解耦与终端/AI 侧栏分离已完成并归档；后续图表策略扩展请统一查看 `GOAL-012-R1/R2/R3` 子任务，不再把并行图表工程进度回写到本总任务。"
     },
     {
       "id": "GOAL-012-R1",
@@ -289,13 +289,13 @@
     {
       "id": "GOAL-012-R3",
       "title": "Strategy registry and multi-signal overlays",
-      "status": "todo",
+      "status": "done",
       "stages": {
         "plan": "done",
-        "dev": "todo",
-        "test": "todo"
+        "dev": "done",
+        "test": "done"
       },
-      "notes": "Dev2 并行任务已启动，当前已完成 Phase A + 首批真实策略落地：新增 `frontend/src/modules/stocks/charting/chartStrategyRegistry.js` 与 `chartPanes.js`，把原先硬编码 legend 升级为统一 strategy registry / grouped chips / render plan 体系；`StockCharts.vue` 已按 `基础图层/趋势策略/动量指标/信号标记` 分组渲染按钮，`useStockChartAdapter.js` 与 `klinechartsRegistry.js` 已改为消费统一 render plan。已接入并验证的首批策略包括 MA5/10/20/60、VWAP、BOLL、Donchian、MACD、RSI、KDJ、ORB，以及既有 AI 价位线、昨收基线和量能副图。本轮又补齐“可读性层”：每个已激活策略都带有颜色小标，悬浮后可查看“介绍 / 解释 / 用法”，并新增 `隐藏小标 / 显示小标` 总开关，解决 MA 线与其他指标难区分的问题。验证已通过 `npm --prefix .\\frontend run test:unit -- src/modules/stocks/StockCharts.spec.js src/modules/stocks/StockInfoTab.spec.js`、`npm --prefix .\\frontend run build` 与后端托管页面 `http://localhost:5119/` 的 Browser MCP 浮动小标 + hover 说明验收；剩余 Phase B/C 仍需继续补齐 ATR、TD Sequential、金叉死叉、突破/假突破、缺口、量价背离、VWAP 强弱等高级策略。"
+      "notes": "Dev2 并行任务已完成并收口。最终状态是：Phase A 已完成 registry / grouped chips / render plan 底座；Phase B 已完成 MA5/10/20/60、VWAP、BOLL、Donchian、MACD、RSI、ATR、KDJ、ORB 及既有 AI/昨收/量能图层；Phase C 也已完整完成。已落地信号包括 `MA5/MA10 金叉/死叉`、`TD九转`、`MACD金叉/死叉`、`KDJ金叉/死叉`、`放量突破/假突破`、`缺口`、`量价背离`、`VWAP强弱`，并全部走统一 marker overlay 渲染出口。当前图表终端控制也已补齐 `全屏 / 退出全屏` 按钮，放大后仍保留时间周期、策略按钮与浮动小标交互。前端可用性已通过：`npm --prefix .\frontend run test:unit -- StockCharts.spec.js`、`npm --prefix .\frontend run build`，以及后端托管页面 `http://localhost:5119/` 的 Browser MCP 验收；已确认日K与分时图的信号按钮、浮动小标、view gating、全屏切换、网络请求与 console 均正常。"
     },
     {
       "id": "GOAL-013",

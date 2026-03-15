@@ -36,6 +36,7 @@
 - Stock Tabs 基础框架
 - LLM 设置页签（管理员配置）
 - K线/分时图 AI 关键价位叠加（突破线/支撑线，来源于多Agent分析）
+- 专业看盘终端已支持图表区 `全屏 / 退出全屏` 切换，放大后保留原有时间周期、策略按钮与浮动小标交互
 - 股票信息页多Agent面板支持双档位触发：标准分析 / Pro 深度分析
 - 股票终端切股加载优化：优先使用 `/api/stocks/detail/cache` 秒开缓存详情，后台再补最新详情，并阻断旧请求覆盖新标的
 - 股票信息页“基本面快照”已支持展示东财公司概况/股东研究抽取出的富文本事实；首次打开先读数据库缓存，实时刷新完成后自动回写，下一次打开可直接秒开
@@ -151,7 +152,7 @@ opencode
 - [x] GOAL-012 界面重构与“专业看盘/AI辅屏”解耦（股票信息页已拆为 TerminalView 主终端 + CopilotPanel 侧栏，并支持专注模式）
 - [x] GOAL-012-R1 图表终端扩展性升级（Dev2 并行任务已完成：分时图已并入“分时图 / 日K图 / 月K图 / 年K图”统一 Tab 单主图终端，并新增 `frontend/src/modules/stocks/charting/**` 适配层作为未来神奇九转、KDJ 金叉等策略叠加扩展点；选型结论为保留 `lightweight-charts` 并以自建 adapter 获得 TradingView 风格可扩展性，且已通过前端单测、build 与 Browser MCP 交互验收，同时继续与 Dev1 的 Step 4.2 交易计划主线隔离推进）
 - [x] GOAL-012-R2 `klinecharts` 受控替换试验（已在 `frontend/src/modules/stocks/charting/**` 内完成底层引擎从 `lightweight-charts` 到 `klinecharts` 的受控替换，保持 `minuteLines` / `kLines` / `interval` / `aiLevels` / `update:interval` 父层 contract 不变，并补齐 `klinechartsRegistry.js` 作为 MA/VOL/AI 价位线与后续策略标记层的 registry 入口；`frontend/package.json` / lockfile 已精确锁定 `10.0.0-beta1` 且移除旧 `lightweight-charts` 依赖。后续回归已补齐日K 时间戳毫秒化、月线/年线真实数据渲染、分时成交量按“手”显示，并将图表图例升级为可点击开关，可直接切换分时主线/量能/昨收基线/AI 价位与 K 线蜡烛/量能/MA5/MA10/AI 价位；前端单测、build 与后端托管页面的查股 + 图例点击 Browser MCP 验收已通过）
-- [ ] GOAL-012-R3 统一策略注册表与多信号叠加（已启动 Phase A：新增 `chartStrategyRegistry.js` / `chartPanes.js`，把原本散落在 view 层的 legend 升级为统一 strategy registry + grouped chips + render plan。当前已接入并验证首批策略：MA5/10/20/60、VWAP、BOLL、Donchian、MACD、RSI、KDJ、ORB，以及既有 AI 价位线/昨收基线/量能副图；同时补齐可读性层：图表头部浮动小标会按颜色区分当前激活策略，鼠标悬浮可查看“介绍 / 解释 / 用法”，并支持 `隐藏小标 / 显示小标` 总开关。已通过前端单测、build 与后端托管页面 Browser MCP 点击验收。剩余 Phase B/C 将继续补齐 ATR、九转、金叉死叉、突破/假突破、缺口、量价背离与 VWAP 强弱等信号。）
+- [x] GOAL-012-R3 统一策略注册表与多信号叠加（Phase A/B/C 已完成并验收：`chartStrategyRegistry.js` / `chartPanes.js` 已将图表能力收敛为统一 strategy registry + grouped chips + render plan。当前已接入并验证策略：MA5/10/20/60、VWAP、BOLL、Donchian、MACD、RSI、ATR、KDJ、ORB，以及完整 Phase C 信号 `MA5/MA10 金叉/死叉`、`TD九转`、`MACD金叉/死叉`、`KDJ金叉/死叉`、`放量突破/假突破`、`缺口`、`量价背离`、`VWAP强弱`；其中日K专属信号只在 `日K图` 展示，分时专属信号只在 `分时图` 展示。可读性层也已收口：图表头部浮动小标按颜色区分当前激活策略，鼠标悬浮可查看“介绍 / 解释 / 用法”，并支持 `隐藏小标 / 显示小标` 总开关，以及 `全屏 / 退出全屏` 放大控制。对于 RSI/KDJ/BOLL/Donchian/MACD 这类多线指标，tooltip 已补齐“颜色对照”；KDJ 也已完成真实图面修复，不再让 render-plan 聚合器错误地去重/排序 `[9,3,3]` 参数，而是在同一 KDJ 副图挂载 `K/D/J` 三条受控单线。整套 R3 已通过前端定向单测、build 与后端托管页面 Browser MCP 点击验收。）
 - [x] GOAL-013 双轨数据中枢（Local+Global Dual-Track）与 LLM 职能调度中心（已完成 Step 2：本地事实库、受控外网路由、新闻精准过滤、Step 2.2 Task 4 的标准/Pro 模型分流、Step 2.3 的新浪板块资讯抓取/大盘多源聚合/无选股即可查看的大盘资讯与完整查询历史展示、Step 2.4 的本地事实批量 AI 清洗/翻译/标签隔离投喂、Step 2.5 的大盘资讯内嵌交互/外媒 RSS 时效清洗/本地事实 AI 重试补漏，以及 Step 2.6 的纯财经大盘源切换、活跃 RSS 替换与 `全量资讯库` 归档工作台）
 - [ ] GOAL-015 深度盘面属性扩充与 Agent 指挥体系重构（Step 3 已继续完成“基本面快照富事实 + 数据库缓存优先刷新”增强：`StockCompanyProfiles` 新增 `FundamentalFactsJson/FundamentalUpdatedAt`，详情页先读 `/api/stocks/detail/cache` 的数据库快照，再由 `/api/stocks/detail` 实时抓东财公司概况/股东研究并回写；已完成 migration、SQLCMD 校验、后端定向单测、前端定向单测、前端 build 与运行时接口验证。剩余主要是 Edge/UI 验收与更大范围联调。）
 - [x] ISSUE-20260310 提示词增强（新闻抗污染策略 + 新闻库定时采集约束 + 白盒 MCP/Skill 任务执行规范）
@@ -175,7 +176,7 @@ opencode
 	- Step 4.1 已完成：新增 `ActiveWatchlist` 高频白名单与 `HighFrequencyQuoteService`，仅在 A 股交易时段轮询白名单股票并持续回写 quote/minute/messages 到本地缓存表，为后续交易计划触发与纪律执行提供稳定底座；已通过后端全量单测、EF migration 应用与 SQLCMD 表/索引校验。
 	- Step 4.2 已完成，并在同日补齐 R1 可用性增强：新增 `TradingPlan` 实体、`/api/stocks/plans*` 接口、后端基于 commander 历史结果的交易计划草稿生成、前端“基于此分析起草交易计划”按钮与可编辑弹窗、当前计划列表，以及保存后自动 upsert `ActiveWatchlist`；R1 进一步补齐已保存计划编辑/删除、跨股票“交易计划总览”，并将止损/止盈/目标价按 commander 图表字段 -> financial `institutionTargetPrice` -> trend forecast 极值的优先级做确定性默认填充。同时补齐对本地旧版 `TradingPlans` 表的兼容补列、索引和 `PlanKey`/`Title` 默认约束，已通过后端定向单测、前端定向单测、前端 build、SQLCMD 结构校验与后端托管页面 Browser MCP 实测保存。
 	- Step 4.3 已于 2026-03-14 完成返工并通过复测：`TradingPlanTriggerService` 现已以 `ActiveWatchlist` 作为执行边界，量价背离 warning 改为按持续条件时间窗去重，前端短轮询同时覆盖“当前交易计划”和“交易计划总览”。本轮已重新通过后端定向单测、前端定向单测、frontend build、`TradingPlanEvents` 的 SQLCMD 字段/索引校验，以及后端托管页面的刷新链路验证；本步仍不引入 SignalR 或 LLM 语义复核。
-	- Dev2 并行前端支线：GOAL-012-R2 已完成 `klinecharts` 受控替换；GOAL-012-R3 现已进入 Phase A 并完成首批策略注册表落地，在既有 `charting/**` 适配层上实现统一 strategy registry、grouped chips 与 render plan，当前已支持 MA/VWAP/BOLL/Donchian、MACD/KDJ/RSI、ORB 及既有 AI/昨收/量能图层，并新增图表头部浮动小标、颜色识别、hover 说明与总开关。后续仍将继续补齐 ATR、神奇九转、各类金叉死叉、突破/假突破、缺口、量价背离与 VWAP 强弱，并保持按钮化切换与父层 contract 稳定。
+	- Dev2 并行前端支线：GOAL-012-R2 已完成 `klinecharts` 受控替换；GOAL-012-R3 现已进入 Phase C 首批信号层落地，在既有 `charting/**` 适配层上实现统一 strategy registry、grouped chips、render plan 与 marker overlay 出口，当前已支持 MA/VWAP/BOLL/Donchian、MACD/KDJ/RSI/ATR、ORB、MA5/MA10 金叉死叉及既有 AI/昨收/量能图层，并新增图表头部浮动小标、颜色识别、hover 说明与总开关。后续仍将继续补齐神奇九转、突破/假突破、缺口、量价背离与 VWAP 强弱，并保持按钮化切换与父层 contract 稳定。
 	- 盘前自动生成候选池：主线板块、关键价位、预期催化、风险提示。
 	- 盘中只执行“已定义触发”：避免临时主观冲动单。
 	- 计划失效自动提示：跌破条件、量价背离、消息反转时触发撤销或降级。

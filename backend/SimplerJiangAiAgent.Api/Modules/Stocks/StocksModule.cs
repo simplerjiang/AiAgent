@@ -29,6 +29,7 @@ public sealed class StocksModule : IModule
         services.AddSingleton<IStockCrawler, CompositeStockCrawler>();
         services.Configure<HighFrequencyQuoteOptions>(configuration.GetSection(HighFrequencyQuoteOptions.SectionName));
         services.Configure<TradingPlanTriggerOptions>(configuration.GetSection(TradingPlanTriggerOptions.SectionName));
+        services.Configure<TradingPlanReviewOptions>(configuration.GetSection(TradingPlanReviewOptions.SectionName));
         services.AddScoped<IActiveWatchlistService, ActiveWatchlistService>();
         services.AddScoped<ILocalFactIngestionService, LocalFactIngestionService>();
         services.AddScoped<ILocalFactAiEnrichmentService, LocalFactAiEnrichmentService>();
@@ -41,11 +42,13 @@ public sealed class StocksModule : IModule
         services.AddScoped<ITradingPlanDraftService, TradingPlanDraftService>();
         services.AddScoped<ITradingPlanService, TradingPlanService>();
         services.AddScoped<ITradingPlanTriggerService, TradingPlanTriggerService>();
+        services.AddScoped<ITradingPlanReviewService, TradingPlanReviewService>();
         services.AddScoped<IStockChatHistoryService, StockChatHistoryService>();
         services.AddScoped<IStockNewsImpactService, StockNewsImpactService>();
         services.AddScoped<IStockSignalService, StockSignalService>();
         services.AddScoped<IStockPositionGuidanceService, StockPositionGuidanceService>();
         services.AddHostedService<TradingPlanTriggerWorker>();
+        services.AddHostedService<TradingPlanReviewWorker>();
     }
 
     public void MapEndpoints(IEndpointRouteBuilder app)
@@ -607,6 +610,21 @@ public sealed class StocksModule : IModule
             return item is null ? Results.NotFound() : Results.Ok(MapTradingPlanDto(item));
         })
         .WithName("CancelTradingPlan")
+        .WithOpenApi();
+
+        group.MapPost("/plans/{id:long}/resume", async (long id, ITradingPlanService tradingPlanService) =>
+        {
+            try
+            {
+                var item = await tradingPlanService.ResumeAsync(id);
+                return item is null ? Results.NotFound() : Results.Ok(MapTradingPlanDto(item));
+            }
+            catch (Exception ex)
+            {
+                return Results.BadRequest(new { message = ex.Message });
+            }
+        })
+        .WithName("ResumeTradingPlan")
         .WithOpenApi();
 
         group.MapDelete("/plans/{id:long}", async (long id, ITradingPlanService tradingPlanService) =>

@@ -12,7 +12,8 @@ public enum TradingPlanStatus
     Pending = 1,
     Triggered = 2,
     Invalid = 3,
-    Cancelled = 4
+    Cancelled = 4,
+    ReviewRequired = 5
 }
 
 public sealed class TradingPlan

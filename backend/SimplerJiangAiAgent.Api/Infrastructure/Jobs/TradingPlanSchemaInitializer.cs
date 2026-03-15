@@ -53,6 +53,7 @@ public static class TradingPlanSchemaInitializer
             "IF COL_LENGTH('dbo.TradingPlans','TriggeredAt') IS NULL ALTER TABLE dbo.TradingPlans ADD TriggeredAt DATETIME2 NULL; " +
             "IF COL_LENGTH('dbo.TradingPlans','InvalidatedAt') IS NULL ALTER TABLE dbo.TradingPlans ADD InvalidatedAt DATETIME2 NULL; " +
             "IF COL_LENGTH('dbo.TradingPlans','CancelledAt') IS NULL ALTER TABLE dbo.TradingPlans ADD CancelledAt DATETIME2 NULL; " +
+            "IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.TradingPlans') AND name = 'Status' AND max_length < 28) ALTER TABLE dbo.TradingPlans ALTER COLUMN Status NVARCHAR(16) NOT NULL; " +
             "IF COL_LENGTH('dbo.TradingPlans','PlanKey') IS NOT NULL AND NOT EXISTS (SELECT 1 FROM sys.default_constraints dc JOIN sys.columns c ON c.object_id = dc.parent_object_id AND c.column_id = dc.parent_column_id WHERE dc.parent_object_id = OBJECT_ID('dbo.TradingPlans') AND c.name = 'PlanKey') ALTER TABLE dbo.TradingPlans ADD CONSTRAINT DF_TradingPlans_LegacyPlanKey DEFAULT('') FOR PlanKey; " +
             "IF COL_LENGTH('dbo.TradingPlans','Title') IS NOT NULL AND NOT EXISTS (SELECT 1 FROM sys.default_constraints dc JOIN sys.columns c ON c.object_id = dc.parent_object_id AND c.column_id = dc.parent_column_id WHERE dc.parent_object_id = OBJECT_ID('dbo.TradingPlans') AND c.name = 'Title') ALTER TABLE dbo.TradingPlans ADD CONSTRAINT DF_TradingPlans_LegacyTitle DEFAULT('') FOR Title; " +
             "IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_TradingPlans_Symbol_CreatedAt' AND object_id = OBJECT_ID('dbo.TradingPlans')) " +
@@ -74,8 +75,12 @@ public static class TradingPlanSchemaInitializer
             "); " +
             "END; " +
             "IF COL_LENGTH('dbo.TradingPlanEvents','PlanId') IS NULL ALTER TABLE dbo.TradingPlanEvents ADD PlanId BIGINT NOT NULL CONSTRAINT DF_TradingPlanEvents_PlanId DEFAULT(0); " +
+            "IF COL_LENGTH('dbo.TradingPlanEvents','VersionId') IS NULL ALTER TABLE dbo.TradingPlanEvents ADD VersionId BIGINT NULL; " +
             "IF COL_LENGTH('dbo.TradingPlanEvents','Symbol') IS NULL ALTER TABLE dbo.TradingPlanEvents ADD Symbol NVARCHAR(32) NOT NULL CONSTRAINT DF_TradingPlanEvents_Symbol DEFAULT(''); " +
             "IF COL_LENGTH('dbo.TradingPlanEvents','EventType') IS NULL ALTER TABLE dbo.TradingPlanEvents ADD EventType NVARCHAR(32) NOT NULL CONSTRAINT DF_TradingPlanEvents_EventType DEFAULT('VolumeDivergenceWarning'); " +
+            "IF COL_LENGTH('dbo.TradingPlanEvents','Strategy') IS NULL ALTER TABLE dbo.TradingPlanEvents ADD Strategy NVARCHAR(64) NOT NULL CONSTRAINT DF_TradingPlanEvents_Strategy DEFAULT('runtime'); " +
+            "IF COL_LENGTH('dbo.TradingPlanEvents','Reason') IS NULL ALTER TABLE dbo.TradingPlanEvents ADD Reason NVARCHAR(MAX) NULL; " +
+            "IF COL_LENGTH('dbo.TradingPlanEvents','CreatedAt') IS NULL ALTER TABLE dbo.TradingPlanEvents ADD CreatedAt DATETIME2 NOT NULL CONSTRAINT DF_TradingPlanEvents_CreatedAt DEFAULT(SYSUTCDATETIME()); " +
             "IF COL_LENGTH('dbo.TradingPlanEvents','Severity') IS NULL ALTER TABLE dbo.TradingPlanEvents ADD Severity NVARCHAR(16) NOT NULL CONSTRAINT DF_TradingPlanEvents_Severity DEFAULT('Warning'); " +
             "IF COL_LENGTH('dbo.TradingPlanEvents','Message') IS NULL ALTER TABLE dbo.TradingPlanEvents ADD Message NVARCHAR(MAX) NOT NULL CONSTRAINT DF_TradingPlanEvents_Message DEFAULT(''); " +
             "IF COL_LENGTH('dbo.TradingPlanEvents','SnapshotPrice') IS NULL ALTER TABLE dbo.TradingPlanEvents ADD SnapshotPrice DECIMAL(18,2) NULL; " +

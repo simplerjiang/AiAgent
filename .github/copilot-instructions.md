@@ -159,14 +159,17 @@
 - For accepted chart-engine replacements, remove the superseded frontend package from the manifest/lockfile in the same change, and validate on a fresh backend-served page load before treating browser console errors from older tabs as current regressions.
 - For `klinecharts` in this repo, always feed timestamps in Unix milliseconds and normalize minute-line cumulative volumes into per-bar hand counts before rendering the volume pane.
 - For GOAL-012 chart legend controls, drive chip active state from a single per-view visibility model and update both runtime chart styles and registry-managed indicators/overlays together; lock the behavior with unit tests that assert active/inactive classes after clicks.
+- For GOAL-012 chart terminal fullscreen controls, bind button state to browser `fullscreenchange` and cover both enter/exit paths in unit tests; do not rely on click-local toggles alone, or native browser exit can desync the UI.
 - For StockInfoTab polling or alert-surface changes, update the shared frontend fetch mock defaults for any newly added `/api/stocks/**` reads before asserting existing plan UI, otherwise older tests can fail by entering the generic error state instead of rendering the target card content.
 - For GOAL-008 Step 4.3 acceptance, the trigger engine must gate execution by `ActiveWatchlist`, dedupe warning events by ongoing condition rather than raw metadata string equality, and short-poll both the current-stock card and the global plan board before calling the task done.
 - For `StockInfoTab` polling tests that use fake timers, flush the mount-triggered async fetch chain with `await Promise.resolve()` plus `await vi.advanceTimersByTimeAsync(0)` before asserting initial request counts; otherwise the first board poll can appear to be missing.
+- For TradingPlans list surfaces, filter out legacy placeholder rows missing core identity fields (`Symbol`, `Name`, valid `AnalysisHistoryId`) at the backend query boundary so blank draft/archived records never leak into the board UI.
 - 对于本地旧表里以字符串持久化的枚举值，禁止继续直接依赖 EF 默认字符串枚举转换；必须改为宽容解析，兼容已知历史值，并把未知值降级到安全状态，避免列表接口因旧数据直接崩溃。
 - 对于 beta 图表引擎替换，必须同时在 `package.json` 与 lockfile 精确锁版本，并把替换限制在既有 `charting/**` 适配层边界内，保证回滚成本可控。
 - 对于已确认落地的图表引擎替换，必须在同一变更里从前端依赖与 lockfile 中移除被替代的旧包，并优先在后端托管的新页面会话中做浏览器验收，不能把旧 tab 残留的控制台错误直接当作当前回归。
 - 对本仓库的 `klinecharts`，时间戳必须使用 Unix 毫秒；分时接口若返回累计成交量，渲染副图前必须先转换成逐 bar 的“手”数量。
 - 对 GOAL-012 图表图例开关，必须用“按视图维度的单一 visibility 状态”驱动按钮 active 状态，并同步更新运行时图表样式与 registry 管理的指标/overlay；同时补单测断言点击后的 active/inactive class，避免再次退化成纯展示文案。
+- 对 GOAL-012 的图表终端全屏控制，按钮状态必须绑定浏览器 `fullscreenchange` 事件，并补齐进入/退出两条单测；不能只靠点击时本地翻转状态，否则用户用浏览器原生退出会让 UI 状态失真。
 - 对 StockInfoTab 这类带短轮询/告警面的页面，只要新增 `/api/stocks/**` 读取接口，就必须先同步更新前端共享 fetch mock 默认返回，再去断言既有计划卡片内容；否则老用例会先落入通用错误态，产生与真实功能无关的伪失败。
 - 对 GOAL-008 Step 4.3 的验收，触发引擎必须以 `ActiveWatchlist` 作为执行边界，warning 事件去重必须基于“持续条件”而不是原始 `MetadataJson` 字符串相等，且短轮询必须同时覆盖当前股票卡与交易计划总览，满足后才可判定完成。
 - 对使用 fake timers 的 `StockInfoTab` 轮询单测，断言首次请求计数前必须先用 `await Promise.resolve()` 加 `await vi.advanceTimersByTimeAsync(0)` 把挂载触发的异步链路 flush 完，否则容易把首次 board 轮询误判为未发出。
@@ -183,6 +186,20 @@
 - For local startup scripts on fixed ports, make reruns idempotent: if the target health endpoint is already healthy, skip restart; if the port is occupied by the same app, stop it first; if occupied by another process, fail fast with a clear message instead of letting Kestrel crash noisily.
 - For repo startup scripts launched from shared terminals, prefer absolute script paths or explicitly verify cwd immediately before invocation; otherwise prior `Set-Location` drift can create false “script not found” failures.
 - For frontend npm commands in shared terminals, prefer `npm --prefix .\\frontend ...` or explicitly confirm cwd first; otherwise commands can silently target the repo root and fail on missing `package.json`.
+- For multi-line chart indicators or overlays, always expose per-series color mapping (`color -> line name -> meaning`) in the UI help layer; a generic indicator description alone is not sufficient for users to interpret RSI/KDJ/BOLL-like charts.
+- For beta chart-engine multi-line indicators, if built-in rendering is visually ambiguous on the real chart, replace the black-box indicator with a controlled custom definition and verify actual canvas output rather than only tooltip/help text.
+- For chart strategy render-plan aggregation, never globally sort/deduplicate `calcParams`; only merge params for truly shared indicators like MA, because ordered tuples such as `KDJ [9,3,3]` and `MACD [12,26,9]` break if normalized blindly.
+- For each newly added chart-registry indicator, update the pane constant, per-view remove filters, and chart regression tests in the same change; otherwise view switches can leave stale panes or make new indicators untestable.
+- For each new chart signal strategy, wire the renderer output path first (for example `renderPlan.markers -> overlay`) before adding the strategy itself; otherwise the signal can compute correctly but remain invisible on the actual chart.
+- For sequence-style chart signals such as TD Sequential, lock the counting logic with synthetic K-line unit tests that deterministically produce both bullish and bearish terminal markers before relying on Browser MCP visuals.
+- For MACD cross signals, compute markers from DIFF versus DEA crossovers directly and lock one bullish plus one bearish crossover with synthetic K-line fixtures before treating the frontend signal as done.
+- For multi-signal Phase C batches in this repo, cover both day-view and minute-view marker families with synthetic fixtures that assert representative labels plus view gating, instead of relying on live market samples to incidentally exercise every signal.
 - 对于固定端口的本地启动脚本，重复执行必须幂等：若健康检查已通过则跳过重启；若端口被同一应用占用则先停止旧进程；若被其他进程占用则直接明确失败，避免放任 Kestrel 以噪声异常崩溃。
 - 对于在共享终端里执行的仓库启动脚本，优先使用绝对路径，或在调用前立刻确认 cwd；否则之前步骤造成的 `Set-Location` 漂移会制造“脚本不存在”的伪失败。
 - 对于共享终端里的前端 npm 命令，优先使用 `npm --prefix .\\frontend ...`，或在运行前显式确认 cwd；否则命令可能误打到仓库根目录并因缺少 `package.json` 失败。
+- 对于多线图表指标或叠加层，UI 帮助层必须提供逐条子线的颜色对照（`颜色 -> 线名 -> 含义`）；只给“这个指标是什么”的总说明，不足以让用户理解 RSI/KDJ/BOLL 这类图表。
+- 对于 beta 图表引擎中的多线指标，只要真实图面渲染仍然暧昧或异常，就不要继续信任内置黑盒实现；应切换为受控自定义指标定义，并验收实际 canvas 输出，而不是只看 tooltip 或帮助文案。
+- 对图表策略 render-plan 的参数聚合，禁止对所有指标统一做 `calcParams` 排序去重；只有像 MA 这类真正共享同一指标实例的场景才能合并参数。像 `KDJ [9,3,3]`、`MACD [12,26,9]` 这类有序参数一旦被盲目归一化，就会直接算错。
+- 对 TD Sequential 这类序列型图表信号，必须先用 synthetic K 线单测锁定多空终点注记计数，再依赖 Browser MCP 做可视确认，避免把真实行情样本里的偶然性当成计数正确。
+- 对 MACD 金叉/死叉信号，必须直接用 DIFF 与 DEA 的交叉来计算 marker，并用 synthetic K 线单测锁定一组多头与空头交叉后，才能判定前端信号完成。
+- 对本仓库 Phase C 这种多信号批量收口，必须同时用 day-view 与 minute-view 的 synthetic 数据夹具覆盖代表性 marker 文案和 view gating，不能只依赖真实行情样本碰巧触发全部信号。

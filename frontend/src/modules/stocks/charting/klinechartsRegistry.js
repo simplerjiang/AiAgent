@@ -22,6 +22,32 @@ const buildPriceLineOverlay = ({ groupId, value, timestamp, color }) => ({
   }
 })
 
+const buildMarkerOverlay = ({ viewId, marker }) => ({
+  name: 'simpleAnnotation',
+  groupId: `${viewId}-markers`,
+  paneId: CANDLE_PANE_ID,
+  lock: true,
+  points: [{ timestamp: marker.timestamp, value: marker.value }],
+  extendData: marker.text,
+  styles: {
+    line: {
+      color: marker.color,
+      style: 'solid',
+      size: 1,
+      dashedValue: [0, 0]
+    },
+    polygon: {
+      color: marker.color,
+      style: 'fill'
+    },
+    text: {
+      color: marker.color,
+      size: 12,
+      weight: '600'
+    }
+  }
+})
+
 export function ensureKLineChartsRegistry() {
   return {
     candlePaneId: CANDLE_PANE_ID,
@@ -44,6 +70,9 @@ export function syncIndicatorRegistry(chart, { viewId, renderPlan }) {
     }
     if (item.series) {
       indicator.series = item.series
+    }
+    if (item.styles) {
+      indicator.styles = item.styles
     }
 
     chart.createIndicator(indicator, item.isStack === true, item.paneOptions)
@@ -75,7 +104,14 @@ export function syncOverlayRegistry(chart, { viewId, firstTimestamp, renderPlan 
 
 export function syncMarkerSignalRegistry(chart, { viewId, renderPlan }) {
   chart.removeOverlay({ groupId: `${viewId}-markers` })
-  return Array.isArray(renderPlan.markers) ? renderPlan.markers : []
+
+  const markers = Array.isArray(renderPlan.markers) ? renderPlan.markers : []
+  if (!markers.length) {
+    return []
+  }
+
+  chart.createOverlay(markers.map(marker => buildMarkerOverlay({ viewId, marker })))
+  return markers
 }
 
 export { CANDLE_PANE_ID, VOLUME_PANE_ID }

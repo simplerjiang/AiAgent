@@ -223,6 +223,76 @@ public sealed class TradingPlanServicesTests
         Assert.Equal("仅 Pending 计划允许编辑", error.Message);
     }
 
+      [Fact]
+      public async Task UpdateAsync_AllowsReviewRequiredPlan()
+      {
+        await using var dbContext = CreateDbContext();
+        var plan = new TradingPlan
+        {
+          Symbol = "sh600519",
+          Name = "贵州茅台",
+          Direction = TradingPlanDirection.Long,
+          Status = TradingPlanStatus.ReviewRequired,
+          AnalysisHistoryId = 1,
+          SourceAgent = "commander",
+          CreatedAt = DateTime.UtcNow,
+          UpdatedAt = DateTime.UtcNow
+        };
+        dbContext.TradingPlans.Add(plan);
+        await dbContext.SaveChangesAsync();
+
+        var service = new TradingPlanService(dbContext, new ActiveWatchlistService(dbContext));
+
+        var updated = await service.UpdateAsync(
+          plan.Id,
+          new TradingPlanUpdateDto(
+            "贵州茅台",
+            "Long",
+            1800m,
+            1700m,
+            1680m,
+            1880m,
+            1920m,
+            "等待确认",
+            "跌破离场",
+            "严格止损",
+            "摘要",
+            "commander",
+            null));
+
+        Assert.NotNull(updated);
+        Assert.Equal(TradingPlanStatus.ReviewRequired, updated!.Status);
+        Assert.Equal(1800m, updated.TriggerPrice);
+      }
+
+      [Fact]
+      public async Task ResumeAsync_MarksReviewRequiredPlanBackToPendingAndAddsEvent()
+      {
+        await using var dbContext = CreateDbContext();
+        var plan = new TradingPlan
+        {
+          Symbol = "sz000021",
+          Name = "深科技",
+          Direction = TradingPlanDirection.Long,
+          Status = TradingPlanStatus.ReviewRequired,
+          AnalysisHistoryId = 1,
+          SourceAgent = "commander",
+          CreatedAt = DateTime.UtcNow,
+          UpdatedAt = DateTime.UtcNow
+        };
+        dbContext.TradingPlans.Add(plan);
+        await dbContext.SaveChangesAsync();
+
+        var service = new TradingPlanService(dbContext, new ActiveWatchlistService(dbContext));
+
+        var resumed = await service.ResumeAsync(plan.Id);
+
+        Assert.NotNull(resumed);
+        Assert.Equal(TradingPlanStatus.Pending, resumed!.Status);
+        var reviewEvent = await dbContext.TradingPlanEvents.SingleAsync();
+        Assert.Equal(TradingPlanEventType.ReviewCleared, reviewEvent.EventType);
+      }
+
     private static AppDbContext CreateDbContext()
     {
         var options = new DbContextOptionsBuilder<AppDbContext>()
@@ -260,6 +330,17 @@ public sealed class TradingPlanServicesTests
 
       [Theory]
       [InlineData("Draft", TradingPlanStatus.Draft)]
+      [InlineData("ReviewRequired", TradingPlanStatus.ReviewRequired)]
+      [InlineData("NeedsReview", TradingPlanStatus.ReviewRequired)]
+      [InlineData("Archived", TradingPlanStatus.Cancelled)]
+      [InlineData("UnexpectedLegacyStatus", TradingPlanStatus.Cancelled)]
+      public void ParseTradingPlanStatus_MapsLegacyAndReviewValues(string raw, TradingPlanStatus expected)
+      {
+        Assert.Equal(expected, AppDbContext.ParseTradingPlanStatus(raw));
+      }
+
+      [Theory]
+      [InlineData("Draft", TradingPlanStatus.Draft)]
       [InlineData("Archived", TradingPlanStatus.Cancelled)]
       [InlineData("UnexpectedLegacyStatus", TradingPlanStatus.Cancelled)]
       public void ParseTradingPlanStatus_NormalizesLegacyValues(string rawValue, TradingPlanStatus expected)
@@ -292,5 +373,54 @@ public sealed class TradingPlanServicesTests
 
         Assert.Single(items);
         Assert.Equal(TradingPlanStatus.Draft, items[0].Status);
+      }
+
+      [Fact]
+      public async Task GetListAsync_FiltersLegacyPlaceholderRowsMissingIdentityFields()
+      {
+        await using var dbContext = CreateDbContext();
+        dbContext.TradingPlans.AddRange(
+          new TradingPlan
+          {
+            Symbol = "sz000021",
+            Name = "深科技",
+            Direction = TradingPlanDirection.Long,
+            Status = TradingPlanStatus.Pending,
+            AnalysisHistoryId = 7,
+            SourceAgent = "commander",
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+          },
+          new TradingPlan
+          {
+            Symbol = string.Empty,
+            Name = string.Empty,
+            Direction = TradingPlanDirection.Long,
+            Status = TradingPlanStatus.Draft,
+            AnalysisHistoryId = 0,
+            SourceAgent = "commander",
+            CreatedAt = DateTime.UtcNow.AddMinutes(-1),
+            UpdatedAt = DateTime.UtcNow.AddMinutes(-1)
+          },
+          new TradingPlan
+          {
+            Symbol = string.Empty,
+            Name = string.Empty,
+            Direction = TradingPlanDirection.Long,
+            Status = TradingPlanStatus.Cancelled,
+            AnalysisHistoryId = 0,
+            SourceAgent = "commander",
+            CreatedAt = DateTime.UtcNow.AddMinutes(-2),
+            UpdatedAt = DateTime.UtcNow.AddMinutes(-2)
+          });
+        await dbContext.SaveChangesAsync();
+
+        var service = new TradingPlanService(dbContext, new ActiveWatchlistService(dbContext));
+
+        var items = await service.GetListAsync(null, 20);
+
+        Assert.Single(items);
+        Assert.Equal("sz000021", items[0].Symbol);
+        Assert.Equal("深科技", items[0].Name);
       }
 }

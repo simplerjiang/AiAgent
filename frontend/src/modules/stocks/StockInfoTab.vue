@@ -5,6 +5,13 @@ import StockAgentPanels from './StockAgentPanels.vue'
 import TerminalView from './TerminalView.vue'
 import CopilotPanel from './CopilotPanel.vue'
 import ChatWindow from '../../components/ChatWindow.vue'
+import {
+  formatTradingPlanStatus,
+  getTradingPlanReviewText,
+  getTradingPlanStatusClass,
+  normalizeTradingPlanStatus,
+  parseTradingPlanAlertMetadata
+} from './tradingPlanReview'
 
 const symbol = ref('')
 const interval = ref(localStorage.getItem('stock_interval') || 'day')
@@ -162,6 +169,7 @@ const marketNewsBucket = computed(() => rootWorkspace.localNewsBuckets.market ??
 const marketNewsLoading = computed(() => rootWorkspace.localNewsLoading)
 const marketNewsError = computed(() => rootWorkspace.localNewsError)
 const deletingPlanId = ref('')
+const resumingPlanId = ref('')
 
 const isBlockingQuoteLoad = computed(() => loading.value && !detail.value)
 const isBackgroundQuoteRefresh = computed(() => loading.value && !!detail.value)
@@ -306,22 +314,12 @@ const normalizePlanNumber = value => {
   return Number.isFinite(number) ? number : null
 }
 
-const normalizePlanStatus = value => {
-  if (value === 'Draft') {
-    return 'Pending'
-  }
-  if (value === 'Archived') {
-    return 'Cancelled'
-  }
-  return value || 'Pending'
-}
-
 const normalizeTradingPlan = item => ({
   id: item?.id ?? item?.Id ?? '',
   symbol: item?.symbol ?? item?.Symbol ?? '',
   name: item?.name ?? item?.Name ?? '',
   direction: item?.direction ?? item?.Direction ?? 'Long',
-  status: normalizePlanStatus(item?.status ?? item?.Status),
+  status: normalizeTradingPlanStatus(item?.status ?? item?.Status),
   triggerPrice: normalizePlanNumber(item?.triggerPrice ?? item?.TriggerPrice),
   invalidPrice: normalizePlanNumber(item?.invalidPrice ?? item?.InvalidPrice),
   stopLossPrice: normalizePlanNumber(item?.stopLossPrice ?? item?.StopLossPrice),
@@ -396,6 +394,17 @@ const formatPlanAlertSummary = alert => {
   const occurredAt = formatDate(alert.occurredAt)
   return occurredAt ? `${alert.message} · ${occurredAt}` : alert.message
 }
+
+const getPlanReviewText = alert => getTradingPlanReviewText(alert)
+
+const getPlanReviewHeadline = alert => {
+  const metadata = parseTradingPlanAlertMetadata(alert?.metadataJson)
+  return metadata?.newsTitle || ''
+}
+
+const canEditTradingPlan = item => ['Pending', 'ReviewRequired'].includes(normalizeTradingPlanStatus(item?.status))
+
+const canResumeTradingPlan = item => normalizeTradingPlanStatus(item?.status) === 'ReviewRequired'
 
 const parseResponseMessage = async (response, fallback) => {
   try {
@@ -954,6 +963,31 @@ const deleteTradingPlan = async (symbolKey, item) => {
     workspace.planError = err.message || '交易计划删除失败'
   } finally {
     deletingPlanId.value = ''
+  }
+}
+
+const resumeTradingPlan = async (symbolKey, item) => {
+  const workspace = getWorkspace(symbolKey)
+  if (!workspace || !item?.id) {
+    return
+  }
+
+  resumingPlanId.value = String(item.id)
+  workspace.planError = ''
+  try {
+    const response = await fetch(`/api/stocks/plans/${item.id}/resume`, { method: 'POST' })
+    if (!response.ok) {
+      throw new Error(await parseResponseMessage(response, '交易计划恢复观察失败'))
+    }
+
+    const saved = normalizeTradingPlan(await response.json())
+    workspace.planList = workspace.planList.map(plan => (String(plan.id) === String(saved.id) ? saved : plan))
+    await refreshTradingPlanSection(symbolKey, true)
+    await refreshTradingPlanBoard(true)
+  } catch (err) {
+    workspace.planError = err.message || '交易计划恢复观察失败'
+  } finally {
+    resumingPlanId.value = ''
   }
 }
 
@@ -2025,10 +2059,13 @@ watch(currentStockKey, () => {
             <li v-for="item in rootWorkspace.planList" :key="`plan-board-${item.id}`" class="plan-item plan-item-compact">
               <div class="plan-item-header">
                 <div class="plan-item-title">
-                  <strong>{{ item.name }} · {{ item.status }}</strong>
+                  <strong>{{ item.name }} · {{ formatTradingPlanStatus(item.status) }}</strong>
                   <small>{{ item.symbol }}</small>
                 </div>
                 <button class="plan-link-button" @click="jumpToPlanSymbol(item.symbol)">查看股票</button>
+              </div>
+              <div class="plan-status-row">
+                <span class="plan-status-badge" :class="getTradingPlanStatusClass(item.status)">{{ formatTradingPlanStatus(item.status) }}</span>
               </div>
               <p>{{ item.analysisSummary || item.expectedCatalyst || '等待补充计划摘要' }}</p>
               <div
@@ -2038,6 +2075,8 @@ watch(currentStockKey, () => {
               >
                 <strong>{{ getLatestPlanAlert(rootWorkspace, item.id).eventType }}</strong>
                 <span>{{ formatPlanAlertSummary(getLatestPlanAlert(rootWorkspace, item.id)) }}</span>
+                <small v-if="getPlanReviewHeadline(getLatestPlanAlert(rootWorkspace, item.id))">关联新闻：{{ getPlanReviewHeadline(getLatestPlanAlert(rootWorkspace, item.id)) }}</small>
+                <small v-if="getPlanReviewText(getLatestPlanAlert(rootWorkspace, item.id))">复核结论：{{ getPlanReviewText(getLatestPlanAlert(rootWorkspace, item.id)) }}</small>
               </div>
               <div class="plan-pill-row">
                 <span class="plan-pill">方向 {{ item.direction }}</span>
@@ -2155,15 +2194,26 @@ watch(currentStockKey, () => {
                 <li v-for="item in workspace.planList" :key="`plan-${item.id}`" class="plan-item">
                   <div class="plan-item-header">
                     <div class="plan-item-title">
-                      <strong>{{ item.name }} · {{ item.status }}</strong>
+                      <strong>{{ item.name }} · {{ formatTradingPlanStatus(item.status) }}</strong>
                       <small class="muted">{{ formatDate(item.updatedAt || item.createdAt) }}</small>
                     </div>
                     <div class="plan-item-actions">
-                      <button v-if="item.status === 'Pending'" class="plan-link-button" @click="editTradingPlan(workspace.symbolKey, item)">编辑</button>
+                      <button v-if="canEditTradingPlan(item)" class="plan-link-button" @click="editTradingPlan(workspace.symbolKey, item)">编辑</button>
+                      <button
+                        v-if="canResumeTradingPlan(item)"
+                        class="plan-link-button"
+                        @click="resumeTradingPlan(workspace.symbolKey, item)"
+                        :disabled="resumingPlanId === String(item.id)"
+                      >
+                        {{ resumingPlanId === String(item.id) ? '恢复中...' : '恢复观察' }}
+                      </button>
                       <button class="plan-danger-button" @click="deleteTradingPlan(workspace.symbolKey, item)" :disabled="deletingPlanId === String(item.id)">
                         {{ deletingPlanId === String(item.id) ? '删除中...' : '删除' }}
                       </button>
                     </div>
+                  </div>
+                  <div class="plan-status-row">
+                    <span class="plan-status-badge" :class="getTradingPlanStatusClass(item.status)">{{ formatTradingPlanStatus(item.status) }}</span>
                   </div>
                   <p>{{ item.analysisSummary || item.expectedCatalyst || '等待补充计划摘要' }}</p>
                   <div
@@ -2173,6 +2223,8 @@ watch(currentStockKey, () => {
                   >
                     <strong>{{ getLatestPlanAlert(workspace, item.id).eventType }}</strong>
                     <span>{{ formatPlanAlertSummary(getLatestPlanAlert(workspace, item.id)) }}</span>
+                    <small v-if="getPlanReviewHeadline(getLatestPlanAlert(workspace, item.id))">关联新闻：{{ getPlanReviewHeadline(getLatestPlanAlert(workspace, item.id)) }}</small>
+                    <small v-if="getPlanReviewText(getLatestPlanAlert(workspace, item.id))">复核结论：{{ getPlanReviewText(getLatestPlanAlert(workspace, item.id)) }}</small>
                   </div>
                   <div class="plan-pill-row">
                     <span class="plan-pill">方向 {{ item.direction }}</span>
@@ -2799,6 +2851,41 @@ watch(currentStockKey, () => {
   gap: 0.12rem;
 }
 
+.plan-status-row {
+  display: flex;
+  align-items: center;
+}
+
+.plan-status-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.14rem 0.55rem;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.plan-status-pending {
+  background: rgba(37, 99, 235, 0.12);
+  color: #1d4ed8;
+}
+
+.plan-status-triggered {
+  background: rgba(22, 163, 74, 0.12);
+  color: #15803d;
+}
+
+.plan-status-invalid {
+  background: rgba(100, 116, 139, 0.16);
+  color: #475569;
+}
+
+.plan-status-review-required {
+  background: rgba(239, 68, 68, 0.12);
+  color: #b91c1c;
+}
+
 .plan-item-actions {
   display: flex;
   flex-wrap: wrap;
@@ -2824,6 +2911,10 @@ watch(currentStockKey, () => {
   font-size: 0.74rem;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+}
+
+.plan-alert small {
+  font-size: 0.76rem;
 }
 
 .plan-alert-warning {

@@ -184,6 +184,10 @@ public sealed class AppDbContext : DbContext
             .HasMaxLength(32);
 
         modelBuilder.Entity<TradingPlanEvent>()
+            .Property(x => x.Strategy)
+            .HasMaxLength(64);
+
+        modelBuilder.Entity<TradingPlanEvent>()
             .Property(x => x.EventType)
             .HasConversion(TradingPlanEventTypeConverter)
             .HasMaxLength(32);
@@ -275,6 +279,12 @@ public sealed class AppDbContext : DbContext
         if (string.Equals(value, "Archived", StringComparison.OrdinalIgnoreCase))
         {
             return TradingPlanStatus.Cancelled;
+        }
+
+        if (string.Equals(value, "Review", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(value, "NeedsReview", StringComparison.OrdinalIgnoreCase))
+        {
+            return TradingPlanStatus.ReviewRequired;
         }
 
         return TradingPlanStatus.Cancelled;

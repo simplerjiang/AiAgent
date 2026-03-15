@@ -109,6 +109,9 @@ public sealed class TradingPlanTriggerService : ITradingPlanTriggerService
                     PlanId = plan.Id,
                     Symbol = plan.Symbol,
                     EventType = transition.EventType,
+                    Strategy = "price-trigger",
+                    Reason = transition.Message,
+                    CreatedAt = occurredAt,
                     Severity = transition.Severity,
                     Message = transition.Message,
                     SnapshotPrice = latestQuote.Price,
@@ -149,6 +152,9 @@ public sealed class TradingPlanTriggerService : ITradingPlanTriggerService
                 PlanId = plan.Id,
                 Symbol = plan.Symbol,
                 EventType = TradingPlanEventType.VolumeDivergenceWarning,
+                Strategy = "volume-divergence",
+                Reason = "价格走高但量能走弱",
+                CreatedAt = divergence.LatestPointAt,
                 Severity = TradingPlanEventSeverity.Warning,
                 Message = $"最近{Math.Max(5, _options.DivergenceLookbackMinutes)}分钟价格走高但量能走弱，请注意量价背离。",
                 SnapshotPrice = latestQuote.Price,
@@ -158,6 +164,8 @@ public sealed class TradingPlanTriggerService : ITradingPlanTriggerService
             latestWarningMap[plan.Id] = new TradingPlanEvent
             {
                 PlanId = plan.Id,
+                Strategy = "volume-divergence",
+                CreatedAt = divergence.LatestPointAt,
                 MetadataJson = metadataJson,
                 OccurredAt = divergence.LatestPointAt
             };

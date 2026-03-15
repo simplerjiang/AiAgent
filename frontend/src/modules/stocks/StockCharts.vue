@@ -29,6 +29,7 @@ const props = defineProps({
 
 const emit = defineEmits(['update:interval'])
 
+const chartWrapperRef = ref(null)
 const chartShellRef = ref(null)
 const klineRef = ref(null)
 const minuteRef = ref(null)
@@ -38,6 +39,8 @@ const activeView = ref(resolveInitialChartView(props.interval))
 const featureVisibilityByView = ref(createStrategyVisibilityState())
 const showFloatingBadges = ref(true)
 const hoveredBadgeId = ref(null)
+const isFullscreen = ref(false)
+const isFallbackFullscreen = ref(false)
 
 const {
   aiLevelText,
@@ -56,6 +59,81 @@ const hasActiveData = computed(() => (activeView.value === 'minute' ? props.minu
 const strategyGroups = computed(() => getStrategyGroupsForView(activeView.value, featureVisibilityByView.value[activeView.value] ?? {}))
 const activeStrategyBadges = computed(() => getActiveStrategyBadgesForView(activeView.value, featureVisibilityByView.value[activeView.value] ?? {}))
 const hoveredStrategyBadge = computed(() => activeStrategyBadges.value.find(item => item.id === hoveredBadgeId.value) ?? null)
+
+const getFullscreenElement = () => document.fullscreenElement ?? document.webkitFullscreenElement ?? document.msFullscreenElement ?? null
+
+const requestNativeFullscreen = async () => {
+  const element = chartWrapperRef.value
+  const request = element?.requestFullscreen ?? element?.webkitRequestFullscreen ?? element?.msRequestFullscreen
+  if (request) {
+    await request.call(element)
+  }
+}
+
+const exitNativeFullscreen = async () => {
+  const exit = document.exitFullscreen ?? document.webkitExitFullscreen ?? document.msExitFullscreen
+  if (exit) {
+    await exit.call(document)
+  }
+}
+
+const syncFullscreenState = () => {
+  const fullscreenElement = getFullscreenElement()
+  if (fullscreenElement) {
+    isFullscreen.value = fullscreenElement === chartWrapperRef.value
+    if (!isFullscreen.value) {
+      isFallbackFullscreen.value = false
+    }
+    return
+  }
+  if (!isFallbackFullscreen.value) {
+    isFullscreen.value = false
+  }
+}
+
+const handleFullscreenChange = () => {
+  syncFullscreenState()
+  nextTick(() => {
+    queueResize()
+  })
+}
+
+const handleFullscreenKeydown = event => {
+  if (event.key !== 'Escape' || !isFallbackFullscreen.value) {
+    return
+  }
+  isFallbackFullscreen.value = false
+  isFullscreen.value = false
+  nextTick(() => {
+    queueResize()
+  })
+}
+
+const toggleFullscreen = async () => {
+  const element = chartWrapperRef.value
+  const hasNativeFullscreen = Boolean(
+    element &&
+    (element.requestFullscreen ?? element.webkitRequestFullscreen ?? element.msRequestFullscreen) &&
+    (document.exitFullscreen ?? document.webkitExitFullscreen ?? document.msExitFullscreen)
+  )
+
+  if (hasNativeFullscreen) {
+    if (getFullscreenElement() === element) {
+      await exitNativeFullscreen()
+    } else {
+      await requestNativeFullscreen()
+    }
+    syncFullscreenState()
+    await nextTick()
+    queueResize()
+    return
+  }
+
+  isFallbackFullscreen.value = !isFallbackFullscreen.value
+  isFullscreen.value = isFallbackFullscreen.value
+  await nextTick()
+  queueResize()
+}
 
 const syncKlineInterval = interval => {
   const normalized = normalizeKlineInterval(interval)
@@ -92,6 +170,7 @@ const toggleFeature = async featureId => {
 onMounted(() => {
   mountCharts()
   syncKlineInterval(props.interval)
+  syncFullscreenState()
   if (typeof ResizeObserver !== 'undefined') {
     resizeObserver = new ResizeObserver(entries => {
       if (!entries?.length) return
@@ -111,6 +190,10 @@ onMounted(() => {
     queueResize()
   }
   window.addEventListener('resize', resizeHandler)
+  document.addEventListener('fullscreenchange', handleFullscreenChange)
+  document.addEventListener('webkitfullscreenchange', handleFullscreenChange)
+  document.addEventListener('MSFullscreenChange', handleFullscreenChange)
+  window.addEventListener('keydown', handleFullscreenKeydown)
   nextTick(() => {
     queueResize()
   })
@@ -125,6 +208,10 @@ onUnmounted(() => {
     resizeObserver.disconnect()
     resizeObserver = null
   }
+  document.removeEventListener('fullscreenchange', handleFullscreenChange)
+  document.removeEventListener('webkitfullscreenchange', handleFullscreenChange)
+  document.removeEventListener('MSFullscreenChange', handleFullscreenChange)
+  window.removeEventListener('keydown', handleFullscreenKeydown)
   destroyCharts()
 })
 
@@ -157,6 +244,10 @@ const resolveBadgeSwatchStyle = item => item.accentSecondaryColor
   ? { backgroundImage: `linear-gradient(135deg, ${item.accentColor}, ${item.accentSecondaryColor})` }
   : { backgroundColor: item.accentColor }
 
+const resolveLineLegendSwatchStyle = item => item.color
+  ? { backgroundColor: item.color }
+  : { backgroundColor: '#64748b' }
+
 watch(featureVisibilityByView, async () => {
   renderAll()
   await nextTick()
@@ -170,21 +261,35 @@ watch(() => props.interval, interval => {
 
 <template>
   <div class="charts">
-    <div class="chart-wrapper">
+    <div
+      ref="chartWrapperRef"
+      class="chart-wrapper"
+      :class="{ 'chart-wrapper-fullscreen': isFullscreen }"
+    >
       <div class="chart-header">
         <div>
           <h3>专业图表终端</h3>
           <p v-if="aiLevelText()" class="ai-level-tip">{{ aiLevelText() }}</p>
         </div>
-        <div class="chart-tabs">
+        <div class="chart-header-actions">
+          <div class="chart-tabs">
+            <button
+              v-for="item in CHART_VIEW_OPTIONS"
+              :key="item.id"
+              class="tab"
+              :class="{ active: activeView === item.id }"
+              @click="selectView(item.id)"
+            >
+              {{ item.label }}
+            </button>
+          </div>
           <button
-            v-for="item in CHART_VIEW_OPTIONS"
-            :key="item.id"
-            class="tab"
-            :class="{ active: activeView === item.id }"
-            @click="selectView(item.id)"
+            type="button"
+            class="chart-chip chart-chip-button chart-fullscreen-toggle"
+            :class="{ active: isFullscreen }"
+            @click="toggleFullscreen"
           >
-            {{ item.label }}
+            {{ isFullscreen ? '退出全屏' : '全屏' }}
           </button>
         </div>
       </div>
@@ -239,6 +344,18 @@ watch(() => props.interval, interval => {
           <p><span>介绍：</span>{{ hoveredStrategyBadge.description }}</p>
           <p><span>解释：</span>{{ hoveredStrategyBadge.interpretation }}</p>
           <p><span>用法：</span>{{ hoveredStrategyBadge.usage }}</p>
+          <div v-if="hoveredStrategyBadge.lineLegends?.length" class="chart-line-legend">
+            <em>颜色对照</em>
+            <div
+              v-for="item in hoveredStrategyBadge.lineLegends"
+              :key="`${hoveredStrategyBadge.id}-${item.label}`"
+              class="chart-line-legend-item"
+            >
+              <span class="chart-line-legend-swatch" :style="resolveLineLegendSwatchStyle(item)" />
+              <span class="chart-line-legend-label">{{ item.label }}</span>
+              <span class="chart-line-legend-meaning">{{ item.meaning }}</span>
+            </div>
+          </div>
         </div>
         <div ref="minuteRef" class="chart" :class="{ 'chart-hidden': activeView !== 'minute' }" />
         <div ref="klineRef" class="chart" :class="{ 'chart-hidden': activeView === 'minute' }" />
@@ -280,6 +397,14 @@ watch(() => props.interval, interval => {
   gap: 1rem;
 }
 
+.chart-header-actions {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
 .chart-tabs {
   display: flex;
   flex-wrap: wrap;
@@ -309,6 +434,10 @@ watch(() => props.interval, interval => {
 
 .chart-badge-toggle {
   margin-left: 0.2rem;
+}
+
+.chart-fullscreen-toggle {
+  white-space: nowrap;
 }
 
 .chart-mode,
@@ -341,6 +470,22 @@ watch(() => props.interval, interval => {
     radial-gradient(circle at top right, rgba(59, 130, 246, 0.16), transparent 34%),
     linear-gradient(180deg, rgba(15, 23, 42, 0.04), rgba(15, 23, 42, 0.02));
   overflow: hidden;
+}
+
+.chart-wrapper-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  height: 100vh;
+  padding: 1rem;
+  box-sizing: border-box;
+  background: #f8fafc;
+  overflow: auto;
+  align-content: stretch;
+}
+
+.chart-wrapper-fullscreen .chart-shell {
+  min-height: max(420px, calc(100vh - 11.5rem));
 }
 
 .chart-floating-legend {
@@ -414,6 +559,44 @@ watch(() => props.interval, interval => {
   margin-right: 0.25rem;
 }
 
+.chart-line-legend {
+  margin-top: 0.65rem;
+  padding-top: 0.55rem;
+  border-top: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.chart-line-legend em {
+  display: block;
+  margin-bottom: 0.35rem;
+  color: #cbd5e1;
+  font-style: normal;
+  font-size: 0.78rem;
+}
+
+.chart-line-legend-item {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  gap: 0.42rem;
+  align-items: center;
+  margin-top: 0.28rem;
+}
+
+.chart-line-legend-swatch {
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.3);
+}
+
+.chart-line-legend-label {
+  color: #f8fafc;
+  font-weight: 600;
+}
+
+.chart-line-legend-meaning {
+  color: #cbd5e1;
+}
+
 .chart {
   position: absolute;
   inset: 0;
@@ -462,6 +645,11 @@ watch(() => props.interval, interval => {
 
   .chart-header {
     flex-direction: column;
+  }
+
+  .chart-header-actions {
+    width: 100%;
+    justify-content: space-between;
   }
 
   .chart-tabs {

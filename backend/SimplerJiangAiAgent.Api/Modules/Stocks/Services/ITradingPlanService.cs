@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using SimplerJiangAiAgent.Api.Data;
 using SimplerJiangAiAgent.Api.Data.Entities;
@@ -13,6 +14,7 @@ public interface ITradingPlanService
     Task<TradingPlanSaveResult> CreateAsync(TradingPlanCreateDto request, CancellationToken cancellationToken = default);
     Task<TradingPlan?> UpdateAsync(long id, TradingPlanUpdateDto request, CancellationToken cancellationToken = default);
     Task<TradingPlan?> CancelAsync(long id, CancellationToken cancellationToken = default);
+    Task<TradingPlan?> ResumeAsync(long id, CancellationToken cancellationToken = default);
     Task<bool> DeleteAsync(long id, CancellationToken cancellationToken = default);
 }
 
@@ -33,6 +35,7 @@ public sealed class TradingPlanService : ITradingPlanService
     {
         var query = _dbContext.TradingPlans
             .AsNoTracking()
+            .Where(IsRenderablePlan())
             .OrderByDescending(item => item.CreatedAt)
             .AsQueryable();
 
@@ -51,6 +54,7 @@ public sealed class TradingPlanService : ITradingPlanService
     {
         return await _dbContext.TradingPlans
             .AsNoTracking()
+            .Where(IsRenderablePlan())
             .FirstOrDefaultAsync(item => item.Id == id, cancellationToken);
     }
 
@@ -161,6 +165,39 @@ public sealed class TradingPlanService : ITradingPlanService
         return plan;
     }
 
+    public async Task<TradingPlan?> ResumeAsync(long id, CancellationToken cancellationToken = default)
+    {
+        var plan = await _dbContext.TradingPlans.FirstOrDefaultAsync(item => item.Id == id, cancellationToken);
+        if (plan is null)
+        {
+            return null;
+        }
+
+        if (plan.Status != TradingPlanStatus.ReviewRequired)
+        {
+            throw new InvalidOperationException("仅 ReviewRequired 计划允许恢复观察");
+        }
+
+        plan.Status = TradingPlanStatus.Pending;
+        plan.UpdatedAt = DateTime.UtcNow;
+        _dbContext.TradingPlanEvents.Add(new TradingPlanEvent
+        {
+            PlanId = plan.Id,
+            Symbol = plan.Symbol,
+            EventType = TradingPlanEventType.ReviewCleared,
+            Strategy = "manual-review",
+            Reason = "人工复核后恢复观察",
+            CreatedAt = plan.UpdatedAt,
+            Severity = TradingPlanEventSeverity.Info,
+            Message = "人工复核后已恢复观察。",
+            MetadataJson = JsonSerializer.Serialize(new { resumedAt = plan.UpdatedAt }),
+            OccurredAt = plan.UpdatedAt
+        });
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        return plan;
+    }
+
     public async Task<bool> DeleteAsync(long id, CancellationToken cancellationToken = default)
     {
         var plan = await _dbContext.TradingPlans.FirstOrDefaultAsync(item => item.Id == id, cancellationToken);
@@ -205,6 +242,13 @@ public sealed class TradingPlanService : ITradingPlanService
 
     private static bool IsEditableStatus(TradingPlanStatus status)
     {
-        return status is TradingPlanStatus.Pending or TradingPlanStatus.Draft;
+        return status is TradingPlanStatus.Pending or TradingPlanStatus.Draft or TradingPlanStatus.ReviewRequired;
+    }
+
+    private static System.Linq.Expressions.Expression<Func<TradingPlan, bool>> IsRenderablePlan()
+    {
+        return item => item.AnalysisHistoryId > 0
+            && !string.IsNullOrWhiteSpace(item.Symbol)
+            && !string.IsNullOrWhiteSpace(item.Name);
     }
 }

@@ -4,7 +4,10 @@ public enum TradingPlanEventType
 {
     Triggered = 1,
     Invalidated = 2,
-    VolumeDivergenceWarning = 3
+    VolumeDivergenceWarning = 3,
+    NewsReviewed = 4,
+    ReviewRequired = 5,
+    ReviewCleared = 6
 }
 
 public enum TradingPlanEventSeverity
@@ -18,8 +21,12 @@ public sealed class TradingPlanEvent
 {
     public long Id { get; set; }
     public long PlanId { get; set; }
+    public long? VersionId { get; set; }
     public string Symbol { get; set; } = string.Empty;
     public TradingPlanEventType EventType { get; set; }
+    public string Strategy { get; set; } = string.Empty;
+    public string? Reason { get; set; }
+    public DateTime CreatedAt { get; set; }
     public TradingPlanEventSeverity Severity { get; set; }
     public string Message { get; set; } = string.Empty;
     public decimal? SnapshotPrice { get; set; }
