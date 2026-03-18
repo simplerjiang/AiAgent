@@ -35,10 +35,77 @@ const toggleRaw = id => {
   rawVisible.value = { ...rawVisible.value, [id]: !rawVisible.value[id] }
 }
 
+const getObjectValue = (item, keys) => {
+  for (const key of keys) {
+    const value = item?.[key]
+    if (value !== undefined && value !== null && value !== '') {
+      return value
+    }
+  }
+  return ''
+}
+
+const getEvidenceItems = data => {
+  const list = Array.isArray(data?.evidence ?? data?.Evidence) ? (data.evidence ?? data.Evidence) : []
+  return list
+    .map((item, index) => {
+      const title = getObjectValue(item, ['title', 'Title', 'point', 'Point', 'url', 'Url']) || `证据 ${index + 1}`
+      const point = getObjectValue(item, ['point', 'Point'])
+      const excerpt = getObjectValue(item, ['excerpt', 'Excerpt', 'summary', 'Summary'])
+      const fallbackExcerpt = point && point !== title ? point : ''
+      const source = getObjectValue(item, ['source', 'Source'])
+      const publishedAt = getObjectValue(item, ['publishedAt', 'PublishedAt'])
+      const ingestedAt = getObjectValue(item, ['ingestedAt', 'IngestedAt'])
+      const url = getObjectValue(item, ['url', 'Url'])
+      const readStatus = getObjectValue(item, ['readStatus', 'ReadStatus'])
+      const readMode = getObjectValue(item, ['readMode', 'ReadMode'])
+      const localFactId = getObjectValue(item, ['localFactId', 'LocalFactId'])
+      const sourceRecordId = getObjectValue(item, ['sourceRecordId', 'SourceRecordId'])
+
+      return {
+        title,
+        excerpt: excerpt || fallbackExcerpt,
+        source,
+        publishedAt,
+        ingestedAt,
+        url,
+        readStatus,
+        readMode,
+        localFactId,
+        sourceRecordId
+      }
+    })
+    .filter(item => item.title || item.source || item.publishedAt || item.url)
+}
+
+const getEvidenceStatusClass = status => {
+  if (status === 'full_text_read' || status === 'summary_only') return 'evidence-pill-strong'
+  if (status === 'title_only') return 'evidence-pill-medium'
+  return 'evidence-pill-weak'
+}
+
+const getEvidenceModeClass = mode => {
+  if (mode === 'local_fact') return 'evidence-mode-local'
+  if (mode === 'url_fetched') return 'evidence-mode-url'
+  return 'evidence-mode-muted'
+}
+
+const getEvidencePublishedText = value => {
+  const text = formatMetricValue(value, 'publishedAt')
+  if (!value) return text
+  return isExpiredPublishedAt(value) ? `${text || '未知'} · 超72h` : text
+}
+
+const getEvidenceRecordText = item => {
+  const tokens = []
+  if (item.localFactId) tokens.push(`事实#${item.localFactId}`)
+  if (item.sourceRecordId) tokens.push(`源#${item.sourceRecordId}`)
+  return tokens.join(' / ')
+}
+
 const buildListSections = data => {
   if (!data) return []
   const configs = [
-    { key: 'evidence', title: '证据来源', columns: ['point', 'source', 'publishedAt'] },
     { key: 'events', title: '资讯列表', columns: ['title', 'category', 'publishedAt', 'source', 'impact'] },
     { key: 'topMovers', title: '板块龙头', columns: ['symbol', 'name', 'changePercent', 'reason'] },
     { key: 'forecast', title: '价格预测', columns: ['label', 'price', 'confidence'] },
@@ -54,7 +121,32 @@ const buildListSections = data => {
 
 const buildMetrics = data => {
   if (!data) return []
-  return buildMetricRows(data.metrics, data.sentiment)
+  const extraMetrics = {}
+  const recommendation = data.recommendation && typeof data.recommendation === 'object'
+    ? data.recommendation
+    : null
+  const rootMetrics = ['entryScore', 'valuationScore', 'positionPercent', 'targetPrice', 'takeProfitPrice', 'stopLossPrice']
+  rootMetrics.forEach(key => {
+    if (data[key] !== undefined && data[key] !== null && data[key] !== '') {
+      extraMetrics[key] = data[key]
+    }
+    if (extraMetrics[key] == null && recommendation?.[key] !== undefined && recommendation[key] !== null && recommendation[key] !== '') {
+      extraMetrics[key] = recommendation[key]
+    }
+  })
+
+  const probabilitySources = [data.probabilities, data.probability_analysis, data.analysis]
+  probabilitySources.forEach(source => {
+    if (!source || typeof source !== 'object') return
+    if (extraMetrics.riseProbability == null) {
+      extraMetrics.riseProbability = source.rise_probability ?? source.up_probability ?? source.probability_up ?? null
+    }
+    if (extraMetrics.fallProbability == null) {
+      extraMetrics.fallProbability = source.fall_probability ?? source.down_probability ?? source.probability_down ?? null
+    }
+  })
+
+  return buildMetricRows(data.metrics, extraMetrics, data.sentiment)
 }
 
 const getConfidence = data => {
@@ -180,6 +272,53 @@ const canDraftPlan = agent => getAgentId(agent) === 'commander' && getAgentSucce
           </div>
 
           <StockAgentChart v-if="getAgentData(agent).chart" :chart="getAgentData(agent).chart" />
+
+          <div v-if="getEvidenceItems(getAgentData(agent)).length" class="evidence-section">
+            <h5>证据来源</h5>
+            <div class="evidence-list">
+              <article
+                v-for="(item, idx) in getEvidenceItems(getAgentData(agent))"
+                :key="`${getAgentId(agent)}-evidence-${idx}`"
+                class="evidence-card"
+              >
+                <div class="evidence-heading">
+                  <a v-if="item.url" class="evidence-link" :href="item.url" target="_blank" rel="noreferrer">
+                    {{ item.title }}
+                  </a>
+                  <span v-else class="evidence-title">{{ item.title }}</span>
+                  <span
+                    v-if="item.publishedAt"
+                    :class="['evidence-time', isExpiredPublishedAt(item.publishedAt) ? 'expired' : 'fresh']"
+                  >
+                    {{ getEvidencePublishedText(item.publishedAt) }}
+                  </span>
+                </div>
+
+                <p v-if="item.excerpt" class="evidence-excerpt">{{ item.excerpt }}</p>
+
+                <div class="evidence-meta">
+                  <span>{{ item.source || '来源未知' }}</span>
+                  <span v-if="item.ingestedAt">入库 {{ formatMetricValue(item.ingestedAt, 'ingestedAt') }}</span>
+                  <span v-if="getEvidenceRecordText(item)">{{ getEvidenceRecordText(item) }}</span>
+                </div>
+
+                <div v-if="item.readStatus || item.readMode" class="evidence-pill-row">
+                  <span
+                    v-if="item.readStatus"
+                    :class="['evidence-pill', getEvidenceStatusClass(item.readStatus)]"
+                  >
+                    {{ formatMetricValue(item.readStatus, 'readStatus') }}
+                  </span>
+                  <span
+                    v-if="item.readMode"
+                    :class="['evidence-pill', getEvidenceModeClass(item.readMode)]"
+                  >
+                    {{ formatMetricValue(item.readMode, 'readMode') }}
+                  </span>
+                </div>
+              </article>
+            </div>
+          </div>
 
           <div v-for="section in buildListSections(getAgentData(agent))" :key="section.key" class="list-section">
             <h5>{{ section.title }}</h5>
@@ -362,6 +501,119 @@ const canDraftPlan = agent => getAgentId(agent) === 'commander' && getAgentSucce
 .summary {
   color: #0f172a;
   font-weight: 500;
+}
+
+.evidence-section h5 {
+  margin: 0 0 0.45rem;
+}
+
+.evidence-list {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.evidence-card {
+  border: 1px solid rgba(191, 219, 254, 0.85);
+  border-radius: 12px;
+  padding: 0.7rem 0.8rem;
+  background: linear-gradient(180deg, rgba(239, 246, 255, 0.8), rgba(255, 255, 255, 0.96));
+}
+
+.evidence-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.evidence-link,
+.evidence-title {
+  color: #0f172a;
+  font-size: 0.86rem;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.evidence-link {
+  text-decoration: none;
+}
+
+.evidence-link:hover {
+  text-decoration: underline;
+}
+
+.evidence-time {
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.evidence-time.fresh {
+  color: #15803d;
+}
+
+.evidence-time.expired {
+  color: #b45309;
+}
+
+.evidence-excerpt {
+  margin: 0.45rem 0 0;
+  color: #334155;
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.evidence-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.7rem;
+  margin-top: 0.45rem;
+  color: #64748b;
+  font-size: 0.75rem;
+}
+
+.evidence-pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.45rem;
+}
+
+.evidence-pill {
+  border-radius: 999px;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.evidence-pill-strong {
+  background: rgba(22, 163, 74, 0.14);
+  color: #166534;
+}
+
+.evidence-pill-medium {
+  background: rgba(2, 132, 199, 0.14);
+  color: #075985;
+}
+
+.evidence-pill-weak {
+  background: rgba(245, 158, 11, 0.16);
+  color: #b45309;
+}
+
+.evidence-mode-local {
+  background: rgba(30, 64, 175, 0.12);
+  color: #1d4ed8;
+}
+
+.evidence-mode-url {
+  background: rgba(8, 145, 178, 0.14);
+  color: #0f766e;
+}
+
+.evidence-mode-muted {
+  background: rgba(148, 163, 184, 0.16);
+  color: #475569;
 }
 
 .recommendation-block h5 {

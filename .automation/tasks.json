@@ -1,6 +1,17 @@
 {
   "tasks": [
     {
+      "id": "MANUAL-20260318-DUAL-SOURCE",
+      "title": "Dual-source market data strategy",
+      "status": "done",
+      "stages": {
+        "plan": "done",
+        "dev": "done",
+        "test": "done"
+      },
+      "notes": "2026-03-18 已将腾讯/东方财富两套行情接口正式封装进后端默认策略：分时默认腾讯优先、东财回退；K 线默认东财优先、腾讯回退；显式 source 参数仍可强制指定单一来源。同步补齐东方财富日/周/月/年 K 获取实现与 StockDataService 自动回退测试。"
+    },
+    {
       "id": "AUTO-001",
       "title": "Bootstrap multi-agent automation",
       "status": "done",
@@ -10,6 +21,50 @@
         "test": "done"
       },
       "notes": ""
+    },
+    {
+      "id": "GOAL-AGENT-001",
+      "title": "Multi-agent evidence and commander redesign plan",
+      "status": "todo",
+      "stages": {
+        "plan": "done",
+        "dev": "todo",
+        "test": "todo"
+      },
+      "notes": "父级规划任务已完成，当前正式拆分为 R1/R2/R3 三个开发切片。R1 先做 evidence object、URL-first 展示、正文抓取/摘要、readMode/readStatus、evidence 归一化与 commander 证据采信闸门；R2 再做子 Agent 职责重切、marketReports 抗污染、确定性特征前置计算，以及 commander 覆盖率/冲突/降级惩罚；R3 最后做 replay 校准闭环、1/3/5/10 日收益对齐、命中率/Brier score/分组胜率与开发者验收基线。2026-03-17 已继续补充两份衍生设计稿：`GOAL-AGENT-001-STOCK-COPILOT-TOOL-CATALOG-V1-20260317.md` 与 `GOAL-AGENT-001-STOP-POLICY-READINESS-V1-20260317.md`，用于后续 planner/governor/tool runtime 的接口与规则落地。该目标继续作为 GOAL-015 与 ISSUE-20260310-P1/P2 在 Agent 决策层的上游总纲。"
+    },
+    {
+      "id": "GOAL-AGENT-001-R1",
+      "title": "Evidence traceability foundation",
+      "status": "done",
+      "stages": {
+        "plan": "done",
+        "dev": "done",
+        "test": "done"
+      },
+      "notes": "R1 由 Dev1 完成收口。范围包括：统一 stock/sector/financial/trend/commander evidence object；后端优先正文抓取/清洗/摘要；readMode/readStatus 语义；commander 证据采信闸门；历史与前端展示兼容。2026-03-17 已完成后端基础链路、Prompt/Repair Schema、Normalizer、Commander 证据置信度闸门、前端 evidence 卡片式兼容展示，以及 Browser MCP 实页验收。验收过程中发现本地事实刷新仍采用 delete-and-reinsert，导致 article-read 缓存写回出现并发主键失效；已改为按业务键原位 merge，并新增回归测试锁定缓存字段保留行为。验证结果：前端单测通过、后端定向回归 30/30 通过，修复后 `/api/stocks/detail`、`/api/stocks/news/impact`、`/api/news?level=stock|sector`、`/api/stocks/agents/single` 在浏览器实测中恢复到 200，evidence 链接/来源/发布时间/readStatus/readMode/trace IDs 可见。"
+    },
+    {
+      "id": "GOAL-AGENT-001-R2",
+      "title": "Agent role narrowing and commander hardening",
+      "status": "todo",
+      "stages": {
+        "plan": "done",
+        "dev": "todo",
+        "test": "todo"
+      },
+      "notes": "R2 由 Dev2 优先负责，但必须以前置确认的 R1 contract 为准。范围：1) 重写 stock_news/sector_news/financial_analysis/trend_analysis prompt contract，移除重复的方向/仓位/风控字段，只保留各自专业结论；2) 清理 A 股场景下不相关的 marketReports/海外加密噪音，建立 context hygiene 闸门；3) 在后端先计算 freshness/coverage/conflict/trend/valuation/volatility 等确定性特征，再交给 LLM 解释；4) commander 只做综合，不再引入上游未引用的新证据；5) 将 coverage penalty、conflict penalty、degraded-path penalty 做成系统逻辑；6) 强化异常/超时/HTML/non-JSON 场景的保守降级。验收重点：子 Agent 不再做半个 commander，伪共识显著下降，异常路径下最终结论明显保守。"
+    },
+    {
+      "id": "GOAL-AGENT-001-R3",
+      "title": "Replay calibration and acceptance baseline",
+      "status": "todo",
+      "stages": {
+        "plan": "done",
+        "dev": "todo",
+        "test": "todo"
+      },
+      "notes": "R3 在 R1/R2 稳定后启动，可由空闲开发者接手。范围：1) 基于 llm-requests.txt、历史 commander 记录和本地事实库构建 replay 样本；2) 将过去 1/3/5/10 日实际收益与方向、概率、confidence_score 对齐；3) 计算命中率、Brier score、分组胜率、证据可追溯率、解析修复率、污染混入率、改判解释完整率；4) 将这些指标接入开发者模式或离线验收报告；5) 为后续模型/路由/提示词迭代提供硬验收门槛。验收重点：系统第一次拥有真实校准回路，而不是只输出格式化观点。"
     },
     {
       "id": "GOAL-015",
@@ -153,6 +208,17 @@
         "test": "done"
       },
       "notes": "根据 20260310 周记完成提示词增强：新增新闻抗污染证据策略、市场/板块/个股新闻库与定时采集约束、白盒 MCP/Skill 与未完成任务定时执行要求；已同步 planner/developer/tester 提示词。"
+    },
+    {
+      "id": "ISSUE-20260317-R1",
+      "title": "Fix agent metrics, sector fallback, and draft price sanity",
+      "status": "todo",
+      "stages": {
+        "plan": "done",
+        "dev": "done",
+        "test": "todo"
+      },
+      "notes": "已完成后端与前端收口：1) `StockAgentResultNormalizer` 统一折叠上涨/下跌概率、入场评分、估值评分、建议仓位、止盈/目标/止损到稳定 `metrics`；2) `StockAgentPanels` 对旧历史 shape 增加前端兼容展示；3) `StockAgentLocalFactProjection` 不再丢弃 `Sentiment/AiTarget/AiTags`，并追加 `FundamentalFacts`；4) `QueryLocalFactDatabaseTool` 在 symbol 维度缺少 `LocalSectorReports` 时回退到 `SectorRotationSnapshots` 生成本地板块快照事实；5) `TradingPlanDraftService` 在拿得到当前价时会跳过明显失真的多头止盈/目标价。已通过后端定向单测 29/29、新增回归 3/3、前端定向单测 46/46。剩余 Browser MCP 因当前环境 SQL Server 连接失败导致 API 无法启动，待数据库恢复后补跑。"
     },
     {
       "id": "ISSUE-20260310-P0",

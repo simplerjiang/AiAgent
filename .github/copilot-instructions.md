@@ -32,10 +32,17 @@
 
 ## Browser And UI Validation
 - Run tests in this order: unit tests first, then Browser MCP checks. If a failure is found, fix it and rerun the affected validations until they pass.
-- Prefer CopilotBrowser MCP for backend-served pages. Use Playwright Edge only when trace/video capture, channel selection, or persistent-profile behavior is explicitly needed.
+- Standardize Browser MCP selection to avoid trial-and-error: default to CopilotBrowser MCP first, fallback 1 to Playwright Edge, fallback 2 to the VS Code integrated browser tools only when CopilotBrowser is unavailable and chat browser tools are enabled.
+- Prefer CopilotBrowser MCP for backend-served pages because it is the fastest and lowest-friction path in this repo: first check `mcp_copilotbrowse_browser_status`, install the browser only if the MCP reports it is missing, then reuse the existing tab if alive or open/select a tab and navigate directly to `http://localhost:<port>`.
+- For CopilotBrowser MCP, the default fast-start sequence is: status check -> tab list/select -> direct navigate -> page snapshot or targeted click flow -> console messages -> network requests. Do not waste turns trying alternative browser paths before this sequence fails.
+- Use CopilotBrowser MCP as long as the browser context is alive, tabs are controllable, and the target page can be reached. Prefer `http://localhost:<port>` over `http://127.0.0.1:<port>`, and prefer the backend-served frontend over Vite whenever both are available.
+- Fallback 1 is Playwright Edge. Use it when CopilotBrowser MCP is unavailable, when trace/video capture is required, when persistent-profile behavior matters, when a specific browser channel is required, or when CopilotBrowser element targeting is unstable on a dense canvas-heavy page.
+- For Playwright Edge fallback, prefer the existing repo scripts under `frontend/scripts/edge-check-*.mjs` or `.automation/scripts/edge-check-*.mjs` before inventing a new flow. Keep `channel: 'msedge'` when available, fall back to bundled Chromium only if Edge launch fails, and use `.automation/edge-profile` as the dedicated user-data-dir whenever the default profile is locked or polluted.
+- Fallback 2 is the VS Code integrated browser tool path. Use it only as a last resort when CopilotBrowser MCP is unavailable and `workbench.browser.enableChatTools` is enabled; if that setting is off and the page can only be opened without page-content access, treat it as a manual visibility aid rather than as acceptance evidence.
 - Browser validation must go beyond static existence checks: click key actions, wait for visible state changes, and inspect both backend logs and frontend console logs for runtime errors.
 - Prefer backend-served frontend for Browser MCP. Use Vite dev server only when `/api` proxying is configured, and set explicit backend URLs to avoid port conflicts.
 - After a restart, prefer `http://localhost:<port>` over `http://127.0.0.1:<port>` so stale browser-session errors do not pollute diagnosis.
+- For this repo, reuse the port already exposed by the running backend whenever possible. When no port is known yet, inspect the backend startup log first; many existing validation scripts assume `http://localhost:5119/`, but the live backend log still has priority over any hard-coded default.
 - For Playwright Edge fallback, use `.automation/edge-profile` when the default profile is locked; on dense dashboards, use resilient click strategies such as forced clicks and tolerate valid empty states.
 - Insert new browser interaction and assertion blocks before any `browser.close()` or page teardown call.
 

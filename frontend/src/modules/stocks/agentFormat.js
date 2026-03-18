@@ -1,4 +1,29 @@
-const percentKeys = ['percent', 'rate', 'ratio']
+const percentKeys = ['percent', 'rate', 'ratio', 'probability']
+const dateKeys = new Set(['publishedat', 'ingestedat'])
+const dateTimeFormatter = new Intl.DateTimeFormat('zh-CN', {
+  timeZone: 'Asia/Shanghai',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: false
+})
+const enumValueMap = {
+  readstatus: {
+    full_text_read: '全文已读',
+    summary_only: '摘要阅读',
+    title_only: '标题阅读',
+    metadata_only: '仅元数据',
+    fetch_failed: '抓取失败',
+    unverified: '未验证'
+  },
+  readmode: {
+    local_fact: '本地事实',
+    url_fetched: '链接抓取',
+    url_unavailable: '无原文链接'
+  }
+}
 const labelMap = {
   agent: 'Agent',
   summary: '摘要',
@@ -28,6 +53,8 @@ const labelMap = {
   stopLossPrice: '止损价',
   timeHorizon: '持有周期',
   positionPercent: '建议仓位',
+  riseProbability: '上涨概率',
+  fallProbability: '下跌概率',
   rating: '评级',
   revenue: '营收',
   revenueYoY: '营收同比',
@@ -47,6 +74,13 @@ const labelMap = {
   impact: '影响',
   symbol: '代码',
   name: '名称',
+  url: '原文链接',
+  excerpt: '摘录',
+  readMode: '读取方式',
+  readStatus: '阅读状态',
+  ingestedAt: '入库时间',
+  localFactId: '本地事实ID',
+  sourceRecordId: '源记录ID',
   reason: '原因',
   label: '标签',
   timeframe: '周期',
@@ -62,6 +96,16 @@ const labelMap = {
 export const formatMetricValue = (value, key = '') => {
   if (value === null || value === undefined || value === '') return '-'
   const keyText = String(key).toLowerCase()
+  const enumValue = enumValueMap[keyText]?.[String(value)]
+  if (enumValue) {
+    return enumValue
+  }
+  if (dateKeys.has(keyText)) {
+    const date = new Date(value)
+    if (!Number.isNaN(date.getTime())) {
+      return dateTimeFormatter.format(date)
+    }
+  }
   const num = Number(value)
   if (Number.isFinite(num)) {
     if (keyText.includes('confidence')) {

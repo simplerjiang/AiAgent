@@ -400,35 +400,10 @@ public sealed class LocalFactIngestionService : ILocalFactIngestionService
             .Where(item => item.Symbol == symbol)
             .ToListAsync(cancellationToken);
 
-        var existingLookup = existing.ToDictionary(BuildStockNewsKey, StringComparer.OrdinalIgnoreCase);
-
-        _dbContext.LocalStockNews.RemoveRange(existing);
-        _dbContext.LocalStockNews.AddRange(items
+        MergeStockNewsEntities(existing, items
             .OrderByDescending(item => item.PublishTime)
             .Take(40)
-            .Select(item =>
-            {
-                existingLookup.TryGetValue(BuildStockNewsKey(item), out var previous);
-                return new LocalStockNews
-                {
-                    Symbol = item.Symbol,
-                    Name = item.Name,
-                    SectorName = item.SectorName,
-                    Title = item.Title,
-                    Category = item.Category,
-                    Source = item.Source,
-                    SourceTag = item.SourceTag,
-                    ExternalId = item.ExternalId,
-                    PublishTime = item.PublishTime,
-                    CrawledAt = item.CrawledAt,
-                    Url = item.Url,
-                    IsAiProcessed = previous?.IsAiProcessed ?? false,
-                    TranslatedTitle = previous?.TranslatedTitle,
-                    AiSentiment = previous?.AiSentiment ?? "中性",
-                    AiTarget = previous?.AiTarget,
-                    AiTags = previous?.AiTags
-                };
-            }));
+            .ToArray(), _dbContext.LocalStockNews);
     }
 
     private async Task UpsertSectorReportsAsync(
@@ -440,31 +415,7 @@ public sealed class LocalFactIngestionService : ILocalFactIngestionService
             .Where(item => item.Symbol == symbol && item.Level == "sector")
             .ToListAsync(cancellationToken);
 
-        var existingLookup = existing.ToDictionary(BuildSectorReportKey, StringComparer.OrdinalIgnoreCase);
-
-        _dbContext.LocalSectorReports.RemoveRange(existing);
-        _dbContext.LocalSectorReports.AddRange(sectorReports.Select(item =>
-        {
-            existingLookup.TryGetValue(BuildSectorReportKey(item), out var previous);
-            return new LocalSectorReport
-            {
-                Symbol = item.Symbol,
-                SectorName = item.SectorName,
-                Level = item.Level,
-                Title = item.Title,
-                Source = item.Source,
-                SourceTag = item.SourceTag,
-                ExternalId = item.ExternalId,
-                PublishTime = item.PublishTime,
-                CrawledAt = item.CrawledAt,
-                Url = item.Url,
-                IsAiProcessed = previous?.IsAiProcessed ?? false,
-                TranslatedTitle = previous?.TranslatedTitle,
-                AiSentiment = previous?.AiSentiment ?? "中性",
-                AiTarget = previous?.AiTarget,
-                AiTags = previous?.AiTags
-            };
-        }));
+        MergeSectorReportEntities(existing, sectorReports, _dbContext.LocalSectorReports);
     }
 
     private async Task UpsertMarketReportsAsync(
@@ -475,13 +426,95 @@ public sealed class LocalFactIngestionService : ILocalFactIngestionService
             .Where(item => item.Level == "market")
             .ToListAsync(cancellationToken);
 
-        var existingLookup = existing.ToDictionary(BuildSectorReportKey, StringComparer.OrdinalIgnoreCase);
+        MergeSectorReportEntities(existing, reports, _dbContext.LocalSectorReports);
+    }
 
-        _dbContext.LocalSectorReports.RemoveRange(existing);
-        _dbContext.LocalSectorReports.AddRange(reports.Select(item =>
+    internal static void MergeStockNewsEntities(
+        IReadOnlyList<LocalStockNews> existing,
+        IReadOnlyList<LocalStockNewsSeed> incoming,
+        DbSet<LocalStockNews> dbSet)
+    {
+        var existingLookup = existing.ToDictionary(BuildStockNewsKey, StringComparer.OrdinalIgnoreCase);
+        var retainedKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var item in incoming)
         {
-            existingLookup.TryGetValue(BuildSectorReportKey(item), out var previous);
-            return new LocalSectorReport
+            var key = BuildStockNewsKey(item);
+            retainedKeys.Add(key);
+
+            if (existingLookup.TryGetValue(key, out var previous))
+            {
+                previous.Symbol = item.Symbol;
+                previous.Name = item.Name;
+                previous.SectorName = item.SectorName;
+                previous.Title = item.Title;
+                previous.Category = item.Category;
+                previous.Source = item.Source;
+                previous.SourceTag = item.SourceTag;
+                previous.ExternalId = item.ExternalId;
+                previous.PublishTime = item.PublishTime;
+                previous.CrawledAt = item.CrawledAt;
+                previous.Url = item.Url;
+                continue;
+            }
+
+            dbSet.Add(new LocalStockNews
+            {
+                Symbol = item.Symbol,
+                Name = item.Name,
+                SectorName = item.SectorName,
+                Title = item.Title,
+                Category = item.Category,
+                Source = item.Source,
+                SourceTag = item.SourceTag,
+                ExternalId = item.ExternalId,
+                PublishTime = item.PublishTime,
+                CrawledAt = item.CrawledAt,
+                Url = item.Url,
+                IsAiProcessed = false,
+                AiSentiment = "中性"
+            });
+        }
+
+        var toRemove = existing
+            .Where(item => !retainedKeys.Contains(BuildStockNewsKey(item)))
+            .ToArray();
+
+        if (toRemove.Length > 0)
+        {
+            dbSet.RemoveRange(toRemove);
+        }
+    }
+
+    internal static void MergeSectorReportEntities(
+        IReadOnlyList<LocalSectorReport> existing,
+        IReadOnlyList<LocalSectorReportSeed> incoming,
+        DbSet<LocalSectorReport> dbSet)
+    {
+        var existingLookup = existing.ToDictionary(BuildSectorReportKey, StringComparer.OrdinalIgnoreCase);
+        var retainedKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var item in incoming)
+        {
+            var key = BuildSectorReportKey(item);
+            retainedKeys.Add(key);
+
+            if (existingLookup.TryGetValue(key, out var previous))
+            {
+                previous.Symbol = item.Symbol;
+                previous.SectorName = item.SectorName;
+                previous.Level = item.Level;
+                previous.Title = item.Title;
+                previous.Source = item.Source;
+                previous.SourceTag = item.SourceTag;
+                previous.ExternalId = item.ExternalId;
+                previous.PublishTime = item.PublishTime;
+                previous.CrawledAt = item.CrawledAt;
+                previous.Url = item.Url;
+                continue;
+            }
+
+            dbSet.Add(new LocalSectorReport
             {
                 Symbol = item.Symbol,
                 SectorName = item.SectorName,
@@ -493,13 +526,19 @@ public sealed class LocalFactIngestionService : ILocalFactIngestionService
                 PublishTime = item.PublishTime,
                 CrawledAt = item.CrawledAt,
                 Url = item.Url,
-                IsAiProcessed = previous?.IsAiProcessed ?? false,
-                TranslatedTitle = previous?.TranslatedTitle,
-                AiSentiment = previous?.AiSentiment ?? "中性",
-                AiTarget = previous?.AiTarget,
-                AiTags = previous?.AiTags
-            };
-        }));
+                IsAiProcessed = false,
+                AiSentiment = "中性"
+            });
+        }
+
+        var toRemove = existing
+            .Where(item => !retainedKeys.Contains(BuildSectorReportKey(item)))
+            .ToArray();
+
+        if (toRemove.Length > 0)
+        {
+            dbSet.RemoveRange(toRemove);
+        }
     }
 
     private static string BuildStockNewsKey(LocalStockNewsSeed item)

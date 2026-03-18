@@ -35,6 +35,7 @@ internal static class TencentStockParser
         var low = ParseDecimal(GetField(fields, 34));
         var turnoverRate = ParseDecimal(GetField(fields, 38));
         var peRatio = ParseDecimal(GetField(fields, 39));
+        var volumeRatio = ParseDecimal(GetField(fields, 43));
         var speed = ParseDecimal(GetField(fields, 49));
 
         return new StockQuoteDto(
@@ -50,7 +51,9 @@ internal static class TencentStockParser
             speed,
             DateTime.UtcNow,
             Array.Empty<StockNewsDto>(),
-            Array.Empty<StockIndicatorDto>()
+            Array.Empty<StockIndicatorDto>(),
+            0m,
+            volumeRatio
         );
      }
 

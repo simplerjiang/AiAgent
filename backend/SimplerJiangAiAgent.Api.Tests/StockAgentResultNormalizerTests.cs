@@ -59,6 +59,27 @@ public sealed class StockAgentResultNormalizerTests
         Assert.Equal(JsonValueKind.Array, events.ValueKind);
         Assert.True(normalized.TryGetProperty("evidence", out var evidence));
         Assert.Equal(JsonValueKind.Array, evidence.ValueKind);
+
+        var populated = StockAgentResultNormalizer.Normalize(StockAgentKind.StockNews, JsonDocument.Parse("""
+        {
+          "agent": "stock_news",
+          "summary": "news",
+          "evidence": [
+            {
+              "point": "消息",
+              "source": "新浪",
+              "publishedAt": "2026-03-17 09:00"
+            }
+          ]
+        }
+        """).RootElement);
+
+        var evidenceItem = populated.GetProperty("evidence")[0];
+        Assert.True(evidenceItem.TryGetProperty("title", out _));
+        Assert.True(evidenceItem.TryGetProperty("excerpt", out _));
+        Assert.True(evidenceItem.TryGetProperty("readMode", out _));
+        Assert.True(evidenceItem.TryGetProperty("readStatus", out _));
+        Assert.True(evidenceItem.TryGetProperty("localFactId", out _));
     }
 
     [Fact]
@@ -87,6 +108,31 @@ public sealed class StockAgentResultNormalizerTests
     }
 
     [Fact]
+    public void Normalize_StockNewsWithMetadataOnlyEvidence_DowngradesToNeutralWatch()
+    {
+        using var input = JsonDocument.Parse("""
+        {
+          "agent": "stock_news",
+          "summary": "偏多",
+          "confidence": 81,
+          "evidence": [
+            {
+              "point": "标题线索",
+              "source": "新浪",
+              "publishedAt": "2026-03-17 09:00",
+              "readStatus": "metadata_only"
+            }
+          ]
+        }
+        """);
+
+        var normalized = StockAgentResultNormalizer.Normalize(StockAgentKind.StockNews, input.RootElement);
+
+        Assert.Equal("信息不足：缺少可验证来源或发布时间，建议观望。", normalized.GetProperty("summary").GetString());
+        Assert.Equal(20, normalized.GetProperty("confidence").GetInt32());
+    }
+
+    [Fact]
     public void Normalize_SectorNewsWithoutUsableEvidence_DowngradesToNeutralWatch()
     {
         using var input = JsonDocument.Parse("""
@@ -109,5 +155,40 @@ public sealed class StockAgentResultNormalizerTests
         Assert.Equal("信息不足：缺少可验证来源或发布时间，建议观望。", normalized.GetProperty("summary").GetString());
         Assert.Equal(20, normalized.GetProperty("confidence").GetInt32());
         Assert.Contains("观望", normalized.GetProperty("signals")[0].GetString());
+    }
+
+    [Fact]
+    public void Normalize_FlattensProbabilityAndScoringMetrics()
+    {
+        using var input = JsonDocument.Parse("""
+        {
+          "agent": "sector_news",
+          "summary": "偏多",
+          "confidence": 78,
+          "probability_analysis": {
+            "up_probability": 65,
+            "down_probability": 35
+          },
+          "entryScore": 82,
+          "valuationScore": 60,
+          "positionPercent": 20,
+          "evidence": [
+            {
+              "point": "板块走强",
+              "source": "新浪",
+              "publishedAt": "2026-03-17 10:00"
+            }
+          ]
+        }
+        """);
+
+        var normalized = StockAgentResultNormalizer.Normalize(StockAgentKind.SectorNews, input.RootElement);
+        var metrics = normalized.GetProperty("metrics");
+
+        Assert.Equal(65m, metrics.GetProperty("riseProbability").GetDecimal());
+        Assert.Equal(35m, metrics.GetProperty("fallProbability").GetDecimal());
+        Assert.Equal(82m, metrics.GetProperty("entryScore").GetDecimal());
+        Assert.Equal(60m, metrics.GetProperty("valuationScore").GetDecimal());
+        Assert.Equal(20m, metrics.GetProperty("positionPercent").GetDecimal());
     }
 }

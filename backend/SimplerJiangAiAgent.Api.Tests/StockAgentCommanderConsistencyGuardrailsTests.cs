@@ -130,4 +130,41 @@ public sealed class StockAgentCommanderConsistencyGuardrailsTests
         Assert.Equal("强反证触发，允许方向变更", guarded.GetProperty("marketState").GetProperty("overrideReason").GetString());
         Assert.True(guarded.GetProperty("revision").GetProperty("required").GetBoolean());
     }
+
+    [Fact]
+    public void Apply_WhenEvidenceIsOnlyMetadata_CapsCommanderConfidence()
+    {
+        using var commanderData = JsonDocument.Parse("""
+        {
+          "agent": "commander",
+          "summary": "ok",
+          "analysis_opinion": "偏多，但证据仍需进一步核验。",
+          "confidence_score": 88,
+          "revision": { "required": false, "reason": null, "previousDirection": null },
+          "signals": [],
+          "invalidations": [],
+          "evidence": [
+            {
+              "point": "消息标题",
+              "source": "新浪",
+              "publishedAt": "2026-03-17 09:00",
+              "readStatus": "metadata_only"
+            }
+          ]
+        }
+        """);
+
+        var guarded = StockAgentCommanderConsistencyGuardrails.Apply(
+            commanderData.RootElement,
+            Array.Empty<StockAgentResultDto>(),
+            """
+            {
+              "commanderHistory": { "items": [] },
+              "kLines": []
+            }
+            """);
+
+        Assert.Equal(55m, guarded.GetProperty("confidence_score").GetDecimal());
+        Assert.Contains("证据仅为元数据或未核验", guarded.GetProperty("signals")[0].GetString());
+    }
 }

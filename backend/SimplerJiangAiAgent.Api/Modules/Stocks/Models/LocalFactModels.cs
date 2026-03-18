@@ -1,6 +1,8 @@
 namespace SimplerJiangAiAgent.Api.Modules.Stocks.Models;
 
 public sealed record LocalNewsItemDto(
+    long? LocalFactId,
+    string? SourceRecordId,
     string Title,
     string? TranslatedTitle,
     string Source,
@@ -10,8 +12,19 @@ public sealed record LocalNewsItemDto(
     DateTime PublishTime,
     DateTime CrawledAt,
     string? Url,
+    string? Excerpt,
+    string? Summary,
+    string ReadMode,
+    string ReadStatus,
+    DateTime? IngestedAt,
     string? AiTarget,
     IReadOnlyList<string> AiTags
+);
+
+public sealed record LocalFundamentalFactDto(
+    string Label,
+    string Value,
+    string Source
 );
 
 public sealed record LocalNewsBucketDto(
@@ -27,7 +40,9 @@ public sealed record LocalFactPackageDto(
     string? SectorName,
     IReadOnlyList<LocalNewsItemDto> StockNews,
     IReadOnlyList<LocalNewsItemDto> SectorReports,
-    IReadOnlyList<LocalNewsItemDto> MarketReports
+    IReadOnlyList<LocalNewsItemDto> MarketReports,
+    DateTime? FundamentalUpdatedAt,
+    IReadOnlyList<LocalFundamentalFactDto> FundamentalFacts
 );
 
 public sealed record LocalNewsArchiveItemDto(
@@ -35,6 +50,8 @@ public sealed record LocalNewsArchiveItemDto(
     string? Symbol,
     string? Name,
     string? SectorName,
+    long? LocalFactId,
+    string? SourceRecordId,
     string Title,
     string? TranslatedTitle,
     string Source,
@@ -44,6 +61,11 @@ public sealed record LocalNewsArchiveItemDto(
     DateTime PublishTime,
     DateTime CrawledAt,
     string? Url,
+    string? Excerpt,
+    string? Summary,
+    string ReadMode,
+    string ReadStatus,
+    DateTime? IngestedAt,
     string? AiTarget,
     IReadOnlyList<string> AiTags
 );

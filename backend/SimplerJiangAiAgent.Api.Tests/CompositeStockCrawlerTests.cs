@@ -27,7 +27,7 @@ public sealed class CompositeStockCrawlerTests
                     Array.Empty<StockNewsDto>(),
                     Array.Empty<StockIndicatorDto>(),
                     1m,
-                    0m,
+                    3.97m,
                     1,
                     "旧板块")),
             new FakeCrawlerSource(
@@ -64,6 +64,7 @@ public sealed class CompositeStockCrawlerTests
         Assert.Equal(32.20m, quote.High);
         Assert.Equal(30.26m, quote.Low);
         Assert.Equal(5.29m, quote.TurnoverRate);
+        Assert.Equal(3.97m, quote.VolumeRatio);
     }
 
     private sealed class FakeCrawlerSource : IStockCrawlerSource

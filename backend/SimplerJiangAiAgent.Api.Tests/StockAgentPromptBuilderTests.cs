@@ -27,6 +27,8 @@ public sealed class StockAgentPromptBuilderTests
         Assert.Contains("近3-7天历史结论", prompt);
         Assert.Contains("多周期融合", prompt);
         Assert.Contains("状态机与滞后机制", prompt);
+        Assert.Contains("\"readMode\"", prompt);
+        Assert.Contains("\"readStatus\"", prompt);
     }
 
     [Fact]
@@ -39,6 +41,7 @@ public sealed class StockAgentPromptBuilderTests
         Assert.Contains("\"triggers\"", prompt);
         Assert.Contains("\"invalidations\"", prompt);
         Assert.Contains("\"riskLimits\"", prompt);
+        Assert.Contains("\"readStatus\"", prompt);
     }
 
     [Fact]
@@ -52,6 +55,9 @@ public sealed class StockAgentPromptBuilderTests
         Assert.Contains("最近72小时", prompt);
         Assert.Contains("扩窗到7天", prompt);
         Assert.Contains("\"crawledAt\"", prompt);
+        Assert.Contains("\"title\"", prompt);
+        Assert.Contains("\"readMode\"", prompt);
+        Assert.Contains("\"localFactId\"", prompt);
     }
 
     [Fact]
@@ -65,5 +71,8 @@ public sealed class StockAgentPromptBuilderTests
         Assert.Contains("最近72小时", prompt);
         Assert.Contains("扩窗到7天", prompt);
         Assert.Contains("\"crawledAt\"", prompt);
+        Assert.Contains("\"title\"", prompt);
+        Assert.Contains("\"readStatus\"", prompt);
+        Assert.Contains("\"sourceRecordId\"", prompt);
     }
 }

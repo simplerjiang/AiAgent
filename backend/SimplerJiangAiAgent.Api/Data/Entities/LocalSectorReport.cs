@@ -18,4 +18,9 @@ public sealed class LocalSectorReport
     public string AiSentiment { get; set; } = "中性";
     public string? AiTarget { get; set; }
     public string? AiTags { get; set; }
+    public string? ArticleExcerpt { get; set; }
+    public string? ArticleSummary { get; set; }
+    public string ReadMode { get; set; } = "url_unavailable";
+    public string ReadStatus { get; set; } = "unverified";
+    public DateTime? IngestedAt { get; set; }
 }

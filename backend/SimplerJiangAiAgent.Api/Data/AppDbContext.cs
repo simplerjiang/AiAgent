@@ -126,6 +126,14 @@ public sealed class AppDbContext : DbContext
         modelBuilder.Entity<LocalStockNews>()
             .HasIndex(x => new { x.IsAiProcessed, x.Symbol, x.PublishTime });
 
+        modelBuilder.Entity<LocalStockNews>()
+            .Property(x => x.ReadMode)
+            .HasMaxLength(32);
+
+        modelBuilder.Entity<LocalStockNews>()
+            .Property(x => x.ReadStatus)
+            .HasMaxLength(32);
+
         modelBuilder.Entity<LocalSectorReport>()
             .HasIndex(x => new { x.Symbol, x.Level, x.PublishTime });
 
@@ -134,6 +142,14 @@ public sealed class AppDbContext : DbContext
 
         modelBuilder.Entity<LocalSectorReport>()
             .HasIndex(x => new { x.IsAiProcessed, x.Level, x.Symbol, x.PublishTime });
+
+        modelBuilder.Entity<LocalSectorReport>()
+            .Property(x => x.ReadMode)
+            .HasMaxLength(32);
+
+        modelBuilder.Entity<LocalSectorReport>()
+            .Property(x => x.ReadStatus)
+            .HasMaxLength(32);
 
         modelBuilder.Entity<StockQueryHistory>()
             .HasIndex(x => x.Symbol)

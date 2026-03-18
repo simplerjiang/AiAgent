@@ -6,11 +6,14 @@ namespace SimplerJiangAiAgent.Api.Modules.Stocks.Services;
 
 public sealed class StockDataService : IStockDataService
 {
+    private const string TencentSourceName = "腾讯";
+    private const string EastmoneySourceName = "东方财富";
     private readonly IMemoryCache _cache;
     private readonly IStockCrawler _defaultCrawler;
     private readonly ILocalFactIngestionService _localFactIngestionService;
     private readonly IQueryLocalFactDatabaseTool _queryLocalFactDatabaseTool;
-    private readonly IEnumerable<IStockCrawlerSource> _sources;
+    private readonly IReadOnlyList<IStockCrawlerSource> _sources;
+    private readonly IReadOnlyDictionary<string, IStockCrawlerSource> _sourcesByName;
 
     public StockDataService(
         IMemoryCache cache,
@@ -23,7 +26,10 @@ public sealed class StockDataService : IStockDataService
         _defaultCrawler = defaultCrawler;
         _localFactIngestionService = localFactIngestionService;
         _queryLocalFactDatabaseTool = queryLocalFactDatabaseTool;
-        _sources = sources;
+        _sources = sources.ToArray();
+        _sourcesByName = _sources
+            .GroupBy(item => item.SourceName, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
     }
 
     public async Task<StockQuoteDto> GetQuoteAsync(string symbol, string? source = null, CancellationToken cancellationToken = default)
@@ -54,28 +60,64 @@ public sealed class StockDataService : IStockDataService
 
     public async Task<IReadOnlyList<KLinePointDto>> GetKLineAsync(string symbol, string interval, int count, string? source = null, CancellationToken cancellationToken = default)
     {
-        var crawler = ResolveSource(source);
-        var cacheKey = $"kline:{crawler.SourceName}:{symbol}:{interval}:{count}";
-        var result = await _cache.GetOrCreateAsync(cacheKey, async entry =>
+        foreach (var crawler in ResolveKLineSources(source))
         {
-            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(1);
-            return await crawler.GetKLineAsync(symbol, interval, count, cancellationToken);
-        });
+            try
+            {
+                var cacheKey = $"kline:{crawler.SourceName}:{symbol}:{interval}:{count}";
+                var result = await _cache.GetOrCreateAsync(cacheKey, async entry =>
+                {
+                    entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(1);
+                    return await crawler.GetKLineAsync(symbol, interval, count, cancellationToken);
+                });
 
-        return result ?? Array.Empty<KLinePointDto>();
+                if (result is { Count: > 0 })
+                {
+                    return result;
+                }
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch
+            {
+                // 自动回退到下一来源
+            }
+        }
+
+        return Array.Empty<KLinePointDto>();
     }
 
     public async Task<IReadOnlyList<MinuteLinePointDto>> GetMinuteLineAsync(string symbol, string? source = null, CancellationToken cancellationToken = default)
     {
-        var crawler = ResolveSource(source);
-        var cacheKey = $"minute:{crawler.SourceName}:{symbol}";
-        var result = await _cache.GetOrCreateAsync(cacheKey, async entry =>
+        foreach (var crawler in ResolveMinuteSources(source))
         {
-            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(30);
-            return await crawler.GetMinuteLineAsync(symbol, cancellationToken);
-        });
+            try
+            {
+                var cacheKey = $"minute:{crawler.SourceName}:{symbol}";
+                var result = await _cache.GetOrCreateAsync(cacheKey, async entry =>
+                {
+                    entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(30);
+                    return await crawler.GetMinuteLineAsync(symbol, cancellationToken);
+                });
 
-        return result ?? Array.Empty<MinuteLinePointDto>();
+                if (result is { Count: > 0 })
+                {
+                    return result;
+                }
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch
+            {
+                // 自动回退到下一来源
+            }
+        }
+
+        return Array.Empty<MinuteLinePointDto>();
     }
 
     public async Task<IReadOnlyList<IntradayMessageDto>> GetIntradayMessagesAsync(string symbol, string? source = null, CancellationToken cancellationToken = default)
@@ -110,5 +152,49 @@ public sealed class StockDataService : IStockDataService
 
         var match = _sources.FirstOrDefault(s => s.SourceName.Equals(source, StringComparison.OrdinalIgnoreCase));
         return match ?? _defaultCrawler;
+    }
+
+    private IReadOnlyList<IStockCrawler> ResolveKLineSources(string? source)
+    {
+        return ResolvePreferredSources(source, EastmoneySourceName, TencentSourceName);
+    }
+
+    private IReadOnlyList<IStockCrawler> ResolveMinuteSources(string? source)
+    {
+        return ResolvePreferredSources(source, TencentSourceName, EastmoneySourceName);
+    }
+
+    private IReadOnlyList<IStockCrawler> ResolvePreferredSources(string? source, params string[] preferredSourceNames)
+    {
+        if (!string.IsNullOrWhiteSpace(source))
+        {
+            return new[] { ResolveSource(source) };
+        }
+
+        var result = new List<IStockCrawler>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var preferredName in preferredSourceNames)
+        {
+            if (_sourcesByName.TryGetValue(preferredName, out var crawler) && seen.Add(crawler.SourceName))
+            {
+                result.Add(crawler);
+            }
+        }
+
+        foreach (var crawler in _sources)
+        {
+            if (seen.Add(crawler.SourceName))
+            {
+                result.Add(crawler);
+            }
+        }
+
+        if (seen.Add(_defaultCrawler.SourceName))
+        {
+            result.Add(_defaultCrawler);
+        }
+
+        return result;
     }
 }

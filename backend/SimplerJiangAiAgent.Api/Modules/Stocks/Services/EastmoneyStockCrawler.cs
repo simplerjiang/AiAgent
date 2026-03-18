@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text.Json;
 using SimplerJiangAiAgent.Api.Modules.Stocks.Models;
 
 namespace SimplerJiangAiAgent.Api.Modules.Stocks.Services;
@@ -58,9 +60,7 @@ public sealed class EastmoneyStockCrawler : IStockCrawlerSource
 
     public Task<IReadOnlyList<KLinePointDto>> GetKLineAsync(string symbol, string interval, int count, CancellationToken cancellationToken = default)
     {
-        // 东方财富 K 线接口在当前测试环境未返回数据，暂不启用
-        IReadOnlyList<KLinePointDto> result = Array.Empty<KLinePointDto>();
-        return Task.FromResult(result);
+        return GetKLineInternalAsync(symbol, interval, count, cancellationToken);
     }
 
     public async Task<IReadOnlyList<MinuteLinePointDto>> GetMinuteLineAsync(string symbol, CancellationToken cancellationToken = default)
@@ -85,6 +85,134 @@ public sealed class EastmoneyStockCrawler : IStockCrawlerSource
         var code = normalized.Replace("sh", string.Empty).Replace("sz", string.Empty);
         var market = normalized.StartsWith("sh") ? "1" : "0";
         return $"{market}.{code}";
+    }
+
+    private async Task<IReadOnlyList<KLinePointDto>> GetKLineInternalAsync(string symbol, string interval, int count, CancellationToken cancellationToken)
+    {
+        var normalized = StockSymbolNormalizer.Normalize(symbol);
+        var safeInterval = NormalizeInterval(interval);
+        var fetchInterval = safeInterval == "year" ? "month" : safeInterval;
+        var safeCount = Math.Max(count, 60);
+        var end = DateTime.UtcNow.Date;
+        var start = end.AddDays(-CalculateLookbackDays(safeInterval, safeCount));
+        var klt = fetchInterval switch
+        {
+            "week" => 102,
+            "month" => 103,
+            _ => 101
+        };
+
+        var url = $"https://push2his.eastmoney.com/api/qt/stock/kline/get?secid={ToEastmoneySecId(normalized)}&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&klt={klt}&fqt=1&beg={start:yyyyMMdd}&end={end:yyyyMMdd}";
+        var json = await _httpClient.GetStringAsync(url, cancellationToken);
+        using var document = JsonDocument.Parse(json);
+
+        if (!document.RootElement.TryGetProperty("data", out var dataNode))
+        {
+            return Array.Empty<KLinePointDto>();
+        }
+
+        if (!dataNode.TryGetProperty("klines", out var klineNode) || klineNode.ValueKind != JsonValueKind.Array)
+        {
+            return Array.Empty<KLinePointDto>();
+        }
+
+        var points = new List<KLinePointDto>();
+        foreach (var item in klineNode.EnumerateArray())
+        {
+            if (item.ValueKind != JsonValueKind.String)
+            {
+                continue;
+            }
+
+            var point = ParseKLinePoint(item.GetString());
+            if (point is not null)
+            {
+                points.Add(point);
+            }
+        }
+
+        var trimmed = points.TakeLast(safeCount).ToArray();
+        if (safeInterval == "year")
+        {
+            return AggregateYearly(trimmed).TakeLast(count).ToArray();
+        }
+
+        return trimmed.TakeLast(count).ToArray();
+    }
+
+    private static KLinePointDto? ParseKLinePoint(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return null;
+        }
+
+        var parts = raw.Split(',', StringSplitOptions.TrimEntries);
+        if (parts.Length < 6)
+        {
+            return null;
+        }
+
+        if (!DateTime.TryParse(parts[0], CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
+        {
+            return null;
+        }
+
+        var open = ParseDecimal(parts[1]);
+        var close = ParseDecimal(parts[2]);
+        var high = ParseDecimal(parts[3]);
+        var low = ParseDecimal(parts[4]);
+        var volume = ParseDecimal(parts[5]);
+        return new KLinePointDto(date, open, close, high, low, volume);
+    }
+
+    private static decimal ParseDecimal(string? input)
+    {
+        return decimal.TryParse(input, NumberStyles.Any, CultureInfo.InvariantCulture, out var value)
+            ? value
+            : 0m;
+    }
+
+    private static string NormalizeInterval(string interval)
+    {
+        var value = interval?.Trim().ToLowerInvariant();
+        return value switch
+        {
+            "week" => "week",
+            "month" => "month",
+            "year" => "year",
+            _ => "day"
+        };
+    }
+
+    private static int CalculateLookbackDays(string interval, int count)
+    {
+        return interval switch
+        {
+            "week" => Math.Max(365, count * 12),
+            "month" => Math.Max(365 * 3, count * 35),
+            "year" => Math.Max(365 * 10, count * 370),
+            _ => Math.Max(120, count * 2)
+        };
+    }
+
+    private static IReadOnlyList<KLinePointDto> AggregateYearly(IEnumerable<KLinePointDto> points)
+    {
+        return points
+            .GroupBy(item => item.Date.Year)
+            .OrderBy(group => group.Key)
+            .Select(group =>
+            {
+                var ordered = group.OrderBy(item => item.Date).ToList();
+                return new KLinePointDto(
+                    new DateTime(group.Key, 1, 1),
+                    ordered.First().Open,
+                    ordered.Last().Close,
+                    ordered.Max(item => item.High),
+                    ordered.Min(item => item.Low),
+                    ordered.Sum(item => item.Volume));
+            })
+            .ToArray();
     }
 
     private async Task<string?> TryGetStringAsync(string url, CancellationToken cancellationToken)

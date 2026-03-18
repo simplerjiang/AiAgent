@@ -34,6 +34,7 @@ public sealed class StocksModule : IModule
         services.AddScoped<IActiveWatchlistService, ActiveWatchlistService>();
         services.AddScoped<ILocalFactIngestionService, LocalFactIngestionService>();
         services.AddScoped<ILocalFactAiEnrichmentService, LocalFactAiEnrichmentService>();
+        services.AddScoped<ILocalFactArticleReadService, LocalFactArticleReadService>();
         services.AddScoped<IQueryLocalFactDatabaseTool, QueryLocalFactDatabaseTool>();
         services.AddScoped<IStockDataService, StockDataService>();
         services.AddScoped<IStockHistoryService, StockHistoryService>();
@@ -321,7 +322,8 @@ public sealed class StocksModule : IModule
             var kline = await dataService.GetKLineAsync(target, "day", 60, source);
             var minute = await dataService.GetMinuteLineAsync(target, source);
             var messages = await dataService.GetIntradayMessagesAsync(target, source);
-            var detail = new StockDetailDto(quote, kline, minute, messages);
+            var mergedKLine = StockRealtimeKLineMerge.MergeDailyFromMinuteLines(kline, minute, 60);
+            var detail = new StockDetailDto(quote, mergedKLine, minute, messages);
             var impact = impactService.Evaluate(target, quote.Name, messages);
             var signal = signalService.Evaluate(detail, impact);
 
@@ -348,8 +350,9 @@ public sealed class StocksModule : IModule
             var kline = await dataService.GetKLineAsync(target, "day", 60, request.Source);
             var minute = await dataService.GetMinuteLineAsync(target, request.Source);
             var messages = await dataService.GetIntradayMessagesAsync(target, request.Source);
+            var mergedKLine = StockRealtimeKLineMerge.MergeDailyFromMinuteLines(kline, minute, 60);
 
-            var detail = new StockDetailDto(quote, kline, minute, messages);
+            var detail = new StockDetailDto(quote, mergedKLine, minute, messages);
             var impact = impactService.Evaluate(target, quote.Name, messages);
             var signal = signalService.Evaluate(detail, impact);
             var marketContext = await marketContextService.GetLatestAsync(target);
@@ -393,8 +396,11 @@ public sealed class StocksModule : IModule
             var minute = await minuteTask;
             var messages = await messagesTask;
             var fundamentalSnapshot = await fundamentalSnapshotTask;
+            var mergedKLine = string.Equals(selectedInterval, "day", StringComparison.OrdinalIgnoreCase)
+                ? StockRealtimeKLineMerge.MergeDailyFromMinuteLines(kline, minute, count ?? 60)
+                : kline;
 
-            var detail = new StockDetailDto(quote, kline, minute, messages, fundamentalSnapshot);
+            var detail = new StockDetailDto(quote, mergedKLine, minute, messages, fundamentalSnapshot);
             if (persist is null || persist.Value)
             {
                 await syncService.SaveDetailAsync(detail, selectedInterval, cancellationToken);
@@ -778,6 +784,9 @@ public sealed class StocksModule : IModule
 
             var kline = await StockDetailCacheQueries.GetRecentKLinesAsync(dbContext, target, intervalValue, take);
             var minute = await StockDetailCacheQueries.GetLatestMinuteLinesAsync(dbContext, target);
+            var mergedKLine = string.Equals(intervalValue, "day", StringComparison.OrdinalIgnoreCase)
+                ? StockRealtimeKLineMerge.MergeDailyFromMinuteLines(kline, minute, take)
+                : kline;
 
             var messages = await dbContext.IntradayMessages
                 .AsNoTracking()
@@ -792,7 +801,7 @@ public sealed class StocksModule : IModule
                 quote.FloatMarketCap, quote.VolumeRatio, quote.ShareholderCount ?? companyProfile?.ShareholderCount, quote.SectorName ?? companyProfile?.SectorName);
             var fundamentalSnapshot = StockFundamentalSnapshotMapper.FromProfile(companyProfile);
 
-            return Results.Ok(new StockDetailDto(quoteDto, kline, minute, messages, fundamentalSnapshot));
+            return Results.Ok(new StockDetailDto(quoteDto, mergedKLine, minute, messages, fundamentalSnapshot));
         })
         .WithName("GetStockDetailCache")
         .WithOpenApi();

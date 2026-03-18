@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using SimplerJiangAiAgent.Api.Data;
 using SimplerJiangAiAgent.Api.Data.Entities;
+using SimplerJiangAiAgent.Api.Modules.Stocks.Services;
 
 namespace SimplerJiangAiAgent.Api.Tests;
 
@@ -145,6 +146,67 @@ public sealed class LocalFactIngestionServiceTests
         await service.EnsureFreshAsync("sh600000");
 
         Assert.Contains("sh600000", aiService.SymbolCalls);
+    }
+
+    [Fact]
+    public void MergeStockNewsEntities_ShouldPreserveCachedEvidenceFieldsOnMatchedRows()
+    {
+        using var dbContext = CreateDbContext();
+        var existing = new LocalStockNews
+        {
+            Id = 12,
+            Symbol = "sh600000",
+            Name = "浦发银行",
+            SectorName = "银行",
+            Title = "原公告",
+            Category = "announcement",
+            Source = "东方财富公告",
+            SourceTag = "eastmoney-announcement",
+            ExternalId = "notice-1",
+            PublishTime = new DateTime(2026, 3, 17, 8, 0, 0, DateTimeKind.Utc),
+            CrawledAt = new DateTime(2026, 3, 17, 8, 5, 0, DateTimeKind.Utc),
+            Url = "https://example.com/notice-1",
+            IsAiProcessed = true,
+            AiSentiment = "利好",
+            AiTarget = "个股:浦发银行",
+            AiTags = "公告,分红",
+            ArticleExcerpt = "缓存摘录",
+            ArticleSummary = "缓存摘要",
+            ReadMode = "url_fetched",
+            ReadStatus = "full_text_read",
+            IngestedAt = new DateTime(2026, 3, 17, 8, 10, 0, DateTimeKind.Utc)
+        };
+        dbContext.LocalStockNews.Add(existing);
+        dbContext.SaveChanges();
+
+        var incoming = new[]
+        {
+            new LocalStockNewsSeed(
+                "sh600000",
+                "浦发银行",
+                "银行",
+                "原公告",
+                "announcement",
+                "东方财富公告",
+                "eastmoney-announcement",
+                "notice-1",
+                new DateTime(2026, 3, 17, 8, 0, 0, DateTimeKind.Utc),
+                new DateTime(2026, 3, 17, 10, 0, 0, DateTimeKind.Utc),
+                "https://example.com/notice-1")
+        };
+
+        LocalFactIngestionService.MergeStockNewsEntities(
+            dbContext.LocalStockNews.ToList(),
+            incoming,
+            dbContext.LocalStockNews);
+
+        var row = Assert.Single(dbContext.LocalStockNews.Local);
+        Assert.Same(existing, row);
+        Assert.Equal("缓存摘录", row.ArticleExcerpt);
+        Assert.Equal("缓存摘要", row.ArticleSummary);
+        Assert.Equal("url_fetched", row.ReadMode);
+        Assert.Equal("full_text_read", row.ReadStatus);
+        Assert.Equal(new DateTime(2026, 3, 17, 10, 0, 0, DateTimeKind.Utc), row.CrawledAt);
     }
 
     private static LocalFactIngestionService CreateService(AppDbContext dbContext, StubAiEnrichmentService aiService)

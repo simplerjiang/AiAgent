@@ -43,6 +43,8 @@ public static class TradingPlanSchemaInitializer
             "CancelledAt DATETIME2 NULL" +
             "); " +
             "END; " +
+            "IF COL_LENGTH('dbo.TradingPlans','PlanKey') IS NULL ALTER TABLE dbo.TradingPlans ADD PlanKey NVARCHAR(64) NOT NULL CONSTRAINT DF_TradingPlans_PlanKey DEFAULT(''); " +
+            "IF COL_LENGTH('dbo.TradingPlans','Title') IS NULL ALTER TABLE dbo.TradingPlans ADD Title NVARCHAR(450) NOT NULL CONSTRAINT DF_TradingPlans_Title DEFAULT(''); " +
             "IF COL_LENGTH('dbo.TradingPlans','Symbol') IS NULL ALTER TABLE dbo.TradingPlans ADD Symbol NVARCHAR(32) NOT NULL CONSTRAINT DF_TradingPlans_Symbol DEFAULT(''); " +
             "IF COL_LENGTH('dbo.TradingPlans','Name') IS NULL ALTER TABLE dbo.TradingPlans ADD Name NVARCHAR(128) NOT NULL CONSTRAINT DF_TradingPlans_Name DEFAULT(''); " +
             "IF COL_LENGTH('dbo.TradingPlans','Direction') IS NULL ALTER TABLE dbo.TradingPlans ADD Direction NVARCHAR(16) NOT NULL CONSTRAINT DF_TradingPlans_Direction DEFAULT('Long'); " +
@@ -72,6 +74,7 @@ public static class TradingPlanSchemaInitializer
             "IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.TradingPlans') AND name = 'Status' AND max_length < 28) ALTER TABLE dbo.TradingPlans ALTER COLUMN Status NVARCHAR(16) NOT NULL; " +
             "IF COL_LENGTH('dbo.TradingPlans','PlanKey') IS NOT NULL AND NOT EXISTS (SELECT 1 FROM sys.default_constraints dc JOIN sys.columns c ON c.object_id = dc.parent_object_id AND c.column_id = dc.parent_column_id WHERE dc.parent_object_id = OBJECT_ID('dbo.TradingPlans') AND c.name = 'PlanKey') ALTER TABLE dbo.TradingPlans ADD CONSTRAINT DF_TradingPlans_LegacyPlanKey DEFAULT('') FOR PlanKey; " +
             "IF COL_LENGTH('dbo.TradingPlans','Title') IS NOT NULL AND NOT EXISTS (SELECT 1 FROM sys.default_constraints dc JOIN sys.columns c ON c.object_id = dc.parent_object_id AND c.column_id = dc.parent_column_id WHERE dc.parent_object_id = OBJECT_ID('dbo.TradingPlans') AND c.name = 'Title') ALTER TABLE dbo.TradingPlans ADD CONSTRAINT DF_TradingPlans_LegacyTitle DEFAULT('') FOR Title; " +
+            "IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_TradingPlans_PlanKey' AND object_id = OBJECT_ID('dbo.TradingPlans')) CREATE UNIQUE INDEX IX_TradingPlans_PlanKey ON dbo.TradingPlans(PlanKey); " +
             "IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_TradingPlans_Symbol_CreatedAt' AND object_id = OBJECT_ID('dbo.TradingPlans')) " +
             "CREATE INDEX IX_TradingPlans_Symbol_CreatedAt ON dbo.TradingPlans(Symbol, CreatedAt); " +
             "IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_TradingPlans_AnalysisHistoryId' AND object_id = OBJECT_ID('dbo.TradingPlans')) " +

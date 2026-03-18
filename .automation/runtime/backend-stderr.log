@@ -1,0 +1,26 @@
+=Development : 无法将“=Development”项识别为 cmdlet、函数、脚本文件或可运行程序的名称。请检查名称的拼写，如果包括路径
+，请确保路径正确，然后再试一次。
+所在位置 行:1 字符: 1
++ ='Development'; ='http://localhost:5119'; ='Server=localhost;Database ...
++ ~~~~~~~~~~~~~~
+    + CategoryInfo          : ObjectNotFound: (=Development:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+=http://localhost:5119 : 无法将“=http://localhost:5119”项识别为 cmdlet、函数、脚本文件或可运行程序的名称。请检查名称
+的拼写，如果包括路径，请确保路径正确，然后再试一次。
+所在位置 行:1 字符: 17
++ ='Development'; ='http://localhost:5119'; ='Server=localhost;Database ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ObjectNotFound: (=http://localhost:5119:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+=Server=localhost;Database=SimplerJiangAiAgent;User Id=sa;Password=123456;TrustServerCertificate=True;MultipleActiveRes
+ultSets=True;Encrypt=False : 无法将“=Server=localhost;Database=SimplerJiangAiAgent;User Id=sa;Password=123456;TrustSer
+verCertificate=True;MultipleActiveResultSets=True;Encrypt=False”项识别为 cmdlet、函数、脚本文件或可运行程序的名称。请
+检查名称的拼写，如果包括路径，请确保路径正确，然后再试一次。
+所在位置 行:1 字符: 43
++ ... host:5119'; ='Server=localhost;Database=SimplerJiangAiAgent;User Id=s ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ObjectNotFound: (=Server=localho...e;Encrypt=False:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 

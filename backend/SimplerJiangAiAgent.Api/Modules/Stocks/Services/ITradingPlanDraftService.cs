@@ -49,6 +49,7 @@ public sealed class TradingPlanDraftService : ITradingPlanDraftService
         var financialData = FindAgentData(document.RootElement, "financial_analysis");
         var trendData = FindAgentData(document.RootElement, "trend_analysis");
 
+        var direction = ResolveDirection(commanderData.Value);
         var summary = ReadString(commanderData.Value, "analysis_opinion") ?? ReadString(commanderData.Value, "summary");
         var expectedCatalyst = ReadString(commanderData.Value, "trigger_conditions");
         var invalidConditions = ReadString(commanderData.Value, "invalid_conditions");
@@ -57,19 +58,27 @@ public sealed class TradingPlanDraftService : ITradingPlanDraftService
         var invalidPrice = ReadChartPrice(commanderData.Value, "supportPrice");
         var stopLossPrice = ReadChartPrice(commanderData.Value, "stopLossPrice")
             ?? ReadChartPrice(commanderData.Value, "supportPrice");
-        var targetPrice = ReadChartPrice(commanderData.Value, "targetPrice")
-            ?? ReadMetricPrice(financialData, "institutionTargetPrice")
-            ?? ReadForecastExtreme(trendData, true);
-        var takeProfitPrice = ReadChartPrice(commanderData.Value, "takeProfitPrice")
-            ?? targetPrice
-            ?? ReadForecastExtreme(trendData, true);
-        var direction = ResolveDirection(commanderData.Value).ToString();
+        var currentPrice = ReadMetricPrice(commanderData, "price");
+        var trendExtremePrice = ReadForecastExtreme(trendData, direction != TradingPlanDirection.Short);
+        var targetPrice = ResolveDirectionalPrice(
+            direction,
+            currentPrice,
+            ReadChartPrice(commanderData.Value, "targetPrice"),
+            ReadMetricPrice(financialData, "institutionTargetPrice"),
+            trendExtremePrice);
+        var takeProfitPrice = ResolveDirectionalPrice(
+            direction,
+            currentPrice,
+            ReadChartPrice(commanderData.Value, "takeProfitPrice"),
+            targetPrice,
+            trendExtremePrice);
+        var directionText = direction.ToString();
         var marketContext = await _marketContextService.GetLatestAsync(normalizedSymbol, cancellationToken);
 
         return new TradingPlanDraftDto(
             normalizedSymbol,
             history.Name,
-            direction,
+            directionText,
             TradingPlanStatus.Pending.ToString(),
             triggerPrice,
             invalidPrice,
@@ -84,6 +93,42 @@ public sealed class TradingPlanDraftService : ITradingPlanDraftService
             "commander",
                 null,
                 marketContext);
+    }
+
+    private static decimal? ResolveDirectionalPrice(
+        TradingPlanDirection direction,
+        decimal? currentPrice,
+        params decimal?[] candidates)
+    {
+        foreach (var candidate in candidates)
+        {
+            if (!candidate.HasValue)
+            {
+                continue;
+            }
+
+            if (!currentPrice.HasValue)
+            {
+                return candidate;
+            }
+
+            if (direction == TradingPlanDirection.Short)
+            {
+                if (candidate.Value < currentPrice.Value)
+                {
+                    return candidate;
+                }
+
+                continue;
+            }
+
+            if (candidate.Value > currentPrice.Value)
+            {
+                return candidate;
+            }
+        }
+
+        return null;
     }
 
     private static JsonElement? FindCommanderData(JsonElement root)

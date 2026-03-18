@@ -40,10 +40,11 @@ public sealed class StockSyncService : IStockSyncService
             var kline = await _crawler.GetKLineAsync(target, "day", 60, cancellationToken);
             var minute = await _crawler.GetMinuteLineAsync(target, cancellationToken);
             var messages = await _crawler.GetIntradayMessagesAsync(target, cancellationToken);
+            var mergedKLine = StockRealtimeKLineMerge.MergeDailyFromMinuteLines(kline, minute, 60);
 
             _dbContext.StockQuoteSnapshots.Add(MapQuote(quote));
             await UpsertCompanyProfileAsync(_dbContext, quote, null, cancellationToken);
-            await UpsertKLineAsync(_dbContext, target, "day", kline, cancellationToken);
+            await UpsertKLineAsync(_dbContext, target, "day", mergedKLine, cancellationToken);
             await UpsertMinuteLineAsync(_dbContext, target, minute, cancellationToken);
             await UpsertMessagesAsync(_dbContext, target, messages, cancellationToken);
         }
@@ -59,10 +60,13 @@ public sealed class StockSyncService : IStockSyncService
         }
 
         var symbol = StockSymbolNormalizer.Normalize(detail.Quote.Symbol);
+        var mergedKLines = string.Equals(interval, "day", StringComparison.OrdinalIgnoreCase)
+            ? StockRealtimeKLineMerge.MergeDailyFromMinuteLines(detail.KLines, detail.MinuteLines, detail.KLines.Count > 0 ? detail.KLines.Count : null)
+            : detail.KLines;
 
         _dbContext.StockQuoteSnapshots.Add(MapQuote(detail.Quote with { Symbol = symbol }));
         await UpsertCompanyProfileAsync(_dbContext, detail.Quote with { Symbol = symbol }, detail.FundamentalSnapshot, cancellationToken);
-        await UpsertKLineAsync(_dbContext, symbol, interval, detail.KLines, cancellationToken);
+        await UpsertKLineAsync(_dbContext, symbol, interval, mergedKLines, cancellationToken);
         await UpsertMinuteLineAsync(_dbContext, symbol, detail.MinuteLines, cancellationToken);
         await UpsertMessagesAsync(_dbContext, symbol, detail.Messages, cancellationToken);
 

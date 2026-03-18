@@ -21,6 +21,7 @@
 - /api/stocks/detail/cache 组合详情（缓存）
 - /api/stocks/plans 交易计划查询/创建/更新/删除/取消/恢复观察，以及 /api/stocks/plans/draft 后端草稿生成；支持不传 `symbol` 直接获取最近交易计划总览
 - `StockCompanyProfiles` 现支持持久化基本面快照事实 JSON 与刷新时间，`/api/stocks/detail/cache` 可直接回放数据库中的基本面事实，`/api/stocks/detail` 再做实时东财刷新并回写数据库
+- 行情双源策略已正式收口到后端：默认 `分时 -> 腾讯优先 / 东方财富回退`，默认 `日K/周K/月K/年K -> 东方财富优先 / 腾讯回退`；当调用方显式传入 `source` 时仍按指定源执行
 - /api/stocks/sync 手动触发同步
 - /api/news 本地事实新闻查询（按 symbol + level=stock/sector/market 精准过滤，前端展示使用批量 AI 清洗后的翻译/情绪/标签）
 - /api/stocks/news/impact 资讯影响评估（公告/研报/新闻分级、来源可信度、同主题合并去重）
@@ -53,6 +54,7 @@
 
 ## 数据同步与配置
 - 后台定时任务按 appsettings.json 的 StockSync 配置抓取并落库
+- 行情接口默认走双源自动回退策略：分时优先腾讯以压低时延，K 线优先东方财富以提高字段完整度与当日覆盖；任一优先源为空或异常时自动降级到另一源
 - GOAL-013 已新增本地事实采集链路：东方财富公告/公司资料 + 新浪公司新闻会进入 `LocalStockNews`；板块资讯改为新浪财经搜索页 HTML 定向抓取；大盘环境已切换为新浪纯财经流 `pageid=153&lid=2509` + CNBC / Seeking Alpha / CoinTelegraph / TechCrunch / The Hill 五路 RSS 聚合写入 `LocalSectorReports`，并在采集阶段直接过滤 `自媒体` 等污染来源。Step 2.4 进一步在本地事实入库后增加 `gemini-2.5-flash-lite` 批量 AI 清洗层，补齐中文翻译、`AiSentiment`、`AiTarget`、`AiTags` 与 `IsAiProcessed` 增量重试机制；这些廉价 AI 标签仅用于 `/api/news` 与 `/api/news/archive` 展示，不直接投喂 Stock Agents，避免污染高阶分析上下文。Step 2.6 新增 `全量资讯库` 页签，对本地 AI 清洗资讯提供关键字 / 层级 / 情绪筛选、分页、译题优先展示与原文跳转
 - 默认账号：admin / admin123（可在 backend/SimplerJiangAiAgent.Api/appsettings.json 的 Admin 段落中修改）
 
@@ -158,6 +160,10 @@ opencode
 - [x] GOAL-012-R2 `klinecharts` 受控替换试验（已在 `frontend/src/modules/stocks/charting/**` 内完成底层引擎从 `lightweight-charts` 到 `klinecharts` 的受控替换，保持 `minuteLines` / `kLines` / `interval` / `aiLevels` / `update:interval` 父层 contract 不变，并补齐 `klinechartsRegistry.js` 作为 MA/VOL/AI 价位线与后续策略标记层的 registry 入口；`frontend/package.json` / lockfile 已精确锁定 `10.0.0-beta1` 且移除旧 `lightweight-charts` 依赖。后续回归已补齐日K 时间戳毫秒化、月线/年线真实数据渲染、分时成交量按“手”显示，并将图表图例升级为可点击开关，可直接切换分时主线/量能/昨收基线/AI 价位与 K 线蜡烛/量能/MA5/MA10/AI 价位；前端单测、build 与后端托管页面的查股 + 图例点击 Browser MCP 验收已通过）
 - [x] GOAL-012-R3 统一策略注册表与多信号叠加（Phase A/B/C 已完成并验收：`chartStrategyRegistry.js` / `chartPanes.js` 已将图表能力收敛为统一 strategy registry + grouped chips + render plan。当前已接入并验证策略：MA5/10/20/60、VWAP、BOLL、Donchian、MACD、RSI、ATR、KDJ、ORB，以及完整 Phase C 信号 `MA5/MA10 金叉/死叉`、`TD九转`、`MACD金叉/死叉`、`KDJ金叉/死叉`、`放量突破/假突破`、`缺口`、`量价背离`、`VWAP强弱`；其中 `TD九转` 现已收敛为只显示 `6/7/8/9`，并按 `6-7` 弱提示、`8-9` 强提示做视觉分层；其余日K专属信号只在 `日K图` 展示，分时专属信号只在 `分时图` 展示。可读性层也已收口：图表头部浮动小标按颜色区分当前激活策略，鼠标悬浮可查看“介绍 / 解释 / 用法”，并支持 `隐藏小标 / 显示小标` 总开关，以及 `全屏 / 退出全屏` 放大控制；K 线鼠标悬浮时也会直接显示开高低收、成交量、MA5/MA10、涨跌额与涨跌幅。对于 RSI/KDJ/BOLL/Donchian/MACD 这类多线指标，tooltip 已补齐“颜色对照”；KDJ 也已完成真实图面修复，不再让 render-plan 聚合器错误地去重/排序 `[9,3,3]` 参数，而是在同一 KDJ 副图挂载 `K/D/J` 三条受控单线。整套 R3 已通过前端定向单测、build 与后端托管页面 Browser MCP 点击验收。）
 - [x] GOAL-013 双轨数据中枢（Local+Global Dual-Track）与 LLM 职能调度中心（已完成 Step 2：本地事实库、受控外网路由、新闻精准过滤、Step 2.2 Task 4 的标准/Pro 模型分流、Step 2.3 的新浪板块资讯抓取/大盘多源聚合/无选股即可查看的大盘资讯与完整查询历史展示、Step 2.4 的本地事实批量 AI 清洗/翻译/标签隔离投喂、Step 2.5 的大盘资讯内嵌交互/外媒 RSS 时效清洗/本地事实 AI 重试补漏，以及 Step 2.6 的纯财经大盘源切换、活跃 RSS 替换与 `全量资讯库` 归档工作台）
+- [ ] GOAL-AGENT-001 多 Agent 分析链路重构规划（本轮先完成规划，不急于编码；目标是把现有系统从“结构化研报生成”提升为“证据可追溯、上下文低污染、置信度可校准、预测口径可回放”的决策辅助引擎。规划共分 8 步：Step 1 证据对象与 URL 追溯重构；Step 2 正文抓取/摘要/可读状态链路；Step 3 子 Agent 职责重新切分；Step 4 上下文净化与新闻抗污染闸门；Step 5 代码侧先算特征再交给 LLM 解释；Step 6 commander 置信度/冲突惩罚/降级机制；Step 7 最终输出 contract 改为“观点+概率+条件+风险+证据”；Step 8 建立日志回放、校准集与验收基线。当前已补充 `Stock Copilot Tool Catalog v1` 与 `Stop Policy / Readiness Evaluator v1` 两份衍生设计稿。）
+- [ ] GOAL-AGENT-001-R1 证据可追溯底座（URL-first evidence object、正文抓取/摘要/readMode/readStatus、evidence 归一化与 commander 采信闸门）
+- [ ] GOAL-AGENT-001-R2 Agent 职责重切与推理收口（stock/sector/financial/trend 边界重划、marketReports 抗污染、代码先算特征、commander 覆盖率/冲突/降级惩罚）
+- [ ] GOAL-AGENT-001-R3 回放校准闭环与验收基线（历史回放样本、1/3/5/10 日收益对齐、命中率/Brier score/分组胜率、开发者可观测验收指标）
 - [ ] GOAL-015 深度盘面属性扩充与 Agent 指挥体系重构（Step 3 已继续完成“基本面快照富事实 + 数据库缓存优先刷新”增强：`StockCompanyProfiles` 新增 `FundamentalFactsJson/FundamentalUpdatedAt`，详情页先读 `/api/stocks/detail/cache` 的数据库快照，再由 `/api/stocks/detail` 实时抓东财公司概况/股东研究并回写；已完成 migration、SQLCMD 校验、后端定向单测、前端定向单测、前端 build 与运行时接口验证。剩余主要是 Edge/UI 验收与更大范围联调。）
 - [x] ISSUE-20260310 提示词增强（新闻抗污染策略 + 新闻库定时采集约束 + 白盒 MCP/Skill 任务执行规范）
 - [x] ISSUE-20260310-P0 动态来源治理基座（LLM每日候选源发现 + 自动新增爬取地址/流程 + 爬虫失效自动修复发布 + 程序化验证与自动隔离）
@@ -175,6 +181,26 @@ opencode
 	- 低置信度自动降级：不满足阈值时仅给“观察”，避免过度交易。
 	- 图表联动增强：K线与分时图叠加 AI 突破线/支撑线（优先 commander 目标/止损，缺失时回退 trend 预测区间）。
 	- 阶段验收标准：多Agent结果在后端统一补齐结构字段；前端可展示操作计划/证据/触发失效/风险上限；自动化测试需验证点击交互、响应等待与日志无异常。
+- [ ] GOAL-AGENT-001 多 Agent 分析链路重构规划
+	- 总体评价：当前分析内容与最终返回内容“合理，但偏松”。它已经适合做信息整合、结构化展示和 UI 呈现，但还不足以直接充当高置信交易判断。当前最大的问题不是不会说，而是说得太像、太满、太统一。
+	- 核心问题 1，证据绑定太弱：虽然提示词要求 `source` 和 `publishedAt`，但没有强制模型只能引用上下文里真实存在的事实项，也没有要求返回可回溯证据对象。真实日志里频繁出现“华尔街日报”“路透社”“北向资金连续净流入”“社交媒体综合统计”这类像研报的话术，说明内容容易“像真的”，但不够可验证。
+	- 核心问题 2，子 Agent 分工不够专：个股资讯、板块资讯、基本面、走势 4 个 Agent 目前都在输出 `signals / triggers / invalidations / riskLimits`，导致大家都在做半个 commander，信息增量不高，反而容易制造“伪共识”。
+	- 核心问题 3，上下文本身有污染：`stock_news` 与 `sector_news` 提示词都允许直接吃 `localFacts.marketReports`，但当前大盘环境里混入了不少 Seeking Alpha、CoinTelegraph、加密和海外个股内容，会把模型注意力从 A 股单票拉向泛宏观杂讯。
+	- 核心问题 4，概率与置信度不够校准：真实日志里多次出现机械化 `0.88` 置信度和模板化上涨/下跌/震荡概率表达，更像模型习惯值，不像经过历史命中率回归后的校准结果。
+	- 核心问题 5，异常场景还不够保守：子 Agent 全部失败、超时、HTML 返回页、非 JSON 思维泄漏等 degraded path 已经在日志中出现，但系统仍可能产出“格式完整但过度自信”的最终结论。
+	- Step 1 证据 schema 重构：这里不再坚持“把 evidenceId 暴露给用户并做成硬约束”，而是改成“把可回溯证据对象做成硬约束”。外部展示以 `url` 为主，不再把内部 evidenceId 当成人类可读核心；同时引入 evidence object，至少包含 `source`、`publishedAt`、`url`、`title`、`excerpt`、`readMode`、`readStatus`、`ingestedAt`，内部如需关联数据库可保留 `localFactId`，但不要求直接暴露给用户。
+	- Step 2 正文获取链路：优先由后端抓取原文正文、清洗正文、抽取摘要或关键段落，再把“已读内容”传给 LLM；禁止把“让 LLM 自己去网上随意读链接”作为主链。若正文抓取失败，必须明确标记 `readStatus=metadata_only` 或 `fetch_failed`，并自动降低证据权重。
+	- Step 2.1 全文阅读触发条件：允许“要求阅读全文”，但只对公告、财报、监管文件、重大合同、业绩预告、直接影响交易计划失效条件的新闻触发；普通快讯、二手转载、板块情绪消息不默认全文抓取，避免延迟、成本和噪声失控。
+	- Step 3 Agent 职责重切：`stock_news` 只负责个股事件事实、时间与直接影响；`sector_news` 只负责板块/大盘 regime 与外部共振；`financial_analysis` 只负责慢变量基本面、估值锚与财报质量；`trend_analysis` 只负责多周期价格结构、量价信号与关键位；`commander` 只能综合已有证据，不允许再凭空新增未经上游引用的新新闻结论。
+	- Step 4 上下文净化：继续坚持 README 中的 Local-First 原则，把大盘/板块/个股事实池明确隔离；对 A 股场景中无关的海外宏观、加密货币、泛美股 RSS 噪音建立隔离或降权策略，避免污染个股分析上下文。
+	- Step 5 代码先算特征：把可确定的特征先在代码里算好，再让 LLM 做解释与综合，例如新闻新鲜度、事件覆盖率、正反证数量、历史结论漂移、趋势状态、波动风险、估值偏离、量价异动。LLM 不负责“凭感觉编数据”。
+	- Step 6 置信度重构：把 `confidence_score` 从自由发挥改为半规则化产物，至少受到四类因素约束：证据覆盖度、证据冲突度、证据新鲜度、链路降级状态。出现 JSON 修复、正文缺失、证据不可追溯、观点冲突大时，必须自动降级到 `观望/中性/低置信度`。
+	- Step 7 输出 contract 重构：最终 commander 输出应围绕“观点而非命令”，统一包含 `analysis_opinion`、多时间尺度方向判断、`bull/base/bear` 或等价概率分布、核心驱动、反证、触发条件、失效条件、风险上限、关键价位与可点击证据 URL；避免只给单句结论或机械化 `0.88` 置信度。
+	- Step 8 回放与验收基线：基于现有 `llm-requests.txt`、历史 commander 结果和本地事实库，构建一批可回放样本，统计证据可追溯率、解析修复率、低质量来源混入率、置信度分布、改判解释完整率，并进一步把过去 1/3/5/10 日实际收益与当时的方向、概率、置信度对齐，计算命中率、Brier score 和分组胜率，形成真实校准回路。
+	- 与现有目标关系：本目标是 GOAL-015 的上游规划约束，也是 ISSUE-20260310-P1/P2 在 Agent 决策层的具体落地拆分。先把这个规划写清楚，再逐步拆成可开发的后续 R1/R2/R3 子任务。
+	- R1 证据可追溯底座：先落 evidence object、URL-first 展示字段、正文抓取与本地摘要、`readMode/readStatus`、evidence 归一化与 commander 证据采信闸门。没有可回溯证据对象的判断，默认不能进入高置信结论。
+	- R2 Agent 职责重切与推理收口：再收口 4 个子 Agent 的职责边界，减少重复结论输出；对 `marketReports` 做 A 股场景净化；先由后端计算 freshness/coverage/conflict/trend/valuation 等确定性特征，再让 LLM 解释；同时把 commander 的覆盖率惩罚、冲突惩罚、degraded path 降级做成系统逻辑。
+	- R3 回放校准闭环与验收基线：最后建立历史 replay、收益对齐、命中率/Brier score/分组胜率指标与可观测验收面板，把“格式化观点”推进成“可被持续校准的分析系统”。
 - [ ] GOAL-008 交易计划引擎（盘前计划、盘中触发、失效条件）
 	- Step 4.0 已完成：股票切换与加载性能深度优化，后端 `/api/stocks/detail` 并发化，前端先读 `/api/stocks/detail/cache` 做秒开渲染，并加入快速切股的旧响应抑制。
 	- Step 4.1 已完成：新增 `ActiveWatchlist` 高频白名单与 `HighFrequencyQuoteService`，仅在 A 股交易时段轮询白名单股票并持续回写 quote/minute/messages 到本地缓存表，为后续交易计划触发与纪律执行提供稳定底座；已通过后端全量单测、EF migration 应用与 SQLCMD 表/索引校验。

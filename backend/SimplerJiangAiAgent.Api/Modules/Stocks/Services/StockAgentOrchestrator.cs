@@ -479,12 +479,10 @@ internal static class StockAgentCommanderHistoryPolicy
         var list = new List<string>();
         foreach (var item in evidence.EnumerateArray())
         {
-            if (!TryGetPropertyIgnoreCase(item, "point", out var pointNode) || pointNode.ValueKind != JsonValueKind.String)
-            {
-                continue;
-            }
-
-            var point = pointNode.GetString();
+            var point = TryGetString(item, "point")
+                ?? TryGetString(item, "title")
+                ?? TryGetString(item, "excerpt")
+                ?? TryGetString(item, "summary");
             if (string.IsNullOrWhiteSpace(point))
             {
                 continue;
@@ -825,7 +823,8 @@ internal static class StockAgentPromptBuilder
             "6. 你会收到仅供指挥Agent使用的近3-7天历史结论（默认5天）。若本次方向/评级与最近一次明显变化，必须给出改判原因。\n\n" +
             "7. 必须执行多周期融合：综合1D/1W/1M信号；若短中周期冲突，consistency.status 必须为“分歧态”。\n" +
             "8. 必须执行状态机与滞后机制：状态=延续/震荡/反转；单日波动不应轻易翻转方向，除非出现强反证（如关键失效条件触发）。\n" +
-            "9. 必须把流通市值、市盈率、量比、股东户数、所属板块纳入推理和结论。\n\n" +
+            "9. 必须把流通市值、市盈率、量比、股东户数、所属板块纳入推理和结论。\n" +
+            "10. evidence 中每条必须显式标注 readMode/readStatus；优先使用 full_text_read 或 summary_only 证据，metadata_only / unverified / fetch_failed 只能作为弱证据。\n\n" +
             "输出JSON结构：\n" +
             "{\n" +
             "  \"agent\": \"commander\",\n" +
@@ -849,9 +848,17 @@ internal static class StockAgentPromptBuilder
             "  \"evidence\": [\n" +
             "    {\n" +
             "      \"point\": \"string\",\n" +
+            "      \"title\": \"string|null\",\n" +
             "      \"source\": \"string\",\n" +
             "      \"publishedAt\": \"YYYY-MM-DD HH:mm|null\",\n" +
-            "      \"url\": \"string|null\"\n" +
+            "      \"crawledAt\": \"YYYY-MM-DD HH:mm|null\",\n" +
+            "      \"url\": \"string|null\",\n" +
+            "      \"excerpt\": \"string|null\",\n" +
+            "      \"readMode\": \"url_fetched|local_fact|url_unavailable|string\",\n" +
+            "      \"readStatus\": \"full_text_read|summary_only|title_only|metadata_only|unverified|fetch_failed|string\",\n" +
+            "      \"ingestedAt\": \"YYYY-MM-DD HH:mm|null\",\n" +
+            "      \"localFactId\": number|null,\n" +
+            "      \"sourceRecordId\": \"string|null\"\n" +
             "    }\n" +
             "  ],\n" +
             "  \"revision\": {\n" +
@@ -891,7 +898,7 @@ internal static class StockAgentPromptBuilder
             "3.1 queryPolicy.allowInternet=false 时，禁止跳过本地事实库自行联网搜索 A 股公告/研报。\n" +
             "4. 证据默认只允许最近72小时；若有效证据不足可扩窗到7天，并在summary中明确标注“扩窗到7天”。\n" +
             "5. 禁止将无来源或无发布时间（publishedAt）的内容作为核心证据。\n" +
-            "6. evidence中每条都必须包含source、publishedAt、crawledAt（抓取时间）。\n\n" +
+            "6. evidence中每条都必须包含source、publishedAt、crawledAt（抓取时间）、title、readMode、readStatus；如来自本地事实库，优先附带localFactId/sourceRecordId。\n\n" +
             "输出JSON结构：\n" +
             "{\n" +
             "  \"agent\": \"stock_news\",\n" +
@@ -916,10 +923,17 @@ internal static class StockAgentPromptBuilder
             "  \"evidence\": [\n" +
             "    {\n" +
             "      \"point\": \"string\",\n" +
+            "      \"title\": \"string|null\",\n" +
             "      \"source\": \"string\",\n" +
             "      \"publishedAt\": \"YYYY-MM-DD HH:mm|null\",\n" +
             "      \"crawledAt\": \"YYYY-MM-DD HH:mm\",\n" +
-            "      \"url\": \"string|null\"\n" +
+            "      \"url\": \"string|null\",\n" +
+            "      \"excerpt\": \"string|null\",\n" +
+            "      \"readMode\": \"string\",\n" +
+            "      \"readStatus\": \"string\",\n" +
+            "      \"ingestedAt\": \"YYYY-MM-DD HH:mm|null\",\n" +
+            "      \"localFactId\": number|null,\n" +
+            "      \"sourceRecordId\": \"string|null\"\n" +
             "    }\n" +
             "  ],\n" +
             "  \"signals\": [\"string\"],\n" +
@@ -945,7 +959,7 @@ internal static class StockAgentPromptBuilder
             "3.1 queryPolicy.allowInternet=false 时，只能基于本地事实库输出，不得擅自联网补齐 A 股板块消息。\n" +
             "4. 证据默认只允许最近72小时；若有效证据不足可扩窗到7天，并在summary中明确标注“扩窗到7天”。\n" +
             "5. 禁止将无来源或无发布时间（publishedAt）的内容作为核心证据。\n" +
-            "6. evidence中每条都必须包含source、publishedAt、crawledAt（抓取时间）。\n\n" +
+            "6. evidence中每条都必须包含source、publishedAt、crawledAt（抓取时间）、title、readMode、readStatus；如来自本地事实库，优先附带localFactId/sourceRecordId。\n\n" +
             "输出JSON结构：\n" +
             "{\n" +
             "  \"agent\": \"sector_news\",\n" +
@@ -964,10 +978,17 @@ internal static class StockAgentPromptBuilder
             "  \"evidence\": [\n" +
             "    {\n" +
             "      \"point\": \"string\",\n" +
+            "      \"title\": \"string|null\",\n" +
             "      \"source\": \"string\",\n" +
             "      \"publishedAt\": \"YYYY-MM-DD HH:mm|null\",\n" +
             "      \"crawledAt\": \"YYYY-MM-DD HH:mm\",\n" +
-            "      \"url\": \"string|null\"\n" +
+            "      \"url\": \"string|null\",\n" +
+            "      \"excerpt\": \"string|null\",\n" +
+            "      \"readMode\": \"string\",\n" +
+            "      \"readStatus\": \"string\",\n" +
+            "      \"ingestedAt\": \"YYYY-MM-DD HH:mm|null\",\n" +
+            "      \"localFactId\": number|null,\n" +
+            "      \"sourceRecordId\": \"string|null\"\n" +
             "    }\n" +
             "  ],\n" +
             "  \"signals\": [\"string\"],\n" +
@@ -985,7 +1006,8 @@ internal static class StockAgentPromptBuilder
     private static string BuildFinancialPrompt(string contextJson)
     {
         const string template =
-            "你是个股分析Agent。请优先使用上下文里的 localFacts.stockNews / localFacts.sectorReports 进行 A 股个股事实分析；仅当 queryPolicy.allowInternet=true 时才允许补充海外/宏观信息。\n" +
+            "你是个股分析Agent。请优先使用上下文里的 localFacts.stockNews / localFacts.sectorReports / localFacts.fundamentalFacts 进行 A 股个股事实分析；仅当 queryPolicy.allowInternet=true 时才允许补充海外/宏观信息。\n" +
+            "如果 localFacts.fundamentalFacts 已提供营收、净利润、扣非利润、股东户数、机构目标价等事实，优先直接采用，不要无故留空。\n" +
             "要求：\n" +
             "1. 必须输出严格JSON，不要Markdown，不要代码块，不要多余文字。\n" +
             "2. 所有字段必须存在；没有数据用null或空数组。\n" +
@@ -1008,9 +1030,17 @@ internal static class StockAgentPromptBuilder
             "  \"evidence\": [\n" +
             "    {\n" +
             "      \"point\": \"string\",\n" +
+            "      \"title\": \"string|null\",\n" +
             "      \"source\": \"string\",\n" +
             "      \"publishedAt\": \"YYYY-MM-DD HH:mm|null\",\n" +
-            "      \"url\": \"string|null\"\n" +
+            "      \"crawledAt\": \"YYYY-MM-DD HH:mm|null\",\n" +
+            "      \"url\": \"string|null\",\n" +
+            "      \"excerpt\": \"string|null\",\n" +
+            "      \"readMode\": \"string\",\n" +
+            "      \"readStatus\": \"string\",\n" +
+            "      \"ingestedAt\": \"YYYY-MM-DD HH:mm|null\",\n" +
+            "      \"localFactId\": number|null,\n" +
+            "      \"sourceRecordId\": \"string|null\"\n" +
             "    }\n" +
             "  ],\n" +
             "  \"signals\": [\"string\"],\n" +
@@ -1055,9 +1085,17 @@ internal static class StockAgentPromptBuilder
             "  \"evidence\": [\n" +
             "    {\n" +
             "      \"point\": \"string\",\n" +
+            "      \"title\": \"string|null\",\n" +
             "      \"source\": \"string\",\n" +
             "      \"publishedAt\": \"YYYY-MM-DD HH:mm|null\",\n" +
-            "      \"url\": \"string|null\"\n" +
+            "      \"crawledAt\": \"YYYY-MM-DD HH:mm|null\",\n" +
+            "      \"url\": \"string|null\",\n" +
+            "      \"excerpt\": \"string|null\",\n" +
+            "      \"readMode\": \"string\",\n" +
+            "      \"readStatus\": \"string\",\n" +
+            "      \"ingestedAt\": \"YYYY-MM-DD HH:mm|null\",\n" +
+            "      \"localFactId\": number|null,\n" +
+            "      \"sourceRecordId\": \"string|null\"\n" +
             "    }\n" +
             "  ],\n" +
             "  \"signals\": [\"string\"],\n" +
@@ -1114,9 +1152,17 @@ internal static class StockAgentPromptBuilder
                 "  \"evidence\": [\n" +
                 "    {\n" +
                 "      \"point\": \"string\",\n" +
+                "      \"title\": \"string|null\",\n" +
                 "      \"source\": \"string\",\n" +
                 "      \"publishedAt\": \"YYYY-MM-DD HH:mm|null\",\n" +
-                "      \"url\": \"string|null\"\n" +
+                "      \"crawledAt\": \"YYYY-MM-DD HH:mm|null\",\n" +
+                "      \"url\": \"string|null\",\n" +
+                "      \"excerpt\": \"string|null\",\n" +
+                "      \"readMode\": \"string\",\n" +
+                "      \"readStatus\": \"string\",\n" +
+                "      \"ingestedAt\": \"YYYY-MM-DD HH:mm|null\",\n" +
+                "      \"localFactId\": number|null,\n" +
+                "      \"sourceRecordId\": \"string|null\"\n" +
                 "    }\n" +
                 "  ],\n" +
                 "  \"revision\": {\n" +
@@ -1164,10 +1210,17 @@ internal static class StockAgentPromptBuilder
                 "  \"evidence\": [\n" +
                 "    {\n" +
                 "      \"point\": \"string\",\n" +
+                "      \"title\": \"string|null\",\n" +
                 "      \"source\": \"string\",\n" +
                 "      \"publishedAt\": \"YYYY-MM-DD HH:mm|null\",\n" +
                 "      \"crawledAt\": \"YYYY-MM-DD HH:mm\",\n" +
-                "      \"url\": \"string|null\"\n" +
+                "      \"url\": \"string|null\",\n" +
+                "      \"excerpt\": \"string|null\",\n" +
+                "      \"readMode\": \"string\",\n" +
+                "      \"readStatus\": \"string\",\n" +
+                "      \"ingestedAt\": \"YYYY-MM-DD HH:mm|null\",\n" +
+                "      \"localFactId\": number|null,\n" +
+                "      \"sourceRecordId\": \"string|null\"\n" +
                 "    }\n" +
                 "  ],\n" +
                 "  \"signals\": [\"string\"],\n" +
@@ -1195,10 +1248,17 @@ internal static class StockAgentPromptBuilder
                 "  \"evidence\": [\n" +
                 "    {\n" +
                 "      \"point\": \"string\",\n" +
+                "      \"title\": \"string|null\",\n" +
                 "      \"source\": \"string\",\n" +
                 "      \"publishedAt\": \"YYYY-MM-DD HH:mm|null\",\n" +
                 "      \"crawledAt\": \"YYYY-MM-DD HH:mm\",\n" +
-                "      \"url\": \"string|null\"\n" +
+                "      \"url\": \"string|null\",\n" +
+                "      \"excerpt\": \"string|null\",\n" +
+                "      \"readMode\": \"string\",\n" +
+                "      \"readStatus\": \"string\",\n" +
+                "      \"ingestedAt\": \"YYYY-MM-DD HH:mm|null\",\n" +
+                "      \"localFactId\": number|null,\n" +
+                "      \"sourceRecordId\": \"string|null\"\n" +
                 "    }\n" +
                 "  ],\n" +
                 "  \"signals\": [\"string\"],\n" +
@@ -1226,9 +1286,17 @@ internal static class StockAgentPromptBuilder
                 "  \"evidence\": [\n" +
                 "    {\n" +
                 "      \"point\": \"string\",\n" +
+                "      \"title\": \"string|null\",\n" +
                 "      \"source\": \"string\",\n" +
                 "      \"publishedAt\": \"YYYY-MM-DD HH:mm|null\",\n" +
-                "      \"url\": \"string|null\"\n" +
+                "      \"crawledAt\": \"YYYY-MM-DD HH:mm|null\",\n" +
+                "      \"url\": \"string|null\",\n" +
+                "      \"excerpt\": \"string|null\",\n" +
+                "      \"readMode\": \"string\",\n" +
+                "      \"readStatus\": \"string\",\n" +
+                "      \"ingestedAt\": \"YYYY-MM-DD HH:mm|null\",\n" +
+                "      \"localFactId\": number|null,\n" +
+                "      \"sourceRecordId\": \"string|null\"\n" +
                 "    }\n" +
                 "  ],\n" +
                 "  \"signals\": [\"string\"],\n" +
@@ -1260,9 +1328,17 @@ internal static class StockAgentPromptBuilder
                 "  \"evidence\": [\n" +
                 "    {\n" +
                 "      \"point\": \"string\",\n" +
+                "      \"title\": \"string|null\",\n" +
                 "      \"source\": \"string\",\n" +
                 "      \"publishedAt\": \"YYYY-MM-DD HH:mm|null\",\n" +
-                "      \"url\": \"string|null\"\n" +
+                "      \"crawledAt\": \"YYYY-MM-DD HH:mm|null\",\n" +
+                "      \"url\": \"string|null\",\n" +
+                "      \"excerpt\": \"string|null\",\n" +
+                "      \"readMode\": \"string\",\n" +
+                "      \"readStatus\": \"string\",\n" +
+                "      \"ingestedAt\": \"YYYY-MM-DD HH:mm|null\",\n" +
+                "      \"localFactId\": number|null,\n" +
+                "      \"sourceRecordId\": \"string|null\"\n" +
                 "    }\n" +
                 "  ],\n" +
                 "  \"signals\": [\"string\"],\n" +
@@ -1467,6 +1543,13 @@ internal static class StockAgentCommanderConsistencyGuardrails
             AppendUniqueSignal(root, "状态机识别：反转态");
         }
 
+        var trustAssessment = AssessEvidenceTrust(root);
+        if (confidence > trustAssessment.MaxConfidence)
+        {
+            root["confidence_score"] = trustAssessment.MaxConfidence;
+            AppendUniqueSignal(root, trustAssessment.Signal);
+        }
+
         revision["required"] = changed;
         revision["previousDirection"] = previousDirection;
         if (changed && string.IsNullOrWhiteSpace(TryReadString(revision, "reason")))
@@ -1657,6 +1740,50 @@ internal static class StockAgentCommanderConsistencyGuardrails
         var preservedDirection = string.IsNullOrWhiteSpace(previousDirection) ? "原方向" : previousDirection;
         var rawOpinion = string.IsNullOrWhiteSpace(currentOpinion) ? "本次改判置信度不足。" : currentOpinion;
         return $"按滞后机制暂维持{preservedDirection}。{rawOpinion}";
+    }
+
+    private static (decimal MaxConfidence, string Signal) AssessEvidenceTrust(JsonObject root)
+    {
+        if (root["evidence"] is not JsonArray evidence || evidence.Count == 0)
+        {
+            return (45m, "证据质量不足：缺少可追溯高质量依据，置信度受限");
+        }
+
+        var hasStrongEvidence = false;
+        var hasModerateEvidence = false;
+
+        foreach (var node in evidence)
+        {
+            if (node is not JsonObject item)
+            {
+                continue;
+            }
+
+            var readStatus = TryReadString(item, "readStatus");
+            if (string.Equals(readStatus, "full_text_read", StringComparison.OrdinalIgnoreCase))
+            {
+                hasStrongEvidence = true;
+                break;
+            }
+
+            if (string.Equals(readStatus, "summary_only", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(readStatus, "title_only", StringComparison.OrdinalIgnoreCase))
+            {
+                hasModerateEvidence = true;
+            }
+        }
+
+        if (hasStrongEvidence)
+        {
+            return (90m, "证据已包含全文核验，可维持较高置信度");
+        }
+
+        if (hasModerateEvidence)
+        {
+            return (72m, "证据以摘要或标题核验为主，置信度已下调");
+        }
+
+        return (55m, "证据仅为元数据或未核验，置信度受限");
     }
 
     private static IReadOnlyList<StockAgentCommanderHistoryItemDto> ParseCommanderHistory(string contextJson)
@@ -1942,6 +2069,7 @@ internal static class StockAgentResultNormalizer
     private static void NormalizeStockNews(JsonObject root)
     {
         EnsureProperty(root, "confidence", null);
+        var metrics = EnsureObject(root, "metrics");
         var sentiment = EnsureObject(root, "sentiment");
         EnsureProperty(sentiment, "positive", null);
         EnsureProperty(sentiment, "neutral", null);
@@ -1949,6 +2077,7 @@ internal static class StockAgentResultNormalizer
         EnsureProperty(sentiment, "overall", null);
 
         EnsureArray(root, "events");
+        NormalizeSharedMetrics(root, metrics);
         EnforceNewsEvidenceGuardrail(root);
     }
 
@@ -1957,7 +2086,10 @@ internal static class StockAgentResultNormalizer
         EnsureProperty(root, "sector", null);
         EnsureProperty(root, "confidence", null);
         EnsureProperty(root, "sectorChangePercent", null);
+        var metrics = EnsureObject(root, "metrics");
         EnsureArray(root, "topMovers");
+        NormalizeSharedMetrics(root, metrics);
+        PromoteMetric(metrics, "sectorChangePercent", ReadNumber(root, "sectorChangePercent"));
         EnforceNewsEvidenceGuardrail(root);
     }
 
@@ -1972,15 +2104,113 @@ internal static class StockAgentResultNormalizer
         EnsureProperty(metrics, "nonRecurringProfit", null);
         EnsureProperty(metrics, "institutionHoldingPercent", null);
         EnsureProperty(metrics, "institutionTargetPrice", null);
+        EnsureProperty(metrics, "shareholderCount", null);
 
         EnsureArray(root, "highlights");
+        NormalizeSharedMetrics(root, metrics);
     }
 
     private static void NormalizeTrend(JsonObject root)
     {
         EnsureProperty(root, "confidence", null);
+        var metrics = EnsureObject(root, "metrics");
         EnsureArray(root, "timeframeSignals");
         EnsureArray(root, "forecast");
+        NormalizeSharedMetrics(root, metrics);
+    }
+
+    private static void NormalizeSharedMetrics(JsonObject root, JsonObject metrics)
+    {
+        PromoteMetric(metrics, "entryScore", FindFirstNumber(root, "entryScore", ("analysis", "entryScore")));
+        PromoteMetric(metrics, "valuationScore", FindFirstNumber(root, "valuationScore", ("analysis", "valuationScore")));
+        PromoteMetric(metrics, "positionPercent", FindFirstNumber(root, "positionPercent", ("analysis", "positionPercent")));
+        PromoteMetric(metrics, "targetPrice", FindFirstNumber(root, "targetPrice", ("chart", "targetPrice")));
+        PromoteMetric(metrics, "takeProfitPrice", FindFirstNumber(root, "takeProfitPrice", ("chart", "takeProfitPrice")));
+        PromoteMetric(metrics, "stopLossPrice", FindFirstNumber(root, "stopLossPrice", ("chart", "stopLossPrice")));
+        PromoteMetric(metrics, "riseProbability", FindFirstNumber(
+            root,
+            "riseProbability",
+            ("probabilities", "rise_probability"),
+            ("probabilities", "up_probability"),
+            ("probability_analysis", "rise_probability"),
+            ("probability_analysis", "up_probability"),
+            ("analysis", "rise_probability"),
+            ("analysis", "probability_up")));
+        PromoteMetric(metrics, "fallProbability", FindFirstNumber(
+            root,
+            "fallProbability",
+            ("probabilities", "fall_probability"),
+            ("probabilities", "down_probability"),
+            ("probability_analysis", "fall_probability"),
+            ("probability_analysis", "down_probability"),
+            ("analysis", "fall_probability"),
+            ("analysis", "probability_down")));
+    }
+
+    private static decimal? FindFirstNumber(JsonObject root, string topLevelKey, params (string Parent, string Child)[] nestedKeys)
+    {
+        var direct = ReadNumber(root, topLevelKey);
+        if (direct.HasValue)
+        {
+            return direct;
+        }
+
+        foreach (var (parent, child) in nestedKeys)
+        {
+            if (root[parent] is not JsonObject parentObject)
+            {
+                continue;
+            }
+
+            var nested = ReadNumber(parentObject, child);
+            if (nested.HasValue)
+            {
+                return nested;
+            }
+        }
+
+        return null;
+    }
+
+    private static decimal? ReadNumber(JsonObject root, string key)
+    {
+        if (root[key] is not JsonValue value)
+        {
+            return null;
+        }
+
+        if (value.TryGetValue<decimal>(out var decimalValue))
+        {
+            return decimalValue;
+        }
+
+        if (value.TryGetValue<double>(out var doubleValue))
+        {
+            return Convert.ToDecimal(doubleValue);
+        }
+
+        if (value.TryGetValue<int>(out var intValue))
+        {
+            return intValue;
+        }
+
+        if (value.TryGetValue<string>(out var text) && decimal.TryParse(text, out decimalValue))
+        {
+            return decimalValue;
+        }
+
+        return null;
+    }
+
+    private static void PromoteMetric(JsonObject metrics, string key, decimal? value)
+    {
+        if (value.HasValue)
+        {
+            metrics[key] = value.Value;
+            return;
+        }
+
+        EnsureProperty(metrics, key, null);
     }
 
     private static void EnsureEvidenceArray(JsonObject root)
@@ -1995,10 +2225,17 @@ internal static class StockAgentResultNormalizer
             }
 
             EnsureProperty(item, "point", null);
+            EnsureProperty(item, "title", null);
             EnsureProperty(item, "source", null);
             EnsureProperty(item, "publishedAt", null);
             EnsureProperty(item, "crawledAt", null);
             EnsureProperty(item, "url", null);
+            EnsureProperty(item, "excerpt", null);
+            EnsureProperty(item, "readMode", null);
+            EnsureProperty(item, "readStatus", null);
+            EnsureProperty(item, "ingestedAt", null);
+            EnsureProperty(item, "localFactId", null);
+            EnsureProperty(item, "sourceRecordId", null);
         }
     }
 
@@ -2045,6 +2282,14 @@ internal static class StockAgentResultNormalizer
             }
 
             if (!TryReadString(item, "publishedAt", out var publishedText) || string.IsNullOrWhiteSpace(publishedText))
+            {
+                continue;
+            }
+
+            TryReadString(item, "readStatus", out var readStatus);
+            if (string.Equals(readStatus, "metadata_only", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(readStatus, "unverified", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(readStatus, "fetch_failed", StringComparison.OrdinalIgnoreCase))
             {
                 continue;
             }

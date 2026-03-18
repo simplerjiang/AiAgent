@@ -196,6 +196,80 @@ public sealed class TradingPlanServicesTests
     }
 
     [Fact]
+    public async Task BuildDraftAsync_WhenCurrentPriceExists_SkipsIllogicalLongTakeProfit()
+    {
+        await using var dbContext = CreateDbContext();
+        var history = new StockAgentAnalysisHistory
+        {
+            Symbol = "sz000021",
+            Name = "深科技",
+            Interval = "day",
+            ResultJson = """
+            {
+              "symbol": "sz000021",
+              "name": "深科技",
+              "agents": [
+                {
+                  "agentId": "commander",
+                  "data": {
+                    "summary": "偏多",
+                    "direction": "Long",
+                    "metrics": {
+                      "price": 31.1
+                    },
+                    "chart": {
+                      "takeProfitPrice": 13.4,
+                      "targetPrice": 14.2
+                    }
+                  }
+                },
+                {
+                  "agentId": "trend_analysis",
+                  "data": {
+                    "forecast": [
+                      { "label": "T+5", "price": 34.8 }
+                    ]
+                  }
+                }
+              ]
+            }
+            """,
+            CreatedAt = DateTime.UtcNow
+        };
+        dbContext.StockAgentAnalysisHistories.Add(history);
+        dbContext.StockQuoteSnapshots.Add(new StockQuoteSnapshot
+        {
+          Symbol = "sz000021",
+          Name = "深科技",
+          Price = 31.1m,
+          Change = 0.1m,
+          ChangePercent = 0.3m,
+          SectorName = "半导体",
+          Timestamp = DateTime.UtcNow
+        });
+        dbContext.MarketSentimentSnapshots.Add(new MarketSentimentSnapshot
+        {
+          TradingDate = new DateTime(2026, 3, 17),
+          SnapshotTime = new DateTime(2026, 3, 17, 7, 0, 0, DateTimeKind.Utc),
+          SessionPhase = "盘后",
+          StageLabel = "主升",
+          StageLabelV2 = "主升",
+          StageScore = 75m,
+          StageConfidence = 80m,
+          SourceTag = "test",
+          CreatedAt = DateTime.UtcNow
+        });
+        await dbContext.SaveChangesAsync();
+
+        var service = new TradingPlanDraftService(new StockAgentHistoryService(dbContext), new StockMarketContextService(dbContext));
+
+        var draft = await service.BuildDraftAsync("sz000021", history.Id);
+
+        Assert.Equal(34.8m, draft.TargetPrice);
+        Assert.Equal(34.8m, draft.TakeProfitPrice);
+    }
+
+    [Fact]
     public async Task CreateAsync_SavesPendingPlanAndEnsuresWatchlist()
     {
         await using var dbContext = CreateDbContext();

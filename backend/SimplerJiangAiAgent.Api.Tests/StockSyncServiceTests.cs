@@ -89,7 +89,13 @@ public class StockSyncServiceTests
         await service.SaveDetailAsync(detail, "day");
 
         Assert.Single(dbContext.StockQuoteSnapshots);
-        Assert.Empty(dbContext.KLinePoints);
+        var storedKLine = Assert.Single(dbContext.KLinePoints);
+        Assert.Equal(DateTime.Today, storedKLine.Date);
+        Assert.Equal(1m, storedKLine.Open);
+        Assert.Equal(1m, storedKLine.Close);
+        Assert.Equal(1m, storedKLine.High);
+        Assert.Equal(1m, storedKLine.Low);
+        Assert.Equal(10m, storedKLine.Volume);
         Assert.Single(dbContext.MinuteLinePoints);
         Assert.Single(dbContext.IntradayMessages);
     }
