@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Logging.EventLog;
+using System.Reflection;
 using SimplerJiangAiAgent.Api.Data;
 using SimplerJiangAiAgent.Api.Infrastructure.Config;
 using SimplerJiangAiAgent.Api.Infrastructure.Jobs;
@@ -38,7 +39,10 @@ builder.Services.Configure<AdminOptions>(builder.Configuration.GetSection(AdminO
 builder.Services.AddSingleton<IPermissionService, PermissionService>();
 builder.Services.AddScoped<IStockSyncService, StockSyncService>();
 builder.Services.AddScoped<ISourceGovernanceService, SourceGovernanceService>();
-builder.Services.AddScoped<ISourceGovernanceReadService, SourceGovernanceReadService>();
+builder.Services.AddScoped<ISourceGovernanceReadService>(serviceProvider =>
+    new SourceGovernanceReadService(
+        serviceProvider.GetRequiredService<AppDbContext>(),
+        serviceProvider.GetRequiredService<AppRuntimePaths>()));
 builder.Services.AddSingleton<ICommandRunner, ProcessCommandRunner>();
 
 var runtimePaths = new AppRuntimePaths(builder.Environment, builder.Configuration);
@@ -117,6 +121,15 @@ app.MapGet("/api/health", () => Results.Ok(new { status = "ok" }))
     .WithName("Health")
     .WithOpenApi();
 
+app.MapGet("/api/app/version", () => Results.Ok(new
+{
+    version = GetAppVersion(),
+    repositoryUrl = "https://github.com/simplerjiang/AiAgent",
+    releaseUrl = "https://github.com/simplerjiang/AiAgent/releases/latest"
+}))
+    .WithName("AppVersion")
+    .WithOpenApi();
+
 app.MapModules();
 
 // 前端路由兜底
@@ -138,4 +151,19 @@ static string ResolveDefaultConnectionString(string provider, IConfiguration con
     }
 
     return configuration.GetConnectionString("Default") ?? string.Empty;
+}
+
+static string GetAppVersion()
+{
+    var assembly = typeof(Program).Assembly;
+    var informationalVersion = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+    if (!string.IsNullOrWhiteSpace(informationalVersion))
+    {
+        var normalized = informationalVersion.Trim();
+        var separatorIndex = normalized.IndexOfAny(['-', '+']);
+        return separatorIndex >= 0 ? normalized[..separatorIndex] : normalized;
+    }
+
+    var version = assembly.GetName().Version;
+    return version is null ? "0.0.0" : $"{version.Major}.{version.Minor}.{version.Build}";
 }

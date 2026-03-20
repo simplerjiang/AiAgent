@@ -221,6 +221,17 @@
       "notes": "R4 已完成当前安装交付链路：`scripts/publish-windows-package.ps1` 现在会先清理旧包并把前端静态资源正确复制到 `Backend/frontend/dist`，避免嵌套 `dist/dist`；新增 `scripts/windows-installer.iss` 与 `scripts/build-windows-installer.ps1`，并补齐对 winget per-user 安装的 Inno Setup 探测。已验证脚本能稳定输出 `artifacts\\windows-package` 可运行目录、包内不含 `llm-settings.local.json`，且 Inno Setup 已成功编译出 `artifacts\\installer\\SimplerJiangAiAgent-Setup.exe`。后续剩余工作主要是升级迁移与回滚策略，而不是首次安装产物本身。"
     },
     {
+      "id": "GOAL-016-R5",
+      "title": "Versioned release, auto-update, and public docs",
+      "status": "done",
+      "stages": {
+        "plan": "done",
+        "dev": "done",
+        "test": "done"
+      },
+      "notes": "2026-03-20 已完成版本号、GitHub Releases 更新检测、桌面端自动升级提示、发布工作流与用户文档收口：新增根级 `Directory.Build.props` 统一版本号；桌面端新增 `AppUpdateService` 与启动后 GitHub Release 检查/下载安装器逻辑；后端新增 `/api/app/version`；前端顶栏展示版本号；安装器输出改为 `SimplerJiangAiAgent-Setup-<version>.exe`；新增 `.github/workflows/release-windows.yml` 用于 tag 驱动发布安装版和 portable zip。文档侧已将原根 README 备份为 `README.llm.md`，并将新的根 `README.md` 改为面向普通用户的安装、升级、功能说明，附带 3 张 1920x1080 新截图。验证覆盖后端定向回归 9/9、前端定向单测 8/8、桌面/后端构建、隔离端口下 `/api/app/version` 烟测、截图脚本执行、安装包重建与 `artifacts\\installer\\SimplerJiangAiAgent-Setup-0.0.1.exe` 产出。真正对外发布仍需后续把提交推到 GitHub 并推送 `v0.0.1` tag 触发 Actions。"
+    },
+    {
       "id": "GOAL-002",
       "title": "Multi-source events with weighted impact",
       "status": "done",

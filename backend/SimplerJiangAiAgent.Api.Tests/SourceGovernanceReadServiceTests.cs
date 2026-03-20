@@ -1,13 +1,40 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using SimplerJiangAiAgent.Api.Data;
 using SimplerJiangAiAgent.Api.Data.Entities;
 using SimplerJiangAiAgent.Api.Infrastructure.Jobs;
+using SimplerJiangAiAgent.Api.Infrastructure.Storage;
 
 namespace SimplerJiangAiAgent.Api.Tests;
 
 public sealed class SourceGovernanceReadServiceTests
 {
+    [Fact]
+    public void ServiceCollection_ShouldResolveServiceFromRuntimePaths()
+    {
+        var services = new ServiceCollection();
+        var environment = new FakeHostEnvironment();
+        var runtimePaths = new AppRuntimePaths(environment, new ConfigurationBuilder().Build());
+
+        services.AddSingleton(runtimePaths);
+        services.AddDbContext<AppDbContext>(options =>
+            options.UseInMemoryDatabase(Guid.NewGuid().ToString("N")));
+        services.AddScoped<ISourceGovernanceReadService>(serviceProvider =>
+            new SourceGovernanceReadService(
+                serviceProvider.GetRequiredService<AppDbContext>(),
+                serviceProvider.GetRequiredService<AppRuntimePaths>()));
+
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+
+        var service = scope.ServiceProvider.GetRequiredService<ISourceGovernanceReadService>();
+
+        Assert.NotNull(service);
+        Assert.IsType<SourceGovernanceReadService>(service);
+    }
+
     [Fact]
     public async Task GetOverviewAsync_ReturnsExpectedCounters()
     {

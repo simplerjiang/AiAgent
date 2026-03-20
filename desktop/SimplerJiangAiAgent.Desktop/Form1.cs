@@ -23,7 +23,7 @@ public partial class Form1 : Form
     {
         InitializeComponent();
 
-        Text = "SimplerJiang AI Agent";
+        Text = $"SimplerJiang AI Agent v{AppUpdateService.CurrentVersionLabel}";
         WindowState = FormWindowState.Maximized;
 
         _webView = new WebView2
@@ -93,6 +93,7 @@ public partial class Form1 : Form
             };
 #endif
             _webView.CoreWebView2.Navigate(startupUrl);
+            _ = CheckForUpdatesAsync();
         }
         catch (Exception ex)
         {
@@ -261,6 +262,118 @@ public partial class Form1 : Form
         {
             return null;
         }
+    }
+
+    private async Task CheckForUpdatesAsync()
+    {
+        if (Debugger.IsAttached)
+        {
+            return;
+        }
+
+        try
+        {
+            await Task.Delay(TimeSpan.FromSeconds(2));
+            var release = await AppUpdateService.GetAvailableReleaseAsync();
+            if (release is null || IsDisposed)
+            {
+                return;
+            }
+
+            await PromptForUpdateAsync(release);
+        }
+        catch (Exception ex)
+        {
+            AppendDebug($"更新检查失败: {ex.Message}");
+        }
+    }
+
+    private Task PromptForUpdateAsync(AppReleaseInfo release)
+    {
+        if (InvokeRequired)
+        {
+            var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            BeginInvoke(async () =>
+            {
+                try
+                {
+                    await PromptForUpdateAsync(release);
+                    completion.SetResult();
+                }
+                catch (Exception ex)
+                {
+                    completion.SetException(ex);
+                }
+            });
+            return completion.Task;
+        }
+
+        var message = $"发现新版本 v{release.VersionLabel}，当前版本为 v{AppUpdateService.CurrentVersionLabel}。\n\n{TrimReleaseNotes(release.ReleaseNotes)}\n\n是否立即从 GitHub 下载并更新？";
+        var result = MessageBox.Show(this, message, "SimplerJiang AI Agent 更新", MessageBoxButtons.YesNo, MessageBoxIcon.Information);
+        if (result != DialogResult.Yes)
+        {
+            return Task.CompletedTask;
+        }
+
+        return DownloadAndInstallUpdateAsync(release);
+    }
+
+    private async Task DownloadAndInstallUpdateAsync(AppReleaseInfo release)
+    {
+        UseWaitCursor = true;
+
+        try
+        {
+            var installerPath = await AppUpdateService.DownloadInstallerAsync(release);
+            var process = Process.Start(new ProcessStartInfo
+            {
+                FileName = installerPath,
+                Arguments = "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS",
+                UseShellExecute = true
+            });
+
+            if (process is null)
+            {
+                throw new InvalidOperationException("更新安装器启动失败。请手工前往 GitHub Release 页面下载安装。");
+            }
+
+            Close();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                this,
+                $"自动更新失败：{ex.Message}\n\n你也可以手工前往 {AppUpdateService.RepositoryUrl}/releases/latest 下载最新版本。",
+                "SimplerJiang AI Agent 更新",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+        }
+        finally
+        {
+            UseWaitCursor = false;
+        }
+    }
+
+    private static string TrimReleaseNotes(string? releaseNotes)
+    {
+        if (string.IsNullOrWhiteSpace(releaseNotes))
+        {
+            return "GitHub Release 已发布新版本。";
+        }
+
+        var lines = releaseNotes
+            .Replace("\r", string.Empty, StringComparison.Ordinal)
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Take(8)
+            .ToArray();
+
+        if (lines.Length == 0)
+        {
+            return "GitHub Release 已发布新版本。";
+        }
+
+        var summary = string.Join(Environment.NewLine, lines);
+        return summary.Length <= 500 ? summary : summary[..500] + "...";
     }
 
     private static int FindAvailablePort(int startInclusive, int endExclusive)

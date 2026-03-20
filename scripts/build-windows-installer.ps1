@@ -3,7 +3,7 @@ param(
     [string]$RuntimeIdentifier = "win-x64",
     [string]$PackageDir = ".\artifacts\windows-package",
     [string]$InstallerOutputDir = ".\artifacts\installer",
-    [string]$AppVersion = "0.1.0-local",
+    [string]$AppVersion = "",
     [switch]$SkipPackagePublish,
     [bool]$SelfContained = $true
 )
@@ -15,6 +15,28 @@ $packagePath = Join-Path $root $PackageDir
 $installerOutputPath = Join-Path $root $InstallerOutputDir
 $publishScript = Join-Path $root "scripts/publish-windows-package.ps1"
 $installerScript = Join-Path $root "scripts/windows-installer.iss"
+$buildPropsPath = Join-Path $root "Directory.Build.props"
+
+function Resolve-AppVersion {
+    param(
+        [string]$RequestedVersion,
+        [string]$PropsPath
+    )
+
+    if (-not [string]::IsNullOrWhiteSpace($RequestedVersion)) {
+        return $RequestedVersion.Trim()
+    }
+
+    if (Test-Path $PropsPath) {
+        [xml]$props = Get-Content $PropsPath
+        $versionNode = $props.Project.PropertyGroup.Version | Select-Object -First 1
+        if ($versionNode -and -not [string]::IsNullOrWhiteSpace($versionNode.InnerText)) {
+            return $versionNode.InnerText.Trim()
+        }
+    }
+
+    return "0.0.1"
+}
 
 function Resolve-IsccPath {
     $command = Get-Command ISCC.exe -ErrorAction SilentlyContinue
@@ -41,6 +63,8 @@ if (-not $SkipPackagePublish) {
     & $publishScript -Configuration $Configuration -RuntimeIdentifier $RuntimeIdentifier -OutputDir $PackageDir -SelfContained:$SelfContained
 }
 
+$resolvedAppVersion = Resolve-AppVersion -RequestedVersion $AppVersion -PropsPath $buildPropsPath
+
 if (-not (Test-Path (Join-Path $packagePath "SimplerJiangAiAgent.Desktop.exe"))) {
     throw "Packaged desktop output was not found at $packagePath. Run scripts/publish-windows-package.ps1 first or remove -SkipPackagePublish."
 }
@@ -53,6 +77,6 @@ if (-not $isccPath) {
 }
 
 Write-Host "Building Setup.exe with Inno Setup..."
-& $isccPath "/DSourceDir=$packagePath" "/DOutputDir=$installerOutputPath" "/DAppVersion=$AppVersion" $installerScript
+& $isccPath "/DSourceDir=$packagePath" "/DOutputDir=$installerOutputPath" "/DAppVersion=$resolvedAppVersion" $installerScript
 
 Write-Host "Installer ready: $installerOutputPath"

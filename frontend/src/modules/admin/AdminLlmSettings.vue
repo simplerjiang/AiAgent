@@ -1,6 +1,8 @@
 <script setup>
 import { computed, ref } from 'vue'
 
+const emit = defineEmits(['settings-saved'])
+
 const providerPresets = {
   default: {
     label: 'Default 通道',
@@ -204,6 +206,7 @@ const saveSettings = async () => {
     hasApiKey.value = data.hasApiKey || false
     apiKey.value = ''
     saveMessage.value = '已保存'
+    emit('settings-saved', data)
   } catch (error) {
     settingsError.value = error.message || '保存失败'
   } finally {

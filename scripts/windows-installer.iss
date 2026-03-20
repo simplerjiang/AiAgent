@@ -1,5 +1,5 @@
 #ifndef AppVersion
-  #define AppVersion "0.1.0-local"
+  #define AppVersion "0.0.1"
 #endif
 
 #ifndef SourceDir
@@ -28,8 +28,12 @@ Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
 PrivilegesRequired=admin
+VersionInfoVersion={#AppVersion}
+VersionInfoProductVersion={#AppVersion}
+CloseApplications=yes
+RestartApplications=no
 OutputDir={#OutputDir}
-OutputBaseFilename=SimplerJiangAiAgent-Setup
+OutputBaseFilename=SimplerJiangAiAgent-Setup-{#AppVersion}
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"

@@ -33,6 +33,7 @@ const onboardingStatus = ref({
   activeProviderKey: 'default',
   recommendedTabKey: 'admin-llm'
 })
+const appVersion = ref('')
 
 const getTabFromLocation = () => {
   const tab = new URLSearchParams(window.location.search).get('tab')
@@ -68,7 +69,7 @@ const openOnboardingTab = () => {
   setActiveTab(onboardingStatus.value.recommendedTabKey || 'admin-llm')
 }
 
-onMounted(async () => {
+const loadOnboardingStatus = async ({ allowAutoRedirect = false } = {}) => {
   try {
     const response = await fetch('/api/llm/onboarding-status')
     if (!response.ok) {
@@ -84,22 +85,40 @@ onMounted(async () => {
       recommendedTabKey: data.recommendedTabKey || 'admin-llm'
     }
 
-    if (onboardingStatus.value.requiresOnboarding && (!initialHasExplicitTab || initialForcedOnboarding)) {
+    if (allowAutoRedirect && onboardingStatus.value.requiresOnboarding && (!initialHasExplicitTab || initialForcedOnboarding)) {
       openOnboardingTab()
       return
     }
   } catch {
     onboardingStatus.value.loading = false
+    return
   }
 
   syncLocation()
+}
+
+onMounted(async () => {
+  try {
+    const versionResponse = await fetch('/api/app/version')
+    if (versionResponse.ok) {
+      const versionData = await versionResponse.json()
+      appVersion.value = versionData.version || ''
+    }
+  } catch {
+    appVersion.value = ''
+  }
+
+  await loadOnboardingStatus({ allowAutoRedirect: true })
 })
 </script>
 
 <template>
   <div class="app">
     <header class="app-header">
-      <div class="brand">SimplerJiang AI Agent</div>
+      <div class="brand">
+        <span>SimplerJiang AI Agent</span>
+        <span v-if="appVersion" class="version-badge">v{{ appVersion }}</span>
+      </div>
       <nav class="tabs">
         <button
           v-for="tab in tabs"
@@ -127,12 +146,30 @@ onMounted(async () => {
 
       <component
         :is="activeComponent"
+        @settings-saved="loadOnboardingStatus()"
       />
     </main>
   </div>
 </template>
 
 <style scoped>
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.version-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #1d3b53;
+  color: #f4f8fb;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+}
+
 .app-content {
   padding: 16px;
 }

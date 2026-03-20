@@ -113,6 +113,32 @@ describe('AdminLlmSettings', () => {
     expect(body.forceChinese).toBe(true)
   })
 
+  it('emits settings-saved after save succeeds', async () => {
+    localStorage.setItem('admin_token', 'token')
+
+    const fetchMock = vi.fn(async (url, options) => {
+      if (url.includes('/api/admin/llm/settings/active')) {
+        return activeProviderResponse()
+      }
+      if (options?.method === 'PUT') {
+        return makeResponse({ ok: true, status: 200, json: async () => ({ apiKeyMasked: '****', hasApiKey: true }) })
+      }
+      return makeResponse({ ok: false, status: 404 })
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    const wrapper = mount(AdminLlmSettings)
+    await flushPromises()
+
+    const saveButton = wrapper.findAll('button').find(button => button.text().includes('保存设置'))
+    await saveButton.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.emitted('settings-saved')).toBeTruthy()
+    expect(wrapper.emitted('settings-saved')[0][0]).toEqual({ apiKeyMasked: '****', hasApiKey: true })
+  })
+
   it('switches active provider through admin endpoint', async () => {
     localStorage.setItem('admin_token', 'token')
 
