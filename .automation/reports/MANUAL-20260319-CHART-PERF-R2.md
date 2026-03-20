@@ -9,6 +9,15 @@
   - default cache responses are now summary-only as well
   - legacy DB-backed K-line/minute replay is preserved only behind explicit `includeLegacyCharts=true`
 - Updated `StockSyncService.SaveDetailAsync(...)` so the detail flow no longer writes minute/K-line rows to the database, while leaving the existing code and tables in place for future reuse.
+- Further narrowed the stock-terminal live chart path after a follow-up bottleneck check:
+  - `/api/stocks/chart` now supports optional `includeQuote` and `includeMinute` flags
+  - the stock terminal requests `includeQuote=false` so the chart path no longer waits for a redundant default quote fetch
+  - `月K图 / 年K图` requests now also send `includeMinute=false` so non-minute views do not wait for unused minute-line payloads
+  - frontend chart payload merging now tolerates partial chart responses and preserves the existing quote/minute cache when those fields are intentionally skipped
+- Fixed a 2026-03-20 follow-up regression for newly searched symbols with no query history/cache:
+  - the first-open chart request now sets `includeQuote=true` only when the workspace does not yet hold a quote
+  - background chart refreshes and interval switches still keep `includeQuote=false`
+  - this restores both the stock detail panel and the visible loading progress for brand-new searches while preserving the lightweight refresh path for already loaded workspaces
 - Added/updated tests to lock the new persistence contract:
   - `StockSyncServiceTests`
   - `HighFrequencyQuoteServiceTests`
@@ -28,6 +37,11 @@
   - 默认缓存响应现在也只回放基础摘要
   - 旧的数据库 K 线 / 分时回放仅保留为显式 `includeLegacyCharts=true` 兼容开关
 - 调整 `StockSyncService.SaveDetailAsync(...)`，让详情流不再往数据库写入分时/K线行，但保留现有代码和表结构，方便未来回用。
+- 在补充排查后，继续收窄股票终端实时图表链路：
+  - `/api/stocks/chart` 新增可选 `includeQuote` 和 `includeMinute` 参数
+  - 股票终端默认以 `includeQuote=false` 请求图表，不再等待一份重复的默认 quote
+  - `月K图 / 年K图` 也改为 `includeMinute=false`，避免非分时视图再等无用的 minute payload
+  - 前端图表合并逻辑已改为支持“部分图表响应”，当这些字段被有意跳过时会保留已有 quote / minute 缓存
 - 补齐/更新回归测试，锁定新的持久化契约：
   - `StockSyncServiceTests`
   - `HighFrequencyQuoteServiceTests`
@@ -43,10 +57,22 @@
   - `dotnet test .\backend\SimplerJiangAiAgent.Api.Tests\SimplerJiangAiAgent.Api.Tests.csproj --filter "StockSyncServiceTests|HighFrequencyQuoteServiceTests|StockDetailCacheQueriesTests"`
 - Backend test result:
   - total 9, failed 0, passed 9
+- Additional backend validation command:
+  - `dotnet test .\backend\SimplerJiangAiAgent.Api.Tests\SimplerJiangAiAgent.Api.Tests.csproj --filter "StockDataServiceSourceRoutingTests|CompositeStockCrawlerTests|StockSyncServiceTests|HighFrequencyQuoteServiceTests|StockDetailCacheQueriesTests"`
+- Additional backend validation result:
+  - total 16, failed 0, passed 16
 - Frontend test command:
   - `npm --prefix .\frontend run test:unit -- src/modules/stocks/StockInfoTab.spec.js`
 - Frontend test result:
-  - total 44, failed 0, passed 44
+  - total 46, failed 0, passed 46
+- Runtime endpoint benchmark command:
+  - cold-start PowerShell `Invoke-WebRequest` probes against `http://localhost:5119/api/stocks/chart|quote|kline|minute`
+- Runtime endpoint benchmark result after optimization:
+  - `chart-day-cold-first` with `includeQuote=false&includeMinute=true`: 467ms / 28035 bytes
+  - `quote-auto-after`: 8815ms / 548 bytes
+  - `kline-day-after`: 23ms / 5758 bytes
+  - `minute-after`: 32ms / 22238 bytes
+  - `chart-month-cold` with `includeQuote=false&includeMinute=false`: 52ms / 5864 bytes
 - Browser MCP benchmark command:
   - ran a browser-side async fetch benchmark against `http://localhost:5119/`
 - Browser MCP benchmark result:
@@ -65,10 +91,22 @@
   - `dotnet test .\backend\SimplerJiangAiAgent.Api.Tests\SimplerJiangAiAgent.Api.Tests.csproj --filter "StockSyncServiceTests|HighFrequencyQuoteServiceTests|StockDetailCacheQueriesTests"`
 - 后端测试结果：
   - 总计 9，失败 0，通过 9
+- 后端补充验证命令：
+  - `dotnet test .\backend\SimplerJiangAiAgent.Api.Tests\SimplerJiangAiAgent.Api.Tests.csproj --filter "StockDataServiceSourceRoutingTests|CompositeStockCrawlerTests|StockSyncServiceTests|HighFrequencyQuoteServiceTests|StockDetailCacheQueriesTests"`
+- 后端补充验证结果：
+  - 总计 16，失败 0，通过 16
 - 前端测试命令：
   - `npm --prefix .\frontend run test:unit -- src/modules/stocks/StockInfoTab.spec.js`
 - 前端测试结果：
-  - 总计 44，失败 0，通过 44
+  - 总计 45，失败 0，通过 45
+- 运行时端点基准命令：
+  - 使用 PowerShell `Invoke-WebRequest` 对 `http://localhost:5119/api/stocks/chart|quote|kline|minute` 做冷启动分项探测
+- 运行时端点基准结果（优化后）：
+  - `chart-day-cold-first`（`includeQuote=false&includeMinute=true`）：467ms / 28035 字节
+  - `quote-auto-after`：8815ms / 548 字节
+  - `kline-day-after`：23ms / 5758 字节
+  - `minute-after`：32ms / 22238 字节
+  - `chart-month-cold`（`includeQuote=false&includeMinute=false`）：52ms / 5864 字节
 - Browser MCP 基准命令：
   - 在 `http://localhost:5119/` 上执行浏览器侧异步 fetch 基准
 - Browser MCP 基准结果：
@@ -86,6 +124,12 @@
 - The follow-up benchmark had to be run on the backend-served frontend page instead of a blank browser tab; once the page was opened properly, the fetch benchmark ran cleanly.
 - This benchmark reflects the current slimmed state. The old chart-heavy `/api/stocks/detail` behavior was intentionally removed rather than preserved for regression timing.
 - The extra review pass found one remaining ambiguity: `/api/stocks/detail/cache` was still replaying legacy chart rows by default. That is now narrowed to summary-only by default so the cache endpoint no longer silently resumes chart responsibilities.
+- A later bottleneck check showed the visible chart stage was still mostly gated by a redundant default quote fetch inside `/api/stocks/chart`, not by K-line retrieval itself. On a cold symbol after restart, `/api/stocks/chart?includeQuote=false&includeMinute=true` returned in 467ms while the standalone default `/api/stocks/quote` still took about 8.8s, which confirmed the main remaining blocker.
+- Direct browser-side JS fetching was intentionally not adopted as the primary path: the current backend path already provides source routing, cache reuse, timeout/degrade control, and future MCP reuse; browser-direct third-party calls would also be more exposed to CORS, anti-hotlink, and contract drift risk.
+- The first `includeQuote=false` optimization introduced one regression for symbols with no cache/history yet: the initial chart payload could no longer seed `detail.quote`, which left the detail panel empty and hid the progress panel after loading finished. The fix now scopes chart quote loading to first-open/no-cache workspaces only, while keeping already loaded workspaces on the lightweight path.
 - 补充基准一开始跑在空白页上，无法直接取到同源页面上下文；打开后端托管前端后，基准才稳定执行。
 - 本次基准反映的是当前瘦身后的状态；旧版图表型 `/api/stocks/detail` 已被主动收口，不再作为回归耗时样本保留。
 - 这次复审还发现一个剩余歧义：`/api/stocks/detail/cache` 之前默认仍会回放旧图表行。现已补成“默认只回放摘要”，避免缓存接口在默认路径上重新承担图表职责。
+- 后续瓶颈排查进一步确认，可见图表阶段的主要残余卡点并不是 K 线获取本身，而是 `/api/stocks/chart` 里额外绑着的一次默认 quote 请求。重启后的冷标的实测显示，`/api/stocks/chart?includeQuote=false&includeMinute=true` 仅需 467ms，而单独默认 `/api/stocks/quote` 仍接近 8.8 秒，说明主残余瓶颈已经定位清楚。
+- 没有把“前端 JS 直连第三方行情”作为主链路：当前后端链路已经提供来源路由、缓存复用、超时/降级控制以及后续 MCP 复用能力；浏览器直连第三方还会额外暴露于 CORS、防盗链和上游契约漂移风险。
+- 首次把 `includeQuote=false` 套到所有图表请求时，还引入了一个“无缓存/无历史的新股票首开”回归：首个图表响应不再带 `detail.quote`，导致详情区留空，加载结束后进度面板也随之消失。现在已收口成仅在工作区还没有 quote 时才让首开图表请求携带 quote，已加载工作区仍保持轻量刷新路径。

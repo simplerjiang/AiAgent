@@ -190,19 +190,25 @@ const createChatFetchMock = (handlers = {}) => {
       const params = new URLSearchParams(String(url).split('?')[1] || '')
       const symbol = params.get('symbol') || 'sz000021'
       const price = symbol === 'sh600000' ? 10.1 : 31.1
+      const includeQuote = params.get('includeQuote') !== 'false'
+      const includeMinute = params.get('includeMinute') !== 'false'
       return makeResponse({
         ok: true,
         status: 200,
         json: async () => ({
-          quote: {
-            symbol,
-            name: symbol === 'sh600000' ? '浦发银行' : '深科技',
-            price,
-            change: 0,
-            changePercent: 0
-          },
+          ...(includeQuote ? {
+            quote: {
+              symbol,
+              name: symbol === 'sh600000' ? '浦发银行' : '深科技',
+              price,
+              change: 0,
+              changePercent: 0
+            }
+          } : {}),
           kLines: [{ date: '2026-03-18', open: price, close: price, low: price, high: price, volume: 100 }],
-          minuteLines: [{ date: '2026-03-18', time: '09:31:00', price, averagePrice: price, volume: 12 }]
+          ...(includeMinute ? {
+            minuteLines: [{ date: '2026-03-18', time: '09:31:00', price, averagePrice: price, volume: 12 }]
+          } : {})
         })
       })
     }
@@ -1439,10 +1445,68 @@ describe('StockInfoTab', () => {
     await flushPromises()
 
     const requestedUrls = fetchMock.mock.calls.map(args => String(args[0]))
-    expect(requestedUrls.some(url => url.startsWith('/api/stocks/chart?') && url.includes('interval=month'))).toBe(true)
+    expect(requestedUrls.some(url => url.startsWith('/api/stocks/chart?') && url.includes('interval=month') && url.includes('includeQuote=false') && url.includes('includeMinute=false'))).toBe(true)
     expect(requestedUrls.some(url => url.startsWith('/api/stocks/detail/cache?'))).toBe(false)
     expect(requestedUrls.some(url => url.startsWith('/api/stocks/messages?'))).toBe(false)
     expect(requestedUrls.some(url => url.startsWith('/api/stocks/fundamental-snapshot?'))).toBe(false)
+  })
+
+  it('keeps background chart refresh lightweight after the stock is already loaded', async () => {
+    const { fetchMock } = createChatFetchMock()
+    vi.stubGlobal('fetch', fetchMock)
+
+    const wrapper = mount(StockInfoTab)
+    await flushPromises()
+    await flushPromises()
+
+    const input = wrapper.find('.search-field input')
+    const button = wrapper.find('.search-field button')
+
+    await input.setValue('600000')
+    await button.trigger('click')
+    await flushPromises()
+    await flushPromises()
+
+    fetchMock.mockClear()
+
+    await wrapper.vm.refreshChartData('sh600000')
+    await flushPromises()
+    await flushPromises()
+
+    const chartCall = fetchMock.mock.calls.find(args => String(args[0]).startsWith('/api/stocks/chart?'))
+    expect(chartCall).toBeTruthy()
+    expect(String(chartCall[0])).toContain('includeQuote=false')
+    expect(String(chartCall[0])).toContain('includeMinute=true')
+  })
+
+  it('requests quote in chart payload for a newly searched stock without cache', async () => {
+    const { fetchMock } = createChatFetchMock({
+      handle: async url => {
+        if (String(url).startsWith('/api/stocks/detail/cache?')) {
+          return makeResponse({ ok: false, status: 404, json: async () => ({ message: 'not found' }) })
+        }
+        return null
+      }
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const wrapper = mount(StockInfoTab)
+    await flushPromises()
+    await flushPromises()
+
+    const input = wrapper.find('.search-field input')
+    const button = wrapper.find('.search-field button')
+
+    await input.setValue('600000')
+    await button.trigger('click')
+    await flushPromises()
+    await flushPromises()
+
+    const chartCall = fetchMock.mock.calls.find(args => String(args[0]).startsWith('/api/stocks/chart?'))
+    expect(chartCall).toBeTruthy()
+    expect(String(chartCall[0])).toContain('includeQuote=true')
+    expect(wrapper.vm.detail?.quote?.symbol).toBe('sh600000')
+    expect(wrapper.text()).toContain('浦发银行')
   })
 
   it('requests summary-only cache payload when opening a stock', async () => {

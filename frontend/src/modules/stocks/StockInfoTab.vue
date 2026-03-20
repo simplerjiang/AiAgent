@@ -381,11 +381,13 @@ const buildDetailQuery = targetSymbol => {
   return params
 }
 
-const buildChartQuery = targetSymbol => {
+const buildChartQuery = (targetSymbol, options = {}) => {
   const params = new URLSearchParams({
     symbol: targetSymbol,
     interval: interval.value
   })
+  params.set('includeQuote', options.includeQuote ? 'true' : 'false')
+  params.set('includeMinute', interval.value === 'day' ? 'true' : 'false')
   if (selectedSource.value) {
     params.set('source', selectedSource.value)
   }
@@ -393,13 +395,21 @@ const buildChartQuery = targetSymbol => {
 }
 
 const applyLatestDetail = (workspace, requestToken, payload) => {
-  if (!workspace || requestToken !== workspace.quoteRequestToken || !payload?.quote) {
+  if (!workspace || requestToken !== workspace.quoteRequestToken || !payload) {
+    return false
+  }
+
+  const nextQuote = payload.quote ?? workspace.detail?.quote ?? null
+  if (!nextQuote) {
     return false
   }
 
   workspace.detail = {
     ...(workspace.detail ?? {}),
     ...payload,
+    quote: nextQuote,
+    kLines: payload.kLines ?? workspace.detail?.kLines ?? [],
+    minuteLines: payload.minuteLines ?? workspace.detail?.minuteLines ?? [],
     messages: payload.messages ?? workspace.detail?.messages ?? [],
     fundamentalSnapshot: payload.fundamentalSnapshot ?? workspace.pendingFundamentalSnapshot ?? workspace.detail?.fundamentalSnapshot ?? null
   }
@@ -1610,7 +1620,9 @@ const fetchQuote = async () => {
   try {
     const stockRealtimePromise = fetchStockRealtimeOverview(targetSymbol, { force: true })
     const params = buildDetailQuery(targetSymbol)
-    const chartParams = buildChartQuery(targetSymbol)
+    const chartParams = buildChartQuery(targetSymbol, {
+      includeQuote: !workspace.detail?.quote
+    })
 
     const cachePromise = (async () => {
       try {
@@ -1718,7 +1730,9 @@ const refreshChartData = async (symbolKey = currentStockKey.value) => {
   resetStockLoadStages(workspace)
   setStockLoadStage(workspace, requestToken, 'cache', 'success', '沿用当前详情')
   setStockLoadStage(workspace, requestToken, 'detail', 'pending')
-  const chartParams = buildChartQuery(targetSymbol)
+  const chartParams = buildChartQuery(targetSymbol, {
+    includeQuote: false
+  })
 
   try {
     const chartResponse = await fetch(`/api/stocks/chart?${chartParams.toString()}`, { signal: controller.signal })

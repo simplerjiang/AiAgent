@@ -17,6 +17,12 @@ const PERIOD_BY_VIEW = {
   year: { type: 'year', span: 1 }
 }
 
+export const CHART_COLORS = {
+  up: '#ef4444',
+  down: '#22c55e',
+  flat: '#94a3b8'
+}
+
 const pad = value => String(value).padStart(2, '0')
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max)
@@ -162,26 +168,69 @@ const calculateMovingAverage = (records, period) => {
   })
 }
 
-const buildChartStyles = (viewType, visibility = {}) => ({
+export const resolveMinuteTrend = (records, basePrice) => {
+  const latestClose = Number(records.at(-1)?.close)
+  if (!Number.isFinite(latestClose) || !Number.isFinite(basePrice)) {
+    return 'flat'
+  }
+  if (latestClose > basePrice) {
+    return 'up'
+  }
+  if (latestClose < basePrice) {
+    return 'down'
+  }
+  return 'flat'
+}
+
+const buildMinuteAreaStyle = (visibility, minuteTrend) => {
+  return {
+    lineSize: 2,
+    lineColor: 'rgba(148, 163, 184, 0)',
+    value: 'close',
+    smooth: true,
+    backgroundColor: [
+      { offset: 0, color: 'rgba(148, 163, 184, 0)' },
+      { offset: 1, color: 'rgba(148, 163, 184, 0)' }
+    ],
+    point: {
+      show: false
+    }
+  }
+}
+
+const withOpacity = (hexColor, opacity) => {
+  const normalized = String(hexColor || '').replace('#', '')
+  if (normalized.length !== 6) {
+    return `rgba(148, 163, 184, ${opacity})`
+  }
+  const red = Number.parseInt(normalized.slice(0, 2), 16)
+  const green = Number.parseInt(normalized.slice(2, 4), 16)
+  const blue = Number.parseInt(normalized.slice(4, 6), 16)
+  return `rgba(${red}, ${green}, ${blue}, ${opacity})`
+}
+
+const buildChartStyles = (viewType, visibility = {}, options = {}) => ({
   grid: {
     horizontal: { show: true, color: 'rgba(148, 163, 184, 0.12)', style: 'dashed', size: 1, dashedValue: [4, 4] },
     vertical: { show: true, color: 'rgba(148, 163, 184, 0.12)', style: 'dashed', size: 1, dashedValue: [4, 4] }
   },
   candle: {
     type: viewType === 'minute' ? 'area' : 'candle_solid',
-    area: {
-      lineSize: 2,
-      lineColor: visibility.price === false ? 'rgba(37, 99, 235, 0)' : '#2563eb',
-      value: 'close',
-      smooth: true,
-      backgroundColor: [
-        { offset: 0, color: visibility.price === false ? 'rgba(37, 99, 235, 0)' : 'rgba(37, 99, 235, 0.28)' },
-        { offset: 1, color: visibility.price === false ? 'rgba(37, 99, 235, 0)' : 'rgba(37, 99, 235, 0.05)' }
-      ],
-      point: {
-        show: false
-      }
-    },
+    area: viewType === 'minute'
+      ? buildMinuteAreaStyle(visibility, options.minuteTrend ?? 'flat')
+      : {
+          lineSize: 2,
+          lineColor: visibility.price === false ? 'rgba(37, 99, 235, 0)' : '#2563eb',
+          value: 'close',
+          smooth: true,
+          backgroundColor: [
+            { offset: 0, color: visibility.price === false ? 'rgba(37, 99, 235, 0)' : 'rgba(37, 99, 235, 0.28)' },
+            { offset: 1, color: visibility.price === false ? 'rgba(37, 99, 235, 0)' : 'rgba(37, 99, 235, 0.05)' }
+          ],
+          point: {
+            show: false
+          }
+        },
     bar: {
       compareRule: 'previous_close',
       upColor: '#ef4444',
@@ -226,7 +275,11 @@ const buildChartStyles = (viewType, visibility = {}) => ({
   xAxis: {
     axisLine: { show: false, color: 'transparent' },
     tickLine: { show: false, color: 'transparent' },
-    tickText: { color: '#94a3b8', size: 11, weight: 400 }
+    tickText: {
+      color: viewType === 'minute' ? 'rgba(148, 163, 184, 0)' : '#94a3b8',
+      size: 11,
+      weight: 400
+    }
   },
   yAxis: {
     axisLine: { show: false, color: 'transparent' },
@@ -298,8 +351,8 @@ const buildKlineRecords = rawLines => {
   }))
 }
 
-const buildMinuteRecords = (rawLines, fallbackBasePrice) => {
-  const records = (Array.isArray(rawLines) ? rawLines : [])
+export const buildMinuteRecords = (rawLines, fallbackBasePrice) => {
+  const normalizedRecords = (Array.isArray(rawLines) ? rawLines : [])
     .map(item => {
       const datePart = parseDatePart(item?.date)
       const timePart = parseTimePart(item?.time)
@@ -340,8 +393,23 @@ const buildMinuteRecords = (rawLines, fallbackBasePrice) => {
     })
 
   const basePrice = fallbackBasePrice == null || fallbackBasePrice === ''
-    ? records[0]?.close ?? null
-    : (Number.isFinite(Number(fallbackBasePrice)) ? Number(fallbackBasePrice) : records[0]?.close ?? null)
+    ? normalizedRecords[0]?.close ?? null
+    : (Number.isFinite(Number(fallbackBasePrice)) ? Number(fallbackBasePrice) : normalizedRecords[0]?.close ?? null)
+
+  const records = normalizedRecords.map((item, index, list) => {
+    const previousClose = index > 0
+      ? list[index - 1]?.close
+      : (Number.isFinite(basePrice) ? basePrice : item.close)
+    const open = Number.isFinite(previousClose) ? previousClose : item.close
+
+    return {
+      ...item,
+      open,
+      high: Math.max(open, item.close),
+      low: Math.min(open, item.close)
+    }
+  })
+
   return {
     records,
     basePrice
@@ -469,7 +537,7 @@ export function useStockChartAdapter({ props, klineRef, minuteRef, featureVisibi
       return chart
     }
 
-    const render = ({ records, periodKey, aiLevels, basePrice }) => {
+    const render = ({ records, periodKey, aiLevels, basePrice, styleOptions }) => {
       const instance = ensureChart()
       if (!instance) return
 
@@ -486,7 +554,7 @@ export function useStockChartAdapter({ props, klineRef, minuteRef, featureVisibi
       dataList = toChartData(records)
       recordMap = buildRecordLookup(records)
 
-      instance.setStyles(buildChartStyles(viewType, visibility))
+      instance.setStyles(buildChartStyles(viewType, visibility, styleOptions))
       instance.setSymbol(buildSymbol(records))
       instance.setPeriod(PERIOD_BY_VIEW[periodKey] ?? PERIOD_BY_VIEW.day)
       instance.resetData()
@@ -555,7 +623,10 @@ export function useStockChartAdapter({ props, klineRef, minuteRef, featureVisibi
       records,
       periodKey: 'minute',
       aiLevels: props.aiLevels,
-      basePrice
+      basePrice,
+      styleOptions: {
+        minuteTrend: resolveMinuteTrend(records, basePrice)
+      }
     })
   }
 

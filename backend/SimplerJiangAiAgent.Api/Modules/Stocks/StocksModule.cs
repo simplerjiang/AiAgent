@@ -259,7 +259,7 @@ public sealed class StocksModule : IModule
         .WithName("GetMinuteLine")
         .WithOpenApi();
 
-        group.MapGet("/chart", async (string symbol, string? interval, int? count, string? source, IStockDataService dataService, HttpContext httpContext) =>
+        group.MapGet("/chart", async (string symbol, string? interval, int? count, string? source, bool? includeQuote, bool? includeMinute, IStockDataService dataService, HttpContext httpContext) =>
         {
             if (string.IsNullOrWhiteSpace(symbol))
             {
@@ -270,18 +270,34 @@ public sealed class StocksModule : IModule
             var selectedInterval = interval ?? "day";
             var take = count ?? 60;
             var cancellationToken = httpContext.RequestAborted;
+            var shouldIncludeQuote = includeQuote ?? true;
+            var shouldIncludeMinute = includeMinute ?? true;
 
-            var quoteTask = dataService.GetQuoteAsync(target, source, cancellationToken);
             var klineTask = dataService.GetKLineAsync(target, selectedInterval, take, source, cancellationToken);
-            var minuteTask = dataService.GetMinuteLineAsync(target, source, cancellationToken);
+            Task<StockQuoteDto>? quoteTask = shouldIncludeQuote
+                ? dataService.GetQuoteAsync(target, source, cancellationToken)
+                : null;
+            Task<IReadOnlyList<MinuteLinePointDto>>? minuteTask = shouldIncludeMinute
+                ? dataService.GetMinuteLineAsync(target, source, cancellationToken)
+                : null;
 
-            await Task.WhenAll(quoteTask, klineTask, minuteTask);
+            var tasks = new List<Task> { klineTask };
+            if (quoteTask is not null)
+            {
+                tasks.Add(quoteTask);
+            }
+            if (minuteTask is not null)
+            {
+                tasks.Add(minuteTask);
+            }
 
-            var quote = await quoteTask;
+            await Task.WhenAll(tasks);
+
             var kline = await klineTask;
-            var minute = await minuteTask;
+            var quote = quoteTask is null ? null : await quoteTask;
+            var minute = minuteTask is null ? null : await minuteTask;
             var mergedKLine = string.Equals(selectedInterval, "day", StringComparison.OrdinalIgnoreCase)
-                ? StockRealtimeKLineMerge.MergeDailyFromMinuteLines(kline, minute, take)
+                ? StockRealtimeKLineMerge.MergeDailyFromMinuteLines(kline, minute ?? Array.Empty<MinuteLinePointDto>(), take)
                 : kline;
 
             return Results.Ok(new StockChartDto(quote, mergedKLine, minute));

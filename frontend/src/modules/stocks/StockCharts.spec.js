@@ -199,7 +199,12 @@ describe('StockCharts', () => {
     expect(minuteSeriesData[0].timestamp).toBeGreaterThan(1700000000000)
     expect(minuteSeriesData[0].timestamp).toBeLessThan(minuteSeriesData[1].timestamp)
     expect(minuteSeriesData[0].volume).toBe(1800)
+    expect(minuteSeriesData[0].open).toBe(31.1)
+    expect(minuteSeriesData[1].open).toBe(31.1)
     expect(minuteSeriesData[1].volume).toBe(500)
+    expect(chartMocks.minuteStyleCalls.at(-1)?.candle?.area?.lineColor).toBe('rgba(148, 163, 184, 0)')
+    expect(chartMocks.minuteStyleCalls.at(-1)?.indicator?.bars?.[0]?.upColor).toBe('#ef4444')
+    expect(chartMocks.minuteStyleCalls.at(-1)?.indicator?.bars?.[0]?.downColor).toBe('#22c55e')
 
     const minuteIndicators = chartMocks.minuteIndicatorCalls.map(item => item.value?.name)
     expect(minuteIndicators).toContain('VOL')
@@ -518,7 +523,89 @@ describe('StockCharts', () => {
     expect(priceChip.classes()).not.toContain('active')
     expect(chartMocks.minuteRemoveIndicatorCalls.some(item => item?.paneId === 'volume_pane' && item?.name === 'VOL')).toBe(true)
     expect(chartMocks.minuteRemoveOverlayCalls.some(item => item?.groupId === 'minute-base-line')).toBe(true)
-    expect(chartMocks.minuteStyleCalls.at(-1)?.candle?.area?.lineColor).toBe('rgba(37, 99, 235, 0)')
+    expect(chartMocks.minuteStyleCalls.at(-1)?.candle?.area?.lineColor).toBe('rgba(148, 163, 184, 0)')
+  })
+
+  it('renders green minute line when latest price is below base price', async () => {
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
+      configurable: true,
+      get() {
+        return 600
+      }
+    })
+    Object.defineProperty(HTMLElement.prototype, 'clientHeight', {
+      configurable: true,
+      get() {
+        return 300
+      }
+    })
+
+    mount(StockCharts, {
+      props: {
+        kLines: [],
+        minuteLines: [
+          { date: '2026-01-01', time: '09:30:00', price: 9.8, volume: 500 },
+          { date: '2026-01-01', time: '09:31:00', price: 9.6, volume: 900 }
+        ],
+        basePrice: 10,
+        interval: 'day'
+      }
+    })
+
+    await nextTick()
+
+    expect(chartMocks.minuteStyleCalls.at(-1)?.candle?.area?.lineColor).toBe('rgba(148, 163, 184, 0)')
+  })
+
+  it('renders segmented minute lines, stronger fill, and colored right-axis labels', async () => {
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
+      configurable: true,
+      get() {
+        return 600
+      }
+    })
+    Object.defineProperty(HTMLElement.prototype, 'clientHeight', {
+      configurable: true,
+      get() {
+        return 300
+      }
+    })
+
+    const wrapper = mount(StockCharts, {
+      props: {
+        kLines: [],
+        minuteLines: [
+          { date: '2026-01-01', time: '09:30:00', price: 10.0, volume: 1000 },
+          { date: '2026-01-01', time: '09:31:00', price: 10.2, volume: 1500 },
+          { date: '2026-01-01', time: '09:32:00', price: 10.1, volume: 1900 },
+          { date: '2026-01-01', time: '09:33:00', price: 10.35, volume: 2400 }
+        ],
+        basePrice: 9.95,
+        interval: 'day'
+      }
+    })
+
+    await nextTick()
+
+    const minuteTab = wrapper.findAll('.tab').find(tab => tab.text() === '分时图')
+    await minuteTab.trigger('click')
+    await nextTick()
+
+    const segments = wrapper.findAll('.minute-segment-line')
+    expect(segments).toHaveLength(3)
+    expect(segments[0].classes()).toContain('minute-segment-up')
+    expect(segments[1].classes()).toContain('minute-segment-down')
+    expect(segments[2].classes()).toContain('minute-segment-up')
+
+    const fillPath = wrapper.find('.minute-fill-path')
+    expect(fillPath.exists()).toBe(true)
+    expect(fillPath.attributes('fill')).toBe('#ef4444')
+    expect(fillPath.attributes('fill-opacity')).toBe('0.18')
+
+    const labels = wrapper.findAll('.minute-axis-label')
+    expect(labels).toHaveLength(5)
+    expect(labels.some(label => label.classes().includes('minute-axis-up'))).toBe(true)
+    expect(labels.some(label => label.classes().includes('minute-axis-down'))).toBe(true)
   })
 
   it('toggles kline MA and AI chips to control overlays', async () => {

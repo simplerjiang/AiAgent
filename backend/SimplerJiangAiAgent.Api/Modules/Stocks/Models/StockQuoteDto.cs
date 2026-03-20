@@ -68,9 +68,9 @@ public sealed record StockDetailSummaryDto(
 );
 
 public sealed record StockChartDto(
-    StockQuoteDto Quote,
+    StockQuoteDto? Quote,
     IReadOnlyList<KLinePointDto> KLines,
-    IReadOnlyList<MinuteLinePointDto> MinuteLines
+    IReadOnlyList<MinuteLinePointDto>? MinuteLines
 );
 
 public sealed record StockFundamentalSnapshotDto(
