@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Hosting;
+using SimplerJiangAiAgent.Api.Infrastructure.Storage;
 
 namespace SimplerJiangAiAgent.Api.Infrastructure.Logging;
 
@@ -12,9 +13,9 @@ public sealed class FileLogWriter : IFileLogWriter
     private readonly string _logFilePath;
     private readonly object _sync = new();
 
-    public FileLogWriter(IWebHostEnvironment environment)
+    public FileLogWriter(AppRuntimePaths runtimePaths)
     {
-        var logDir = Path.Combine(environment.ContentRootPath, "App_Data", "logs");
+        var logDir = runtimePaths.LogsPath;
         Directory.CreateDirectory(logDir);
         _logFilePath = Path.Combine(logDir, "llm-requests.txt");
     }

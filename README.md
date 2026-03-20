@@ -99,6 +99,14 @@ $env:GLM_API_KEY="你的GLM-5_API_KEY"
 - 受控默认配置：`backend/SimplerJiangAiAgent.Api/App_Data/llm-settings.json`，只保存非敏感参数
 - 本地忽略覆盖：`backend/SimplerJiangAiAgent.Api/App_Data/llm-settings.local.json`，只保存 `apiKey`
 
+发布版（打包后的桌面程序）不再把这些文件写回安装目录，而是统一写到当前 Windows 用户本地目录：
+- `%LOCALAPPDATA%\SimplerJiangAiAgent\App_Data\llm-settings.json`
+- `%LOCALAPPDATA%\SimplerJiangAiAgent\App_Data\llm-settings.local.json`
+
+其中：
+- `llm-settings.json` 会由安装包内置的默认非敏感配置在首次启动时自动复制到本地目录
+- `llm-settings.local.json` 不会随安装包分发，用户需要自己通过管理员页面保存 key，或手工写入本地文件
+
 当前支持两个可切换通道：
 - `default`：现有默认 OpenAI 兼容通道
 - `gemini_official`：Google Gemini 官方 OpenAI 兼容通道
@@ -149,6 +157,28 @@ opencode
 - `/models` 确认已选中 `zai/glm-5`
 - `/init` 让 OpenCode 读取仓库结构与规则
 
+### Windows 打包（当前阶段）
+当前仓库已提供一个基础打包脚本，用于生成“桌面 EXE + 同目录后端 + 前端静态资源”的可运行目录：
+
+```powershell
+.\scripts\publish-windows-package.ps1
+```
+
+脚本会执行：
+- 前端 build
+- 后端 publish
+- 桌面程序 publish
+- 将前端 `dist` 复制到后端发布目录
+- 仅复制默认的 `llm-settings.json`，不会打包本地 `llm-settings.local.json`
+
+当前阶段已实现的开箱即用能力：
+- 用户机器不需要安装数据库
+- 桌面程序会自动启动同目录后端
+- 数据库、日志、LLM 本地配置统一落到 `%LOCALAPPDATA%\SimplerJiangAiAgent`
+
+当前仍需用户自己准备的内容：
+- LLM Key，需要用户在首次使用时自行配置
+
 ## 多 Agent 自动化开发与测试
 入口与说明： [.automation/README.md](.automation/README.md)
 
@@ -174,6 +204,7 @@ opencode
 - [ ] GOAL-AGENT-001-R2 Agent 职责重切与推理收口（stock/sector/financial/trend 边界重划、marketReports 抗污染、代码先算特征、commander 覆盖率/冲突/降级惩罚）
 - [ ] GOAL-AGENT-001-R3 回放校准闭环与验收基线（历史回放样本、1/3/5/10 日收益对齐、命中率/Brier score/分组胜率、开发者可观测验收指标）
 - [ ] GOAL-015 深度盘面属性扩充与 Agent 指挥体系重构（Step 3 已继续完成“基本面快照富事实 + 数据库缓存优先刷新”增强：`StockCompanyProfiles` 新增 `FundamentalFactsJson/FundamentalUpdatedAt`，详情页先读 `/api/stocks/detail/cache` 的数据库快照，再由 `/api/stocks/detail` 实时抓东财公司概况/股东研究并回写；本轮进一步补上股票信息卡片真实加载进度，将“缓存回显 / 腾讯行情 / 东方财富基本面”拆成可视化阶段，并新增 `/api/stocks/fundamental-snapshot` 轻量接口配合前端独立显示东财刷新状态。剩余主要是 Edge/UI 验收与更大范围联调。）
+- [ ] GOAL-016 单机可安装版与本地数据底座重构规划（本轮先完成规划，不急于编码；目标是把当前“桌面壳 + 本地后端 + 外部 SQL Server”的开发形态，收敛为可以发给不同 Windows 用户安装使用的单机应用。总体路线采用“桌面宿主 EXE + 后端内嵌启动 + 前端静态资源随包发布 + 主事务库 SQLite + 冷数据 Parquet + 本地分析 DuckDB”的分层架构，兼顾免安装数据库、长期大数据量增长和后续回测/统计能力。规划分 4 个切片：R1 数据库提供者抽象与 SQLite 落地；R2 高频行情/历史事实冷热分层与归档；R3 WinForms/WebView2 桌面宿主化与本地自启动；R4 安装器、升级、数据目录与发布流程收口。）
 - [x] MANUAL-20260319-EXTENSION-INTERFACE `stock-and-fund-chrome-master` 接口吸收规划（已完成 R1-R5 全链路收口：后端新增 `/api/stocks/quotes/batch`、`/api/market/realtime/overview`、`/api/market/sectors/realtime`，接入东财批量行情、主力资金、北向资金、涨跌分布与实时板块榜；默认分时来源已切到东方财富优先；前端已同步落地到 `情绪轮动`、`股票推荐`、`股票信息` 与交易计划总览等高频决策入口，并通过定向单测与浏览器验收。整体策略仍是不做整包替换，而是只吸收扩展里仍有价值的公开端点；作者自建 `110.40.187.161` 云服务继续排除在正式依赖之外。）
 - [x] MANUAL-20260319-EXTENSION-INTERFACE-R1 实时行情后端切片（新增 Eastmoney realtime adapter 与聚合服务，提供批量行情和市场总览 API；验证覆盖批量行情、主力资金、北向资金、涨跌分布解析，以及本地运行时 smoke test。）
 - [x] MANUAL-20260319-CHART-PERF 股票图表刷新性能收口（已定位慢点不在第三方行情源本身，而在前端把图表刷新绑定到 `/api/stocks/detail` 重聚合链路；现已新增 `/api/stocks/chart` 轻量接口，并把 `StockInfoTab` 首屏图表和 `日K/月K/年K` 切换改为只请求图表数据。定向单测 43/43 通过，Browser MCP 已确认切换 `月K图/年K图` 时只出现 `/api/stocks/chart?...interval=month|year`，不再触发 `/api/stocks/detail/cache`、`/api/stocks/messages` 与 `/api/stocks/fundamental-snapshot`。）
@@ -244,6 +275,15 @@ opencode
 	- 违规行为识别：追涨杀跌、逆势加仓、无计划交易等行为统计。
 	- 周/月策略报告：胜率、盈亏比、回撤、执行一致性、最需优化项。
 	- 输出“下一周期可执行改进清单”，形成持续迭代闭环。
+- [ ] GOAL-016 单机可安装版与本地数据底座重构
+	- 目标：把当前开发态系统重构为“安装一次即可运行”的 Windows 单机应用，不再要求用户自行安装 SQL Server，也不要求手工分别启动前后端。
+	- 数据底座：主业务库改为 SQLite，承载配置、交易计划、热数据缓存、最近窗口查询与应用事务；海量历史分时/K线/事实归档改为 Parquet 分区文件；需要本地大范围扫描、回测、聚合时由 DuckDB 直接读取 Parquet。这样既满足免安装，也避免将所有长期历史堆进一个持续膨胀的事务库。
+	- 架构形态：WinForms/WebView2 桌面程序升级为真正的宿主进程，由桌面 EXE 内嵌启动 ASP.NET Core 后端；前端产物随安装包发布；数据库与归档文件统一放入用户本地数据目录，而不是依赖开发机脚本或外部数据库实例。
+	- R1 数据库提供者抽象与 SQLite 落地：移除启动期对 `OBJECT_ID/COL_LENGTH/sys.indexes` 等 SQL Server 方言的硬依赖，统一为 provider-aware schema/migration 机制；先让现有表结构完整跑通 SQLite，并补齐数据目录、连接串与迁移策略。
+	- R2 冷热分层与归档：重新定义 `MinuteLinePoints`、`KLinePoints`、`StockQuoteSnapshots`、`LocalStockNews`、`StockAgentAnalysisHistories` 的保留策略，热路径只保最近窗口，冷路径按 `symbol/date` 分区落 Parquet；同时补充归档、回放、清理和索引元数据。
+	- R3 桌面宿主化：让 `SimplerJiangAiAgent.Desktop` 在应用内启动本地后端与静态前端，替代当前依赖 `start-all.bat` 和 `http://localhost:5119` 外部开发流程的方式；同时补齐端口管理、健康检查、首次初始化和异常日志。
+	- R4 安装与发布：建立 `dotnet publish`、前端 build、资源复制、数据库初始化、WebView2 runtime 策略和安装器产物；定义升级时的数据迁移、备份与回滚规则，最终输出可发给不同用户安装的 `Setup.exe + 主程序` 交付链路。
+	- 容量前提：按未来大数据量设计，假设监控股票数和保留年限持续增长，不再以当前本地几万行数据做选型；事务数据与海量历史必须物理分层，否则单库体积、备份、恢复和统计扫描都会成为长期瓶颈。
 
 ## 核心差异化：LLM 联网投研决策中枢（GOAL-007）
 你提出的方向将作为下一阶段最优先事项：尽可能与 LLM 大模型结合，由模型联网获取信息后输出个股优劣判断与目标操作建议。

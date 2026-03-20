@@ -101,9 +101,12 @@ public sealed class AppDbContext : DbContext
             .Property(x => x.SectorName)
             .HasMaxLength(128);
 
-        modelBuilder.Entity<StockCompanyProfile>()
-            .Property(x => x.FundamentalFactsJson)
-            .HasColumnType("nvarchar(max)");
+        if (Database.IsSqlServer())
+        {
+            modelBuilder.Entity<StockCompanyProfile>()
+                .Property(x => x.FundamentalFactsJson)
+                .HasColumnType("nvarchar(max)");
+        }
 
         modelBuilder.Entity<MarketIndexSnapshot>()
             .HasIndex(x => new { x.Symbol, x.Timestamp });

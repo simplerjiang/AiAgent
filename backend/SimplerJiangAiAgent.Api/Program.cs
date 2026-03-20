@@ -6,6 +6,7 @@ using SimplerJiangAiAgent.Api.Infrastructure.Config;
 using SimplerJiangAiAgent.Api.Infrastructure.Jobs;
 using SimplerJiangAiAgent.Api.Infrastructure.Logging;
 using SimplerJiangAiAgent.Api.Infrastructure.Security;
+using SimplerJiangAiAgent.Api.Infrastructure.Storage;
 using SimplerJiangAiAgent.Api.Modules;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -39,17 +40,30 @@ builder.Services.AddScoped<IStockSyncService, StockSyncService>();
 builder.Services.AddScoped<ISourceGovernanceService, SourceGovernanceService>();
 builder.Services.AddScoped<ISourceGovernanceReadService, SourceGovernanceReadService>();
 builder.Services.AddSingleton<ICommandRunner, ProcessCommandRunner>();
+
+var runtimePaths = new AppRuntimePaths(builder.Environment, builder.Configuration);
+runtimePaths.EnsureWritableDirectories();
+runtimePaths.EnsureBundledDefaultsCopied();
+builder.Services.AddSingleton(runtimePaths);
 builder.Services.AddSingleton<IFileLogWriter, FileLogWriter>();
 
 var databaseOptions = builder.Configuration.GetSection(DatabaseOptions.SectionName).Get<DatabaseOptions>() ?? new DatabaseOptions();
+var provider = string.IsNullOrWhiteSpace(databaseOptions.Provider)
+    ? "Sqlite"
+    : databaseOptions.Provider.Trim();
 var connectionString = string.IsNullOrWhiteSpace(databaseOptions.ConnectionString)
-    ? builder.Configuration.GetConnectionString("Default") ?? string.Empty
+    ? ResolveDefaultConnectionString(provider, builder.Configuration, runtimePaths)
     : databaseOptions.ConnectionString;
 
-if (databaseOptions.Provider.Equals("MySql", StringComparison.OrdinalIgnoreCase))
+if (provider.Equals("MySql", StringComparison.OrdinalIgnoreCase))
 {
     builder.Services.AddDbContext<AppDbContext>(options =>
         options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString)));
+}
+else if (provider.Equals("Sqlite", StringComparison.OrdinalIgnoreCase) || provider.Equals("SQLite", StringComparison.OrdinalIgnoreCase))
+{
+    builder.Services.AddDbContext<AppDbContext>(options =>
+        options.UseSqlite(connectionString));
 }
 else
 {
@@ -90,8 +104,8 @@ app.UseCors();
 app.UseMiddleware<RequestLoggingMiddleware>();
 
 // 静态前端（若已构建）
-var distPath = Path.GetFullPath(Path.Combine(app.Environment.ContentRootPath, "..", "..", "frontend", "dist"));
-if (Directory.Exists(distPath))
+var distPath = runtimePaths.ResolveFrontendDistPath();
+if (!string.IsNullOrWhiteSpace(distPath) && Directory.Exists(distPath))
 {
     var fileProvider = new PhysicalFileProvider(distPath);
     app.UseDefaultFiles(new DefaultFilesOptions { FileProvider = fileProvider });
@@ -106,7 +120,7 @@ app.MapGet("/api/health", () => Results.Ok(new { status = "ok" }))
 app.MapModules();
 
 // 前端路由兜底
-if (Directory.Exists(distPath))
+if (!string.IsNullOrWhiteSpace(distPath) && Directory.Exists(distPath))
 {
     app.MapFallbackToFile("index.html", new StaticFileOptions
     {
@@ -115,3 +129,13 @@ if (Directory.Exists(distPath))
 }
 
 app.Run();
+
+static string ResolveDefaultConnectionString(string provider, IConfiguration configuration, AppRuntimePaths runtimePaths)
+{
+    if (provider.Equals("Sqlite", StringComparison.OrdinalIgnoreCase) || provider.Equals("SQLite", StringComparison.OrdinalIgnoreCase))
+    {
+        return runtimePaths.GetDefaultSqliteConnectionString();
+    }
+
+    return configuration.GetConnectionString("Default") ?? string.Empty;
+}

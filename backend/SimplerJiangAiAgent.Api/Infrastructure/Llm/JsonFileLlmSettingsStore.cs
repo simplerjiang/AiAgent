@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
+using SimplerJiangAiAgent.Api.Infrastructure.Storage;
 
 namespace SimplerJiangAiAgent.Api.Infrastructure.Llm;
 
@@ -16,6 +17,14 @@ public sealed class JsonFileLlmSettingsStore : ILlmSettingsStore
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         WriteIndented = true
     };
+
+    public JsonFileLlmSettingsStore(AppRuntimePaths runtimePaths)
+    {
+        runtimePaths.EnsureWritableDirectories();
+        runtimePaths.EnsureBundledDefaultsCopied();
+        _defaultsFilePath = runtimePaths.WritableLlmSettingsFilePath;
+        _localSecretsFilePath = runtimePaths.WritableLocalLlmSecretsFilePath;
+    }
 
     public JsonFileLlmSettingsStore(IWebHostEnvironment environment)
     {

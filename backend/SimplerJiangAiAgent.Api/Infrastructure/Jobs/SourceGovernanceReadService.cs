@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SimplerJiangAiAgent.Api.Data;
 using SimplerJiangAiAgent.Api.Data.Entities;
+using SimplerJiangAiAgent.Api.Infrastructure.Storage;
 using System.Text.RegularExpressions;
 using System.Text.Json;
 
@@ -26,6 +27,12 @@ public sealed class SourceGovernanceReadService : ISourceGovernanceReadService
     private static readonly Regex StageRegex = new("stage=([^\\s]+)", RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex ProviderRegex = new("provider=([^\\s]+)", RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex ModelRegex = new("model=([^\\s]+)", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    public SourceGovernanceReadService(AppDbContext dbContext, AppRuntimePaths runtimePaths)
+    {
+        _dbContext = dbContext;
+        _logPath = Path.Combine(runtimePaths.LogsPath, "llm-requests.txt");
+    }
 
     public SourceGovernanceReadService(AppDbContext dbContext, IHostEnvironment environment)
     {

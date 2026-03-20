@@ -4,8 +4,10 @@ public sealed class DatabaseOptions
 {
     public const string SectionName = "Database";
 
-    // Provider: SqlServer | MySql
-    public string Provider { get; set; } = "SqlServer";
+    // Provider: Sqlite | SqlServer | MySql
+    public string Provider { get; set; } = "Sqlite";
 
     public string ConnectionString { get; set; } = string.Empty;
+
+    public string DataRootPath { get; set; } = string.Empty;
 }

@@ -7,6 +7,12 @@ public static class TradingPlanSchemaInitializer
 {
     public static async Task EnsureAsync(AppDbContext dbContext, CancellationToken cancellationToken = default)
     {
+        var provider = dbContext.Database.ProviderName ?? string.Empty;
+        if (!provider.Contains("SqlServer", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
         await dbContext.Database.ExecuteSqlRawAsync(
             "IF OBJECT_ID('dbo.TradingPlans', 'U') IS NULL " +
             "BEGIN " +

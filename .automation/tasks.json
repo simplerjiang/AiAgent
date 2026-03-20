@@ -97,7 +97,7 @@
         "dev": "done",
         "test": "done"
       },
-      "notes": "2026-03-19 follow-up completed: `/api/stocks/detail` was slimmed into a non-chart summary endpoint that now returns quote + messages + optional fundamental snapshot only, while `StockSyncService.SaveDetailAsync(...)` keeps saving basic quote/profile/message data and no longer persists minute/K-line rows from the detail path. Browser MCP benchmark on `http://localhost:5119/` recorded first-open parallel fetch total at 6708ms, `detail-summary` at 2090ms, `chart-day` at 6705ms, and interval switches at `chart-month` 7ms / `chart-year` 4ms. A review follow-up then narrowed `/api/stocks/detail/cache` to summary-only by default as well, with legacy DB-backed chart replay preserved only behind explicit `includeLegacyCharts=true`, so the cache endpoint no longer silently resumes chart responsibilities. Verification: `dotnet test .\\backend\\SimplerJiangAiAgent.Api.Tests\\SimplerJiangAiAgent.Api.Tests.csproj --filter \"StockSyncServiceTests|HighFrequencyQuoteServiceTests|StockDetailCacheQueriesTests\"` 9/9 passed, `npm --prefix .\\frontend run test:unit -- src/modules/stocks/StockInfoTab.spec.js` 44/44 passed, and Browser MCP page smoke check returned 0 console errors."
+      "notes": "2026-03-19 follow-up completed: `/api/stocks/detail` was slimmed into a non-chart summary endpoint that now returns quote + messages + optional fundamental snapshot only, while `StockSyncService.SaveDetailAsync(...)` keeps saving basic quote/profile/message data and no longer persists minute/K-line rows from the detail path. Browser MCP benchmark on `http://localhost:5119/` recorded first-open parallel fetch total at 6708ms, `detail-summary` at 2090ms, `chart-day` at 6705ms, and interval switches at `chart-month` 7ms / `chart-year` 4ms. A review follow-up then narrowed `/api/stocks/detail/cache` to summary-only by default as well, with legacy DB-backed chart replay preserved only behind explicit `includeLegacyCharts=true`, so the cache endpoint no longer silently resumes chart responsibilities. A later bottleneck pass confirmed the remaining visible chart delay was mostly caused by a redundant default quote fetch inside `/api/stocks/chart`, not by K-line retrieval itself; the stock terminal now requests `/api/stocks/chart` with `includeQuote=false`, and `月K/年K` also use `includeMinute=false`. A 2026-03-20 regression fix then restored first-open rendering for newly searched symbols with no cache/history by re-enabling `includeQuote=true` only when the workspace does not yet hold a quote, while already loaded workspaces still keep the lightweight refresh path. Cold-start runtime probe after restart showed `chart-day-cold-first` dropped to 467ms while standalone default `/api/stocks/quote` still took about 8815ms. Verification: `dotnet test .\\backend\\SimplerJiangAiAgent.Api.Tests\\SimplerJiangAiAgent.Api.Tests.csproj --filter \"StockSyncServiceTests|HighFrequencyQuoteServiceTests|StockDetailCacheQueriesTests\"` 9/9 passed, the expanded backend filter run passed 16/16, `npm --prefix .\\frontend run test:unit -- src/modules/stocks/StockInfoTab.spec.js` later passed 46/46 after adding the no-cache first-open regression test, and Browser MCP page smoke check returned 0 console errors." 
     },
     {
       "id": "AUTO-001",
@@ -164,6 +164,61 @@
         "test": "todo"
       },
       "notes": "Step 3 已继续收口：在既有流通市值/动态市盈率/量比/股东人数/所属板块基础上，新增“基本面快照富事实 + 数据库缓存优先刷新”能力。`StockCompanyProfiles` 已持久化 `FundamentalFactsJson` 与 `FundamentalUpdatedAt`；`/api/stocks/detail/cache` 可直接回放数据库中的基本面事实，`/api/stocks/detail` 会实时抓取东财公司概况/股东研究并回写数据库；前端 StockInfoTab 已渲染快照刷新时间与事实列表。本轮继续补齐股票信息卡片真实加载进度：新增 `/api/stocks/fundamental-snapshot` 轻量接口，`/api/stocks/detail` 支持 `includeFundamentalSnapshot=false`，前端会分别展示“缓存回显 / 腾讯行情 / 东方财富基本面”阶段。待补主要是更大范围 UI/Browser MCP 验收。"
+    },
+    {
+      "id": "GOAL-016",
+      "title": "Packaged single-machine app architecture plan",
+      "status": "todo",
+      "stages": {
+        "plan": "done",
+        "dev": "done",
+        "test": "done"
+      },
+      "notes": "2026-03-20 已完成总体规划并落下第一阶段可运行基础：当前发布版后端默认切到 SQLite，运行期数据库/日志/LLM 本地配置统一迁到 `%LOCALAPPDATA%\\SimplerJiangAiAgent`，桌面宿主可自动拉起同目录后端，且已新增 `scripts/publish-windows-package.ps1` 生成“桌面 EXE + Backend + frontend dist”的可运行目录。验证已覆盖 `dotnet test .\\backend\\SimplerJiangAiAgent.Api.Tests\\SimplerJiangAiAgent.Api.Tests.csproj` 174/174、桌面构建通过、打包脚本成功，以及发布版后端在 `Production` 下 `/api/health` 返回 `{\"status\":\"ok\"}` 且自动创建 SQLite 文件。剩余开发主要集中在 R2 冷热分层与 R4 安装器/升级链路。"
+    },
+    {
+      "id": "GOAL-016-R1",
+      "title": "Provider abstraction and SQLite foundation",
+      "status": "done",
+      "stages": {
+        "plan": "done",
+        "dev": "done",
+        "test": "done"
+      },
+      "notes": "R1 已落地：1) `Program.cs` 已支持 `Sqlite | SqlServer | MySql` provider 选择，并在未配置连接串时自动落到本地 SQLite 文件；2) 新增 `Infrastructure/Storage/AppRuntimePaths.cs`，统一数据目录、日志目录、SQLite 路径与 LLM 配置路径；3) `StockMarketDataSchemaInitializer`、`TradingPlanSchemaInitializer`、`MarketSentimentSchemaInitializer` 已在非 SQL Server provider 下直接跳过方言修复逻辑；4) `AppDbContext` 已修复 `FundamentalFactsJson` 的 SQL Server 专属列类型，确保 SQLite 可成功 `EnsureCreated()`。验证：发布版后端在干净数据目录下成功启动并创建本地 `SimplerJiangAiAgent.db`。"
+    },
+    {
+      "id": "GOAL-016-R2",
+      "title": "Hot-cold data tiering and archive pipeline",
+      "status": "todo",
+      "stages": {
+        "plan": "done",
+        "dev": "todo",
+        "test": "todo"
+      },
+      "notes": "R2 处理未来大数据量。范围：1) 为 `MinuteLinePoints`、`KLinePoints`、`StockQuoteSnapshots`、`LocalStockNews`、`StockAgentAnalysisHistories` 定义热数据窗口；2) 把长期历史按 `symbol/date` 或等价分区落到 Parquet；3) 增加归档索引元数据、清理任务、回放入口与容量阈值；4) 引入 DuckDB 作为本地统计/回测/批量扫描引擎。验收重点：在高增长场景下，主事务库体积和查询时延仍保持可控，历史统计不需要把归档重新导回 SQLite。"
+    },
+    {
+      "id": "GOAL-016-R3",
+      "title": "Desktop host self-start integration",
+      "status": "todo",
+      "stages": {
+        "plan": "done",
+        "dev": "done",
+        "test": "todo"
+      },
+      "notes": "R3 已完成首轮开发：`SimplerJiangAiAgent.Desktop` 现在会优先复用 `http://localhost:5119` 的健康后端，否则自动在发布目录 `Backend/` 下查找 `SimplerJiangAiAgent.Api.exe` 或 `.dll` 并启动，自动注入 `ASPNETCORE_URLS`、`ASPNETCORE_ENVIRONMENT`、`DOTNET_ENVIRONMENT` 与 `SJAI_DATA_ROOT`，并在健康检查通过后再导航到前端页面。当前仍欠一次完整的发布版桌面 GUI 自动化验收，因此状态保留为未完结。"
+    },
+    {
+      "id": "GOAL-016-R4",
+      "title": "Installer and upgrade delivery pipeline",
+      "status": "todo",
+      "stages": {
+        "plan": "done",
+        "dev": "done",
+        "test": "done"
+      },
+      "notes": "R4 已完成基础打包链路：新增 `scripts/publish-windows-package.ps1`，串起前端 build、后端 publish、桌面 publish、前端 dist 复制、默认 `llm-settings.json` 投递以及 `llm-settings.local.json` 排除。已验证脚本可以稳定输出 `artifacts\\windows-package` 可运行目录，并确认包内不含本地 LLM 密钥文件。尚未完成的部分是正式安装器、升级迁移与回滚机制。"
     },
     {
       "id": "GOAL-002",
