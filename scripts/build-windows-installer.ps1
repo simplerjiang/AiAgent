@@ -35,7 +35,7 @@ function Resolve-AppVersion {
         }
     }
 
-    return "0.0.2"
+    return "0.0.3"
 }
 
 function Resolve-IsccPath {

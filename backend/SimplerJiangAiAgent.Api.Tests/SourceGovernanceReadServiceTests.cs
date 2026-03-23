@@ -213,6 +213,111 @@ public sealed class SourceGovernanceReadServiceTests
         Assert.Equal("最终建议：关注银行板块估值修复。", item.ResponseText);
     }
 
+    [Fact]
+    public async Task GetLlmConversationLogsAsync_ShouldStripExtendedReasoningTitleScaffold()
+    {
+        await using var db = CreateDb();
+        var env = new FakeHostEnvironment();
+        var logDir = Path.Combine(env.ContentRootPath, "App_Data", "logs");
+        Directory.CreateDirectory(logDir);
+        var logPath = Path.Combine(logDir, "llm-requests.txt");
+        await File.WriteAllLinesAsync(logPath, new[]
+        {
+            "2026-03-12 10:00:00.000 [LLM-AUDIT] traceId=t6 stage=request provider=openai model=gpt prompt=hello",
+            "2026-03-12 10:00:03.000 [LLM-AUDIT] traceId=t6 stage=response provider=openai model=gpt content=**Simulating Information Retrieval** **Interpreting the Data** **Formulating the Response** 最终建议：等待量价确认。"
+        });
+
+        var service = new SourceGovernanceReadService(db, env);
+        var logs = await service.GetLlmConversationLogsAsync(10, "t6");
+
+        var item = Assert.Single(logs);
+        Assert.Equal("最终建议：等待量价确认。", item.ResponseText);
+    }
+
+    [Fact]
+    public async Task GetLlmConversationLogsAsync_ShouldStripLiveBoldReasoningTitleSequence()
+    {
+        await using var db = CreateDb();
+        var env = new FakeHostEnvironment();
+        var logDir = Path.Combine(env.ContentRootPath, "App_Data", "logs");
+        Directory.CreateDirectory(logDir);
+        var logPath = Path.Combine(logDir, "llm-requests.txt");
+        await File.WriteAllLinesAsync(logPath, new[]
+        {
+            "2026-03-12 10:00:00.000 [LLM-AUDIT] traceId=t7 stage=request provider=openai model=gpt prompt=hello",
+            "2026-03-12 10:00:03.000 [LLM-AUDIT] traceId=t7 stage=response provider=openai model=gpt content=**Initiating Market Analysis** **Refining Search Strategies** **Adapting Query Approach** **Analyzing Current Context** **Reviewing Market Trends** 最终建议：保持耐心，等待右侧确认。"
+        });
+
+        var service = new SourceGovernanceReadService(db, env);
+        var logs = await service.GetLlmConversationLogsAsync(10, "t7");
+
+        var item = Assert.Single(logs);
+        Assert.Equal("最终建议：保持耐心，等待右侧确认。", item.ResponseText);
+    }
+
+    [Fact]
+    public async Task GetLlmConversationLogsAsync_ShouldRedactEnglishReasoningNarrativePreamble()
+    {
+        await using var db = CreateDb();
+        var env = new FakeHostEnvironment();
+        var logDir = Path.Combine(env.ContentRootPath, "App_Data", "logs");
+        Directory.CreateDirectory(logDir);
+        var logPath = Path.Combine(logDir, "llm-requests.txt");
+        await File.WriteAllLinesAsync(logPath, new[]
+        {
+            "2026-03-12 10:00:00.000 [LLM-AUDIT] traceId=t8 stage=request provider=openai model=gpt prompt=hello",
+            "2026-03-12 10:00:03.000 [LLM-AUDIT] traceId=t8 stage=response provider=openai model=gpt content=I'm currently dissecting the user's request, focusing on the core task: delivering stock market insights for March 23, 2026."
+        });
+
+        var service = new SourceGovernanceReadService(db, env);
+        var logs = await service.GetLlmConversationLogsAsync(10, "t8");
+
+        var item = Assert.Single(logs);
+        Assert.Equal("返回内容包含中间推理，已脱敏。", item.ResponseText);
+    }
+
+    [Fact]
+    public async Task GetLlmConversationLogsAsync_ShouldKeepJsonAfterEnglishReasoningNarrative()
+    {
+        await using var db = CreateDb();
+        var env = new FakeHostEnvironment();
+        var logDir = Path.Combine(env.ContentRootPath, "App_Data", "logs");
+        Directory.CreateDirectory(logDir);
+        var logPath = Path.Combine(logDir, "llm-requests.txt");
+        await File.WriteAllLinesAsync(logPath, new[]
+        {
+            "2026-03-12 10:00:00.000 [LLM-AUDIT] traceId=t9 stage=request provider=openai model=gpt prompt=hello",
+            "2026-03-12 10:00:03.000 [LLM-AUDIT] traceId=t9 stage=response provider=openai model=gpt content=I'm currently dissecting the parameters of this request. The task is clear: I need to generate a JSON array. [{\"id\":\"market:1\",\"translatedTitle\":\"测试标题\"}]"
+        });
+
+        var service = new SourceGovernanceReadService(db, env);
+        var logs = await service.GetLlmConversationLogsAsync(10, "t9");
+
+        var item = Assert.Single(logs);
+        Assert.Equal("[{\"id\":\"market:1\",\"translatedTitle\":\"测试标题\"}]", item.ResponseText);
+    }
+
+    [Fact]
+    public async Task GetLlmConversationLogsAsync_ShouldRedactUserTaskEnglishNarrative()
+    {
+        await using var db = CreateDb();
+        var env = new FakeHostEnvironment();
+        var logDir = Path.Combine(env.ContentRootPath, "App_Data", "logs");
+        Directory.CreateDirectory(logDir);
+        var logPath = Path.Combine(logDir, "llm-requests.txt");
+        await File.WriteAllLinesAsync(logPath, new[]
+        {
+            "2026-03-12 10:00:00.000 [LLM-AUDIT] traceId=t10 stage=request provider=openai model=gpt prompt=hello",
+            "2026-03-12 10:00:03.000 [LLM-AUDIT] traceId=t10 stage=response provider=openai model=gpt content=The user, who is clearly knowledgeable, needs a list of Chinese market news sources in a specific JSON format. The goal is a clean JSON array with details on each source."
+        });
+
+        var service = new SourceGovernanceReadService(db, env);
+        var logs = await service.GetLlmConversationLogsAsync(10, "t10");
+
+        var item = Assert.Single(logs);
+        Assert.Equal("返回内容包含中间推理，已脱敏。", item.ResponseText);
+    }
+
     private static AppDbContext CreateDb()
     {
         var options = new DbContextOptionsBuilder<AppDbContext>()

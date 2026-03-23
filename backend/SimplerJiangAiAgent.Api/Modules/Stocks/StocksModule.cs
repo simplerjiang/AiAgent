@@ -20,26 +20,32 @@ public sealed class StocksModule : IModule
     {
         // 爬虫配置（预留反爬/代理池）
         services.Configure<StockCrawlerOptions>(configuration.GetSection(StockCrawlerOptions.SectionName));
+        var crawlerOptions = configuration.GetSection(StockCrawlerOptions.SectionName).Get<StockCrawlerOptions>() ?? new StockCrawlerOptions();
+        var stockHttpTimeout = TimeSpan.FromSeconds(Math.Clamp(crawlerOptions.HttpTimeoutSeconds, 5, 60));
 
         // 来源爬虫（占位实现，后续替换为真实解析逻辑）
         services.AddHttpClient();
-        services.AddTransient<IStockCrawlerSource, EastmoneyStockCrawler>();
-        services.AddTransient<IStockCrawlerSource, TencentStockCrawler>();
-        services.AddTransient<IStockCrawlerSource, SinaStockCrawler>();
-        services.AddTransient<IStockCrawlerSource, BaiduStockCrawler>();
-        services.AddTransient<IStockFundamentalSnapshotService, EastmoneyFundamentalSnapshotService>();
+        services.AddHttpClient<EastmoneyStockCrawler>(client => ConfigureStockHttpClient(client, stockHttpTimeout));
+        services.AddHttpClient<TencentStockCrawler>(client => ConfigureStockHttpClient(client, stockHttpTimeout));
+        services.AddHttpClient<SinaStockCrawler>(client => ConfigureStockHttpClient(client, stockHttpTimeout));
+        services.AddTransient<BaiduStockCrawler>();
+        services.AddTransient<IStockCrawlerSource>(serviceProvider => serviceProvider.GetRequiredService<EastmoneyStockCrawler>());
+        services.AddTransient<IStockCrawlerSource>(serviceProvider => serviceProvider.GetRequiredService<TencentStockCrawler>());
+        services.AddTransient<IStockCrawlerSource>(serviceProvider => serviceProvider.GetRequiredService<SinaStockCrawler>());
+        services.AddTransient<IStockCrawlerSource>(serviceProvider => serviceProvider.GetRequiredService<BaiduStockCrawler>());
+        services.AddHttpClient<IStockFundamentalSnapshotService, EastmoneyFundamentalSnapshotService>(client => ConfigureStockHttpClient(client, stockHttpTimeout));
         services.AddSingleton<IStockCrawler, CompositeStockCrawler>();
         services.Configure<HighFrequencyQuoteOptions>(configuration.GetSection(HighFrequencyQuoteOptions.SectionName));
         services.Configure<TradingPlanTriggerOptions>(configuration.GetSection(TradingPlanTriggerOptions.SectionName));
         services.Configure<TradingPlanReviewOptions>(configuration.GetSection(TradingPlanReviewOptions.SectionName));
         services.AddScoped<IActiveWatchlistService, ActiveWatchlistService>();
-        services.AddScoped<ILocalFactIngestionService, LocalFactIngestionService>();
+        services.AddHttpClient<ILocalFactIngestionService, LocalFactIngestionService>(client => ConfigureStockHttpClient(client, stockHttpTimeout));
         services.AddScoped<ILocalFactAiEnrichmentService, LocalFactAiEnrichmentService>();
-        services.AddScoped<ILocalFactArticleReadService, LocalFactArticleReadService>();
+        services.AddHttpClient<ILocalFactArticleReadService, LocalFactArticleReadService>(client => ConfigureStockHttpClient(client, stockHttpTimeout));
         services.AddScoped<IQueryLocalFactDatabaseTool, QueryLocalFactDatabaseTool>();
         services.AddScoped<IStockDataService, StockDataService>();
         services.AddScoped<IStockHistoryService, StockHistoryService>();
-        services.AddTransient<IStockSearchService, StockSearchService>();
+        services.AddHttpClient<IStockSearchService, StockSearchService>(client => ConfigureStockHttpClient(client, stockHttpTimeout));
         services.Configure<StockCopilotSearchOptions>(configuration.GetSection(StockCopilotSearchOptions.SectionName));
         services.AddScoped<IStockAgentOrchestrator, StockAgentOrchestrator>();
         services.AddScoped<IStockAgentHistoryService, StockAgentHistoryService>();
@@ -58,6 +64,11 @@ public sealed class StocksModule : IModule
         services.AddScoped<IStockPositionGuidanceService, StockPositionGuidanceService>();
         services.AddHostedService<TradingPlanTriggerWorker>();
         services.AddHostedService<TradingPlanReviewWorker>();
+    }
+
+    private static void ConfigureStockHttpClient(HttpClient client, TimeSpan timeout)
+    {
+        client.Timeout = timeout;
     }
 
     public void MapEndpoints(IEndpointRouteBuilder app)

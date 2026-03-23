@@ -240,10 +240,10 @@ opencode
 - [x] GOAL-AGENT-001-R2 Agent 职责重切与推理收口（stock/sector/financial/trend 边界重划、marketReports 抗污染、代码先算特征、commander 覆盖率/冲突/降级惩罚）
 - [x] GOAL-AGENT-001-R3 回放校准闭环与验收基线（历史回放样本、1/3/5/10 日收益对齐、命中率/Brier score/分组胜率、开发者可观测验收指标）
 - [x] GOAL-AGENT-001-R4 Copilot 风格 MCP 工具运行时基础层（股票 K 线 MCP、分时图 MCP、策略 MCP、新闻 MCP、搜索 MCP/Tavily 受控兜底；统一 tool envelope、governor policy class、trace/cache/degradedFlags/evidence/features 输出，作为后续把多 Agent 改造成类似 Copilot 的直接能力层）
-- [ ] GOAL-AGENT-002 股票 Copilot 会话化编排与产品层（2026-03-22 已完成父级规划：下一阶段不再继续堆工具，而是把现有 evidence/replay/MCP 底座变成真正类似 GitHub Copilot 的股票协驾层。切片包括：P0 运行态稳定性与输出安全闸门、R1 会话 contract 与 planner/governor 时间线、R2 股票 Copilot 面板 UX、R3 动作化工作流集成、R4 Copilot 验收与 replay 指标。）
-- [ ] GOAL-AGENT-002-P0 运行态稳定性与输出安全闸门（优先修复直接阻塞 Copilot 的高优先级 bug：`情绪轮动` sectors API 500、图表未重新命中 `/api/stocks/chart`、raw reasoning 外泄、developer-mode 脏输出展示与疑似后端崩溃风险。）
+- [ ] GOAL-AGENT-002 股票 Copilot 会话化编排与产品层（2026-03-22 已完成父级规划；截至 2026-03-23，P0 运行态稳定性与输出安全闸门、R1 会话 contract 与 planner/governor 时间线、R2 股票 Copilot 面板 UX 已完成，当前剩余重点收口到 R3 动作化工作流与 R4 产品验收指标。）
+- [x] GOAL-AGENT-002-P0 运行态稳定性与输出安全闸门（已完成：修复直接阻塞 Copilot 的高优先级 bug，包括 `情绪轮动` sectors API 500、图表重试与运行态稳定性、raw reasoning 外泄、developer-mode 脏输出展示与 MCP 请求取消误报 500 等问题。）
 - [x] GOAL-AGENT-002-R1 会话 Contract 与 planner/governor 时间线（已于 2026-03-22 完成第一可执行切片：后端新增 `Session/Turn/PlanStep/ToolCall/ToolResult/FinalAnswer/FollowUpAction` contract、`IStockCopilotSessionService` / `StockCopilotSessionService`，并开放 `POST /api/stocks/copilot/turns/draft` 把用户问题组装成 planner/governor timeline 草案。`StockSearchMcp` 在草案阶段已应用 `external_gated` 审批，相关定向测试 3/3 通过。）
-- [ ] GOAL-AGENT-002-R2 股票 Copilot 面板 UX（问题输入、计划时间线、工具调用卡片、evidence/source 展示、follow-up action chips、最近一轮回放。）
+- [x] GOAL-AGENT-002-R2 股票 Copilot 面板 UX（已于 2026-03-23 完成：股票页右侧已接入会话化 Copilot 面板，包含问题输入、计划时间线、工具调用卡片、evidence/source 展示、follow-up action chips、最近一轮回放，以及已批准工具执行后的结果摘要与证据回填。定向单测 `StockInfoTab.spec.js` 54/54 通过，Browser MCP 已在真实股票页完成“提问 -> 看计划 -> 执行工具 -> evidence/source 落屏”验收。）
 - [ ] GOAL-AGENT-002-R3 动作化工作流集成（把 Copilot 回答接到图表、市场上下文、新闻证据、交易计划草稿等实际工作流，形成“下一步做什么”的动作卡。）
 - [ ] GOAL-AGENT-002-R4 Copilot 验收与 replay 指标（建立工具调用效率、evidence 覆盖率、local-first 命中率、外部搜索触发率、traceability 与 action-card 质量等产品指标。）
 - [ ] GOAL-015 深度盘面属性扩充与 Agent 指挥体系重构（Step 3 已继续完成“基本面快照富事实 + 数据库缓存优先刷新”增强：`StockCompanyProfiles` 新增 `FundamentalFactsJson/FundamentalUpdatedAt`，详情页先读 `/api/stocks/detail/cache` 的数据库快照，再由 `/api/stocks/detail` 实时抓东财公司概况/股东研究并回写；本轮进一步补上股票信息卡片真实加载进度，将“缓存回显 / 腾讯行情 / 东方财富基本面”拆成可视化阶段，并新增 `/api/stocks/fundamental-snapshot` 轻量接口配合前端独立显示东财刷新状态。剩余主要是 Edge/UI 验收与更大范围联调。）

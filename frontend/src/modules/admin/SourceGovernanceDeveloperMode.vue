@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
+import { summarizeReasoningSafeText } from '../../utils/reasoningSanitizer'
 
 const DEV_MODE_KEY = 'source_governance_dev_mode'
 
@@ -43,8 +44,12 @@ const isLoggedIn = computed(() => Boolean(token.value))
 const selectedLlmRequestJson = computed(() => formatPrettyJson(extractJsonCandidate(selectedLlmLog.value?.requestText || '')))
 const selectedLlmResponseJson = computed(() => formatPrettyJson(extractJsonCandidate(selectedLlmLog.value?.responseText || '')))
 const selectedLlmErrorJson = computed(() => formatPrettyJson(extractJsonCandidate(selectedLlmLog.value?.errorText || '')))
-const selectedLlmRawPreview = computed(() => summarizeLogText((selectedLlmLog.value?.lines || []).join('\n')))
-const REASONING_SCAFFOLD_LINE_PATTERN = /(\*{0,2}\s*)?(considering the request|analyzing the request|analyzing the scenario|refining the strategy|refining the approach|simulating the search|defining the scope|assessing risk elements|synthesizing risk insights|my thought process|thought process|let's break this down before answering|let's break this down|before answering|i need to understand|i'm zeroing in on)(\*{0,2}\s*)?[:：-]?\s*/gi
+const selectedLlmRequestSummary = computed(() => summarizeLogText(selectedLlmLog.value?.requestText || ''))
+const selectedLlmResponseSummary = computed(() => summarizeAuditResponseText(selectedLlmLog.value?.responseText || ''))
+const selectedLlmErrorSummary = computed(() => summarizeLogText(selectedLlmLog.value?.errorText || ''))
+const selectedLlmRawPreview = computed(() => summarizeAuditResponseText((selectedLlmLog.value?.lines || []).join('\n')))
+
+const SUSPICIOUS_NON_JSON_RESPONSE_FALLBACK = '返回内容不是结构化 JSON，已按安全摘要收口。'
 
 const authHeaders = () => ({
   Authorization: `Bearer ${token.value}`
@@ -245,15 +250,20 @@ const closeLlmLogViewer = () => {
 }
 
 const summarizeLogText = value => {
-  const normalized = String(value || '')
-    .replace(REASONING_SCAFFOLD_LINE_PATTERN, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-  if (!normalized) {
-    return '返回内容包含中间推理，已脱敏。'
+  return summarizeReasoningSafeText(value)
+}
+
+const summarizeAuditResponseText = value => {
+  const normalized = summarizeReasoningSafeText(value, SUSPICIOUS_NON_JSON_RESPONSE_FALLBACK)
+  if (!normalized || normalized === SUSPICIOUS_NON_JSON_RESPONSE_FALLBACK) {
+    return SUSPICIOUS_NON_JSON_RESPONSE_FALLBACK
   }
 
-  return normalized.length > 180 ? `${normalized.slice(0, 180)}...` : normalized
+  if (looksLikeSuspiciousNonJsonAuditResponse(normalized)) {
+    return SUSPICIOUS_NON_JSON_RESPONSE_FALLBACK
+  }
+
+  return normalized
 }
 
 const formatPrettyJson = candidate => {
@@ -284,6 +294,25 @@ const extractJsonCandidate = raw => {
 
   return tryExtractJson(trimmed)
 }
+
+const looksLikeSuspiciousNonJsonAuditResponse = value => {
+  const normalized = String(value || '').replace(/\s+/g, ' ').trim()
+  if (!normalized || extractJsonCandidate(normalized)) {
+    return false
+  }
+
+  if (looksLikeNetworkOrTransportError(normalized)) {
+    return false
+  }
+
+  const englishTokens = normalized.match(/[A-Za-z]{4,}/g) || []
+  const containsCjk = /[\u3400-\u9fff]/.test(normalized)
+  const containsMarkdownNoise = /[*_`]/.test(normalized)
+
+  return englishTokens.length >= 6 && (containsCjk || containsMarkdownNoise)
+}
+
+const looksLikeNetworkOrTransportError = value => /https?:\/\/|uri=|baseurl|proxy|network|connection|timeout|transport|inner=/i.test(String(value || ''))
 
 const tryExtractJson = value => {
   const trimmed = String(value || '').trim()
@@ -419,7 +448,7 @@ onMounted(async () => {
                 <button class="secondary" @click.stop="jumpToTrace(item.traceId)" :disabled="!item.traceId">Trace</button>
               </div>
               <pre class="llm-log-raw">请求：{{ summarizeLogText(item.requestText) }}
-返回：{{ summarizeLogText(item.responseText || item.errorText) }}</pre>
+返回：{{ item.status === 'error' ? summarizeLogText(item.errorText) : summarizeAuditResponseText(item.responseText || item.errorText) }}</pre>
             </li>
           </ul>
         </section>
@@ -443,7 +472,7 @@ onMounted(async () => {
 
             <section v-if="selectedLlmLog.requestText" class="log-viewer-section">
               <h4>请求摘要</h4>
-              <pre class="log-viewer-raw">{{ selectedLlmLog.requestText }}</pre>
+              <pre class="log-viewer-raw">{{ selectedLlmRequestSummary }}</pre>
             </section>
 
             <section v-if="selectedLlmRequestJson" class="log-viewer-section">
@@ -453,7 +482,7 @@ onMounted(async () => {
 
             <section v-if="selectedLlmLog.responseText" class="log-viewer-section">
               <h4>返回摘要</h4>
-              <pre class="log-viewer-raw">{{ selectedLlmLog.responseText }}</pre>
+              <pre class="log-viewer-raw">{{ selectedLlmResponseSummary }}</pre>
             </section>
 
             <section v-if="selectedLlmResponseJson" class="log-viewer-section">
@@ -463,7 +492,7 @@ onMounted(async () => {
 
             <section v-if="selectedLlmLog.errorText" class="log-viewer-section">
               <h4>异常信息</h4>
-              <pre class="log-viewer-raw">{{ selectedLlmLog.errorText }}</pre>
+              <pre class="log-viewer-raw">{{ selectedLlmErrorSummary }}</pre>
             </section>
 
             <section v-if="selectedLlmErrorJson" class="log-viewer-section">

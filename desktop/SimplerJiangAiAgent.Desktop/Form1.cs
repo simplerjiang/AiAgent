@@ -1,6 +1,6 @@
 using System.Diagnostics;
 using System.Net.Http;
-using System.Net.Sockets;
+using System.Text;
 using System.Text.Json;
 using Microsoft.Web.WebView2.WinForms;
 
@@ -9,10 +9,23 @@ namespace SimplerJiangAiAgent.Desktop;
 public partial class Form1 : Form
 {
     private const int PreferredBackendPort = 5119;
+    private const int BackendHealthFailureThreshold = 2;
+    private static readonly TimeSpan BackendStartupTimeout = TimeSpan.FromSeconds(90);
+    private static readonly TimeSpan BackendHealthProbeInterval = TimeSpan.FromSeconds(2);
     private static readonly HttpClient HealthClient = new() { Timeout = TimeSpan.FromSeconds(2) };
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
     private readonly WebView2 _webView;
+    private readonly System.Windows.Forms.Timer _backendHealthTimer;
+    private readonly object _backendLogSync = new();
     private Process? _backendProcess;
+    private BackendLaunchCommand? _backendLaunchCommand;
+    private string? _backendBaseUrl;
+    private string? _backendDataRoot;
+    private bool _ownsBackendProcess;
+    private bool _backendReady;
+    private bool _isRecoveringBackend;
+    private bool _isClosing;
+    private int _backendConsecutiveHealthFailures;
 #if DEBUG
     private readonly TextBox _debugTextBox;
     private readonly Button _debugButton;
@@ -30,6 +43,11 @@ public partial class Form1 : Form
         {
             Dock = DockStyle.Fill
         };
+        _backendHealthTimer = new System.Windows.Forms.Timer
+        {
+            Interval = (int)BackendHealthProbeInterval.TotalMilliseconds
+        };
+        _backendHealthTimer.Tick += OnBackendHealthTimerTickAsync;
 
         Controls.Add(_webView);
 #if DEBUG
@@ -72,15 +90,21 @@ public partial class Form1 : Form
             var backendBaseUrl = await EnsureBackendAsync();
             var startupUrl = await GetStartupUrlAsync(backendBaseUrl);
             await _webView.EnsureCoreWebView2Async();
-#if DEBUG
-            _webView.CoreWebView2.ProcessFailed += (_, args) => AppendDebug($"WebView2 进程异常: {args.Reason}");
             _webView.CoreWebView2.NavigationCompleted += (_, args) =>
             {
-                if (!args.IsSuccess)
+                if (args.IsSuccess)
                 {
-                    AppendDebug($"页面加载失败: {args.WebErrorStatus}");
+                    return;
+                }
+
+                AppendDebug($"页面加载失败: {args.WebErrorStatus}");
+                if (_ownsBackendProcess && !_isClosing)
+                {
+                    _ = RecoverBackendAsync($"页面导航失败: {args.WebErrorStatus}");
                 }
             };
+#if DEBUG
+            _webView.CoreWebView2.ProcessFailed += (_, args) => AppendDebug($"WebView2 进程异常: {args.Reason}");
 
             AppDomain.CurrentDomain.UnhandledException += (_, args) =>
             {
@@ -106,76 +130,37 @@ public partial class Form1 : Form
     private async Task<string> EnsureBackendAsync()
     {
         var existingUrl = $"http://localhost:{PreferredBackendPort}";
+        _backendBaseUrl = existingUrl;
+
         if (await IsHealthyAsync(existingUrl))
         {
+            _ownsBackendProcess = false;
+            _backendReady = true;
             AppendDebug($"复用已运行后端: {existingUrl}");
             return existingUrl;
         }
 
-        var launchCommand = FindPackagedBackendLaunchCommand();
-        if (launchCommand is null)
+        _backendLaunchCommand = FindPackagedBackendLaunchCommand();
+        if (_backendLaunchCommand is null)
         {
             throw new InvalidOperationException("未找到可启动的后端程序。请使用打包后的发布目录运行桌面程序，或先手工启动本地后端。");
         }
 
-        var port = FindAvailablePort(PreferredBackendPort, PreferredBackendPort + 20);
-        var baseUrl = $"http://localhost:{port}";
-        var dataRoot = Path.Combine(
+        _backendDataRoot = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "SimplerJiangAiAgent");
-        Directory.CreateDirectory(dataRoot);
+        Directory.CreateDirectory(_backendDataRoot);
 
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = launchCommand.FileName,
-            Arguments = launchCommand.Arguments,
-            WorkingDirectory = launchCommand.WorkingDirectory,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
-        startInfo.Environment["ASPNETCORE_ENVIRONMENT"] = "Production";
-        startInfo.Environment["DOTNET_ENVIRONMENT"] = "Production";
-        startInfo.Environment["ASPNETCORE_URLS"] = baseUrl;
-        startInfo.Environment["SJAI_DATA_ROOT"] = dataRoot;
-
-        _backendProcess = Process.Start(startInfo);
-        if (_backendProcess is null)
-        {
-            throw new InvalidOperationException("后端启动失败，未能创建后端进程。");
-        }
-
-        AppendDebug($"已启动本地后端进程: {_backendProcess.Id}, 地址: {baseUrl}");
-        if (!await WaitForHealthyAsync(baseUrl, _backendProcess, TimeSpan.FromSeconds(20)))
-        {
-            throw new InvalidOperationException("后端启动超时，请检查发布目录或日志。");
-        }
-
-        return baseUrl;
+        await StartManagedBackendAsync(existingUrl, _backendDataRoot);
+        StartBackendHealthMonitoring();
+        return existingUrl;
     }
 
     private void OnFormClosed(object? sender, FormClosedEventArgs e)
     {
-        if (_backendProcess is null)
-        {
-            return;
-        }
-
-        try
-        {
-            if (!_backendProcess.HasExited)
-            {
-                _backendProcess.Kill(entireProcessTree: true);
-                _backendProcess.WaitForExit(3000);
-            }
-        }
-        catch
-        {
-        }
-        finally
-        {
-            _backendProcess.Dispose();
-            _backendProcess = null;
-        }
+        _isClosing = true;
+        _backendHealthTimer.Stop();
+        StopOwnedBackendProcess();
     }
 
     private static BackendLaunchCommand? FindPackagedBackendLaunchCommand()
@@ -215,6 +200,234 @@ public partial class Form1 : Form
         }
 
         return false;
+    }
+
+    private async void OnBackendHealthTimerTickAsync(object? sender, EventArgs e)
+    {
+        if (_isClosing || _isRecoveringBackend || !_ownsBackendProcess || !_backendReady || string.IsNullOrWhiteSpace(_backendBaseUrl))
+        {
+            return;
+        }
+
+        if (await IsHealthyAsync(_backendBaseUrl))
+        {
+            _backendConsecutiveHealthFailures = 0;
+            return;
+        }
+
+        _backendConsecutiveHealthFailures += 1;
+        AppendDebug($"后端健康检查失败，第 {_backendConsecutiveHealthFailures} 次。地址: {_backendBaseUrl}");
+        if (_backendConsecutiveHealthFailures < BackendHealthFailureThreshold)
+        {
+            return;
+        }
+
+        await RecoverBackendAsync("健康检查连续失败");
+    }
+
+    private async Task RecoverBackendAsync(string reason)
+    {
+        if (_isClosing || _isRecoveringBackend || !_ownsBackendProcess || string.IsNullOrWhiteSpace(_backendBaseUrl) || string.IsNullOrWhiteSpace(_backendDataRoot))
+        {
+            return;
+        }
+
+        _isRecoveringBackend = true;
+        _backendReady = false;
+        _backendHealthTimer.Stop();
+
+        try
+        {
+            AppendDebug($"检测到后端失联，准备自动恢复。原因: {reason}");
+            StopOwnedBackendProcess();
+            await StartManagedBackendAsync(_backendBaseUrl, _backendDataRoot);
+            _backendConsecutiveHealthFailures = 0;
+            AppendDebug("后端自动恢复完成，准备刷新页面。");
+            ReloadFrontend();
+        }
+        catch (Exception ex)
+        {
+            AppendDebug($"后端自动恢复失败: {ex.Message}");
+        }
+        finally
+        {
+            _isRecoveringBackend = false;
+            if (!_isClosing && _ownsBackendProcess)
+            {
+                _backendHealthTimer.Start();
+            }
+        }
+    }
+
+    private async Task StartManagedBackendAsync(string baseUrl, string dataRoot)
+    {
+        if (_backendLaunchCommand is null)
+        {
+            throw new InvalidOperationException("未找到后端启动命令。请检查打包后的 Backend 目录。");
+        }
+
+        var process = CreateBackendProcess(_backendLaunchCommand, baseUrl, dataRoot);
+        if (!process.Start())
+        {
+            process.Dispose();
+            throw new InvalidOperationException("后端启动失败，未能创建后端进程。");
+        }
+
+        _backendProcess = process;
+        _ownsBackendProcess = true;
+        _backendConsecutiveHealthFailures = 0;
+        AttachBackendProcessDiagnostics(process, dataRoot);
+        process.BeginOutputReadLine();
+        process.BeginErrorReadLine();
+
+        AppendDebug($"已启动本地后端进程: {process.Id}, 地址: {baseUrl}");
+        if (!await WaitForHealthyAsync(baseUrl, process, BackendStartupTimeout))
+        {
+            var exitCode = TryGetProcessExitCode(process);
+            StopOwnedBackendProcess();
+            throw new InvalidOperationException($"后端启动超时，请检查 {Path.Combine(dataRoot, "logs")}。{(exitCode is null ? string.Empty : $" 进程退出码: {exitCode}.")}".Trim());
+        }
+
+        _backendReady = true;
+    }
+
+    private static Process CreateBackendProcess(BackendLaunchCommand launchCommand, string baseUrl, string dataRoot)
+    {
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = launchCommand.FileName,
+            Arguments = launchCommand.Arguments,
+            WorkingDirectory = launchCommand.WorkingDirectory,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8
+        };
+        startInfo.Environment["ASPNETCORE_ENVIRONMENT"] = "Production";
+        startInfo.Environment["DOTNET_ENVIRONMENT"] = "Production";
+        startInfo.Environment["ASPNETCORE_URLS"] = baseUrl;
+        startInfo.Environment["SJAI_DATA_ROOT"] = dataRoot;
+
+        return new Process
+        {
+            StartInfo = startInfo,
+            EnableRaisingEvents = true
+        };
+    }
+
+    private void AttachBackendProcessDiagnostics(Process process, string dataRoot)
+    {
+        var logDirectory = Path.Combine(dataRoot, "logs");
+        Directory.CreateDirectory(logDirectory);
+        var stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
+        var stdoutPath = Path.Combine(logDirectory, $"desktop-backend-{stamp}.stdout.log");
+        var stderrPath = Path.Combine(logDirectory, $"desktop-backend-{stamp}.stderr.log");
+
+        process.OutputDataReceived += (_, args) => AppendBackendLogLine(stdoutPath, args.Data);
+        process.ErrorDataReceived += (_, args) => AppendBackendLogLine(stderrPath, args.Data);
+        process.Exited += async (_, _) =>
+        {
+            AppendBackendLogLine(stderrPath, $"[host] backend exited with code {TryGetProcessExitCode(process)?.ToString() ?? "unknown"}");
+            if (_isClosing || !_backendReady || !_ownsBackendProcess || !ReferenceEquals(process, _backendProcess))
+            {
+                return;
+            }
+
+            await RecoverBackendAsync("后端进程异常退出");
+        };
+    }
+
+    private void AppendBackendLogLine(string logPath, string? content)
+    {
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            return;
+        }
+
+        var line = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] {content}{Environment.NewLine}";
+        lock (_backendLogSync)
+        {
+            File.AppendAllText(logPath, line);
+        }
+    }
+
+    private void StartBackendHealthMonitoring()
+    {
+        if (_isClosing || !_ownsBackendProcess)
+        {
+            return;
+        }
+
+        _backendConsecutiveHealthFailures = 0;
+        _backendHealthTimer.Stop();
+        _backendHealthTimer.Start();
+    }
+
+    private void ReloadFrontend()
+    {
+        if (IsDisposed)
+        {
+            return;
+        }
+
+        if (InvokeRequired)
+        {
+            BeginInvoke(ReloadFrontend);
+            return;
+        }
+
+        if (_webView.CoreWebView2 is not null)
+        {
+            _webView.CoreWebView2.Reload();
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(_backendBaseUrl))
+        {
+            _webView.Source = new Uri(_backendBaseUrl);
+        }
+    }
+
+    private void StopOwnedBackendProcess()
+    {
+        var process = _backendProcess;
+        _backendProcess = null;
+        _backendReady = false;
+
+        if (!_ownsBackendProcess || process is null)
+        {
+            return;
+        }
+
+        try
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+                process.WaitForExit(3000);
+            }
+        }
+        catch
+        {
+        }
+        finally
+        {
+            process.Dispose();
+        }
+    }
+
+    private static int? TryGetProcessExitCode(Process process)
+    {
+        try
+        {
+            return process.HasExited ? process.ExitCode : null;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private static async Task<bool> IsHealthyAsync(string baseUrl)
@@ -374,38 +587,6 @@ public partial class Form1 : Form
 
         var summary = string.Join(Environment.NewLine, lines);
         return summary.Length <= 500 ? summary : summary[..500] + "...";
-    }
-
-    private static int FindAvailablePort(int startInclusive, int endExclusive)
-    {
-        for (var port = startInclusive; port < endExclusive; port++)
-        {
-            if (IsPortAvailable(port))
-            {
-                return port;
-            }
-        }
-
-        throw new InvalidOperationException($"未找到可用本地端口，尝试范围 {startInclusive}-{endExclusive - 1}。");
-    }
-
-    private static bool IsPortAvailable(int port)
-    {
-        TcpListener? listener = null;
-        try
-        {
-            listener = new TcpListener(System.Net.IPAddress.Loopback, port);
-            listener.Start();
-            return true;
-        }
-        catch (SocketException)
-        {
-            return false;
-        }
-        finally
-        {
-            listener?.Stop();
-        }
     }
 
 #if DEBUG

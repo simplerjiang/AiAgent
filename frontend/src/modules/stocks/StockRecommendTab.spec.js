@@ -90,7 +90,9 @@ describe('StockRecommendTab', () => {
     const encoder = new TextEncoder()
     const stream = new ReadableStream({
       start(controller) {
-        controller.enqueue(encoder.encode('data: **Considering the Request** 你好\n\n'))
+        controller.enqueue(encoder.encode('data: **Initiating Market Analysis** **Refining Search Strategies**\n\n'))
+        controller.enqueue(encoder.encode('data: **Adapting Query Approach** **Analyzing Current Context**\n\n'))
+        controller.enqueue(encoder.encode('data: **Reviewing Market Trends** 你好\n\n'))
         controller.enqueue(encoder.encode('data: 世界\n\n'))
         controller.enqueue(encoder.encode('data: [DONE]\n\n'))
         controller.close()
@@ -120,6 +122,44 @@ describe('StockRecommendTab', () => {
 
     const assistant = chatWindow.vm.chatMessages.find(item => item.role === 'assistant')
     expect(assistant.content).toBe('你好世界')
+  })
+
+  it('strips english reasoning narrative before chinese output in stream', async () => {
+    const encoder = new TextEncoder()
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode("data: I'm currently dissecting the parameters of this request. The core objective is to offer stock market insights.\n\n"))
+        controller.enqueue(encoder.encode('data: 你好\n\n'))
+        controller.enqueue(encoder.encode('data: [DONE]\n\n'))
+        controller.close()
+      }
+    })
+
+    const fetchMock = vi.fn(async (url) => {
+      if (url === '/api/llm/chat/stream/openai') {
+        return {
+          ok: true,
+          status: 200,
+          body: stream,
+          text: async () => '',
+          json: async () => ({})
+        }
+      }
+
+      return makeResponse({ ok: false, status: 404 })
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    const wrapper = mount(StockRecommendTab)
+    await flushPromises()
+
+    const chatWindow = wrapper.findComponent({ name: 'ChatWindow' })
+    await chatWindow.vm.sendChat('请给我一份测试推荐')
+    await flushPromises()
+
+    const assistant = chatWindow.vm.chatMessages.find(item => item.role === 'assistant')
+    expect(assistant.content).toBe('你好')
   })
 
   it('renders markdown content', async () => {

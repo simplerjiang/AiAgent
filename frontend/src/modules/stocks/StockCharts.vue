@@ -21,6 +21,10 @@ const props = defineProps({
     type: String,
     default: 'day'
   },
+  focusedView: {
+    type: String,
+    default: ''
+  },
   aiLevels: {
     type: Object,
     default: null
@@ -376,6 +380,22 @@ watch(featureVisibilityByView, async () => {
 
 watch(() => props.interval, interval => {
   syncKlineInterval(interval)
+})
+
+watch(() => props.focusedView, viewId => {
+  if (!viewId || activeView.value === viewId) {
+    return
+  }
+
+  if (viewId === 'minute') {
+    activeView.value = 'minute'
+    return
+  }
+
+  if (isKlineChartView(viewId)) {
+    activeView.value = viewId
+    syncKlineInterval(viewId)
+  }
 })
 
 watch(activeView, async () => {

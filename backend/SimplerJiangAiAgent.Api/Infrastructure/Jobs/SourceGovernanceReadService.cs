@@ -31,6 +31,64 @@ public sealed class SourceGovernanceReadService : ISourceGovernanceReadService
     private static readonly Regex LeadingReasoningTitleBlockRegex = new(
         $"^(?:\\s|[*#>`\"'_\\-])*(?:(?:\\*{{0,2}}{EnglishTitleWordPattern}(?:\\s+{EnglishTitleWordPattern}){{0,7}}\\*{{0,2}})(?:[:：-]?\\s*)){{2,}}",
         RegexOptions.Compiled);
+    private static readonly Regex LeadingEmphasizedTitleSequenceRegex = new(
+        "^(?:\\s|[*#>`\"'_\\-])*(?:\\*{1,2}[A-Z][A-Za-z'&/-]*(?:\\s+[A-Z][A-Za-z'&/-]*){1,7}\\*{1,2}(?:\\s+|[:：-]?\\s*)){2,}",
+        RegexOptions.Compiled);
+    private static readonly string[] LeadingEnglishReasoningNarrativeMarkers =
+    {
+        "i'm currently dissecting",
+        "i am currently dissecting",
+        "i'm now focusing on",
+        "i am now focusing on",
+        "here's how i'm approaching this",
+        "here is how i'm approaching this",
+        "the role is clear",
+        "the task is clear",
+        "the task is straightforward",
+        "the core objective is",
+        "i'll need to consider",
+        "i will need to consider",
+        "my analysis centers on",
+        "focusing on the core task",
+        "focusing on the core objective"
+    };
+    private static readonly string[] LeadingEnglishReasoningNarrativeActorMarkers =
+    {
+        "i'm",
+        "i am",
+        "i've",
+        "i have",
+        "i'll",
+        "i will",
+        "my ",
+        "here's",
+        "here is",
+        "let's",
+        "the user",
+        "the prompt",
+        "the task",
+        "the role",
+        "the goal"
+    };
+    private static readonly string[] LeadingEnglishReasoningNarrativeMetaMarkers =
+    {
+        "json array",
+        "structured json",
+        "prompt",
+        "task",
+        "objective",
+        "constraint",
+        "approach",
+        "analysis",
+        "analyzing",
+        "dissecting",
+        "focus",
+        "focusing",
+        "consider",
+        "generate",
+        "delivering",
+        "adhere"
+    };
 
     public SourceGovernanceReadService(AppDbContext dbContext, AppRuntimePaths runtimePaths)
     {
@@ -701,19 +759,21 @@ public sealed class SourceGovernanceReadService : ISourceGovernanceReadService
 
         sanitized = Regex.Replace(
             sanitized,
-            "(\\*{0,2}\\s*)?(considering the request|analyzing the request|analyzing the scenario|refining the strategy|refining the approach|simulating the search|defining the scope|assessing risk elements|synthesizing risk insights|my thought process|thought process|let's break this down before answering|let's break this down|before answering|i need to understand|i'm zeroing in on)(\\*{0,2}\\s*)?[:：-]?\\s*",
+            "(\\*{0,2}\\s*)?(initiating market analysis|refining search strategies|adapting query approach|analyzing current context|reviewing market trends|considering the request|analyzing the request|analyzing the scenario|analyzing the data|refining the strategy|refining the approach|simulating the search|simulating information retrieval|defining the scope|interpreting the data|formulating the response|assessing risk elements|synthesizing risk insights|my thought process|thought process|let's break this down before answering|let's break this down|before answering|i need to understand|i'm zeroing in on)(\\*{0,2}\\s*)?[:：-]?\\s*",
             string.Empty,
             RegexOptions.IgnoreCase);
 
         while (true)
         {
-            var nextValue = LeadingReasoningTitleBlockRegex.Replace(sanitized, string.Empty);
+            var nextValue = LeadingEmphasizedTitleSequenceRegex.Replace(sanitized, string.Empty);
+            nextValue = LeadingReasoningTitleBlockRegex.Replace(nextValue, string.Empty);
+            nextValue = StripLeadingEnglishReasoningNarrative(nextValue).TrimStart();
             if (ReferenceEquals(nextValue, sanitized) || nextValue == sanitized)
             {
                 break;
             }
 
-            sanitized = nextValue.TrimStart();
+            sanitized = nextValue;
         }
 
         sanitized = sanitized.Trim();
@@ -746,24 +806,110 @@ public sealed class SourceGovernanceReadService : ISourceGovernanceReadService
 
     private static bool ContainsReasoningScaffold(string value)
     {
-        return value.Contains("my thought process", StringComparison.OrdinalIgnoreCase)
+        return LooksLikeLeadingEnglishReasoningNarrative(value)
+            || value.Contains("my thought process", StringComparison.OrdinalIgnoreCase)
             || value.Contains("thought process", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("initiating market analysis", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("refining search strategies", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("adapting query approach", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("analyzing current context", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("reviewing market trends", StringComparison.OrdinalIgnoreCase)
             || value.Contains("defining the scope", StringComparison.OrdinalIgnoreCase)
             || value.Contains("considering the request", StringComparison.OrdinalIgnoreCase)
             || value.Contains("analyzing the request", StringComparison.OrdinalIgnoreCase)
             || value.Contains("analyzing the scenario", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("analyzing the data", StringComparison.OrdinalIgnoreCase)
             || value.Contains("refining the strategy", StringComparison.OrdinalIgnoreCase)
             || value.Contains("refining the approach", StringComparison.OrdinalIgnoreCase)
             || value.Contains("simulating the search", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("simulating information retrieval", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("interpreting the data", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("formulating the response", StringComparison.OrdinalIgnoreCase)
             || value.Contains("assessing risk elements", StringComparison.OrdinalIgnoreCase)
             || value.Contains("synthesizing risk insights", StringComparison.OrdinalIgnoreCase)
             || value.Contains("before answering", StringComparison.OrdinalIgnoreCase)
             || value.Contains("let's break this down", StringComparison.OrdinalIgnoreCase)
             || value.Contains("i need to understand", StringComparison.OrdinalIgnoreCase)
             || value.Contains("i'm zeroing in on", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("i'm currently dissecting", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("i am currently dissecting", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("i'm now focusing on", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("i am now focusing on", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("here's how i'm approaching this", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("here is how i'm approaching this", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("the role is clear", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("the task is clear", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("the task is straightforward", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("the core objective is", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("i'll need to consider", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("i will need to consider", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("my analysis centers on", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("focusing on the core task", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("focusing on the core objective", StringComparison.OrdinalIgnoreCase)
             || value.Contains("思考过程", StringComparison.OrdinalIgnoreCase)
             || value.Contains("推理过程", StringComparison.OrdinalIgnoreCase);
     }
+
+    private static string StripLeadingEnglishReasoningNarrative(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        var cutoff = FindFirstStructuredOrCjkIndex(value);
+        var prefix = value[..cutoff];
+        if (!LooksLikeLeadingEnglishReasoningNarrative(prefix))
+        {
+            return value;
+        }
+
+        return value[cutoff..].TrimStart();
+    }
+
+    private static bool LooksLikeLeadingEnglishReasoningNarrative(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        var normalized = Regex.Replace(value, "\\s+", " ").Trim();
+        if (normalized.Length < 24)
+        {
+            return false;
+        }
+
+        if (normalized.Any(IsCjkCharacter))
+        {
+            return false;
+        }
+
+        if (LeadingEnglishReasoningNarrativeMarkers.Any(marker => normalized.Contains(marker, StringComparison.OrdinalIgnoreCase)))
+        {
+            return true;
+        }
+
+        return LeadingEnglishReasoningNarrativeActorMarkers.Any(marker => normalized.Contains(marker, StringComparison.OrdinalIgnoreCase))
+            && LeadingEnglishReasoningNarrativeMetaMarkers.Any(marker => normalized.Contains(marker, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static int FindFirstStructuredOrCjkIndex(string value)
+    {
+        for (var index = 0; index < value.Length; index++)
+        {
+            var ch = value[index];
+            if (ch == '[' || ch == '{' || IsCjkCharacter(ch))
+            {
+                return index;
+            }
+        }
+
+        return value.Length;
+    }
+
+    private static bool IsCjkCharacter(char ch)
+        => ch >= '\u3400' && ch <= '\u9fff';
 
     private static string TryExtractJsonCandidate(string value)
     {

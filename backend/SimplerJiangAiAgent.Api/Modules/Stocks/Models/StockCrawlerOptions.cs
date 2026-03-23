@@ -9,4 +9,6 @@ public sealed class StockCrawlerOptions
 
     // 预留：代理池开关（当前不实现，仅占位）
     public bool EnableProxyPoolStub { get; set; } = false;
+
+    public int HttpTimeoutSeconds { get; set; } = 20;
 }

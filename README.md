@@ -1,4 +1,4 @@
-# Stock Copilot v0.0.2
+# Stock Copilot v0.0.3
 
 一个面向 A 股场景的本地优先桌面助手。
 
@@ -6,7 +6,7 @@
 
 完整开发说明、任务拆解、技术细节和自动化记录，请看 README.llm.md。
 
-## v0.0.2 最新功能
+## v0.0.3 最新功能
 
 - 股票终端已经形成完整工作台：支持分时、日 K、月 K、年 K，以及策略指标和图表叠加
 - 多 Agent 分析已经从“单句结论”升级为“观点 + 条件 + 风险 + 证据”的结构化输出
@@ -120,15 +120,15 @@
 
 ## 怎么安装
 
-推荐直接从 GitHub Releases 下载 v0.0.2 对应安装包：
+推荐直接从 GitHub Releases 下载 v0.0.3 对应安装包：
 
-- SimplerJiangAiAgent-Setup-0.0.2.exe
+- SimplerJiangAiAgent-Setup-0.0.3.exe
 
 发布页：<https://github.com/simplerjiang/StockCopilot/releases>
 
 如果你不想安装，也可以下载便携包：
 
-- SimplerJiangAiAgent-portable-0.0.2.zip
+- SimplerJiangAiAgent-portable-0.0.3.zip
 
 ## 第一次打开怎么用
 

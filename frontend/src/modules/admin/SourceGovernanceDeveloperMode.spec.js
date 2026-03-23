@@ -248,7 +248,7 @@ describe('SourceGovernanceDeveloperMode', () => {
         return makeResponse({ ok: true, status: 200, json: async () => ([]) })
       }
       if (target.includes('/source-governance/llm-logs')) {
-        return makeResponse({ ok: true, status: 200, json: async () => ({ items: [{ timestamp: '2026-03-12 10:00:00.000', level: 'LLM-AUDIT', status: 'response', provider: 'openai', model: 'gpt', traceId: 'trace-request-1', requestText: '{"symbol":"600000","messages":[{"role":"user","content":"hello"}]}', responseText: '{"answer":"ok","confidence":0.9}', errorText: '', requestRaw: 'request raw', responseRaw: 'response raw', errorRaw: '', lines: ['request raw', 'response raw'], raw: 'request raw\nresponse raw', stages: ['request', 'response'] }] }) })
+        return makeResponse({ ok: true, status: 200, json: async () => ({ items: [{ timestamp: '2026-03-12 10:00:00.000', level: 'LLM-AUDIT', status: 'response', provider: 'openai', model: 'gpt', traceId: 'trace-request-1', requestText: '{"symbol":"600000","messages":[{"role":"user","content":"hello"}]}', responseText: '**Interpreting the Data** **Formulating the Response** {"answer":"ok","confidence":0.9}', errorText: '', requestRaw: 'request raw', responseRaw: 'response raw', errorRaw: '', lines: ['request raw', 'response raw'], raw: 'request raw\nresponse raw', stages: ['request', 'response'] }] }) })
       }
       return makeResponse({ ok: false, status: 404 })
     })
@@ -268,12 +268,79 @@ describe('SourceGovernanceDeveloperMode', () => {
     expect(sections[0].text()).toContain('请求摘要')
     expect(sections[0].text()).toContain('"symbol":"600000"')
     expect(sections[2].text()).toContain('返回摘要')
-    expect(sections[2].text()).toContain('"answer":"ok"')
+    expect(sections[2].text()).toContain('{"answer":"ok","confidence":0.9}')
+
+    const logListText = wrapper.find('.llm-log-list').text()
+    expect(logListText).not.toContain('Interpreting the Data')
+    expect(logListText).not.toContain('Formulating the Response')
 
     const jsonViews = wrapper.findAll('.log-viewer-json')
     expect(jsonViews[0].text()).toContain('"symbol": "600000"')
     expect(jsonViews[0].text()).toContain('"content": "hello"')
     expect(jsonViews[1].text()).toContain('"answer": "ok"')
     expect(jsonViews[1].text()).toContain('"confidence": 0.9')
+  })
+
+  it('redacts historical mixed-language non-json response summaries', async () => {
+    localStorage.setItem('admin_token', 'token')
+
+    const fetchMock = vi.fn(async (url) => {
+      const target = String(url)
+      if (target.includes('/source-governance/overview')) {
+        return makeResponse({ ok: true, status: 200, json: async () => ({ activeSources: 0, quarantinedSources: 0, pendingCandidates: 0, pendingChanges: 0, rollbackCount7d: 0, recentErrorCount24h: 0 }) })
+      }
+      if (target.includes('/source-governance/sources') || target.includes('/source-governance/candidates') || target.includes('/source-governance/changes')) {
+        return makeResponse({ ok: true, status: 200, json: async () => ({ items: [] }) })
+      }
+      if (target.includes('/source-governance/errors')) {
+        return makeResponse({ ok: true, status: 200, json: async () => ([]) })
+      }
+      if (target.includes('/source-governance/llm-logs')) {
+        return makeResponse({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            items: [{
+              timestamp: '2026-03-23 13:08:53.708',
+              level: 'LLM-AUDIT',
+              status: 'response',
+              provider: 'default',
+              model: 'gpt',
+              traceId: 'trace-dirty-1',
+              requestText: '请求内容已脱敏；界面仅保留必要元数据与结构化 JSON。',
+              responseText: '中国最权威的财经媒体之一，深度报道和调查新闻质量高。" (One of the most authoritative financial media in China, with high-quality in-depth reports and investigative journalism.) For Eastmoney, it\'s `eastmoney`.',
+              errorText: '',
+              requestRaw: 'request raw',
+              responseRaw: 'response raw',
+              errorRaw: '',
+              lines: ['request raw', 'response raw'],
+              raw: 'request raw\nresponse raw',
+              stages: ['request', 'response']
+            }]
+          })
+        })
+      }
+      return makeResponse({ ok: false, status: 404 })
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    const wrapper = mount(SourceGovernanceDeveloperMode)
+    await flushPromises()
+
+    await wrapper.find('input[type="checkbox"]').setValue(true)
+    await flushPromises()
+
+    const logListText = wrapper.find('.llm-log-list').text()
+    expect(logListText).toContain('返回内容不是结构化 JSON，已按安全摘要收口。')
+    expect(logListText).not.toContain('One of the most authoritative financial media in China')
+
+    await wrapper.find('.llm-log-item').trigger('click')
+    await flushPromises()
+
+    const sections = wrapper.findAll('.log-viewer-section')
+    expect(sections[1].text()).toContain('返回摘要')
+    expect(sections[1].text()).toContain('返回内容不是结构化 JSON，已按安全摘要收口。')
+    expect(wrapper.text()).not.toContain('One of the most authoritative financial media in China')
   })
 })

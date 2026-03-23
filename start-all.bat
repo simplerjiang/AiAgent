@@ -45,7 +45,7 @@ start "SimplerJiangAiAgent.Desktop" "%PACKAGE_EXE%"
 echo Waiting for packaged backend health check...
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$healthUrl = '%HEALTH_URL%';" ^
-  "$deadline = (Get-Date).AddSeconds(60);" ^
+  "$deadline = (Get-Date).AddSeconds(90);" ^
   "do { try { $response = Invoke-WebRequest -UseBasicParsing $healthUrl -TimeoutSec 3; if ($response.Content -match '\"status\"\s*:\s*\"ok\"') { exit 0 } } catch {}; Start-Sleep -Milliseconds 500 } while ((Get-Date) -lt $deadline);" ^
   "Write-Host 'Packaged desktop backend did not become healthy in time.'; exit 1"
 if errorlevel 1 (
