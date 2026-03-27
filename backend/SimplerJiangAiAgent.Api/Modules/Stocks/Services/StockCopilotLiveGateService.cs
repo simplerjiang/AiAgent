@@ -444,6 +444,7 @@ public sealed class StockCopilotLiveGateService : IStockCopilotLiveGateService
         CancellationToken cancellationToken)
     {
         var input = ParseInputSummary(approvedCall.ToolCall.InputSummary);
+        var window = ParseWindowOptions(input);
         var toolTaskId = string.IsNullOrWhiteSpace(taskId)
             ? approvedCall.CallId
             : $"{taskId.Trim()}-{approvedCall.CallId}";
@@ -454,28 +455,28 @@ public sealed class StockCopilotLiveGateService : IStockCopilotLiveGateService
             {
                 StockMcpToolNames.CompanyOverview => MapOutcome(
                     approvedCall,
-                    await _mcpToolGateway.GetCompanyOverviewAsync(symbol, toolTaskId, cancellationToken),
+                    await _mcpToolGateway.GetCompanyOverviewAsync(symbol, toolTaskId, window, cancellationToken),
                     envelope => $"公司概况：{envelope.Data.Name}，主营={envelope.Data.MainBusiness ?? "缺失"}，经营范围={envelope.Data.BusinessScope ?? "缺失"}。"),
                 StockMcpToolNames.Product => MapOutcome(
                     approvedCall,
-                    await _mcpToolGateway.GetProductAsync(symbol, toolTaskId, cancellationToken),
+                    await _mcpToolGateway.GetProductAsync(symbol, toolTaskId, window, cancellationToken),
                     envelope => $"产品事实 {envelope.Data.FactCount} 条，行业={envelope.Data.Industry ?? "缺失"}，地区={envelope.Data.Region ?? "缺失"}。"),
                 StockMcpToolNames.Fundamentals => MapOutcome(
                     approvedCall,
-                    await _mcpToolGateway.GetFundamentalsAsync(symbol, toolTaskId, cancellationToken),
-                    envelope => $"基本面事实 {envelope.Data.FactCount} 条。"),
+                    await _mcpToolGateway.GetFundamentalsAsync(symbol, toolTaskId, window, cancellationToken),
+                    envelope => $"基本面事实总数={envelope.Data.FactCount}，当前返回={envelope.Data.Facts.Count}。"),
                 StockMcpToolNames.Shareholder => MapOutcome(
                     approvedCall,
-                    await _mcpToolGateway.GetShareholderAsync(symbol, toolTaskId, cancellationToken),
+                    await _mcpToolGateway.GetShareholderAsync(symbol, toolTaskId, window, cancellationToken),
                     envelope => $"股东事实 {envelope.Data.FactCount} 条，股东户数={envelope.Data.ShareholderCount?.ToString() ?? "缺失"}。"),
                 StockMcpToolNames.MarketContext => MapOutcome(
                     approvedCall,
-                    await _mcpToolGateway.GetMarketContextAsync(symbol, toolTaskId, cancellationToken),
-                    envelope => $"市场阶段={envelope.Data.StageLabel ?? "未知"}，主线={envelope.Data.MainlineSectorName ?? "未知"}。"),
+                    await _mcpToolGateway.GetMarketContextAsync(symbol, toolTaskId, window, cancellationToken),
+                    envelope => $"本地市场上下文：个股行业={envelope.Data.StockSectorName ?? "未知"}，主线={envelope.Data.MainlineSectorName ?? "未知"}，主线强度={envelope.Data.MainlineScore?.ToString("0.##") ?? "未知"}。"),
                 StockMcpToolNames.SocialSentiment => MapOutcome(
                     approvedCall,
-                    await _mcpToolGateway.GetSocialSentimentAsync(symbol, toolTaskId, cancellationToken),
-                    envelope => $"情绪状态={envelope.Data.Status}，证据数={envelope.Data.EvidenceCount}。"),
+                    await _mcpToolGateway.GetSocialSentimentAsync(symbol, toolTaskId, window, cancellationToken),
+                    envelope => $"本地情绪证据聚合状态={envelope.Data.Status}，证据数={envelope.Data.EvidenceCount}。"),
                 StockMcpToolNames.Kline => MapOutcome(
                     approvedCall,
                     await _mcpToolGateway.GetKlineAsync(
@@ -484,11 +485,12 @@ public sealed class StockCopilotLiveGateService : IStockCopilotLiveGateService
                         ParseInt(input, "count", 60),
                         input.GetValueOrDefault("source"),
                         toolTaskId,
+                        window,
                         cancellationToken),
                     envelope => $"K 线窗口={envelope.Data.WindowSize}，趋势={envelope.Data.TrendState}，5D={envelope.Data.Return5dPercent:0.##}%。"),
                 StockMcpToolNames.Minute => MapOutcome(
                     approvedCall,
-                    await _mcpToolGateway.GetMinuteAsync(symbol, input.GetValueOrDefault("source"), toolTaskId, cancellationToken),
+                    await _mcpToolGateway.GetMinuteAsync(symbol, input.GetValueOrDefault("source"), toolTaskId, window, cancellationToken),
                     envelope => $"分时 session={envelope.Data.SessionPhase}，点位={envelope.Data.WindowSize}。"),
                 StockMcpToolNames.Strategy => MapOutcome(
                     approvedCall,
@@ -499,11 +501,12 @@ public sealed class StockCopilotLiveGateService : IStockCopilotLiveGateService
                         input.GetValueOrDefault("source"),
                         ParseStrategies(input.GetValueOrDefault("strategies")),
                         toolTaskId,
+                        window,
                         cancellationToken),
                     envelope => $"策略信号 {envelope.Data.Signals.Count} 条。"),
                 StockMcpToolNames.News => MapOutcome(
                     approvedCall,
-                    await _mcpToolGateway.GetNewsAsync(symbol, input.GetValueOrDefault("level", "stock"), toolTaskId, cancellationToken),
+                    await _mcpToolGateway.GetNewsAsync(symbol, input.GetValueOrDefault("level", "stock"), toolTaskId, window, cancellationToken),
                     envelope => $"本地新闻 {envelope.Data.ItemCount} 条，最新时间={envelope.Data.LatestPublishedAt:yyyy-MM-dd HH:mm:ss}。"),
                 StockMcpToolNames.Search => MapOutcome(
                     approvedCall,
@@ -592,6 +595,7 @@ public sealed class StockCopilotLiveGateService : IStockCopilotLiveGateService
         builder.AppendLine("5. 不允许切换 symbol，不允许生成未注册工具，不允许越权调用。");
         builder.AppendLine($"6. 最多输出 {MaxPlannedToolCalls} 个 toolCalls，其中最多 {MaxExternalSearchCalls} 个 StockSearchMcp。");
         builder.AppendLine("7. 只返回一个 JSON object，不要输出解释、markdown、代码块或思考过程。");
+        builder.AppendLine("8. 对返回 evidence 的 MCP，可在 inputSummary 里传 evidenceSkip/evidenceTake；对 StockFundamentalsMcp 还可传 factSkip/factTake。");
         builder.AppendLine();
         builder.AppendLine("输出 JSON schema：");
         builder.AppendLine("{");
@@ -614,10 +618,10 @@ public sealed class StockCopilotLiveGateService : IStockCopilotLiveGateService
         builder.AppendLine($"- allowExternalSearch={allowExternalSearch}");
         if (marketContext is not null)
         {
-            builder.AppendLine($"- marketStage={marketContext.StageLabel ?? "unknown"}");
+            builder.AppendLine($"- marketContextStageConfidence={marketContext.StageConfidence:0.##}");
             builder.AppendLine($"- mainlineSector={marketContext.MainlineSectorName ?? "unknown"}");
             builder.AppendLine($"- stockSector={marketContext.StockSectorName ?? "unknown"}");
-            builder.AppendLine($"- counterTrendWarning={marketContext.CounterTrendWarning}");
+            builder.AppendLine($"- mainlineScore={marketContext.MainlineScore:0.##}");
         }
 
         builder.AppendLine();
@@ -701,7 +705,7 @@ public sealed class StockCopilotLiveGateService : IStockCopilotLiveGateService
                 "生成 live gate 工具计划",
                 marketContext is null
                     ? "基于问题生成受控工具计划，并让 governor 在后端强校验。"
-                    : $"基于问题与当前市场阶段={marketContext.StageLabel} 生成受控工具计划，并让 governor 在后端强校验。",
+                    : $"基于问题与当前本地市场上下文（主线={marketContext.MainlineSectorName ?? "无"}，置信度={marketContext.StageConfidence:0.##}）生成受控工具计划，并让 governor 在后端强校验。",
                 "completed",
                 Array.Empty<string>(),
                 null)
@@ -881,6 +885,29 @@ public sealed class StockCopilotLiveGateService : IStockCopilotLiveGateService
         return input.TryGetValue(key, out var value) && int.TryParse(value, out var parsed)
             ? parsed
             : fallback;
+    }
+
+    private static StockCopilotMcpWindowOptions? ParseWindowOptions(IReadOnlyDictionary<string, string> input)
+    {
+        var evidenceSkip = 0;
+        var evidenceTake = 0;
+        var factSkip = 0;
+        var factTake = 0;
+        var hasEvidenceSkip = input.TryGetValue("evidenceSkip", out var evidenceSkipRaw) && int.TryParse(evidenceSkipRaw, out evidenceSkip);
+        var hasEvidenceTake = input.TryGetValue("evidenceTake", out var evidenceTakeRaw) && int.TryParse(evidenceTakeRaw, out evidenceTake);
+        var hasFactSkip = input.TryGetValue("factSkip", out var factSkipRaw) && int.TryParse(factSkipRaw, out factSkip);
+        var hasFactTake = input.TryGetValue("factTake", out var factTakeRaw) && int.TryParse(factTakeRaw, out factTake);
+
+        if (!hasEvidenceSkip && !hasEvidenceTake && !hasFactSkip && !hasFactTake)
+        {
+            return null;
+        }
+
+        return new StockCopilotMcpWindowOptions(
+            hasEvidenceSkip ? evidenceSkip : 0,
+            hasEvidenceTake ? evidenceTake : null,
+            hasFactSkip ? factSkip : 0,
+            hasFactTake ? factTake : null);
     }
 
     private static IReadOnlyList<string>? ParseStrategies(string? value)

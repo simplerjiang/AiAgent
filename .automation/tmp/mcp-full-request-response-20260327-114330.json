@@ -1,0 +1,228 @@
+﻿[
+    {
+        "tool":  "CompanyOverviewMcp",
+        "request":  {
+                        "method":  "GET",
+                        "url":  "http://localhost:5119/api/stocks/mcp/company-overview?symbol=sh600000\u0026taskId=GOAL-AGENT-NEW-001-P0-PRE-FULL-MCP-REQRESP-20260327",
+                        "path":  "/api/stocks/mcp/company-overview?symbol=sh600000\u0026taskId=GOAL-AGENT-NEW-001-P0-PRE-FULL-MCP-REQRESP-20260327",
+                        "tool":  "CompanyOverviewMcp",
+                        "query":  {
+                                      "taskId":  "GOAL-AGENT-NEW-001-P0-PRE-FULL-MCP-REQRESP-20260327",
+                                      "symbol":  "sh600000"
+                                  }
+                    },
+        "response":  {
+                         "statusCode":  null,
+                         "headers":  null,
+                         "bodyRaw":  null,
+                         "bodyJson":  null
+                     },
+        "error":  "无法连接到远程服务器"
+    },
+    {
+        "tool":  "StockProductMcp",
+        "request":  {
+                        "method":  "GET",
+                        "url":  "http://localhost:5119/api/stocks/mcp/product?symbol=sh600000\u0026taskId=GOAL-AGENT-NEW-001-P0-PRE-FULL-MCP-REQRESP-20260327",
+                        "path":  "/api/stocks/mcp/product?symbol=sh600000\u0026taskId=GOAL-AGENT-NEW-001-P0-PRE-FULL-MCP-REQRESP-20260327",
+                        "tool":  "StockProductMcp",
+                        "query":  {
+                                      "taskId":  "GOAL-AGENT-NEW-001-P0-PRE-FULL-MCP-REQRESP-20260327",
+                                      "symbol":  "sh600000"
+                                  }
+                    },
+        "response":  {
+                         "statusCode":  null,
+                         "headers":  null,
+                         "bodyRaw":  null,
+                         "bodyJson":  null
+                     },
+        "error":  "无法连接到远程服务器"
+    },
+    {
+        "tool":  "StockFundamentalsMcp",
+        "request":  {
+                        "method":  "GET",
+                        "url":  "http://localhost:5119/api/stocks/mcp/fundamentals?symbol=sh600000\u0026taskId=GOAL-AGENT-NEW-001-P0-PRE-FULL-MCP-REQRESP-20260327",
+                        "path":  "/api/stocks/mcp/fundamentals?symbol=sh600000\u0026taskId=GOAL-AGENT-NEW-001-P0-PRE-FULL-MCP-REQRESP-20260327",
+                        "tool":  "StockFundamentalsMcp",
+                        "query":  {
+                                      "taskId":  "GOAL-AGENT-NEW-001-P0-PRE-FULL-MCP-REQRESP-20260327",
+                                      "symbol":  "sh600000"
+                                  }
+                    },
+        "response":  {
+                         "statusCode":  null,
+                         "headers":  null,
+                         "bodyRaw":  null,
+                         "bodyJson":  null
+                     },
+        "error":  "无法连接到远程服务器"
+    },
+    {
+        "tool":  "StockShareholderMcp",
+        "request":  {
+                        "method":  "GET",
+                        "url":  "http://localhost:5119/api/stocks/mcp/shareholder?symbol=sh600000\u0026taskId=GOAL-AGENT-NEW-001-P0-PRE-FULL-MCP-REQRESP-20260327",
+                        "path":  "/api/stocks/mcp/shareholder?symbol=sh600000\u0026taskId=GOAL-AGENT-NEW-001-P0-PRE-FULL-MCP-REQRESP-20260327",
+                        "tool":  "StockShareholderMcp",
+                        "query":  {
+                                      "taskId":  "GOAL-AGENT-NEW-001-P0-PRE-FULL-MCP-REQRESP-20260327",
+                                      "symbol":  "sh600000"
+                                  }
+                    },
+        "response":  {
+                         "statusCode":  null,
+                         "headers":  null,
+                         "bodyRaw":  null,
+                         "bodyJson":  null
+                     },
+        "error":  "无法连接到远程服务器"
+    },
+    {
+        "tool":  "MarketContextMcp",
+        "request":  {
+                        "method":  "GET",
+                        "url":  "http://localhost:5119/api/stocks/mcp/market-context?symbol=sh600000\u0026taskId=GOAL-AGENT-NEW-001-P0-PRE-FULL-MCP-REQRESP-20260327",
+                        "path":  "/api/stocks/mcp/market-context?symbol=sh600000\u0026taskId=GOAL-AGENT-NEW-001-P0-PRE-FULL-MCP-REQRESP-20260327",
+                        "tool":  "MarketContextMcp",
+                        "query":  {
+                                      "taskId":  "GOAL-AGENT-NEW-001-P0-PRE-FULL-MCP-REQRESP-20260327",
+                                      "symbol":  "sh600000"
+                                  }
+                    },
+        "response":  {
+                         "statusCode":  null,
+                         "headers":  null,
+                         "bodyRaw":  null,
+                         "bodyJson":  null
+                     },
+        "error":  "无法连接到远程服务器"
+    },
+    {
+        "tool":  "SocialSentimentMcp",
+        "request":  {
+                        "method":  "GET",
+                        "url":  "http://localhost:5119/api/stocks/mcp/social-sentiment?symbol=sh600000\u0026taskId=GOAL-AGENT-NEW-001-P0-PRE-FULL-MCP-REQRESP-20260327",
+                        "path":  "/api/stocks/mcp/social-sentiment?symbol=sh600000\u0026taskId=GOAL-AGENT-NEW-001-P0-PRE-FULL-MCP-REQRESP-20260327",
+                        "tool":  "SocialSentimentMcp",
+                        "query":  {
+                                      "taskId":  "GOAL-AGENT-NEW-001-P0-PRE-FULL-MCP-REQRESP-20260327",
+                                      "symbol":  "sh600000"
+                                  }
+                    },
+        "response":  {
+                         "statusCode":  null,
+                         "headers":  null,
+                         "bodyRaw":  null,
+                         "bodyJson":  null
+                     },
+        "error":  "无法连接到远程服务器"
+    },
+    {
+        "tool":  "StockKlineMcp",
+        "request":  {
+                        "method":  "GET",
+                        "url":  "http://localhost:5119/api/stocks/mcp/kline?symbol=sh600000\u0026interval=day\u0026count=60\u0026taskId=GOAL-AGENT-NEW-001-P0-PRE-FULL-MCP-REQRESP-20260327",
+                        "path":  "/api/stocks/mcp/kline?symbol=sh600000\u0026interval=day\u0026count=60\u0026taskId=GOAL-AGENT-NEW-001-P0-PRE-FULL-MCP-REQRESP-20260327",
+                        "tool":  "StockKlineMcp",
+                        "query":  {
+                                      "interval":  "day",
+                                      "taskId":  "GOAL-AGENT-NEW-001-P0-PRE-FULL-MCP-REQRESP-20260327",
+                                      "symbol":  "sh600000",
+                                      "count":  "60"
+                                  }
+                    },
+        "response":  {
+                         "statusCode":  null,
+                         "headers":  null,
+                         "bodyRaw":  null,
+                         "bodyJson":  null
+                     },
+        "error":  "无法连接到远程服务器"
+    },
+    {
+        "tool":  "StockMinuteMcp",
+        "request":  {
+                        "method":  "GET",
+                        "url":  "http://localhost:5119/api/stocks/mcp/minute?symbol=sh600000\u0026taskId=GOAL-AGENT-NEW-001-P0-PRE-FULL-MCP-REQRESP-20260327",
+                        "path":  "/api/stocks/mcp/minute?symbol=sh600000\u0026taskId=GOAL-AGENT-NEW-001-P0-PRE-FULL-MCP-REQRESP-20260327",
+                        "tool":  "StockMinuteMcp",
+                        "query":  {
+                                      "taskId":  "GOAL-AGENT-NEW-001-P0-PRE-FULL-MCP-REQRESP-20260327",
+                                      "symbol":  "sh600000"
+                                  }
+                    },
+        "response":  {
+                         "statusCode":  null,
+                         "headers":  null,
+                         "bodyRaw":  null,
+                         "bodyJson":  null
+                     },
+        "error":  "无法连接到远程服务器"
+    },
+    {
+        "tool":  "StockStrategyMcp",
+        "request":  {
+                        "method":  "GET",
+                        "url":  "http://localhost:5119/api/stocks/mcp/strategy?symbol=sh600000\u0026interval=day\u0026count=60\u0026taskId=GOAL-AGENT-NEW-001-P0-PRE-FULL-MCP-REQRESP-20260327",
+                        "path":  "/api/stocks/mcp/strategy?symbol=sh600000\u0026interval=day\u0026count=60\u0026taskId=GOAL-AGENT-NEW-001-P0-PRE-FULL-MCP-REQRESP-20260327",
+                        "tool":  "StockStrategyMcp",
+                        "query":  {
+                                      "interval":  "day",
+                                      "taskId":  "GOAL-AGENT-NEW-001-P0-PRE-FULL-MCP-REQRESP-20260327",
+                                      "symbol":  "sh600000",
+                                      "count":  "60"
+                                  }
+                    },
+        "response":  {
+                         "statusCode":  null,
+                         "headers":  null,
+                         "bodyRaw":  null,
+                         "bodyJson":  null
+                     },
+        "error":  "无法连接到远程服务器"
+    },
+    {
+        "tool":  "StockNewsMcp",
+        "request":  {
+                        "method":  "GET",
+                        "url":  "http://localhost:5119/api/stocks/mcp/news?symbol=sh600000\u0026level=stock\u0026taskId=GOAL-AGENT-NEW-001-P0-PRE-FULL-MCP-REQRESP-20260327",
+                        "path":  "/api/stocks/mcp/news?symbol=sh600000\u0026level=stock\u0026taskId=GOAL-AGENT-NEW-001-P0-PRE-FULL-MCP-REQRESP-20260327",
+                        "tool":  "StockNewsMcp",
+                        "query":  {
+                                      "level":  "stock",
+                                      "symbol":  "sh600000",
+                                      "taskId":  "GOAL-AGENT-NEW-001-P0-PRE-FULL-MCP-REQRESP-20260327"
+                                  }
+                    },
+        "response":  {
+                         "statusCode":  null,
+                         "headers":  null,
+                         "bodyRaw":  null,
+                         "bodyJson":  null
+                     },
+        "error":  "无法连接到远程服务器"
+    },
+    {
+        "tool":  "StockSearchMcp",
+        "request":  {
+                        "method":  "GET",
+                        "url":  "http://localhost:5119/api/stocks/mcp/search?query=%E6%B5%A6%E5%8F%91%E9%93%B6%E8%A1%8C\u0026trustedOnly=true\u0026taskId=GOAL-AGENT-NEW-001-P0-PRE-FULL-MCP-REQRESP-20260327",
+                        "path":  "/api/stocks/mcp/search?query=%E6%B5%A6%E5%8F%91%E9%93%B6%E8%A1%8C\u0026trustedOnly=true\u0026taskId=GOAL-AGENT-NEW-001-P0-PRE-FULL-MCP-REQRESP-20260327",
+                        "tool":  "StockSearchMcp",
+                        "query":  {
+                                      "query":  "浦发银行",
+                                      "trustedOnly":  "true",
+                                      "taskId":  "GOAL-AGENT-NEW-001-P0-PRE-FULL-MCP-REQRESP-20260327"
+                                  }
+                    },
+        "response":  {
+                         "statusCode":  null,
+                         "headers":  null,
+                         "bodyRaw":  null,
+                         "bodyJson":  null
+                     },
+        "error":  "无法连接到远程服务器"
+    }
+]

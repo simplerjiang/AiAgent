@@ -2,6 +2,7 @@ namespace SimplerJiangAiAgent.Api.Modules.Llm.Models;
 
 public sealed record LlmSettingsRequest(
     string? ApiKey,
+    string? TavilyApiKey,
     string? BaseUrl,
     string? Model,
     string? SystemPrompt,
@@ -22,6 +23,8 @@ public sealed record LlmSettingsResponse(
     bool Enabled,
     bool HasApiKey,
     string ApiKeyMasked,
+    bool HasTavilyApiKey,
+    string TavilyApiKeyMasked,
     DateTimeOffset UpdatedAt);
 
 public sealed record ActiveLlmProviderResponse(

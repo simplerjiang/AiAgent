@@ -92,7 +92,7 @@ public sealed record StockCopilotMcpMetaDto(
     string? Symbol,
     string? Interval,
     string? Query,
-    StockMarketContextDto? MarketContext);
+    StockCopilotMcpMarketContextDto? MarketContext);
 
 public sealed record StockCopilotMcpEnvelopeDto<T>(
     string TraceId,
@@ -177,31 +177,38 @@ public sealed record StockCopilotSearchDataDto(
     int ResultCount,
     IReadOnlyList<StockCopilotSearchResultDto> Results);
 
-public sealed record StockCopilotMarketContextDataDto(
-    string Symbol,
-    bool Available,
-    string? StageLabel,
+public sealed record StockCopilotMcpWindowOptions(
+    int EvidenceSkip = 0,
+    int? EvidenceTake = null,
+    int FactSkip = 0,
+    int? FactTake = null);
+
+public sealed record StockCopilotMcpMarketContextDto(
     decimal? StageConfidence,
     string? StockSectorName,
     string? MainlineSectorName,
     string? SectorCode,
-    decimal? MainlineScore,
-    decimal? SuggestedPositionScale,
-    string? ExecutionFrequencyLabel,
-    bool CounterTrendWarning,
-    bool IsMainlineAligned);
+    decimal? MainlineScore);
+
+public sealed record StockCopilotMarketContextDataDto(
+    string Symbol,
+    bool Available,
+    decimal? StageConfidence,
+    string? StockSectorName,
+    string? MainlineSectorName,
+    string? SectorCode,
+    decimal? MainlineScore);
 
 public sealed record StockCopilotSentimentCountDto(
     int PositiveCount,
-    int NeutralCount,
     int NegativeCount,
+    int NeutralCount,
     int TotalCount,
     DateTime? LatestPublishedAt);
 
 public sealed record StockCopilotSocialSentimentMarketProxyDto(
     string StageLabel,
     decimal StageConfidence,
-    string OverallSentiment,
     DateTime SnapshotTime);
 
 public sealed record StockCopilotSocialSentimentDataDto(
@@ -210,7 +217,6 @@ public sealed record StockCopilotSocialSentimentDataDto(
     bool Blocked,
     string? BlockedReason,
     string ApproximationMode,
-    string? OverallSentiment,
     int EvidenceCount,
     DateTime? LatestEvidenceAt,
     StockCopilotSentimentCountDto StockNews,

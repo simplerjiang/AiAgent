@@ -133,6 +133,7 @@ public sealed class LlmModule : IModule
                 Provider = provider,
                 ProviderType = existing?.ProviderType ?? "openai",
                 ApiKey = request.ApiKey ?? string.Empty,
+                TavilyApiKey = request.TavilyApiKey ?? string.Empty,
                 BaseUrl = request.BaseUrl ?? string.Empty,
                 Model = request.Model ?? string.Empty,
                 SystemPrompt = request.SystemPrompt ?? string.Empty,
@@ -319,6 +320,7 @@ public sealed class LlmModule : IModule
     private static LlmSettingsResponse ToResponse(LlmProviderSettings settings)
     {
         var masked = MaskKey(settings.ApiKey);
+        var tavilyMasked = MaskKey(settings.TavilyApiKey);
         return new LlmSettingsResponse(
             settings.Provider,
             settings.ProviderType,
@@ -331,6 +333,8 @@ public sealed class LlmModule : IModule
             settings.Enabled,
             !string.IsNullOrWhiteSpace(settings.ApiKey),
             masked,
+                !string.IsNullOrWhiteSpace(settings.TavilyApiKey),
+                tavilyMasked,
             settings.UpdatedAt);
     }
 

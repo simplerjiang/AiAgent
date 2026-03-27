@@ -204,7 +204,7 @@ public sealed class StocksModule : IModule
         .WithName("SearchStocks")
         .WithOpenApi();
 
-        group.MapGet("/mcp/kline", async (string symbol, string? interval, int? count, string? source, string? taskId, IMcpToolGateway gateway, HttpContext httpContext) =>
+        group.MapGet("/mcp/kline", async (string symbol, string? interval, int? count, string? source, string? taskId, int? evidenceSkip, int? evidenceTake, IMcpToolGateway gateway, HttpContext httpContext) =>
         {
             if (string.IsNullOrWhiteSpace(symbol))
             {
@@ -212,13 +212,13 @@ public sealed class StocksModule : IModule
             }
 
             return await StockMcpEndpointExecutor.ExecuteAsync(
-                cancellationToken => gateway.GetKlineAsync(symbol.Trim(), interval ?? "day", count ?? 60, source, taskId, cancellationToken),
+                cancellationToken => gateway.GetKlineAsync(symbol.Trim(), interval ?? "day", count ?? 60, source, taskId, CreateMcpWindowOptions(evidenceSkip, evidenceTake), cancellationToken),
                 httpContext.RequestAborted);
         })
         .WithName("GetStockKlineMcp")
         .WithOpenApi();
 
-        group.MapGet("/mcp/company-overview", async (string symbol, string? taskId, IMcpToolGateway gateway, HttpContext httpContext) =>
+        group.MapGet("/mcp/company-overview", async (string symbol, string? taskId, int? evidenceSkip, int? evidenceTake, IMcpToolGateway gateway, HttpContext httpContext) =>
         {
             if (string.IsNullOrWhiteSpace(symbol))
             {
@@ -226,13 +226,13 @@ public sealed class StocksModule : IModule
             }
 
             return await StockMcpEndpointExecutor.ExecuteAsync(
-                cancellationToken => gateway.GetCompanyOverviewAsync(symbol.Trim(), taskId, cancellationToken),
+                cancellationToken => gateway.GetCompanyOverviewAsync(symbol.Trim(), taskId, CreateMcpWindowOptions(evidenceSkip, evidenceTake), cancellationToken),
                 httpContext.RequestAborted);
         })
         .WithName("GetStockCompanyOverviewMcp")
         .WithOpenApi();
 
-        group.MapGet("/mcp/product", async (string symbol, string? taskId, IMcpToolGateway gateway, HttpContext httpContext) =>
+        group.MapGet("/mcp/product", async (string symbol, string? taskId, int? evidenceSkip, int? evidenceTake, IMcpToolGateway gateway, HttpContext httpContext) =>
         {
             if (string.IsNullOrWhiteSpace(symbol))
             {
@@ -240,13 +240,13 @@ public sealed class StocksModule : IModule
             }
 
             return await StockMcpEndpointExecutor.ExecuteAsync(
-                cancellationToken => gateway.GetProductAsync(symbol.Trim(), taskId, cancellationToken),
+                cancellationToken => gateway.GetProductAsync(symbol.Trim(), taskId, CreateMcpWindowOptions(evidenceSkip, evidenceTake), cancellationToken),
                 httpContext.RequestAborted);
         })
         .WithName("GetStockProductMcp")
         .WithOpenApi();
 
-        group.MapGet("/mcp/fundamentals", async (string symbol, string? taskId, IMcpToolGateway gateway, HttpContext httpContext) =>
+        group.MapGet("/mcp/fundamentals", async (string symbol, string? taskId, int? evidenceSkip, int? evidenceTake, int? factSkip, int? factTake, IMcpToolGateway gateway, HttpContext httpContext) =>
         {
             if (string.IsNullOrWhiteSpace(symbol))
             {
@@ -254,13 +254,13 @@ public sealed class StocksModule : IModule
             }
 
             return await StockMcpEndpointExecutor.ExecuteAsync(
-                cancellationToken => gateway.GetFundamentalsAsync(symbol.Trim(), taskId, cancellationToken),
+                cancellationToken => gateway.GetFundamentalsAsync(symbol.Trim(), taskId, CreateMcpWindowOptions(evidenceSkip, evidenceTake, factSkip, factTake), cancellationToken),
                 httpContext.RequestAborted);
         })
         .WithName("GetStockFundamentalsMcp")
         .WithOpenApi();
 
-        group.MapGet("/mcp/shareholder", async (string symbol, string? taskId, IMcpToolGateway gateway, HttpContext httpContext) =>
+        group.MapGet("/mcp/shareholder", async (string symbol, string? taskId, int? evidenceSkip, int? evidenceTake, IMcpToolGateway gateway, HttpContext httpContext) =>
         {
             if (string.IsNullOrWhiteSpace(symbol))
             {
@@ -268,13 +268,13 @@ public sealed class StocksModule : IModule
             }
 
             return await StockMcpEndpointExecutor.ExecuteAsync(
-                cancellationToken => gateway.GetShareholderAsync(symbol.Trim(), taskId, cancellationToken),
+                cancellationToken => gateway.GetShareholderAsync(symbol.Trim(), taskId, CreateMcpWindowOptions(evidenceSkip, evidenceTake), cancellationToken),
                 httpContext.RequestAborted);
         })
         .WithName("GetStockShareholderMcp")
         .WithOpenApi();
 
-        group.MapGet("/mcp/market-context", async (string symbol, string? taskId, IMcpToolGateway gateway, HttpContext httpContext) =>
+        group.MapGet("/mcp/market-context", async (string symbol, string? taskId, int? evidenceSkip, int? evidenceTake, IMcpToolGateway gateway, HttpContext httpContext) =>
         {
             if (string.IsNullOrWhiteSpace(symbol))
             {
@@ -282,13 +282,13 @@ public sealed class StocksModule : IModule
             }
 
             return await StockMcpEndpointExecutor.ExecuteAsync(
-                cancellationToken => gateway.GetMarketContextAsync(symbol.Trim(), taskId, cancellationToken),
+                cancellationToken => gateway.GetMarketContextAsync(symbol.Trim(), taskId, CreateMcpWindowOptions(evidenceSkip, evidenceTake), cancellationToken),
                 httpContext.RequestAborted);
         })
         .WithName("GetStockMarketContextMcp")
         .WithOpenApi();
 
-        group.MapGet("/mcp/social-sentiment", async (string symbol, string? taskId, IMcpToolGateway gateway, HttpContext httpContext) =>
+        group.MapGet("/mcp/social-sentiment", async (string symbol, string? taskId, int? evidenceSkip, int? evidenceTake, IMcpToolGateway gateway, HttpContext httpContext) =>
         {
             if (string.IsNullOrWhiteSpace(symbol))
             {
@@ -296,13 +296,13 @@ public sealed class StocksModule : IModule
             }
 
             return await StockMcpEndpointExecutor.ExecuteAsync(
-                cancellationToken => gateway.GetSocialSentimentAsync(symbol.Trim(), taskId, cancellationToken),
+                cancellationToken => gateway.GetSocialSentimentAsync(symbol.Trim(), taskId, CreateMcpWindowOptions(evidenceSkip, evidenceTake), cancellationToken),
                 httpContext.RequestAborted);
         })
         .WithName("GetStockSocialSentimentMcp")
         .WithOpenApi();
 
-        group.MapGet("/mcp/minute", async (string symbol, string? source, string? taskId, IMcpToolGateway gateway, HttpContext httpContext) =>
+        group.MapGet("/mcp/minute", async (string symbol, string? source, string? taskId, int? evidenceSkip, int? evidenceTake, IMcpToolGateway gateway, HttpContext httpContext) =>
         {
             if (string.IsNullOrWhiteSpace(symbol))
             {
@@ -310,13 +310,13 @@ public sealed class StocksModule : IModule
             }
 
             return await StockMcpEndpointExecutor.ExecuteAsync(
-                cancellationToken => gateway.GetMinuteAsync(symbol.Trim(), source, taskId, cancellationToken),
+                cancellationToken => gateway.GetMinuteAsync(symbol.Trim(), source, taskId, CreateMcpWindowOptions(evidenceSkip, evidenceTake), cancellationToken),
                 httpContext.RequestAborted);
         })
         .WithName("GetStockMinuteMcp")
         .WithOpenApi();
 
-        group.MapGet("/mcp/strategy", async (string symbol, string? interval, int? count, string? source, string[]? strategies, string? taskId, IMcpToolGateway gateway, HttpContext httpContext) =>
+        group.MapGet("/mcp/strategy", async (string symbol, string? interval, int? count, string? source, string[]? strategies, string? taskId, int? evidenceSkip, int? evidenceTake, IMcpToolGateway gateway, HttpContext httpContext) =>
         {
             if (string.IsNullOrWhiteSpace(symbol))
             {
@@ -324,13 +324,13 @@ public sealed class StocksModule : IModule
             }
 
             return await StockMcpEndpointExecutor.ExecuteAsync(
-                cancellationToken => gateway.GetStrategyAsync(symbol.Trim(), interval ?? "day", count ?? 60, source, strategies, taskId, cancellationToken),
+                cancellationToken => gateway.GetStrategyAsync(symbol.Trim(), interval ?? "day", count ?? 60, source, strategies, taskId, CreateMcpWindowOptions(evidenceSkip, evidenceTake), cancellationToken),
                 httpContext.RequestAborted);
         })
         .WithName("GetStockStrategyMcp")
         .WithOpenApi();
 
-        group.MapGet("/mcp/news", async (string symbol, string? level, string? taskId, IMcpToolGateway gateway, HttpContext httpContext) =>
+        group.MapGet("/mcp/news", async (string symbol, string? level, string? taskId, int? evidenceSkip, int? evidenceTake, IMcpToolGateway gateway, HttpContext httpContext) =>
         {
             if (string.IsNullOrWhiteSpace(symbol))
             {
@@ -338,7 +338,7 @@ public sealed class StocksModule : IModule
             }
 
             return await StockMcpEndpointExecutor.ExecuteAsync(
-                cancellationToken => gateway.GetNewsAsync(symbol.Trim(), level ?? "stock", taskId, cancellationToken),
+                cancellationToken => gateway.GetNewsAsync(symbol.Trim(), level ?? "stock", taskId, CreateMcpWindowOptions(evidenceSkip, evidenceTake), cancellationToken),
                 httpContext.RequestAborted);
         })
         .WithName("GetStockNewsMcp")
@@ -967,6 +967,20 @@ public sealed class StocksModule : IModule
         })
         .WithName("GetStockSources")
         .WithOpenApi();
+    }
+
+    private static StockCopilotMcpWindowOptions? CreateMcpWindowOptions(int? evidenceSkip, int? evidenceTake, int? factSkip = null, int? factTake = null)
+    {
+        if (!evidenceSkip.HasValue && !evidenceTake.HasValue && !factSkip.HasValue && !factTake.HasValue)
+        {
+            return null;
+        }
+
+        return new StockCopilotMcpWindowOptions(
+            evidenceSkip ?? 0,
+            evidenceTake,
+            factSkip ?? 0,
+            factTake);
     }
 
     private static string? ExtractAgentSummary(JsonElement result)

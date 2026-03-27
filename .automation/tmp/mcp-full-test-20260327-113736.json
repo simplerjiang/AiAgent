@@ -1,0 +1,90 @@
+﻿[
+    {
+        "Expected":  "CompanyOverviewMcp",
+        "HttpStatus":  200,
+        "TraceId":  "b16e3d1a6034423db5c6f3bc2ec2825f",
+        "ToolName":  "CompanyOverviewMcp",
+        "Summary":  null,
+        "Error":  null
+    },
+    {
+        "Expected":  "StockProductMcp",
+        "HttpStatus":  200,
+        "TraceId":  "a90268aac8f44d1d8e021c0116b828e9",
+        "ToolName":  "StockProductMcp",
+        "Summary":  null,
+        "Error":  null
+    },
+    {
+        "Expected":  "StockFundamentalsMcp",
+        "HttpStatus":  200,
+        "TraceId":  "8c56f4959cfe4850abb39abdd5808b48",
+        "ToolName":  "StockFundamentalsMcp",
+        "Summary":  null,
+        "Error":  null
+    },
+    {
+        "Expected":  "StockShareholderMcp",
+        "HttpStatus":  200,
+        "TraceId":  "b44e0bbb0bc043429216362478e66798",
+        "ToolName":  "StockShareholderMcp",
+        "Summary":  null,
+        "Error":  null
+    },
+    {
+        "Expected":  "MarketContextMcp",
+        "HttpStatus":  200,
+        "TraceId":  "e6100b4099cd4752a15280baebf58c67",
+        "ToolName":  "MarketContextMcp",
+        "Summary":  null,
+        "Error":  null
+    },
+    {
+        "Expected":  "SocialSentimentMcp",
+        "HttpStatus":  200,
+        "TraceId":  "5cfdba1f7378404f9eefa4258bcb4f7a",
+        "ToolName":  "SocialSentimentMcp",
+        "Summary":  null,
+        "Error":  null
+    },
+    {
+        "Expected":  "StockKlineMcp",
+        "HttpStatus":  200,
+        "TraceId":  "111e242022514dfd96e52ded91b0d5d6",
+        "ToolName":  "StockKlineMcp",
+        "Summary":  null,
+        "Error":  null
+    },
+    {
+        "Expected":  "StockMinuteMcp",
+        "HttpStatus":  200,
+        "TraceId":  "1fac93f1743d40079b8d85d79fc039f2",
+        "ToolName":  "StockMinuteMcp",
+        "Summary":  null,
+        "Error":  null
+    },
+    {
+        "Expected":  "StockStrategyMcp",
+        "HttpStatus":  200,
+        "TraceId":  "a3123df2d6e04b3dacae633d9a3e69ba",
+        "ToolName":  "StockStrategyMcp",
+        "Summary":  null,
+        "Error":  null
+    },
+    {
+        "Expected":  "StockNewsMcp",
+        "HttpStatus":  200,
+        "TraceId":  "ba47a88a403c4ac7a9e843de78deceb6",
+        "ToolName":  "StockNewsMcp",
+        "Summary":  null,
+        "Error":  null
+    },
+    {
+        "Expected":  "StockSearchMcp",
+        "HttpStatus":  200,
+        "TraceId":  "87461eb016fb4f8bba35f1eebd67aa0d",
+        "ToolName":  "StockSearchMcp",
+        "Summary":  null,
+        "Error":  null
+    }
+]

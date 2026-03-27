@@ -97,12 +97,15 @@ public sealed class StockMcpGatewayPhaseATests
     [Fact]
     public async Task Gateway_ShouldDelegateToProductTool()
     {
-        var gateway = new McpToolGateway(new RecordingStockCopilotMcpService(), new McpServiceRegistry(), CreatePolicy());
+        var service = new RecordingStockCopilotMcpService();
+        var gateway = new McpToolGateway(service, new McpServiceRegistry(), CreatePolicy());
 
-        var result = await gateway.GetProductAsync("sz002594", "task-product");
+        var result = await gateway.GetProductAsync("sz002594", "task-product", new StockCopilotMcpWindowOptions(1, 5));
 
         Assert.Equal(StockMcpToolNames.Product, result.ToolName);
         Assert.Equal("task-product", result.TaskId);
+        Assert.Equal(1, service.LastWindow?.EvidenceSkip);
+        Assert.Equal(5, service.LastWindow?.EvidenceTake);
     }
 
     [Fact]
@@ -159,13 +162,16 @@ public sealed class StockMcpGatewayPhaseATests
 
     private sealed class RecordingStockCopilotMcpService : IStockCopilotMcpService
     {
-        public Task<StockCopilotMcpEnvelopeDto<StockCopilotCompanyOverviewDataDto>> GetCompanyOverviewAsync(string symbol, string? taskId, CancellationToken cancellationToken = default)
+        public StockCopilotMcpWindowOptions? LastWindow { get; private set; }
+
+        public Task<StockCopilotMcpEnvelopeDto<StockCopilotCompanyOverviewDataDto>> GetCompanyOverviewAsync(string symbol, string? taskId, StockCopilotMcpWindowOptions? window = null, CancellationToken cancellationToken = default)
         {
             throw new NotSupportedException();
         }
 
-        public Task<StockCopilotMcpEnvelopeDto<StockCopilotProductDataDto>> GetProductAsync(string symbol, string? taskId, CancellationToken cancellationToken = default)
+        public Task<StockCopilotMcpEnvelopeDto<StockCopilotProductDataDto>> GetProductAsync(string symbol, string? taskId, StockCopilotMcpWindowOptions? window = null, CancellationToken cancellationToken = default)
         {
+            LastWindow = window;
             return Task.FromResult(new StockCopilotMcpEnvelopeDto<StockCopilotProductDataDto>(
                 "trace-product",
                 taskId ?? "task-product",
@@ -183,17 +189,17 @@ public sealed class StockMcpGatewayPhaseATests
                 new StockCopilotMcpMetaDto("v1", "local_required", StockMcpToolNames.Product, symbol, null, null, null)));
         }
 
-        public Task<StockCopilotMcpEnvelopeDto<StockCopilotFundamentalsDataDto>> GetFundamentalsAsync(string symbol, string? taskId, CancellationToken cancellationToken = default)
+        public Task<StockCopilotMcpEnvelopeDto<StockCopilotFundamentalsDataDto>> GetFundamentalsAsync(string symbol, string? taskId, StockCopilotMcpWindowOptions? window = null, CancellationToken cancellationToken = default)
         {
             throw new NotSupportedException();
         }
 
-        public Task<StockCopilotMcpEnvelopeDto<StockCopilotShareholderDataDto>> GetShareholderAsync(string symbol, string? taskId, CancellationToken cancellationToken = default)
+        public Task<StockCopilotMcpEnvelopeDto<StockCopilotShareholderDataDto>> GetShareholderAsync(string symbol, string? taskId, StockCopilotMcpWindowOptions? window = null, CancellationToken cancellationToken = default)
         {
             throw new NotSupportedException();
         }
 
-        public Task<StockCopilotMcpEnvelopeDto<StockCopilotMarketContextDataDto>> GetMarketContextAsync(string symbol, string? taskId, CancellationToken cancellationToken = default)
+        public Task<StockCopilotMcpEnvelopeDto<StockCopilotMarketContextDataDto>> GetMarketContextAsync(string symbol, string? taskId, StockCopilotMcpWindowOptions? window = null, CancellationToken cancellationToken = default)
         {
             return Task.FromResult(new StockCopilotMcpEnvelopeDto<StockCopilotMarketContextDataDto>(
                 "trace-market-context",
@@ -203,13 +209,13 @@ public sealed class StockMcpGatewayPhaseATests
                 new StockCopilotMcpCacheDto(false, "test", DateTime.UtcNow),
                 Array.Empty<string>(),
                 Array.Empty<string>(),
-                new StockCopilotMarketContextDataDto(symbol, true, "主升", 80m, "银行", "银行", "BK001", 90m, 0.8m, "积极执行", false, true),
+                new StockCopilotMarketContextDataDto(symbol, true, 80m, "银行", "银行", "BK001", 90m),
                 Array.Empty<StockCopilotMcpEvidenceDto>(),
                 Array.Empty<StockCopilotMcpFeatureDto>(),
                 new StockCopilotMcpMetaDto("v1", "local_required", StockMcpToolNames.MarketContext, symbol, null, null, null)));
         }
 
-        public Task<StockCopilotMcpEnvelopeDto<StockCopilotSocialSentimentDataDto>> GetSocialSentimentAsync(string symbol, string? taskId, CancellationToken cancellationToken = default)
+            public Task<StockCopilotMcpEnvelopeDto<StockCopilotSocialSentimentDataDto>> GetSocialSentimentAsync(string symbol, string? taskId, StockCopilotMcpWindowOptions? window = null, CancellationToken cancellationToken = default)
         {
             return Task.FromResult(new StockCopilotMcpEnvelopeDto<StockCopilotSocialSentimentDataDto>(
                 "trace-social-sentiment",
@@ -219,28 +225,28 @@ public sealed class StockMcpGatewayPhaseATests
                 new StockCopilotMcpCacheDto(false, "test", DateTime.UtcNow),
                 new[] { "degraded" },
                 new[] { "no_live_social_source" },
-                new StockCopilotSocialSentimentDataDto(symbol, "degraded", false, null, "market_proxy_only", "利好", 1, DateTime.UtcNow, new StockCopilotSentimentCountDto(0, 0, 0, 0, null), new StockCopilotSentimentCountDto(0, 0, 0, 0, null), new StockCopilotSentimentCountDto(0, 0, 0, 0, null), new StockCopilotSocialSentimentMarketProxyDto("主升", 81m, "利好", DateTime.UtcNow)),
+                new StockCopilotSocialSentimentDataDto(symbol, "degraded", false, null, "market_proxy_only", 1, DateTime.UtcNow, new StockCopilotSentimentCountDto(0, 0, 0, 0, null), new StockCopilotSentimentCountDto(0, 0, 0, 0, null), new StockCopilotSentimentCountDto(0, 0, 0, 0, null), new StockCopilotSocialSentimentMarketProxyDto("主升", 81m, DateTime.UtcNow)),
                 Array.Empty<StockCopilotMcpEvidenceDto>(),
                 Array.Empty<StockCopilotMcpFeatureDto>(),
                 new StockCopilotMcpMetaDto("v1", "local_required", StockMcpToolNames.SocialSentiment, symbol, null, null, null)));
         }
 
-        public Task<StockCopilotMcpEnvelopeDto<StockCopilotKlineDataDto>> GetKlineAsync(string symbol, string interval, int count, string? source, string? taskId, CancellationToken cancellationToken = default)
+        public Task<StockCopilotMcpEnvelopeDto<StockCopilotKlineDataDto>> GetKlineAsync(string symbol, string interval, int count, string? source, string? taskId, StockCopilotMcpWindowOptions? window = null, CancellationToken cancellationToken = default)
         {
             throw new NotSupportedException();
         }
 
-        public Task<StockCopilotMcpEnvelopeDto<StockCopilotMinuteDataDto>> GetMinuteAsync(string symbol, string? source, string? taskId, CancellationToken cancellationToken = default)
+        public Task<StockCopilotMcpEnvelopeDto<StockCopilotMinuteDataDto>> GetMinuteAsync(string symbol, string? source, string? taskId, StockCopilotMcpWindowOptions? window = null, CancellationToken cancellationToken = default)
         {
             throw new NotSupportedException();
         }
 
-        public Task<StockCopilotMcpEnvelopeDto<StockCopilotStrategyDataDto>> GetStrategyAsync(string symbol, string interval, int count, string? source, IReadOnlyList<string>? strategies, string? taskId, CancellationToken cancellationToken = default)
+        public Task<StockCopilotMcpEnvelopeDto<StockCopilotStrategyDataDto>> GetStrategyAsync(string symbol, string interval, int count, string? source, IReadOnlyList<string>? strategies, string? taskId, StockCopilotMcpWindowOptions? window = null, CancellationToken cancellationToken = default)
         {
             throw new NotSupportedException();
         }
 
-        public Task<StockCopilotMcpEnvelopeDto<StockCopilotNewsDataDto>> GetNewsAsync(string symbol, string level, string? taskId, CancellationToken cancellationToken = default)
+        public Task<StockCopilotMcpEnvelopeDto<StockCopilotNewsDataDto>> GetNewsAsync(string symbol, string level, string? taskId, StockCopilotMcpWindowOptions? window = null, CancellationToken cancellationToken = default)
         {
             return Task.FromResult(new StockCopilotMcpEnvelopeDto<StockCopilotNewsDataDto>(
                 "trace-news",

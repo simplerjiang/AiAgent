@@ -1,10 +1,13 @@
+using System.Globalization;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using SimplerJiangAiAgent.Api.Modules.Stocks.Models;
 
 namespace SimplerJiangAiAgent.Api.Modules.Stocks.Services;
 
 internal static class EastmoneyCompanyProfileParser
 {
+    private static readonly Regex FinanceReportYearRegex = new("(?<year>20\\d{2})", RegexOptions.Compiled);
     private static readonly (string JsonKey, string Label)[] FactMappings =
     [
         ("zyyw", "主营业务"),
@@ -206,7 +209,7 @@ internal static class EastmoneyCompanyProfileParser
                 return Array.Empty<StockFundamentalFactDto>();
             }
 
-            var latest = dataNode[0];
+            var latest = SelectLatestFinanceNode(dataNode);
             var facts = new List<StockFundamentalFactDto>();
 
             void AddFactOrSkip(string jsonKey, string label, string unit = "", decimal divisor = 1m)
@@ -241,5 +244,103 @@ internal static class EastmoneyCompanyProfileParser
         {
             return Array.Empty<StockFundamentalFactDto>();
         }
+    }
+
+    private static JsonElement SelectLatestFinanceNode(JsonElement dataNode)
+    {
+        JsonElement? best = null;
+        (DateTime? ReportDate, int ReportRank, int Index) bestKey = (null, int.MinValue, int.MaxValue);
+        var index = 0;
+
+        foreach (var item in dataNode.EnumerateArray())
+        {
+            var currentKey = ResolveFinanceSortKey(item, index);
+            if (best is null || CompareFinanceSortKey(currentKey, bestKey) > 0)
+            {
+                best = item;
+                bestKey = currentKey;
+            }
+
+            index += 1;
+        }
+
+        return best ?? dataNode[0];
+    }
+
+    private static (DateTime? ReportDate, int ReportRank, int Index) ResolveFinanceSortKey(JsonElement item, int index)
+    {
+        var reportDate = TryParseFinanceDate(item, "REPORT_DATE")
+            ?? TryParseFinanceDate(item, "REPORTDATE")
+            ?? TryParseFinanceDate(item, "NOTICE_DATE");
+        var reportRank = ResolveFinanceReportRank(item);
+        return (reportDate, reportRank, -index);
+    }
+
+    private static int CompareFinanceSortKey((DateTime? ReportDate, int ReportRank, int Index) left, (DateTime? ReportDate, int ReportRank, int Index) right)
+    {
+        var dateComparison = Nullable.Compare(left.ReportDate, right.ReportDate);
+        if (dateComparison != 0)
+        {
+            return dateComparison;
+        }
+
+        var rankComparison = left.ReportRank.CompareTo(right.ReportRank);
+        if (rankComparison != 0)
+        {
+            return rankComparison;
+        }
+
+        return left.Index.CompareTo(right.Index);
+    }
+
+    private static DateTime? TryParseFinanceDate(JsonElement item, string propertyName)
+    {
+        if (!item.TryGetProperty(propertyName, out var node) || node.ValueKind != JsonValueKind.String)
+        {
+            return null;
+        }
+
+        var raw = node.GetString()?.Trim();
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return null;
+        }
+
+        return DateTime.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.AssumeLocal, out var parsed)
+            ? parsed.Date
+            : null;
+    }
+
+    private static int ResolveFinanceReportRank(JsonElement item)
+    {
+        if (!item.TryGetProperty("REPORT_DATE_NAME", out var node) || node.ValueKind != JsonValueKind.String)
+        {
+            return int.MinValue;
+        }
+
+        var name = node.GetString()?.Trim();
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return int.MinValue;
+        }
+
+        var year = 0;
+        var match = FinanceReportYearRegex.Match(name);
+        if (match.Success)
+        {
+            _ = int.TryParse(match.Groups["year"].Value, out year);
+        }
+
+        var quarterWeight = name.Contains("年报", StringComparison.OrdinalIgnoreCase)
+            ? 4
+            : name.Contains("三季报", StringComparison.OrdinalIgnoreCase)
+                ? 3
+                : name.Contains("中报", StringComparison.OrdinalIgnoreCase) || name.Contains("半年报", StringComparison.OrdinalIgnoreCase)
+                    ? 2
+                    : name.Contains("一季报", StringComparison.OrdinalIgnoreCase)
+                        ? 1
+                        : 0;
+
+        return year * 10 + quarterWeight;
     }
 }

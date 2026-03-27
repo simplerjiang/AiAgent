@@ -109,31 +109,25 @@ public sealed class LocalFactIngestionService : ILocalFactIngestionService
         var normalized = StockSymbolNormalizer.Normalize(symbol);
         await EnsureMarketFreshAsync(cancellationToken);
 
-        var freshCutoff = DateTime.UtcNow.AddMinutes(-30);
-
         var symbolGate = GetSymbolGate(normalized);
         await symbolGate.WaitAsync(cancellationToken);
         try
         {
-            var hasFreshStockNews = await _dbContext.LocalStockNews
-                .AnyAsync(item => item.Symbol == normalized && item.CrawledAt >= freshCutoff, cancellationToken);
-
-            var hasFreshSector = await _dbContext.LocalSectorReports
-                .AnyAsync(item => item.Symbol == normalized && item.Level == "sector" && item.CrawledAt >= freshCutoff, cancellationToken);
-
-            if (hasFreshStockNews && hasFreshSector)
+            try
             {
-                if (await HasPendingSymbolAiAsync(normalized, cancellationToken))
-                {
-                    await _aiEnrichmentService.ProcessSymbolPendingAsync(normalized, cancellationToken);
-                }
-
-                return;
+                var crawledAt = DateTime.UtcNow;
+                await SyncSymbolAsync(normalized, crawledAt, cancellationToken);
+                await _dbContext.SaveChangesAsync(cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "按需刷新本地事实失败，回退到现有缓存数据: {Symbol}", normalized);
             }
 
-            var crawledAt = DateTime.UtcNow;
-            await SyncSymbolAsync(normalized, crawledAt, cancellationToken);
-            await _dbContext.SaveChangesAsync(cancellationToken);
             await _aiEnrichmentService.ProcessSymbolPendingAsync(normalized, cancellationToken);
         }
         finally
@@ -144,24 +138,9 @@ public sealed class LocalFactIngestionService : ILocalFactIngestionService
 
     public async Task EnsureMarketFreshAsync(CancellationToken cancellationToken = default)
     {
-        var freshCutoff = DateTime.UtcNow.AddMinutes(-30);
-
         await MarketRefreshGate.WaitAsync(cancellationToken);
         try
         {
-            var hasFreshMarket = await _dbContext.LocalSectorReports
-                .AnyAsync(item => item.Level == "market" && item.CrawledAt >= freshCutoff, cancellationToken);
-
-            if (hasFreshMarket)
-            {
-                if (await HasPendingMarketAiAsync(cancellationToken))
-                {
-                    await _aiEnrichmentService.ProcessMarketPendingAsync(cancellationToken);
-                }
-
-                return;
-            }
-
             var crawledAt = DateTime.UtcNow;
             var marketReports = await FetchMarketReportsAsync(crawledAt, cancellationToken);
             await UpsertMarketReportsAsync(marketReports, cancellationToken);

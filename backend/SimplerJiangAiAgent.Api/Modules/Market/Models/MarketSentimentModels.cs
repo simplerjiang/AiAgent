@@ -149,13 +149,13 @@ public sealed record SectorRotationDetailDto(
     IReadOnlyList<SectorRotationNewsDto> News);
 
 public sealed record StockMarketContextDto(
-    string StageLabel,
+    string? StageLabel,
     decimal StageConfidence,
     string? StockSectorName,
     string? MainlineSectorName,
     string? SectorCode,
     decimal MainlineScore,
     decimal SuggestedPositionScale,
-    string ExecutionFrequencyLabel,
+    string? ExecutionFrequencyLabel,
     bool CounterTrendWarning,
     bool IsMainlineAligned);

@@ -1,5 +1,9 @@
+using System.Text.Json;
 using System.Net;
 using Microsoft.Extensions.Options;
+using SimplerJiangAiAgent.Api.Infrastructure.Jobs;
+using SimplerJiangAiAgent.Api.Infrastructure.Llm;
+using SimplerJiangAiAgent.Api.Infrastructure.Serialization;
 using SimplerJiangAiAgent.Api.Modules.Market.Models;
 using SimplerJiangAiAgent.Api.Modules.Market.Services;
 using SimplerJiangAiAgent.Api.Modules.Stocks.Models;
@@ -51,6 +55,7 @@ public sealed class StockCopilotMcpServiceTests
             DateTime.UtcNow.AddMinutes(-25),
             new[]
             {
+                new StockFundamentalFactDto("主营业务", "新能源汽车及动力电池业务", "东方财富公司概况"),
                 new StockFundamentalFactDto("经营范围", "新能源汽车及动力电池研发、生产、销售", "东方财富公司概况"),
                 new StockFundamentalFactDto("所属行业", "汽车整车", "东方财富公司概况"),
                 new StockFundamentalFactDto("证监会行业", "汽车制造业", "东方财富公司概况"),
@@ -66,13 +71,224 @@ public sealed class StockCopilotMcpServiceTests
         Assert.Equal(StockMcpToolNames.Product, result.ToolName);
         Assert.Equal("local_required", result.RolePolicyClass);
         Assert.Equal("local", result.SourceTier);
-        Assert.Equal("新能源汽车及动力电池研发、生产、销售", result.Data.BusinessScope);
+        Assert.Equal("新能源汽车及动力电池业务", result.Data.BusinessScope);
+        Assert.Equal("新能源汽车及动力电池业务", result.Data.MainBusiness);
         Assert.Equal("汽车整车", result.Data.Industry);
         Assert.Equal("汽车制造业", result.Data.CsrcIndustry);
         Assert.Equal("广东", result.Data.Region);
-        Assert.Equal(4, result.Data.FactCount);
+        Assert.Equal(5, result.Data.FactCount);
         Assert.DoesNotContain(result.Data.Facts, item => item.Label == "营业收入");
+        Assert.Contains(result.Data.Facts, item => item.Label == "经营范围" && item.Value.Contains("研发、生产、销售", StringComparison.Ordinal));
         Assert.Contains(result.Evidence, item => item.Level == "product");
+    }
+
+    [Fact]
+    public async Task GetProductAsync_WhenLlmReturnsMarketRecognitionDirections_ShouldSurfaceLlmSummaryInsteadOfHardcodedKeywords()
+    {
+        const string registeredBusinessScope = "光通信器件、通信设备、电子元器件的研发、生产、销售及技术服务。";
+        var llmService = new FakeLlmService((provider, request, _) =>
+        {
+            Assert.Equal("cheap-route", provider);
+            Assert.Equal("gpt-4.1-nano", request.Model);
+            return Task.FromResult(new LlmChatResult("{\"marketRecognitionDirections\":[\"高速铜缆\",\"北美算力映射\"],\"reason\":\"最近新闻与搜索证据都把公司放在高速互联与海外算力链方向。\"}"));
+        });
+
+        var service = CreateService(
+            queryTool: new FakeQueryLocalFactDatabaseTool(
+                name: "中际旭创",
+                sectorName: "通信设备",
+                fundamentalFacts: new[]
+                {
+                    new LocalFundamentalFactDto("主营业务", "高速光模块及光通信器件业务", "东方财富公司概况"),
+                    new LocalFundamentalFactDto("经营范围", registeredBusinessScope, "东方财富公司概况"),
+                    new LocalFundamentalFactDto("所属行业", "通信设备", "东方财富公司概况"),
+                    new LocalFundamentalFactDto("所属地区", "山东", "东方财富公司概况")
+                },
+                stockNews: new[]
+                {
+                    CreateLocalNewsItem(
+                        101,
+                        "stock",
+                        DateTime.UtcNow.AddHours(-1),
+                        DateTime.UtcNow.AddMinutes(-30),
+                        "公司在 AI 算力链条中的高速光模块需求提升。",
+                        "公司在 AI 算力链条中的高速光模块需求提升。",
+                        title: "中际旭创 AI 算力需求持续提升",
+                        aiTarget: "个股:中际旭创",
+                        aiTags: new[] { "算力" })
+                },
+                sectorReports: new[]
+                {
+                    CreateLocalNewsItem(
+                        201,
+                        "sector",
+                        DateTime.UtcNow.AddHours(-2),
+                        DateTime.UtcNow.AddMinutes(-40),
+                        "CPO 光模块板块维持活跃。",
+                        "CPO 光模块板块维持活跃。",
+                        title: "CPO 光模块板块持续活跃",
+                        aiTarget: "板块:CPO",
+                        aiTags: new[] { "光模块" })
+                }),
+            fundamentalSnapshotService: new NullFundamentalSnapshotService(),
+            llmService: llmService,
+            syncOptions: new StockSyncOptions
+            {
+                AiProvider = "cheap-route",
+                AiModel = "gpt-4.1-nano"
+            });
+
+        var result = await service.GetProductAsync("sz300308", "task-product-market-direction");
+
+        var summaryEvidence = result.Evidence[0];
+        var summary = Assert.IsType<string>(summaryEvidence.Summary);
+        Assert.Equal("产品业务概览", summaryEvidence.Title);
+        Assert.Contains("市场认可方向=高速铜缆 / 北美算力映射", summary, StringComparison.Ordinal);
+        Assert.Contains("业务摘要=高速光模块及光通信器件业务", summary, StringComparison.Ordinal);
+        Assert.DoesNotContain("经营范围=", summary, StringComparison.Ordinal);
+        Assert.Contains("市场归纳LLM", summaryEvidence.Source, StringComparison.Ordinal);
+        Assert.Contains(result.Data.Facts, item => item.Label == "经营范围" && item.Value == registeredBusinessScope);
+    }
+
+    [Fact]
+    public async Task GetProductAsync_WhenLlmFails_ShouldFallbackToReadableBusinessIndustrySummary()
+    {
+        const string registeredBusinessScope = "企业金融服务、零售金融服务、资金业务、金融市场业务。";
+        var service = CreateService(
+            queryTool: new FakeQueryLocalFactDatabaseTool(
+                name: "浦发银行",
+                sectorName: "银行",
+                fundamentalFacts: new[]
+                {
+                    new LocalFundamentalFactDto("主营业务", "商业银行及相关金融服务", "东方财富公司概况"),
+                    new LocalFundamentalFactDto("经营范围", registeredBusinessScope, "东方财富公司概况"),
+                    new LocalFundamentalFactDto("所属行业", "银行", "东方财富公司概况"),
+                    new LocalFundamentalFactDto("所属地区", "上海", "东方财富公司概况")
+                },
+                stockNews: new[]
+                {
+                    CreateLocalNewsItem(
+                        301,
+                        "stock",
+                        DateTime.UtcNow.AddHours(-2),
+                        DateTime.UtcNow.AddMinutes(-20),
+                        "银行板块维持稳健。",
+                        "银行板块维持稳健。",
+                        title: "浦发银行经营稳健")
+                }),
+            fundamentalSnapshotService: new NullFundamentalSnapshotService(),
+            llmService: new FakeLlmService((_, _, _) => throw new InvalidOperationException("llm failed")));
+
+        var result = await service.GetProductAsync("sh600000", "task-product-llm-fallback");
+
+        var summary = Assert.IsType<string>(result.Evidence[0].Summary);
+        Assert.DoesNotContain("市场认可方向=", summary, StringComparison.Ordinal);
+        Assert.Contains("业务摘要=商业银行及相关金融服务", summary, StringComparison.Ordinal);
+        Assert.Contains("所属行业=银行", summary, StringComparison.Ordinal);
+        Assert.Contains("所属地区=上海", summary, StringComparison.Ordinal);
+        Assert.DoesNotContain("经营范围=", summary, StringComparison.Ordinal);
+        Assert.Contains(result.Data.Facts, item => item.Label == "经营范围" && item.Value == registeredBusinessScope);
+    }
+
+    [Fact]
+    public async Task GetProductAsync_WhenExternalSearchAvailable_ShouldIncludeSearchEvidenceInLlmPrompt()
+    {
+        var publishedAt = DateTime.UtcNow.AddHours(-3);
+        var llmService = new FakeLlmService((_, _, _) => Task.FromResult(new LlmChatResult("{\"marketRecognitionDirections\":[],\"reason\":\"证据不足\"}")));
+        var payload = $$"""
+{"results":[{"title":"高速铜缆概念热度提升","url":"https://news.example.com/copper","source":"trusted-feed","content":"多篇报道把公司与高速铜缆方向关联。","published_date":"{{publishedAt:O}}","score":0.92}]}
+""";
+        var service = CreateService(
+            new StockCopilotSearchOptions { Enabled = true, Provider = "tavily", ApiKey = "test-key", BaseUrl = "https://search.example.com" },
+            queryTool: new FakeQueryLocalFactDatabaseTool(
+                name: "中际旭创",
+                sectorName: "通信设备",
+                fundamentalFacts: new[]
+                {
+                    new LocalFundamentalFactDto("主营业务", "高速光模块及光通信器件业务", "东方财富公司概况"),
+                    new LocalFundamentalFactDto("经营范围", "光通信器件、通信设备研发生产销售", "东方财富公司概况"),
+                    new LocalFundamentalFactDto("所属行业", "通信设备", "东方财富公司概况")
+                },
+                stockNews: new[]
+                {
+                    CreateLocalNewsItem(
+                        401,
+                        "stock",
+                        DateTime.UtcNow.AddHours(-1),
+                        DateTime.UtcNow.AddMinutes(-10),
+                        "高速互联需求继续提升。",
+                        "高速互联需求继续提升。",
+                        title: "中际旭创高速互联需求提升")
+                }),
+            fundamentalSnapshotService: new NullFundamentalSnapshotService(),
+            httpClientFactory: new FakeHttpClientFactory(new StaticHttpMessageHandler(HttpStatusCode.OK, payload)),
+            llmService: llmService);
+
+        await service.GetProductAsync("sz300308", "task-product-search-prompt");
+
+        Assert.NotNull(llmService.LastRequest);
+        Assert.Contains("高速铜缆概念热度提升", llmService.LastRequest!.Prompt, StringComparison.Ordinal);
+        Assert.Contains("trusted-feed", llmService.LastRequest.Prompt, StringComparison.Ordinal);
+        Assert.Contains("多篇报道把公司与高速铜缆方向关联", llmService.LastRequest.Prompt, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task GetProductAsync_WhenMainBusinessMissingButIndustryExists_ShouldUseIndustrySummaryInsteadOfRegisteredScope()
+    {
+        const string registeredBusinessScope = "吸收公众存款；发放短期、中期和长期贷款；办理国内外结算；办理票据承兑与贴现；发行金融债券；代理发行、代理兑付、承销政府债券；买卖政府债券、金融债券；从事同业拆借；买卖、代理买卖外汇；从事银行卡业务；提供信用证服务及担保；代理收付款项及代理保险业务；提供保管箱服务；经国务院银行业监督管理机构批准的其他业务。";
+        var snapshot = new StockFundamentalSnapshotDto(
+            DateTime.UtcNow.AddMinutes(-25),
+            new[]
+            {
+                new StockFundamentalFactDto("经营范围", registeredBusinessScope, "东方财富公司概况"),
+                new StockFundamentalFactDto("所属行业", "银行", "东方财富公司概况"),
+                new StockFundamentalFactDto("所属地区", "上海", "东方财富公司概况")
+            });
+        var service = CreateService(
+            queryTool: new EmptyQueryLocalFactDatabaseTool(),
+            fundamentalSnapshotService: new StaticFundamentalSnapshotService(snapshot));
+
+        var result = await service.GetProductAsync("sh600000", "task-product-industry-summary");
+
+        Assert.Null(result.Data.MainBusiness);
+        Assert.Equal("以银行相关业务为主", result.Data.BusinessScope);
+        Assert.NotEqual(registeredBusinessScope, result.Data.BusinessScope);
+        Assert.DoesNotContain("no_product_facts", result.DegradedFlags);
+        Assert.Contains(result.Data.Facts, item => item.Label == "经营范围" && item.Value == registeredBusinessScope);
+        var summaryEvidence = result.Evidence[0];
+        var summary = Assert.IsType<string>(summaryEvidence.Summary);
+        Assert.Equal("产品业务概览", summaryEvidence.Title);
+        Assert.Contains($"业务摘要={result.Data.BusinessScope}", summary, StringComparison.Ordinal);
+        Assert.Contains("所属行业=银行", summary, StringComparison.Ordinal);
+        Assert.Contains("所属地区=上海", summary, StringComparison.Ordinal);
+        Assert.DoesNotContain("经营范围=", summary, StringComparison.Ordinal);
+        Assert.Contains(result.Evidence, item => item.Title == "经营范围" && item.Summary == registeredBusinessScope);
+    }
+
+    [Fact]
+    public async Task GetProductAsync_WhenOnlyRegisteredBusinessScopeAvailable_ShouldKeepFirstSummaryReadable()
+    {
+        const string registeredBusinessScope = "一般项目：电子专用材料研发；电子专用材料制造；电子专用材料销售；货物进出口；技术进出口；以自有资金从事投资活动。";
+        var snapshot = new StockFundamentalSnapshotDto(
+            DateTime.UtcNow.AddMinutes(-25),
+            new[]
+            {
+                new StockFundamentalFactDto("经营范围", registeredBusinessScope, "东方财富公司概况")
+            });
+        var service = CreateService(
+            queryTool: new EmptyQueryLocalFactDatabaseTool(),
+            fundamentalSnapshotService: new StaticFundamentalSnapshotService(snapshot));
+
+        var result = await service.GetProductAsync("sh600000", "task-product-registered-scope-only");
+
+        var summaryEvidence = result.Evidence[0];
+        var summary = Assert.IsType<string>(summaryEvidence.Summary);
+        Assert.Equal("产品业务概览", summaryEvidence.Title);
+        Assert.Equal("产品事实已收录，详见后续经营范围原始事实", summary);
+        Assert.DoesNotContain(registeredBusinessScope, summary, StringComparison.Ordinal);
+        Assert.DoesNotContain("经营范围=", summary, StringComparison.Ordinal);
+        Assert.Contains(result.Data.Facts, item => item.Label == "经营范围" && item.Value == registeredBusinessScope);
+        Assert.Contains(result.Evidence, item => item.Title == "经营范围" && item.Summary == registeredBusinessScope);
     }
 
     [Fact]
@@ -82,7 +298,6 @@ public sealed class StockCopilotMcpServiceTests
             DateTime.UtcNow.AddMinutes(-25),
             new[]
             {
-                new StockFundamentalFactDto("所属行业", "银行", "东方财富公司概况"),
                 new StockFundamentalFactDto("所属地区", "上海", "东方财富公司概况")
             });
         var service = CreateService(
@@ -95,8 +310,26 @@ public sealed class StockCopilotMcpServiceTests
         Assert.Contains("no_product_facts", result.DegradedFlags);
         Assert.Null(result.Data.MainBusiness);
         Assert.Null(result.Data.BusinessScope);
-        Assert.Equal(2, result.Data.FactCount);
-        Assert.Contains(result.Data.Facts, item => item.Label == "所属行业");
+        Assert.Equal(1, result.Data.FactCount);
+        Assert.Contains(result.Data.Facts, item => item.Label == "所属地区");
+    }
+
+    [Fact]
+    public async Task GetCompanyOverviewAsync_WithoutEvidenceTake_ShouldReturnAllEvidence()
+    {
+        var service = CreateService(
+            queryTool: new FakeQueryLocalFactDatabaseTool(
+                stockNews: CreateLocalNewsItems(4),
+                fundamentalFacts: new[]
+                {
+                    new LocalFundamentalFactDto("主营业务", "商业银行及相关金融服务", "东方财富公司概况"),
+                    new LocalFundamentalFactDto("经营范围", "吸收公众存款、发放贷款、办理结算", "东方财富公司概况")
+                }));
+
+        var result = await service.GetCompanyOverviewAsync("sh600000", "task-company-overview-all-evidence");
+
+        Assert.Equal(5, result.Evidence.Count);
+        Assert.Contains(result.Evidence, item => item.Level == "overview");
     }
 
     [Fact]
@@ -112,6 +345,64 @@ public sealed class StockCopilotMcpServiceTests
         Assert.True(result.Data.FactCount > 0);
         Assert.Contains(result.Data.Facts, item => item.Label == "机构目标价");
         Assert.All(result.Evidence, item => Assert.Equal("fundamental", item.Level));
+    }
+
+    [Fact]
+    public async Task GetFundamentalsAsync_ShouldApplyFactAndEvidenceWindowWithLatestFirstOrdering()
+    {
+        var snapshot = new StockFundamentalSnapshotDto(
+            DateTime.UtcNow.AddMinutes(-20),
+            new[]
+            {
+                new StockFundamentalFactDto("所属行业", "银行", "东方财富公司概况"),
+                new StockFundamentalFactDto("归属净利润", "128亿元", "东方财富最新财报"),
+                new StockFundamentalFactDto("最新财报期", "2025年报", "东方财富最新财报"),
+                new StockFundamentalFactDto("营业收入", "1680亿元", "东方财富最新财报")
+            });
+        var service = CreateService(
+            queryTool: new FakeQueryLocalFactDatabaseTool(
+                fundamentalFacts: new[]
+                {
+                    new LocalFundamentalFactDto("机构目标价", "11.5", "东方财富")
+                }),
+            fundamentalSnapshotService: new StaticFundamentalSnapshotService(snapshot));
+
+        var result = await service.GetFundamentalsAsync(
+            "sh600000",
+            "task-fundamentals-window",
+            new StockCopilotMcpWindowOptions(1, 2, 1, 2));
+
+        Assert.Equal(5, result.Data.FactCount);
+        Assert.Equal(new[] { "营业收入", "归属净利润" }, result.Data.Facts.Select(item => item.Label).ToArray());
+        Assert.Equal(2, result.Evidence.Count);
+        Assert.Equal(new[] { "营业收入", "归属净利润" }, result.Evidence.Select(item => item.Title).ToArray());
+    }
+
+    [Fact]
+    public async Task GetFundamentalsAsync_WithoutFactTake_ShouldReturnAllFactsAndEvidence()
+    {
+        var snapshot = new StockFundamentalSnapshotDto(
+            DateTime.UtcNow.AddMinutes(-20),
+            new[]
+            {
+                new StockFundamentalFactDto("所属行业", "银行", "东方财富公司概况"),
+                new StockFundamentalFactDto("归属净利润", "128亿元", "东方财富最新财报"),
+                new StockFundamentalFactDto("最新财报期", "2025年报", "东方财富最新财报"),
+                new StockFundamentalFactDto("营业收入", "1680亿元", "东方财富最新财报")
+            });
+        var service = CreateService(
+            queryTool: new FakeQueryLocalFactDatabaseTool(
+                fundamentalFacts: new[]
+                {
+                    new LocalFundamentalFactDto("机构目标价", "11.5", "东方财富")
+                }),
+            fundamentalSnapshotService: new StaticFundamentalSnapshotService(snapshot));
+
+        var result = await service.GetFundamentalsAsync("sh600000", "task-fundamentals-all");
+
+        Assert.Equal(5, result.Data.FactCount);
+        Assert.Equal(5, result.Data.Facts.Count);
+        Assert.Equal(5, result.Evidence.Count);
     }
 
     [Fact]
@@ -225,7 +516,7 @@ public sealed class StockCopilotMcpServiceTests
     [Fact]
     public async Task GetMarketContextAsync_ShouldReturnStructuredData()
     {
-        var service = CreateService();
+        var service = CreateService(marketContextService: new EmptyLabelStockMarketContextService());
 
         var result = await service.GetMarketContextAsync("sh600000", "task-market-context");
 
@@ -233,9 +524,96 @@ public sealed class StockCopilotMcpServiceTests
         Assert.Equal("local_required", result.RolePolicyClass);
         Assert.True(result.Data.Available);
         Assert.Equal("sh600000", result.Data.Symbol);
-        Assert.Equal("主升", result.Data.StageLabel);
+        Assert.NotNull(result.Meta.MarketContext);
         Assert.Equal("银行", result.Data.MainlineSectorName);
         Assert.Equal(2, result.Evidence.Count);
+
+        var json = JsonSerializer.Serialize(result, CreateWebJsonOptions());
+        using var doc = JsonDocument.Parse(json);
+        var data = doc.RootElement.GetProperty("data");
+        var metaMarketContext = doc.RootElement.GetProperty("meta").GetProperty("marketContext");
+
+        Assert.False(data.TryGetProperty("stageLabel", out _));
+        Assert.False(data.TryGetProperty("executionFrequencyLabel", out _));
+        Assert.False(data.TryGetProperty("suggestedPositionScale", out _));
+        Assert.False(data.TryGetProperty("isMainlineAligned", out _));
+        Assert.False(data.TryGetProperty("counterTrendWarning", out _));
+        Assert.False(metaMarketContext.TryGetProperty("stageLabel", out _));
+        Assert.False(metaMarketContext.TryGetProperty("executionFrequencyLabel", out _));
+        Assert.False(metaMarketContext.TryGetProperty("suggestedPositionScale", out _));
+        Assert.False(metaMarketContext.TryGetProperty("isMainlineAligned", out _));
+        Assert.False(metaMarketContext.TryGetProperty("counterTrendWarning", out _));
+    }
+
+    [Fact]
+    public async Task GetCompanyOverviewAsync_ShouldSerializeUtcDatesWithSingleChinaShift()
+    {
+        var quoteTimestampUtc = new DateTime(2026, 3, 21, 10, 0, 0, DateTimeKind.Utc);
+        var fundamentalUpdatedAtUtc = new DateTime(2026, 3, 21, 9, 0, 0, DateTimeKind.Utc);
+        var service = CreateService(
+            dataService: new FakeStockDataService(
+                quote: new StockQuoteDto(
+                    "sh600000",
+                    "浦发银行",
+                    10.5m,
+                    0.2m,
+                    1.9m,
+                    13m,
+                    8m,
+                    10.7m,
+                    10.1m,
+                    0.1m,
+                    quoteTimestampUtc,
+                    Array.Empty<StockNewsDto>(),
+                    Array.Empty<StockIndicatorDto>(),
+                    320_000_000_000m,
+                    2.8m,
+                    100000,
+                    "银行")),
+            queryTool: new FakeQueryLocalFactDatabaseTool(
+                fundamentalUpdatedAt: new DateTime(2026, 3, 21, 8, 0, 0, DateTimeKind.Utc)),
+            fundamentalSnapshotService: new StaticFundamentalSnapshotService(new StockFundamentalSnapshotDto(
+                fundamentalUpdatedAtUtc,
+                new[]
+                {
+                    new StockFundamentalFactDto("机构目标价", "11.5", "东方财富"),
+                    new StockFundamentalFactDto("股东户数", "100000", "东方财富股东研究")
+                })));
+
+        var result = await service.GetCompanyOverviewAsync("sh600000", "task-company-overview-serialize");
+
+        Assert.Equal(quoteTimestampUtc, result.Data.QuoteTimestamp);
+        Assert.Equal(fundamentalUpdatedAtUtc, result.Data.FundamentalUpdatedAt);
+
+        var json = JsonSerializer.Serialize(result, CreateWebJsonOptions());
+        using var doc = JsonDocument.Parse(json);
+        var data = doc.RootElement.GetProperty("data");
+        var evidence = doc.RootElement.GetProperty("evidence")[0];
+
+        Assert.Equal("2026-03-21T18:00:00.0000000+08:00", data.GetProperty("quoteTimestamp").GetString());
+        Assert.Equal("2026-03-21T17:00:00.0000000+08:00", data.GetProperty("fundamentalUpdatedAt").GetString());
+        Assert.Equal(data.GetProperty("quoteTimestamp").GetString(), evidence.GetProperty("publishedAt").GetString());
+    }
+
+    [Fact]
+    public async Task GetSocialSentimentAsync_ShouldSerializeLatestEvidenceAtWithoutExtraChinaShift()
+    {
+        var latestPublishedAtUtc = new DateTime(2026, 3, 26, 16, 30, 0, DateTimeKind.Utc);
+        var ingestedAtUtc = new DateTime(2026, 3, 26, 16, 0, 0, DateTimeKind.Utc);
+        var service = CreateService(
+            queryTool: new FakeQueryLocalFactDatabaseTool(
+                publishedAt: latestPublishedAtUtc,
+                ingestedAt: ingestedAtUtc));
+
+        var result = await service.GetSocialSentimentAsync("sh600000", "task-social-latest-evidence");
+
+        var json = JsonSerializer.Serialize(result, CreateWebJsonOptions());
+        using var doc = JsonDocument.Parse(json);
+        var latestEvidenceAt = doc.RootElement.GetProperty("data").GetProperty("latestEvidenceAt").GetString();
+        var latestEvidenceTimestamp = GetLatestEvidenceTimestampString(doc.RootElement.GetProperty("evidence"));
+
+        Assert.Equal("2026-03-27T00:30:00.0000000+08:00", latestEvidenceAt);
+        Assert.Equal(latestEvidenceTimestamp, latestEvidenceAt);
     }
 
     [Fact]
@@ -252,10 +630,15 @@ public sealed class StockCopilotMcpServiceTests
         Assert.Equal("degraded", result.Data.Status);
         Assert.False(result.Data.Blocked);
         Assert.Equal("market_proxy_only", result.Data.ApproximationMode);
-        Assert.Equal("利好", result.Data.OverallSentiment);
         Assert.NotNull(result.Data.MarketProxy);
         Assert.Contains("no_live_social_source", result.DegradedFlags);
         Assert.Contains("degraded.market_proxy_only", result.DegradedFlags);
+        Assert.Contains(result.Warnings, item => item.Contains("本地情绪相关证据聚合工具", StringComparison.Ordinal));
+
+        var json = JsonSerializer.Serialize(result, CreateWebJsonOptions());
+        using var doc = JsonDocument.Parse(json);
+        Assert.False(doc.RootElement.GetProperty("data").TryGetProperty("overallSentiment", out _));
+        Assert.False(doc.RootElement.GetProperty("data").GetProperty("marketProxy").TryGetProperty("overallSentiment", out _));
     }
 
     [Fact]
@@ -273,8 +656,11 @@ public sealed class StockCopilotMcpServiceTests
         Assert.Equal("no_data", result.Data.BlockedReason);
         Assert.Equal("blocked.no_data", result.ErrorCode);
         Assert.Equal("none", result.Data.ApproximationMode);
-        Assert.Null(result.Data.OverallSentiment);
         Assert.Empty(result.Evidence);
+
+        var json = JsonSerializer.Serialize(result, CreateWebJsonOptions());
+        using var doc = JsonDocument.Parse(json);
+        Assert.False(doc.RootElement.GetProperty("data").TryGetProperty("overallSentiment", out _));
     }
 
     [Fact]
@@ -466,6 +852,28 @@ public sealed class StockCopilotMcpServiceTests
     }
 
     [Fact]
+    public async Task SearchAsync_ShouldSerializePublishedDateWithSingleChinaShift()
+    {
+        var publishedAtUtc = new DateTime(2026, 3, 21, 10, 0, 0, DateTimeKind.Utc);
+        var payload = $$"""
+{"results":[{"title":"浦发银行公告速览","url":"https://news.example.com/pingan","source":"trusted-feed","content":"公告显示公司维持稳健经营。","published_date":"{{publishedAtUtc:O}}","score":0.87}]}
+""";
+        var service = CreateService(
+            new StockCopilotSearchOptions { Enabled = true, Provider = "tavily", ApiKey = "test-key", BaseUrl = "https://search.example.com" },
+            httpClientFactory: new FakeHttpClientFactory(new StaticHttpMessageHandler(HttpStatusCode.OK, payload)));
+
+        var result = await service.SearchAsync("浦发银行 公告", true, "task-search-serialize");
+
+        var json = JsonSerializer.Serialize(result, CreateWebJsonOptions());
+        using var doc = JsonDocument.Parse(json);
+        var publishedAt = doc.RootElement.GetProperty("data").GetProperty("results")[0].GetProperty("publishedAt").GetString();
+        var evidencePublishedAt = doc.RootElement.GetProperty("evidence")[0].GetProperty("publishedAt").GetString();
+
+        Assert.Equal("2026-03-21T18:00:00.0000000+08:00", publishedAt);
+        Assert.Equal(publishedAt, evidencePublishedAt);
+    }
+
+    [Fact]
     public async Task SearchAsync_WhenProviderEnabledAndResponseIsEmpty_ShouldReturnNoDataEnvelope()
     {
         var service = CreateService(
@@ -535,12 +943,15 @@ public sealed class StockCopilotMcpServiceTests
         IQueryLocalFactDatabaseTool? queryTool = null,
         IStockFundamentalSnapshotService? fundamentalSnapshotService = null,
         ISectorRotationQueryService? sectorRotationQueryService = null,
-        IHttpClientFactory? httpClientFactory = null)
+        IHttpClientFactory? httpClientFactory = null,
+        IStockMarketContextService? marketContextService = null,
+        ILlmService? llmService = null,
+        StockSyncOptions? syncOptions = null)
     {
         return new StockCopilotMcpService(
             dataService ?? new FakeStockDataService(),
             queryTool ?? new FakeQueryLocalFactDatabaseTool(),
-            new FakeStockMarketContextService(),
+            marketContextService ?? new FakeStockMarketContextService(),
             sectorRotationQueryService ?? new FakeSectorRotationQueryService(),
             new StockAgentFeatureEngineeringService(),
             fundamentalSnapshotService ?? new StaticFundamentalSnapshotService(new StockFundamentalSnapshotDto(
@@ -552,18 +963,31 @@ public sealed class StockCopilotMcpServiceTests
                     new StockFundamentalFactDto("户均持股", "2.5万股", "东方财富股东研究")
                 })),
             httpClientFactory ?? new FakeHttpClientFactory(),
-            Options.Create(options ?? new StockCopilotSearchOptions { Enabled = false, Provider = "tavily" }));
+            Options.Create(options ?? new StockCopilotSearchOptions { Enabled = false, Provider = "tavily" }),
+            llmService,
+            Options.Create(syncOptions ?? new StockSyncOptions()));
+    }
+
+    private static JsonSerializerOptions CreateWebJsonOptions()
+    {
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        options.Converters.Add(new ChinaDateTimeJsonConverter());
+        options.Converters.Add(new ChinaNullableDateTimeJsonConverter());
+        return options;
     }
 
     private sealed class FakeStockDataService : IStockDataService
     {
         private readonly IReadOnlyList<KLinePointDto> _kLines;
         private readonly IReadOnlyList<MinuteLinePointDto> _minuteLines;
+        private readonly StockQuoteDto _quote;
 
         public FakeStockDataService(
+            StockQuoteDto? quote = null,
             IReadOnlyList<KLinePointDto>? kLines = null,
             IReadOnlyList<MinuteLinePointDto>? minuteLines = null)
         {
+            _quote = quote ?? new StockQuoteDto("sh600000", "浦发银行", 10.5m, 0.2m, 1.9m, 13m, 8m, 10.7m, 10.1m, 0.1m, new DateTime(2026, 3, 21, 10, 0, 0), Array.Empty<StockNewsDto>(), Array.Empty<StockIndicatorDto>(), 320_000_000_000m, 2.8m, 100000, "银行");
             _kLines = kLines ?? Enumerable.Range(0, 30)
                 .Select(index => new KLinePointDto(new DateTime(2026, 2, 1).AddDays(index), 9.8m + index * 0.02m, 9.9m + index * 0.02m, 10m + index * 0.02m, 9.7m + index * 0.02m, 1000 + index * 20))
                 .ToArray();
@@ -577,7 +1001,7 @@ public sealed class StockCopilotMcpServiceTests
 
         public Task<StockQuoteDto> GetQuoteAsync(string symbol, string? source = null, CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(new StockQuoteDto(symbol, "浦发银行", 10.5m, 0.2m, 1.9m, 13m, 8m, 10.7m, 10.1m, 0.1m, new DateTime(2026, 3, 21, 10, 0, 0), Array.Empty<StockNewsDto>(), Array.Empty<StockIndicatorDto>(), 320_000_000_000m, 2.8m, 100000, "银行"));
+            return Task.FromResult(_quote with { Symbol = symbol });
         }
 
         public Task<MarketIndexDto> GetMarketIndexAsync(string symbol, string? source = null, CancellationToken cancellationToken = default)
@@ -609,44 +1033,64 @@ public sealed class StockCopilotMcpServiceTests
     {
         private readonly string? _excerpt;
         private readonly string? _summary;
+        private readonly string? _name;
+        private readonly string? _sectorName;
         private readonly IReadOnlyList<LocalFundamentalFactDto> _fundamentalFacts;
+        private readonly IReadOnlyList<LocalNewsItemDto> _stockNews;
+        private readonly IReadOnlyList<LocalNewsItemDto> _sectorReports;
+        private readonly IReadOnlyList<LocalNewsItemDto> _marketReports;
+        private readonly DateTime _publishedAt;
+        private readonly DateTime _ingestedAt;
+        private readonly DateTime? _fundamentalUpdatedAt;
 
         public FakeQueryLocalFactDatabaseTool(
             string? excerpt = "公告摘要",
             string? summary = "公告摘要",
-            IReadOnlyList<LocalFundamentalFactDto>? fundamentalFacts = null)
+            string? name = "浦发银行",
+            string? sectorName = "银行",
+            IReadOnlyList<LocalFundamentalFactDto>? fundamentalFacts = null,
+            IReadOnlyList<LocalNewsItemDto>? stockNews = null,
+            IReadOnlyList<LocalNewsItemDto>? sectorReports = null,
+            IReadOnlyList<LocalNewsItemDto>? marketReports = null,
+            DateTime? publishedAt = null,
+            DateTime? ingestedAt = null,
+            DateTime? fundamentalUpdatedAt = null)
         {
             _excerpt = excerpt;
             _summary = summary;
+            _name = name;
+            _sectorName = sectorName;
             _fundamentalFacts = fundamentalFacts ?? new[] { new LocalFundamentalFactDto("机构目标价", "11.5", "东方财富") };
+            _publishedAt = publishedAt ?? DateTime.UtcNow.AddHours(-1);
+            _ingestedAt = ingestedAt ?? DateTime.UtcNow.AddMinutes(-30);
+            _fundamentalUpdatedAt = fundamentalUpdatedAt ?? DateTime.UtcNow.AddHours(-2);
+            _stockNews = stockNews ?? new[] { CreateLocalNewsItem(1, "stock", _publishedAt, _ingestedAt, _excerpt, _summary) };
+            _sectorReports = sectorReports ?? Array.Empty<LocalNewsItemDto>();
+            _marketReports = marketReports ?? Array.Empty<LocalNewsItemDto>();
         }
 
         public Task<LocalFactPackageDto> QueryAsync(string symbol, CancellationToken cancellationToken = default)
         {
-            var publishedAt = DateTime.UtcNow.AddHours(-1);
-            var ingestedAt = DateTime.UtcNow.AddMinutes(-30);
             return Task.FromResult(new LocalFactPackageDto(
                 symbol,
-                "浦发银行",
-                "银行",
-                new[]
-                {
-                    new LocalNewsItemDto(1, "stock_news:1", "浦发银行公告", null, "上交所公告", "announcement", "announcement", "利好", publishedAt, ingestedAt, "https://example.com/a", _excerpt, _summary, "local_fact", "summary_only", ingestedAt, "个股:浦发银行", new[] { "公告" })
-                },
-                Array.Empty<LocalNewsItemDto>(),
-                Array.Empty<LocalNewsItemDto>(),
-                DateTime.UtcNow.AddHours(-2),
+                _name,
+                _sectorName,
+                _stockNews,
+                _sectorReports,
+                _marketReports,
+                _fundamentalUpdatedAt,
                 _fundamentalFacts));
         }
 
         public Task<LocalNewsBucketDto> QueryLevelAsync(string symbol, string level, CancellationToken cancellationToken = default)
         {
-            var publishedAt = DateTime.UtcNow.AddHours(-1);
-            var ingestedAt = DateTime.UtcNow.AddMinutes(-30);
-            return Task.FromResult(new LocalNewsBucketDto(symbol, level, "银行", new[]
+            var items = level switch
             {
-                new LocalNewsItemDto(1, "stock_news:1", "浦发银行公告", null, "上交所公告", "announcement", level, "利好", publishedAt, ingestedAt, "https://example.com/a", _excerpt, _summary, "local_fact", "summary_only", ingestedAt, "个股:浦发银行", new[] { "公告" })
-            }));
+                "sector" => _sectorReports,
+                "market" => _marketReports,
+                _ => _stockNews
+            };
+            return Task.FromResult(new LocalNewsBucketDto(symbol, level, _sectorName, items));
         }
 
         public Task<LocalNewsBucketDto> QueryMarketAsync(CancellationToken cancellationToken = default)
@@ -739,6 +1183,14 @@ public sealed class StockCopilotMcpServiceTests
         public Task<StockMarketContextDto?> GetLatestAsync(string symbol, CancellationToken cancellationToken = default)
         {
             return Task.FromResult<StockMarketContextDto?>(new StockMarketContextDto("主升", 72m, "银行", "银行", "BK001", 80m, 0.8m, "积极执行", false, true));
+        }
+    }
+
+    private sealed class EmptyLabelStockMarketContextService : IStockMarketContextService
+    {
+        public Task<StockMarketContextDto?> GetLatestAsync(string symbol, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<StockMarketContextDto?>(new StockMarketContextDto(string.Empty, 72m, "银行", "银行", "BK001", 80m, 0.8m, string.Empty, false, true));
         }
     }
 
@@ -902,11 +1354,110 @@ public sealed class StockCopilotMcpServiceTests
         }
     }
 
+    private sealed class FakeLlmService : ILlmService
+    {
+        private readonly Func<string, LlmChatRequest, CancellationToken, Task<LlmChatResult>> _handler;
+
+        public FakeLlmService(Func<string, LlmChatRequest, CancellationToken, Task<LlmChatResult>>? handler = null)
+        {
+            _handler = handler ?? ((_, _, _) => Task.FromResult(new LlmChatResult("{\"marketRecognitionDirections\":[],\"reason\":\"默认空结果\"}")));
+        }
+
+        public string? LastProvider { get; private set; }
+
+        public LlmChatRequest? LastRequest { get; private set; }
+
+        public async Task<LlmChatResult> ChatAsync(string provider, LlmChatRequest request, CancellationToken cancellationToken = default)
+        {
+            LastProvider = provider;
+            LastRequest = request;
+            return await _handler(provider, request, cancellationToken);
+        }
+    }
+
     private sealed class NullFundamentalSnapshotService : IStockFundamentalSnapshotService
     {
         public Task<StockFundamentalSnapshotDto?> GetSnapshotAsync(string symbol, CancellationToken cancellationToken = default)
         {
             return Task.FromResult<StockFundamentalSnapshotDto?>(null);
         }
+    }
+
+    private static string? GetLatestEvidenceTimestampString(JsonElement evidence)
+    {
+        string? latestRaw = null;
+        DateTimeOffset? latestValue = null;
+
+        foreach (var item in evidence.EnumerateArray())
+        {
+            foreach (var propertyName in new[] { "publishedAt", "crawledAt", "ingestedAt" })
+            {
+                if (!item.TryGetProperty(propertyName, out var property) || property.ValueKind != JsonValueKind.String)
+                {
+                    continue;
+                }
+
+                var raw = property.GetString();
+                if (string.IsNullOrWhiteSpace(raw) || !DateTimeOffset.TryParse(raw, out var parsed))
+                {
+                    continue;
+                }
+
+                if (!latestValue.HasValue || parsed > latestValue.Value)
+                {
+                    latestValue = parsed;
+                    latestRaw = raw;
+                }
+            }
+        }
+
+        return latestRaw;
+    }
+
+    private static IReadOnlyList<LocalNewsItemDto> CreateLocalNewsItems(int count)
+    {
+        return Enumerable.Range(1, count)
+            .Select(index => CreateLocalNewsItem(
+                index,
+                "stock",
+                DateTime.UtcNow.AddHours(-index),
+                DateTime.UtcNow.AddMinutes(-index * 10),
+                $"公告摘要{index}",
+                $"公告摘要{index}"))
+            .ToArray();
+    }
+
+    private static LocalNewsItemDto CreateLocalNewsItem(
+        int id,
+        string level,
+        DateTime publishedAt,
+        DateTime ingestedAt,
+        string? excerpt,
+        string? summary,
+        string? title = null,
+        string? translatedTitle = null,
+        string? source = null,
+        string? aiTarget = null,
+        IReadOnlyList<string>? aiTags = null)
+    {
+        return new LocalNewsItemDto(
+            id,
+            $"{level}_news:{id}",
+            title ?? $"浦发银行公告{id}",
+            translatedTitle,
+            source ?? "上交所公告",
+            "announcement",
+            level,
+            "利好",
+            publishedAt,
+            ingestedAt,
+            $"https://example.com/{id}",
+            excerpt,
+            summary,
+            "local_fact",
+            "summary_only",
+            ingestedAt,
+            aiTarget ?? "个股:浦发银行",
+            aiTags ?? new[] { "公告" });
     }
 }

@@ -30,6 +30,7 @@ const loginLoading = ref(false)
 const activeProviderKey = ref('default')
 const provider = ref('default')
 const apiKey = ref('')
+const tavilyApiKey = ref('')
 const baseUrl = ref(providerPresets.default.baseUrl)
 const model = ref(providerPresets.default.model)
 const organization = ref('')
@@ -37,6 +38,8 @@ const project = ref('')
 const enabled = ref(true)
 const apiKeyMasked = ref('')
 const hasApiKey = ref(false)
+const tavilyApiKeyMasked = ref('')
+const hasTavilyApiKey = ref(false)
 const settingsLoading = ref(false)
 const settingsError = ref('')
 const saveMessage = ref('')
@@ -98,8 +101,11 @@ const applyProviderPreset = selectedProvider => {
   organization.value = ''
   project.value = ''
   enabled.value = true
+  tavilyApiKey.value = ''
   apiKeyMasked.value = ''
   hasApiKey.value = false
+  tavilyApiKeyMasked.value = ''
+  hasTavilyApiKey.value = false
 }
 
 const loadActiveProvider = async () => {
@@ -159,6 +165,8 @@ const loadSettings = async () => {
     enabled.value = data.enabled ?? true
     apiKeyMasked.value = data.apiKeyMasked || ''
     hasApiKey.value = data.hasApiKey || false
+    tavilyApiKeyMasked.value = data.tavilyApiKeyMasked || ''
+    hasTavilyApiKey.value = data.hasTavilyApiKey || false
   } catch (error) {
     settingsError.value = error.message || '获取配置失败'
   } finally {
@@ -181,6 +189,7 @@ const saveSettings = async () => {
       },
       body: JSON.stringify({
         apiKey: apiKey.value,
+        tavilyApiKey: tavilyApiKey.value,
         baseUrl: baseUrl.value,
         model: model.value,
         systemPrompt: systemPrompt.value,
@@ -204,7 +213,10 @@ const saveSettings = async () => {
     const data = await response.json()
     apiKeyMasked.value = data.apiKeyMasked || ''
     hasApiKey.value = data.hasApiKey || false
+    tavilyApiKeyMasked.value = data.tavilyApiKeyMasked || ''
+    hasTavilyApiKey.value = data.hasTavilyApiKey || false
     apiKey.value = ''
+    tavilyApiKey.value = ''
     saveMessage.value = '已保存'
     emit('settings-saved', data)
   } catch (error) {
@@ -302,9 +314,16 @@ if (token.value) {
       </div>
 
       <div class="field">
-        <label>API Key</label>
-        <input v-model="apiKey" placeholder="填写新 Key（留空保持不变）" />
+        <label>主 LLM API Key</label>
+        <input v-model="apiKey" placeholder="填写新的主模型 Key（留空保持不变）" />
         <p v-if="hasApiKey" class="muted">当前已保存：{{ apiKeyMasked }}</p>
+      </div>
+
+      <div class="field">
+        <label>Tavily API Key（外部搜索）</label>
+        <input v-model="tavilyApiKey" placeholder="填写 Tavily Key（留空保持不变）" />
+        <p class="muted">仅用于外部搜索工具，不会替代主 LLM API Key。</p>
+        <p v-if="hasTavilyApiKey" class="muted">当前已保存 Tavily Key：{{ tavilyApiKeyMasked }}</p>
       </div>
 
       <div class="field">
@@ -319,7 +338,7 @@ if (token.value) {
 
       <div class="field">
         <label>预设提示词</label>
-        <textarea v-model="systemPrompt" rows="4" placeholder="用于引导模型的系统提示词" />
+        <textarea v-model="systemPrompt" rows="4" placeholder="用于引导模型的系统提示词"></textarea>
       </div>
 
       <div class="field">

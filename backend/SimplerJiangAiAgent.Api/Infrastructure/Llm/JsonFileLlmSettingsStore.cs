@@ -123,6 +123,11 @@ public sealed class JsonFileLlmSettingsStore : ILlmSettingsStore
                 existingSecrets.ApiKey = settings.ApiKey.Trim();
             }
 
+            if (!string.IsNullOrWhiteSpace(settings.TavilyApiKey))
+            {
+                existingSecrets.TavilyApiKey = settings.TavilyApiKey.Trim();
+            }
+
             existingDefaults.Provider = providerKey;
             existingDefaults.ProviderType = string.IsNullOrWhiteSpace(settings.ProviderType)
                 ? NormalizeProviderType(existingDefaults.ProviderType)
@@ -147,13 +152,14 @@ public sealed class JsonFileLlmSettingsStore : ILlmSettingsStore
             existingDefaults.ApiKey = string.Empty;
 
             defaultsDocument.Providers[providerKey] = existingDefaults;
-            if (!string.IsNullOrWhiteSpace(existingSecrets.ApiKey))
+            if (!string.IsNullOrWhiteSpace(existingSecrets.ApiKey) || !string.IsNullOrWhiteSpace(existingSecrets.TavilyApiKey))
             {
                 localSecretsDocument.Providers[providerKey] = new LlmProviderSettings
                 {
                     Provider = providerKey,
                     ProviderType = existingDefaults.ProviderType,
                     ApiKey = existingSecrets.ApiKey,
+                    TavilyApiKey = existingSecrets.TavilyApiKey,
                     UpdatedAt = existingDefaults.UpdatedAt
                 };
             }
@@ -272,6 +278,11 @@ public sealed class JsonFileLlmSettingsStore : ILlmSettingsStore
             {
                 mergedSettings.ApiKey = settings.ApiKey.Trim();
             }
+
+            if (!string.IsNullOrWhiteSpace(settings.TavilyApiKey))
+            {
+                mergedSettings.TavilyApiKey = settings.TavilyApiKey.Trim();
+            }
         }
 
         foreach (var (provider, settings) in merged.Providers)
@@ -294,6 +305,7 @@ public sealed class JsonFileLlmSettingsStore : ILlmSettingsStore
         merged.ApiKey = string.IsNullOrWhiteSpace(apiKey)
             ? ResolveApiKeyFromEnvironment(defaultsSettings.Provider)
             : apiKey;
+        merged.TavilyApiKey = ResolveTavilyApiKey(defaultsSettings.Provider, defaultsSettings.TavilyApiKey);
         return merged;
     }
 
@@ -304,6 +316,7 @@ public sealed class JsonFileLlmSettingsStore : ILlmSettingsStore
             Provider = source.Provider,
             ProviderType = NormalizeProviderType(source.ProviderType),
             ApiKey = string.Empty,
+            TavilyApiKey = string.Empty,
             BaseUrl = source.BaseUrl,
             Model = source.Model,
             SystemPrompt = source.SystemPrompt,
@@ -358,6 +371,28 @@ public sealed class JsonFileLlmSettingsStore : ILlmSettingsStore
         return string.Empty;
     }
 
+    private static string ResolveTavilyApiKey(string provider, string? existing)
+    {
+        if (!string.IsNullOrWhiteSpace(existing))
+        {
+            return existing.Trim();
+        }
+
+        var scoped = Environment.GetEnvironmentVariable($"LLM__{provider.Trim().ToUpperInvariant()}__TAVILYAPIKEY");
+        if (!string.IsNullOrWhiteSpace(scoped))
+        {
+            return scoped.Trim();
+        }
+
+        var shared = Environment.GetEnvironmentVariable("TAVILY_API_KEY");
+        if (!string.IsNullOrWhiteSpace(shared))
+        {
+            return shared.Trim();
+        }
+
+        return string.Empty;
+    }
+
     private static LlmSettingsDocument NormalizeDocument(LlmSettingsDocument? document)
     {
         document ??= new LlmSettingsDocument();
@@ -397,6 +432,7 @@ public sealed class JsonFileLlmSettingsStore : ILlmSettingsStore
             Provider = source.Provider,
             ProviderType = NormalizeProviderType(source.ProviderType),
             ApiKey = source.ApiKey,
+            TavilyApiKey = source.TavilyApiKey,
             BaseUrl = source.BaseUrl,
             Model = source.Model,
             SystemPrompt = source.SystemPrompt,

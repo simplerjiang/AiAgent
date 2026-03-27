@@ -1,0 +1,42 @@
+﻿[
+    {
+        "Expected":  "StockKlineMcp",
+        "HttpStatus":  200,
+        "TraceId":  "8d1b691b15194e3fa1ab5c26443617db",
+        "ToolName":  "StockKlineMcp",
+        "Summary":  null,
+        "Error":  null
+    },
+    {
+        "Expected":  "StockMinuteMcp",
+        "HttpStatus":  200,
+        "TraceId":  "dc33fd2f892f4399bb829ff06309638e",
+        "ToolName":  "StockMinuteMcp",
+        "Summary":  null,
+        "Error":  null
+    },
+    {
+        "Expected":  "StockStrategyMcp",
+        "HttpStatus":  200,
+        "TraceId":  "44beb8069c914abd80a7f0c4f9d00486",
+        "ToolName":  "StockStrategyMcp",
+        "Summary":  null,
+        "Error":  null
+    },
+    {
+        "Expected":  "StockNewsMcp",
+        "HttpStatus":  200,
+        "TraceId":  "767cae82863a4762aacd98b4d78c6340",
+        "ToolName":  "StockNewsMcp",
+        "Summary":  null,
+        "Error":  null
+    },
+    {
+        "Expected":  "StockSearchMcp",
+        "HttpStatus":  200,
+        "TraceId":  "db313ffbd0f74110b85fb6a9f29dc33f",
+        "ToolName":  "StockSearchMcp",
+        "Summary":  null,
+        "Error":  null
+    }
+]

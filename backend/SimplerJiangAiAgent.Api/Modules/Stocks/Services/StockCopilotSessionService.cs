@@ -159,7 +159,7 @@ public sealed class StockCopilotSessionService : IStockCopilotSessionService
                 Title: "确认问题与市场环境",
                 Description: marketContext is null
                     ? "先锁定问题意图，并在缺少市场上下文时走保守路径。"
-                    : $"先锁定问题意图，并记录当前市场阶段={marketContext.StageLabel}、主线={marketContext.MainlineSectorName ?? "无"}。",
+                    : $"先锁定问题意图，并记录当前本地市场上下文的主线={marketContext.MainlineSectorName ?? "无"}、置信度={marketContext.StageConfidence:0.##}。",
                 Status: stepStatuses?.GetValueOrDefault("planner-1") ?? "planned",
                 DependsOn: Array.Empty<string>(),
                 ToolName: null)
@@ -483,6 +483,7 @@ public sealed class StockCopilotSessionService : IStockCopilotSessionService
         try
         {
             var input = ParseInputSummary(proposal.InputSummary);
+            var window = ParseWindowOptions(input);
             var toolTaskId = string.IsNullOrWhiteSpace(taskId) ? proposal.CallId : $"{taskId.Trim()}-{proposal.CallId}";
 
             return proposal.ToolName switch
@@ -495,10 +496,11 @@ public sealed class StockCopilotSessionService : IStockCopilotSessionService
                         ParseInt(input, "count", 60),
                         null,
                         toolTaskId,
+                        window,
                         cancellationToken)),
                 "StockMinuteMcp" => MapOutcome(
                     proposal,
-                    await _copilotMcpService.GetMinuteAsync(symbol, null, toolTaskId, cancellationToken)),
+                    await _copilotMcpService.GetMinuteAsync(symbol, null, toolTaskId, window, cancellationToken)),
                 "StockStrategyMcp" => MapOutcome(
                     proposal,
                     await _copilotMcpService.GetStrategyAsync(
@@ -508,10 +510,11 @@ public sealed class StockCopilotSessionService : IStockCopilotSessionService
                         null,
                         strategies.Count == 0 ? null : strategies,
                         toolTaskId,
+                        window,
                         cancellationToken)),
                 "StockNewsMcp" => MapOutcome(
                     proposal,
-                    await _copilotMcpService.GetNewsAsync(symbol, input.GetValueOrDefault("level", "stock"), toolTaskId, cancellationToken)),
+                    await _copilotMcpService.GetNewsAsync(symbol, input.GetValueOrDefault("level", "stock"), toolTaskId, window, cancellationToken)),
                 "StockSearchMcp" => MapOutcome(
                     proposal,
                     await _copilotMcpService.SearchAsync(input.GetValueOrDefault("query", question), true, toolTaskId, cancellationToken)),
@@ -767,6 +770,29 @@ public sealed class StockCopilotSessionService : IStockCopilotSessionService
         return input.TryGetValue(key, out var value) && int.TryParse(value, out var parsed)
             ? parsed
             : fallback;
+    }
+
+    private static StockCopilotMcpWindowOptions? ParseWindowOptions(IReadOnlyDictionary<string, string> input)
+    {
+        var evidenceSkip = 0;
+        var evidenceTake = 0;
+        var factSkip = 0;
+        var factTake = 0;
+        var hasEvidenceSkip = input.TryGetValue("evidenceSkip", out var evidenceSkipRaw) && int.TryParse(evidenceSkipRaw, out evidenceSkip);
+        var hasEvidenceTake = input.TryGetValue("evidenceTake", out var evidenceTakeRaw) && int.TryParse(evidenceTakeRaw, out evidenceTake);
+        var hasFactSkip = input.TryGetValue("factSkip", out var factSkipRaw) && int.TryParse(factSkipRaw, out factSkip);
+        var hasFactTake = input.TryGetValue("factTake", out var factTakeRaw) && int.TryParse(factTakeRaw, out factTake);
+
+        if (!hasEvidenceSkip && !hasEvidenceTake && !hasFactSkip && !hasFactTake)
+        {
+            return null;
+        }
+
+        return new StockCopilotMcpWindowOptions(
+            hasEvidenceSkip ? evidenceSkip : 0,
+            hasEvidenceTake ? evidenceTake : null,
+            hasFactSkip ? factSkip : 0,
+            hasFactTake ? factTake : null);
     }
 
     private static bool IsBullishSignal(string signal, string? state)

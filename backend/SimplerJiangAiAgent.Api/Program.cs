@@ -8,6 +8,7 @@ using SimplerJiangAiAgent.Api.Infrastructure.Config;
 using SimplerJiangAiAgent.Api.Infrastructure.Jobs;
 using SimplerJiangAiAgent.Api.Infrastructure.Logging;
 using SimplerJiangAiAgent.Api.Infrastructure.Security;
+using SimplerJiangAiAgent.Api.Infrastructure.Serialization;
 using SimplerJiangAiAgent.Api.Infrastructure.Storage;
 using SimplerJiangAiAgent.Api.Modules;
 
@@ -31,6 +32,11 @@ builder.Services.AddCors(options =>
 
 builder.Services.AddMemoryCache();
 builder.Services.AddHttpClient();
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.Converters.Add(new ChinaDateTimeJsonConverter());
+    options.SerializerOptions.Converters.Add(new ChinaNullableDateTimeJsonConverter());
+});
 builder.Services.Configure<DatabaseOptions>(builder.Configuration.GetSection(DatabaseOptions.SectionName));
 builder.Services.Configure<StockSyncOptions>(builder.Configuration.GetSection(StockSyncOptions.SectionName));
 builder.Services.Configure<SourceGovernanceOptions>(builder.Configuration.GetSection(SourceGovernanceOptions.SectionName));

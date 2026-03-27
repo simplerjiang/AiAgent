@@ -1,0 +1,1323 @@
+﻿{
+    "session":  {
+                    "sessionKey":  "sh600000-1774578486771",
+                    "symbol":  "sh600000",
+                    "title":  "visual-md-demo",
+                    "createdAt":  "2026-03-27T02:28:06.7899587Z",
+                    "updatedAt":  "2026-03-27T02:28:06.7899587Z",
+                    "turns":  [
+                                  {
+                                      "turnId":  "turn-live-908f911ea9224f4b8f67cae8df8b73fa",
+                                      "sessionKey":  "sh600000-1774578486771",
+                                      "symbol":  "sh600000",
+                                      "userQuestion":  "看下浦发银行日线结构和本地新闻证据",
+                                      "createdAt":  "2026-03-27T02:28:35.5377729Z",
+                                      "status":  "done",
+                                      "plannerSummary":  "计划执行浦发银行(sh600000)的日线结构分析与本地新闻证据收集，严格遵循本地优先原则，不进行外部搜索。 当前 live gate 计划中，已批准 4 个工具，拦截 0 个工具。",
+                                      "governorSummary":  "已确认 allowExternalSearch=False，禁止调用 StockSearchMcp。已规划本地工具链以获取日线数据与新闻证据，符合角色权限。 governor 未发现越权工具。",
+                                      "marketContext":  {
+                                                            "stageLabel":  "分歧",
+                                                            "stageConfidence":  60.35,
+                                                            "stockSectorName":  "银行",
+                                                            "mainlineSectorName":  "单抗概念",
+                                                            "sectorCode":  null,
+                                                            "mainlineScore":  58.56,
+                                                            "suggestedPositionScale":  0.5718,
+                                                            "executionFrequencyLabel":  "降低频率",
+                                                            "counterTrendWarning":  false,
+                                                            "isMainlineAligned":  false
+                                                        },
+                                      "planSteps":  [
+                                                        {
+                                                            "stepId":  "planner-1",
+                                                            "owner":  "planner",
+                                                            "title":  "生成 live gate 工具计划",
+                                                            "description":  "基于问题与当前市场阶段=分歧 生成受控工具计划，并让 governor 在后端强校验。",
+                                                            "status":  "completed",
+                                                            "dependsOn":  [
+
+                                                                          ],
+                                                            "toolName":  null
+                                                        },
+                                                        {
+                                                            "stepId":  "tool-1",
+                                                            "owner":  "planner",
+                                                            "title":  "读取公司概况",
+                                                            "description":  "获取浦发银行基础信息。输入：symbol=sh600000",
+                                                            "status":  "completed",
+                                                            "dependsOn":  [
+                                                                              "planner-1"
+                                                                          ],
+                                                            "toolName":  "CompanyOverviewMcp"
+                                                        },
+                                                        {
+                                                            "stepId":  "tool-2",
+                                                            "owner":  "planner",
+                                                            "title":  "读取市场环境",
+                                                            "description":  "获取市场环境上下文。输入：symbol=sh600000",
+                                                            "status":  "completed",
+                                                            "dependsOn":  [
+                                                                              "planner-1"
+                                                                          ],
+                                                            "toolName":  "MarketContextMcp"
+                                                        },
+                                                        {
+                                                            "stepId":  "tool-3",
+                                                            "owner":  "planner",
+                                                            "title":  "读取 K 线结构",
+                                                            "description":  "获取日线结构数据。输入：period=daily; symbol=sh600000",
+                                                            "status":  "completed",
+                                                            "dependsOn":  [
+                                                                              "planner-1"
+                                                                          ],
+                                                            "toolName":  "StockKlineMcp"
+                                                        },
+                                                        {
+                                                            "stepId":  "tool-4",
+                                                            "owner":  "planner",
+                                                            "title":  "读取本地新闻",
+                                                            "description":  "获取本地新闻证据。输入：symbol=sh600000",
+                                                            "status":  "completed",
+                                                            "dependsOn":  [
+                                                                              "planner-1"
+                                                                          ],
+                                                            "toolName":  "StockNewsMcp"
+                                                        },
+                                                        {
+                                                            "stepId":  "commander-1",
+                                                            "owner":  "commander",
+                                                            "title":  "收口 live gate 回执",
+                                                            "description":  "只根据 LLM 计划、后端校验结果和已执行 tool results 输出验收结论。",
+                                                            "status":  "done",
+                                                            "dependsOn":  [
+                                                                              "tool-1",
+                                                                              "tool-2",
+                                                                              "tool-3",
+                                                                              "tool-4"
+                                                                          ],
+                                                            "toolName":  null
+                                                        }
+                                                    ],
+                                      "toolCalls":  [
+                                                        {
+                                                            "callId":  "live-call-1",
+                                                            "stepId":  "tool-1",
+                                                            "toolName":  "CompanyOverviewMcp",
+                                                            "policyClass":  "local_required",
+                                                            "purpose":  "获取浦发银行基础信息",
+                                                            "inputSummary":  "symbol=sh600000",
+                                                            "approvalStatus":  "approved",
+                                                            "blockedReason":  null
+                                                        },
+                                                        {
+                                                            "callId":  "live-call-2",
+                                                            "stepId":  "tool-2",
+                                                            "toolName":  "MarketContextMcp",
+                                                            "policyClass":  "local_required",
+                                                            "purpose":  "获取市场环境上下文",
+                                                            "inputSummary":  "symbol=sh600000",
+                                                            "approvalStatus":  "approved",
+                                                            "blockedReason":  null
+                                                        },
+                                                        {
+                                                            "callId":  "live-call-3",
+                                                            "stepId":  "tool-3",
+                                                            "toolName":  "StockKlineMcp",
+                                                            "policyClass":  "local_required",
+                                                            "purpose":  "获取日线结构数据",
+                                                            "inputSummary":  "period=daily; symbol=sh600000",
+                                                            "approvalStatus":  "approved",
+                                                            "blockedReason":  null
+                                                        },
+                                                        {
+                                                            "callId":  "live-call-4",
+                                                            "stepId":  "tool-4",
+                                                            "toolName":  "StockNewsMcp",
+                                                            "policyClass":  "local_required",
+                                                            "purpose":  "获取本地新闻证据",
+                                                            "inputSummary":  "symbol=sh600000",
+                                                            "approvalStatus":  "approved",
+                                                            "blockedReason":  null
+                                                        }
+                                                    ],
+                                      "toolResults":  [
+                                                          {
+                                                              "callId":  "live-call-1",
+                                                              "toolName":  "CompanyOverviewMcp",
+                                                              "status":  "completed",
+                                                              "traceId":  "442e365bae064b848eb0f5ee6ef99e8e",
+                                                              "evidenceCount":  3,
+                                                              "featureCount":  8,
+                                                              "warnings":  [
+
+                                                                           ],
+                                                              "degradedFlags":  [
+
+                                                                                ],
+                                                              "evidence":  [
+                                                                               {
+                                                                                   "point":  "浦发银行 公司概览",
+                                                                                   "title":  "浦发银行",
+                                                                                   "source":  "公司画像缓存",
+                                                                                   "publishedAt":  "2026-03-27T02:28:22.3703078Z",
+                                                                                   "crawledAt":  "2026-03-27T02:28:31.6760642Z",
+                                                                                   "url":  null,
+                                                                                   "excerpt":  "所属板块=银行; 股东户数=119099; 现价=10.04; 经营范围=吸收公众存款;发放短期、中期和长期贷款;办理结算;办理票据贴现;发行金融债券;代理发行、代理兑付、承销政府债券,买卖政府债券;同业拆借;提供信用证服务及担保;代理收付款项及代理保险业务;提供保管箱服务;外汇存款;外汇贷款;外汇汇款;外币兑换;国际结算;同业外汇拆借;外汇票据的承兑和贴现;外汇借款;外汇担保;结汇、售汇;买卖和代理买卖股票以外的外币有价证券;自营外汇买卖;代客外汇买卖;银行卡业务;资信调查、咨询、见证业务;离岸银行业务;证券投资基金托管业务;公募证券投资基金销售;经批准的其它业务。",
+                                                                                   "summary":  "所属板块=银行; 股东户数=119099; 现价=10.04; 经营范围=吸收公众存款;发放短期、中期和长期贷款;办理结算;办理票据贴现;发行金融债券;代理发行、代理兑付、承销政府债券,买卖政府债券;同业拆借;提供信用证服务及担保;代理收付款项及代理保险业务;提供保管箱服务;外汇存款;外汇贷款;外汇汇款;外币兑换;国际结算;同业外汇拆借;外汇票据的承兑和贴现;外汇借款;外汇担保;结汇、售汇;买卖和代理买卖股票以外的外币有价证券;自营外汇买卖;代客外汇买卖;银行卡业务;资信调查、咨询、见证业务;离岸银行业务;证券投资基金托管业务;公募证券投资基金销售;经批准的其它业务。",
+                                                                                   "readMode":  "local_fact",
+                                                                                   "readStatus":  "full",
+                                                                                   "ingestedAt":  "2026-03-27T02:28:31.6760642Z",
+                                                                                   "localFactId":  null,
+                                                                                   "sourceRecordId":  "company_profile:sh600000",
+                                                                                   "level":  "overview",
+                                                                                   "sentiment":  null,
+                                                                                   "target":  "sh600000",
+                                                                                   "tags":  [
+                                                                                                "company_overview"
+                                                                                            ]
+                                                                               },
+                                                                               {
+                                                                                   "point":  "浦发银行:上海浦东发展银行股份有限公司关于召开2025年度业绩说明会的公告",
+                                                                                   "title":  "浦发银行:上海浦东发展银行股份有限公司关于召开2025年度业绩说明会的公告",
+                                                                                   "source":  "东方财富公告",
+                                                                                   "publishedAt":  "2026-03-20T17:47:45",
+                                                                                   "crawledAt":  "2026-03-27T02:26:40.9955755",
+                                                                                   "url":  "https://data.eastmoney.com/notices/detail/600000/AN202603201820670515.html",
+                                                                                   "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                                                                                   "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                                                                                   "readMode":  "url_fetched",
+                                                                                   "readStatus":  "full_text_read",
+                                                                                   "ingestedAt":  "2026-03-26T08:18:57.2325181",
+                                                                                   "localFactId":  136768,
+                                                                                   "sourceRecordId":  "stock_news:136768",
+                                                                                   "level":  "announcement",
+                                                                                   "sentiment":  "中性",
+                                                                                   "target":  "个股:浦发银行",
+                                                                                   "tags":  [
+                                                                                                "财报业绩",
+                                                                                                "政策红利"
+                                                                                            ]
+                                                                               },
+                                                                               {
+                                                                                   "point":  "浦发银行:上海浦东发展银行股份有限公司优先股二期股息发放实施公告",
+                                                                                   "title":  "浦发银行:上海浦东发展银行股份有限公司优先股二期股息发放实施公告",
+                                                                                   "source":  "东方财富公告",
+                                                                                   "publishedAt":  "2026-02-26T18:29:33",
+                                                                                   "crawledAt":  "2026-03-27T02:26:40.9955755",
+                                                                                   "url":  "https://data.eastmoney.com/notices/detail/600000/AN202602261820067654.html",
+                                                                                   "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                                                                                   "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                                                                                   "readMode":  "url_fetched",
+                                                                                   "readStatus":  "full_text_read",
+                                                                                   "ingestedAt":  "2026-03-17T10:30:22.5202329",
+                                                                                   "localFactId":  135846,
+                                                                                   "sourceRecordId":  "stock_news:135846",
+                                                                                   "level":  "announcement",
+                                                                                   "sentiment":  "利好",
+                                                                                   "target":  "个股:浦发银行",
+                                                                                   "tags":  [
+                                                                                                "财报业绩"
+                                                                                            ]
+                                                                               }
+                                                                           ],
+                                                              "summary":  "公司概况：浦发银行，主营=缺失，经营范围=吸收公众存款;发放短期、中期和长期贷款;办理结算;办理票据贴现;发行金融债券;代理发行、代理兑付、承销政府债券,买卖政府债券;同业拆借;提供信用证服务及担保;代理收付款项及代理保险业务;提供保管箱服务;外汇存款;外汇贷款;外汇汇款;外币兑换;国际结算;同业外汇拆借;外汇票据的承兑和贴现;外汇借款;外汇担保;结汇、售汇;买卖和代理买卖股票以外的外币有价证券;自营外汇买卖;代客外汇买卖;银行卡业务;资信调查、咨询、见证业务;离岸银行业务;证券投资基金托管业务;公募证券投资基金销售;经批准的其它业务。。"
+                                                          },
+                                                          {
+                                                              "callId":  "live-call-2",
+                                                              "toolName":  "MarketContextMcp",
+                                                              "status":  "completed",
+                                                              "traceId":  "173c5555484548488ecbc540a34efc6b",
+                                                              "evidenceCount":  2,
+                                                              "featureCount":  3,
+                                                              "warnings":  [
+
+                                                                           ],
+                                                              "degradedFlags":  [
+
+                                                                                ],
+                                                              "evidence":  [
+                                                                               {
+                                                                                   "point":  "市场阶段=分歧",
+                                                                                   "title":  "市场阶段",
+                                                                                   "source":  "IStockMarketContextService",
+                                                                                   "publishedAt":  null,
+                                                                                   "crawledAt":  null,
+                                                                                   "url":  null,
+                                                                                   "excerpt":  "阶段=分歧，置信度=60.35。",
+                                                                                   "summary":  "阶段=分歧，置信度=60.35。",
+                                                                                   "readMode":  "local_fact",
+                                                                                   "readStatus":  "summary_only",
+                                                                                   "ingestedAt":  null,
+                                                                                   "localFactId":  null,
+                                                                                   "sourceRecordId":  "market_context:sh600000:stage",
+                                                                                   "level":  "market_context",
+                                                                                   "sentiment":  null,
+                                                                                   "target":  "sh600000",
+                                                                                   "tags":  [
+
+                                                                                            ]
+                                                                               },
+                                                                               {
+                                                                                   "point":  "主线=单抗概念",
+                                                                                   "title":  "板块对齐",
+                                                                                   "source":  "IStockMarketContextService",
+                                                                                   "publishedAt":  null,
+                                                                                   "crawledAt":  null,
+                                                                                   "url":  null,
+                                                                                   "excerpt":  "个股行业=银行，主线=单抗概念，主线对齐=否。",
+                                                                                   "summary":  "个股行业=银行，主线=单抗概念，主线对齐=否。",
+                                                                                   "readMode":  "local_fact",
+                                                                                   "readStatus":  "summary_only",
+                                                                                   "ingestedAt":  null,
+                                                                                   "localFactId":  null,
+                                                                                   "sourceRecordId":  "market_context:sh600000:alignment",
+                                                                                   "level":  "market_context",
+                                                                                   "sentiment":  null,
+                                                                                   "target":  "sh600000",
+                                                                                   "tags":  [
+
+                                                                                            ]
+                                                                               }
+                                                                           ],
+                                                              "summary":  "市场阶段=分歧，主线=单抗概念。"
+                                                          },
+                                                          {
+                                                              "callId":  "live-call-3",
+                                                              "toolName":  "StockKlineMcp",
+                                                              "status":  "completed",
+                                                              "traceId":  "7adfec8c29b94c59abf9be97d9782dcb",
+                                                              "evidenceCount":  4,
+                                                              "featureCount":  7,
+                                                              "warnings":  [
+
+                                                                           ],
+                                                              "degradedFlags":  [
+                                                                                    "expanded_news_window"
+                                                                                ],
+                                                              "evidence":  [
+                                                                               {
+                                                                                   "point":  "浦发银行:上海浦东发展银行股份有限公司关于召开2025年度业绩说明会的公告",
+                                                                                   "title":  "浦发银行:上海浦东发展银行股份有限公司关于召开2025年度业绩说明会的公告",
+                                                                                   "source":  "东方财富公告",
+                                                                                   "publishedAt":  "2026-03-20T17:47:45+08:00",
+                                                                                   "crawledAt":  "2026-03-27T02:28:33.7795773Z",
+                                                                                   "url":  "https://data.eastmoney.com/notices/detail/600000/AN202603201820670515.html",
+                                                                                   "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                                                                                   "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                                                                                   "readMode":  "url_fetched",
+                                                                                   "readStatus":  "full_text_read",
+                                                                                   "ingestedAt":  "2026-03-26T08:18:57.2325181",
+                                                                                   "localFactId":  136768,
+                                                                                   "sourceRecordId":  "stock_news:136768",
+                                                                                   "level":  "announcement",
+                                                                                   "sentiment":  "中性",
+                                                                                   "target":  "个股:浦发银行",
+                                                                                   "tags":  [
+                                                                                                "财报业绩",
+                                                                                                "政策红利"
+                                                                                            ]
+                                                                               },
+                                                                               {
+                                                                                   "point":  "浦发银行:上海浦东发展银行股份有限公司优先股二期股息发放实施公告",
+                                                                                   "title":  "浦发银行:上海浦东发展银行股份有限公司优先股二期股息发放实施公告",
+                                                                                   "source":  "东方财富公告",
+                                                                                   "publishedAt":  "2026-02-26T18:29:33+08:00",
+                                                                                   "crawledAt":  "2026-03-27T02:28:33.7795773Z",
+                                                                                   "url":  "https://data.eastmoney.com/notices/detail/600000/AN202602261820067654.html",
+                                                                                   "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                                                                                   "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                                                                                   "readMode":  "url_fetched",
+                                                                                   "readStatus":  "full_text_read",
+                                                                                   "ingestedAt":  "2026-03-17T10:30:22.5202329",
+                                                                                   "localFactId":  135846,
+                                                                                   "sourceRecordId":  "stock_news:135846",
+                                                                                   "level":  "announcement",
+                                                                                   "sentiment":  "利好",
+                                                                                   "target":  "个股:浦发银行",
+                                                                                   "tags":  [
+                                                                                                "财报业绩"
+                                                                                            ]
+                                                                               },
+                                                                               {
+                                                                                   "point":  "浦发银行:上海浦东发展银行股份有限公司董事会2026年第三次会议决议公告",
+                                                                                   "title":  "浦发银行:上海浦东发展银行股份有限公司董事会2026年第三次会议决议公告",
+                                                                                   "source":  "东方财富公告",
+                                                                                   "publishedAt":  "2026-02-12T17:19:17+08:00",
+                                                                                   "crawledAt":  "2026-03-27T02:28:33.7795773Z",
+                                                                                   "url":  "https://data.eastmoney.com/notices/detail/600000/AN202602121819901642.html",
+                                                                                   "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                                                                                   "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                                                                                   "readMode":  "url_fetched",
+                                                                                   "readStatus":  "full_text_read",
+                                                                                   "ingestedAt":  "2026-03-17T10:30:22.9127989",
+                                                                                   "localFactId":  135847,
+                                                                                   "sourceRecordId":  "stock_news:135847",
+                                                                                   "level":  "announcement",
+                                                                                   "sentiment":  "中性",
+                                                                                   "target":  "个股:浦发银行",
+                                                                                   "tags":  [
+                                                                                                "公司治理"
+                                                                                            ]
+                                                                               },
+                                                                               {
+                                                                                   "point":  "浦发银行:上海浦东发展银行股份有限公司董事会2026年第二次会议决议公告",
+                                                                                   "title":  "浦发银行:上海浦东发展银行股份有限公司董事会2026年第二次会议决议公告",
+                                                                                   "source":  "东方财富公告",
+                                                                                   "publishedAt":  "2026-01-23T20:24:51+08:00",
+                                                                                   "crawledAt":  "2026-03-27T02:28:33.7795773Z",
+                                                                                   "url":  "https://data.eastmoney.com/notices/detail/600000/AN202601231818339251.html",
+                                                                                   "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                                                                                   "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                                                                                   "readMode":  "url_fetched",
+                                                                                   "readStatus":  "full_text_read",
+                                                                                   "ingestedAt":  "2026-03-17T10:30:23.3056142",
+                                                                                   "localFactId":  135850,
+                                                                                   "sourceRecordId":  "stock_news:135850",
+                                                                                   "level":  "announcement",
+                                                                                   "sentiment":  "中性",
+                                                                                   "target":  "个股:浦发银行",
+                                                                                   "tags":  [
+                                                                                                "行业周期",
+                                                                                                "公司治理"
+                                                                                            ]
+                                                                               }
+                                                                           ],
+                                                              "summary":  "K 线窗口=60，趋势=盘整，5D=1.83%。"
+                                                          },
+                                                          {
+                                                              "callId":  "live-call-4",
+                                                              "toolName":  "StockNewsMcp",
+                                                              "status":  "completed",
+                                                              "traceId":  "709999b4fe344db7a0ecce7e9f40b3ff",
+                                                              "evidenceCount":  20,
+                                                              "featureCount":  3,
+                                                              "warnings":  [
+
+                                                                           ],
+                                                              "degradedFlags":  [
+
+                                                                                ],
+                                                              "evidence":  [
+                                                                               {
+                                                                                   "point":  "浦发银行:上海浦东发展银行股份有限公司关于召开2025年度业绩说明会的公告",
+                                                                                   "title":  "浦发银行:上海浦东发展银行股份有限公司关于召开2025年度业绩说明会的公告",
+                                                                                   "source":  "东方财富公告",
+                                                                                   "publishedAt":  "2026-03-20T17:47:45+08:00",
+                                                                                   "crawledAt":  "2026-03-27T02:28:33.7795773Z",
+                                                                                   "url":  "https://data.eastmoney.com/notices/detail/600000/AN202603201820670515.html",
+                                                                                   "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                                                                                   "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                                                                                   "readMode":  "url_fetched",
+                                                                                   "readStatus":  "full_text_read",
+                                                                                   "ingestedAt":  "2026-03-26T08:18:57.2325181",
+                                                                                   "localFactId":  136768,
+                                                                                   "sourceRecordId":  "stock_news:136768",
+                                                                                   "level":  "announcement",
+                                                                                   "sentiment":  "中性",
+                                                                                   "target":  "个股:浦发银行",
+                                                                                   "tags":  [
+                                                                                                "财报业绩",
+                                                                                                "政策红利"
+                                                                                            ]
+                                                                               },
+                                                                               {
+                                                                                   "point":  "浦发银行:上海浦东发展银行股份有限公司优先股二期股息发放实施公告",
+                                                                                   "title":  "浦发银行:上海浦东发展银行股份有限公司优先股二期股息发放实施公告",
+                                                                                   "source":  "东方财富公告",
+                                                                                   "publishedAt":  "2026-02-26T18:29:33+08:00",
+                                                                                   "crawledAt":  "2026-03-27T02:28:33.7795773Z",
+                                                                                   "url":  "https://data.eastmoney.com/notices/detail/600000/AN202602261820067654.html",
+                                                                                   "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                                                                                   "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                                                                                   "readMode":  "url_fetched",
+                                                                                   "readStatus":  "full_text_read",
+                                                                                   "ingestedAt":  "2026-03-17T10:30:22.5202329",
+                                                                                   "localFactId":  135846,
+                                                                                   "sourceRecordId":  "stock_news:135846",
+                                                                                   "level":  "announcement",
+                                                                                   "sentiment":  "利好",
+                                                                                   "target":  "个股:浦发银行",
+                                                                                   "tags":  [
+                                                                                                "财报业绩"
+                                                                                            ]
+                                                                               },
+                                                                               {
+                                                                                   "point":  "浦发银行:上海浦东发展银行股份有限公司董事会2026年第三次会议决议公告",
+                                                                                   "title":  "浦发银行:上海浦东发展银行股份有限公司董事会2026年第三次会议决议公告",
+                                                                                   "source":  "东方财富公告",
+                                                                                   "publishedAt":  "2026-02-12T17:19:17+08:00",
+                                                                                   "crawledAt":  "2026-03-27T02:28:33.7795773Z",
+                                                                                   "url":  "https://data.eastmoney.com/notices/detail/600000/AN202602121819901642.html",
+                                                                                   "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                                                                                   "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                                                                                   "readMode":  "url_fetched",
+                                                                                   "readStatus":  "full_text_read",
+                                                                                   "ingestedAt":  "2026-03-17T10:30:22.9127989",
+                                                                                   "localFactId":  135847,
+                                                                                   "sourceRecordId":  "stock_news:135847",
+                                                                                   "level":  "announcement",
+                                                                                   "sentiment":  "中性",
+                                                                                   "target":  "个股:浦发银行",
+                                                                                   "tags":  [
+                                                                                                "公司治理"
+                                                                                            ]
+                                                                               },
+                                                                               {
+                                                                                   "point":  "浦发银行:上海浦东发展银行股份有限公司董事会2026年第二次会议决议公告",
+                                                                                   "title":  "浦发银行:上海浦东发展银行股份有限公司董事会2026年第二次会议决议公告",
+                                                                                   "source":  "东方财富公告",
+                                                                                   "publishedAt":  "2026-01-23T20:24:51+08:00",
+                                                                                   "crawledAt":  "2026-03-27T02:28:33.7795773Z",
+                                                                                   "url":  "https://data.eastmoney.com/notices/detail/600000/AN202601231818339251.html",
+                                                                                   "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                                                                                   "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                                                                                   "readMode":  "url_fetched",
+                                                                                   "readStatus":  "full_text_read",
+                                                                                   "ingestedAt":  "2026-03-17T10:30:23.3056142",
+                                                                                   "localFactId":  135850,
+                                                                                   "sourceRecordId":  "stock_news:135850",
+                                                                                   "level":  "announcement",
+                                                                                   "sentiment":  "中性",
+                                                                                   "target":  "个股:浦发银行",
+                                                                                   "tags":  [
+                                                                                                "行业周期",
+                                                                                                "公司治理"
+                                                                                            ]
+                                                                               },
+                                                                               {
+                                                                                   "point":  "浦发银行:上海市联合律师事务所关于上海浦东发展银行股份有限公司2026年第一次临时股东会之法律意见书",
+                                                                                   "title":  "浦发银行:上海市联合律师事务所关于上海浦东发展银行股份有限公司2026年第一次临时股东会之法律意见书",
+                                                                                   "source":  "东方财富公告",
+                                                                                   "publishedAt":  "2026-01-23T20:24:51+08:00",
+                                                                                   "crawledAt":  "2026-03-27T02:28:33.7795773Z",
+                                                                                   "url":  "https://data.eastmoney.com/notices/detail/600000/AN202601231818339250.html",
+                                                                                   "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                                                                                   "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                                                                                   "readMode":  "url_fetched",
+                                                                                   "readStatus":  "full_text_read",
+                                                                                   "ingestedAt":  "2026-03-17T10:30:23.7018196",
+                                                                                   "localFactId":  135849,
+                                                                                   "sourceRecordId":  "stock_news:135849",
+                                                                                   "level":  "announcement",
+                                                                                   "sentiment":  "中性",
+                                                                                   "target":  "个股:浦发银行",
+                                                                                   "tags":  [
+                                                                                                "政策红利",
+                                                                                                "公司治理"
+                                                                                            ]
+                                                                               },
+                                                                               {
+                                                                                   "point":  "浦发银行:上海浦东发展银行股份有限公司2026年第一次临时股东会决议公告",
+                                                                                   "title":  "浦发银行:上海浦东发展银行股份有限公司2026年第一次临时股东会决议公告",
+                                                                                   "source":  "东方财富公告",
+                                                                                   "publishedAt":  "2026-01-23T20:24:51+08:00",
+                                                                                   "crawledAt":  "2026-03-27T02:28:33.7795773Z",
+                                                                                   "url":  "https://data.eastmoney.com/notices/detail/600000/AN202601231818339252.html",
+                                                                                   "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                                                                                   "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                                                                                   "readMode":  "url_fetched",
+                                                                                   "readStatus":  "full_text_read",
+                                                                                   "ingestedAt":  "2026-03-17T10:30:24.0801202",
+                                                                                   "localFactId":  135848,
+                                                                                   "sourceRecordId":  "stock_news:135848",
+                                                                                   "level":  "announcement",
+                                                                                   "sentiment":  "中性",
+                                                                                   "target":  "个股:浦发银行",
+                                                                                   "tags":  [
+                                                                                                "突发事件",
+                                                                                                "公司治理"
+                                                                                            ]
+                                                                               },
+                                                                               {
+                                                                                   "point":  "浦发银行:上海浦东发展银行股份有限公司关于选举新一届董事会职工代表董事的公告",
+                                                                                   "title":  "浦发银行:上海浦东发展银行股份有限公司关于选举新一届董事会职工代表董事的公告",
+                                                                                   "source":  "东方财富公告",
+                                                                                   "publishedAt":  "2026-01-15T17:11:30+08:00",
+                                                                                   "crawledAt":  "2026-03-27T02:28:33.7795773Z",
+                                                                                   "url":  "https://data.eastmoney.com/notices/detail/600000/AN202601151817051291.html",
+                                                                                   "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                                                                                   "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                                                                                   "readMode":  "url_fetched",
+                                                                                   "readStatus":  "full_text_read",
+                                                                                   "ingestedAt":  "2026-03-17T10:30:24.452549",
+                                                                                   "localFactId":  135851,
+                                                                                   "sourceRecordId":  "stock_news:135851",
+                                                                                   "level":  "announcement",
+                                                                                   "sentiment":  "中性",
+                                                                                   "target":  "个股:浦发银行",
+                                                                                   "tags":  [
+                                                                                                "突发事件",
+                                                                                                "公司治理"
+                                                                                            ]
+                                                                               },
+                                                                               {
+                                                                                   "point":  "浦发银行:上海浦东发展银行股份有限公司2026年第一次临时股东会会议资料",
+                                                                                   "title":  "浦发银行:上海浦东发展银行股份有限公司2026年第一次临时股东会会议资料",
+                                                                                   "source":  "东方财富公告",
+                                                                                   "publishedAt":  "2026-01-14T18:35:56+08:00",
+                                                                                   "crawledAt":  "2026-03-27T02:28:33.7795773Z",
+                                                                                   "url":  "https://data.eastmoney.com/notices/detail/600000/AN202601141817019137.html",
+                                                                                   "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                                                                                   "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                                                                                   "readMode":  "url_fetched",
+                                                                                   "readStatus":  "full_text_read",
+                                                                                   "ingestedAt":  "2026-03-17T10:30:24.8268681",
+                                                                                   "localFactId":  135852,
+                                                                                   "sourceRecordId":  "stock_news:135852",
+                                                                                   "level":  "announcement",
+                                                                                   "sentiment":  "中性",
+                                                                                   "target":  "个股:浦发银行",
+                                                                                   "tags":  [
+
+                                                                                            ]
+                                                                               },
+                                                                               {
+                                                                                   "point":  "浦发银行:上海浦东发展银行股份有限公司2025年度业绩快报公告",
+                                                                                   "title":  "浦发银行:上海浦东发展银行股份有限公司2025年度业绩快报公告",
+                                                                                   "source":  "东方财富公告",
+                                                                                   "publishedAt":  "2026-01-13T17:07:34+08:00",
+                                                                                   "crawledAt":  "2026-03-27T02:28:33.7795773Z",
+                                                                                   "url":  "https://data.eastmoney.com/notices/detail/600000/AN202601131816981923.html",
+                                                                                   "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                                                                                   "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                                                                                   "readMode":  "url_fetched",
+                                                                                   "readStatus":  "full_text_read",
+                                                                                   "ingestedAt":  "2026-03-17T10:30:25.2042754",
+                                                                                   "localFactId":  135853,
+                                                                                   "sourceRecordId":  "stock_news:135853",
+                                                                                   "level":  "announcement",
+                                                                                   "sentiment":  "中性",
+                                                                                   "target":  "个股:浦发银行",
+                                                                                   "tags":  [
+                                                                                                "财报业绩"
+                                                                                            ]
+                                                                               },
+                                                                               {
+                                                                                   "point":  "浦发银行:独立董事候选人声明与承诺",
+                                                                                   "title":  "浦发银行:独立董事候选人声明与承诺",
+                                                                                   "source":  "东方财富公告",
+                                                                                   "publishedAt":  "2026-01-06T18:48:44+08:00",
+                                                                                   "crawledAt":  "2026-03-27T02:28:33.7795773Z",
+                                                                                   "url":  "https://data.eastmoney.com/notices/detail/600000/AN202601061816147382.html",
+                                                                                   "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                                                                                   "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                                                                                   "readMode":  "url_fetched",
+                                                                                   "readStatus":  "full_text_read",
+                                                                                   "ingestedAt":  "2026-03-17T10:30:25.5785099",
+                                                                                   "localFactId":  135857,
+                                                                                   "sourceRecordId":  "stock_news:135857",
+                                                                                   "level":  "announcement",
+                                                                                   "sentiment":  "中性",
+                                                                                   "target":  "个股:浦发银行",
+                                                                                   "tags":  [
+
+                                                                                            ]
+                                                                               },
+                                                                               {
+                                                                                   "point":  "浦发银行:上海浦东发展银行股份有限公司董事会2026年第一次会议决议公告",
+                                                                                   "title":  "浦发银行:上海浦东发展银行股份有限公司董事会2026年第一次会议决议公告",
+                                                                                   "source":  "东方财富公告",
+                                                                                   "publishedAt":  "2026-01-06T18:48:44+08:00",
+                                                                                   "crawledAt":  "2026-03-27T02:28:33.7795773Z",
+                                                                                   "url":  "https://data.eastmoney.com/notices/detail/600000/AN202601061816147380.html",
+                                                                                   "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                                                                                   "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                                                                                   "readMode":  "url_fetched",
+                                                                                   "readStatus":  "full_text_read",
+                                                                                   "ingestedAt":  "2026-03-17T10:30:25.95335",
+                                                                                   "localFactId":  135856,
+                                                                                   "sourceRecordId":  "stock_news:135856",
+                                                                                   "level":  "announcement",
+                                                                                   "sentiment":  "中性",
+                                                                                   "target":  "个股:浦发银行",
+                                                                                   "tags":  [
+
+                                                                                            ]
+                                                                               },
+                                                                               {
+                                                                                   "point":  "浦发银行:上海浦东发展银行股份有限公司关于召开2026年第一次临时股东会的通知",
+                                                                                   "title":  "浦发银行:上海浦东发展银行股份有限公司关于召开2026年第一次临时股东会的通知",
+                                                                                   "source":  "东方财富公告",
+                                                                                   "publishedAt":  "2026-01-06T18:48:44+08:00",
+                                                                                   "crawledAt":  "2026-03-27T02:28:33.7795773Z",
+                                                                                   "url":  "https://data.eastmoney.com/notices/detail/600000/AN202601061816147383.html",
+                                                                                   "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                                                                                   "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                                                                                   "readMode":  "url_fetched",
+                                                                                   "readStatus":  "full_text_read",
+                                                                                   "ingestedAt":  "2026-03-17T10:30:26.3294041",
+                                                                                   "localFactId":  135855,
+                                                                                   "sourceRecordId":  "stock_news:135855",
+                                                                                   "level":  "announcement",
+                                                                                   "sentiment":  "中性",
+                                                                                   "target":  "个股:浦发银行",
+                                                                                   "tags":  [
+
+                                                                                            ]
+                                                                               },
+                                                                               {
+                                                                                   "point":  "浦发银行:独立董事提名人声明与承诺",
+                                                                                   "title":  "浦发银行:独立董事提名人声明与承诺",
+                                                                                   "source":  "东方财富公告",
+                                                                                   "publishedAt":  "2026-01-06T18:48:44+08:00",
+                                                                                   "crawledAt":  "2026-03-27T02:28:33.7795773Z",
+                                                                                   "url":  "https://data.eastmoney.com/notices/detail/600000/AN202601061816147381.html",
+                                                                                   "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                                                                                   "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                                                                                   "readMode":  "url_fetched",
+                                                                                   "readStatus":  "full_text_read",
+                                                                                   "ingestedAt":  "2026-03-17T10:30:26.7031079",
+                                                                                   "localFactId":  135854,
+                                                                                   "sourceRecordId":  "stock_news:135854",
+                                                                                   "level":  "announcement",
+                                                                                   "sentiment":  "中性",
+                                                                                   "target":  "个股:浦发银行",
+                                                                                   "tags":  [
+
+                                                                                            ]
+                                                                               },
+                                                                               {
+                                                                                   "point":  "浦发银行:上海浦东发展银行股份有限公司关于公司章程修订获核准及不再设立监事会的公告",
+                                                                                   "title":  "浦发银行:上海浦东发展银行股份有限公司关于公司章程修订获核准及不再设立监事会的公告",
+                                                                                   "source":  "东方财富公告",
+                                                                                   "publishedAt":  "2025-12-29T18:23:12+08:00",
+                                                                                   "crawledAt":  "2026-03-27T02:28:33.7795773Z",
+                                                                                   "url":  "https://data.eastmoney.com/notices/detail/600000/AN202512291810687583.html",
+                                                                                   "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                                                                                   "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                                                                                   "readMode":  "url_fetched",
+                                                                                   "readStatus":  "full_text_read",
+                                                                                   "ingestedAt":  "2026-03-17T10:30:27.0814119",
+                                                                                   "localFactId":  135859,
+                                                                                   "sourceRecordId":  "stock_news:135859",
+                                                                                   "level":  "announcement",
+                                                                                   "sentiment":  "中性",
+                                                                                   "target":  "个股:浦发银行",
+                                                                                   "tags":  [
+                                                                                                "监管政策"
+                                                                                            ]
+                                                                               },
+                                                                               {
+                                                                                   "point":  "浦发银行:上海浦东发展银行股份有限公司章程(2025年修订)",
+                                                                                   "title":  "浦发银行:上海浦东发展银行股份有限公司章程(2025年修订)",
+                                                                                   "source":  "东方财富公告",
+                                                                                   "publishedAt":  "2025-12-29T18:23:12+08:00",
+                                                                                   "crawledAt":  "2026-03-27T02:28:33.7795773Z",
+                                                                                   "url":  "https://data.eastmoney.com/notices/detail/600000/AN202512291810687580.html",
+                                                                                   "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                                                                                   "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                                                                                   "readMode":  "url_fetched",
+                                                                                   "readStatus":  "full_text_read",
+                                                                                   "ingestedAt":  "2026-03-17T10:30:27.4561923",
+                                                                                   "localFactId":  135858,
+                                                                                   "sourceRecordId":  "stock_news:135858",
+                                                                                   "level":  "announcement",
+                                                                                   "sentiment":  "中性",
+                                                                                   "target":  "个股:浦发银行",
+                                                                                   "tags":  [
+                                                                                                "监管政策"
+                                                                                            ]
+                                                                               },
+                                                                               {
+                                                                                   "point":  "浦发银行:上海浦东发展银行股份有限公司董事会2025年第十三次会议决议公告",
+                                                                                   "title":  "浦发银行:上海浦东发展银行股份有限公司董事会2025年第十三次会议决议公告",
+                                                                                   "source":  "东方财富公告",
+                                                                                   "publishedAt":  "2025-12-26T17:29:34+08:00",
+                                                                                   "crawledAt":  "2026-03-27T02:28:33.7795773Z",
+                                                                                   "url":  "https://data.eastmoney.com/notices/detail/600000/AN202512261808623733.html",
+                                                                                   "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                                                                                   "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                                                                                   "readMode":  "url_fetched",
+                                                                                   "readStatus":  "full_text_read",
+                                                                                   "ingestedAt":  "2026-03-17T10:30:28.1160315",
+                                                                                   "localFactId":  135862,
+                                                                                   "sourceRecordId":  "stock_news:135862",
+                                                                                   "level":  "announcement",
+                                                                                   "sentiment":  "中性",
+                                                                                   "target":  "个股:浦发银行",
+                                                                                   "tags":  [
+
+                                                                                            ]
+                                                                               },
+                                                                               {
+                                                                                   "point":  "浦发银行:上海浦东发展银行股份有限公司关联交易公告",
+                                                                                   "title":  "浦发银行:上海浦东发展银行股份有限公司关联交易公告",
+                                                                                   "source":  "东方财富公告",
+                                                                                   "publishedAt":  "2025-12-26T17:29:34+08:00",
+                                                                                   "crawledAt":  "2026-03-27T02:28:33.7795773Z",
+                                                                                   "url":  "https://data.eastmoney.com/notices/detail/600000/AN202512261808623730.html",
+                                                                                   "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                                                                                   "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                                                                                   "readMode":  "url_fetched",
+                                                                                   "readStatus":  "full_text_read",
+                                                                                   "ingestedAt":  "2026-03-17T10:30:29.5078531",
+                                                                                   "localFactId":  135861,
+                                                                                   "sourceRecordId":  "stock_news:135861",
+                                                                                   "level":  "announcement",
+                                                                                   "sentiment":  "中性",
+                                                                                   "target":  "个股:浦发银行",
+                                                                                   "tags":  [
+
+                                                                                            ]
+                                                                               },
+                                                                               {
+                                                                                   "point":  "浦发银行:上海浦东发展银行股份有限公司监事会2025年第十二次会议决议公告",
+                                                                                   "title":  "浦发银行:上海浦东发展银行股份有限公司监事会2025年第十二次会议决议公告",
+                                                                                   "source":  "东方财富公告",
+                                                                                   "publishedAt":  "2025-12-26T17:29:34+08:00",
+                                                                                   "crawledAt":  "2026-03-27T02:28:33.7795773Z",
+                                                                                   "url":  "https://data.eastmoney.com/notices/detail/600000/AN202512261808623731.html",
+                                                                                   "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                                                                                   "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                                                                                   "readMode":  "url_fetched",
+                                                                                   "readStatus":  "full_text_read",
+                                                                                   "ingestedAt":  "2026-03-17T10:30:30.830376",
+                                                                                   "localFactId":  135860,
+                                                                                   "sourceRecordId":  "stock_news:135860",
+                                                                                   "level":  "announcement",
+                                                                                   "sentiment":  "中性",
+                                                                                   "target":  "个股:浦发银行",
+                                                                                   "tags":  [
+
+                                                                                            ]
+                                                                               },
+                                                                               {
+                                                                                   "point":  "浦发银行:上海浦东发展银行股份有限公司关于2025年第二期金融债券发行完毕的公告",
+                                                                                   "title":  "浦发银行:上海浦东发展银行股份有限公司关于2025年第二期金融债券发行完毕的公告",
+                                                                                   "source":  "东方财富公告",
+                                                                                   "publishedAt":  "2025-12-15T18:11:04+08:00",
+                                                                                   "crawledAt":  "2026-03-27T02:28:33.7795773Z",
+                                                                                   "url":  "https://data.eastmoney.com/notices/detail/600000/AN202512151801064388.html",
+                                                                                   "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                                                                                   "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                                                                                   "readMode":  "url_fetched",
+                                                                                   "readStatus":  "full_text_read",
+                                                                                   "ingestedAt":  "2026-03-17T10:30:32.4514062",
+                                                                                   "localFactId":  135863,
+                                                                                   "sourceRecordId":  "stock_news:135863",
+                                                                                   "level":  "announcement",
+                                                                                   "sentiment":  "中性",
+                                                                                   "target":  "个股:浦发银行",
+                                                                                   "tags":  [
+                                                                                                "资金面"
+                                                                                            ]
+                                                                               },
+                                                                               {
+                                                                                   "point":  "浦发银行:上海浦东发展银行股份有限公司关于副董事长任职资格获核准的公告",
+                                                                                   "title":  "浦发银行:上海浦东发展银行股份有限公司关于副董事长任职资格获核准的公告",
+                                                                                   "source":  "东方财富公告",
+                                                                                   "publishedAt":  "2025-11-27T17:28:11+08:00",
+                                                                                   "crawledAt":  "2026-03-27T02:28:33.7795773Z",
+                                                                                   "url":  "https://data.eastmoney.com/notices/detail/600000/AN202511271789377566.html",
+                                                                                   "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                                                                                   "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                                                                                   "readMode":  "url_fetched",
+                                                                                   "readStatus":  "full_text_read",
+                                                                                   "ingestedAt":  "2026-03-17T10:30:34.2569098",
+                                                                                   "localFactId":  135864,
+                                                                                   "sourceRecordId":  "stock_news:135864",
+                                                                                   "level":  "announcement",
+                                                                                   "sentiment":  "中性",
+                                                                                   "target":  "个股:浦发银行",
+                                                                                   "tags":  [
+                                                                                                "监管政策"
+                                                                                            ]
+                                                                               }
+                                                                           ],
+                                                              "summary":  "本地新闻 20 条，最新时间=2026-03-20 17:47:45。"
+                                                          }
+                                                      ],
+                                      "finalAnswer":  {
+                                                          "status":  "done",
+                                                          "summary":  "这是 live gate 的计划草案，真正可采信的事实以后端 tool results 为准。待工具执行后，将结合日线结构、本地新闻及市场情绪计算浦发银行的涨跌概率。目前暂无法提供具体概率数值。\n\n工具回执：CompanyOverviewMcp[completed] traceId=442e365bae064b848eb0f5ee6ef99e8e 公司概况：浦发银行，主营=缺失，经营范围=吸收公众存款;发放短期、中期和长期贷款;办理结算;办理票据贴现;发行金融债券;代理发行、代理兑付、承销政府债券,买卖政府债券;同业拆借;提供信用证服务及担保;代理收付款项及代理保险业务;提供保管箱服务;外汇存款;外汇贷款;外汇汇款;外币兑换;国际结算;同业外汇拆借;外汇票据的承兑和贴现;外汇借款;外汇担保;结汇、售汇;买卖和代理买卖股票以外的外币有价证券;自营外汇买卖;代客外汇买卖;银行卡业务;资信调查、咨询、见证业务;离岸银行业务;证券投资基金托管业务;公募证券投资基金销售;经批准的其它业务。。；MarketContextMcp[completed] traceId=173c5555484548488ecbc540a34efc6b 市场阶段=分歧，主线=单抗概念。；StockKlineMcp[completed] traceId=7adfec8c29b94c59abf9be97d9782dcb K 线窗口=60，趋势=盘整，5D=1.83%。；StockNewsMcp[completed] traceId=709999b4fe344db7a0ecce7e9f40b3ff 本地新闻 20 条，最新时间=2026-03-20 17:47:45。",
+                                                          "groundingMode":  "llm_plan_with_tool_receipts",
+                                                          "confidenceScore":  0.9,
+                                                          "needsToolExecution":  false,
+                                                          "constraints":  [
+                                                                              "这是 live gate 验收结论，不是多轮产品化对话结果。",
+                                                                              "真正可采信事实以后端执行成功的 tool result、traceId 和 evidence 为准。",
+                                                                              "LLM traceId=00906074eef44eeea3c9770a6f2e5b29"
+                                                                          ]
+                                                      },
+                                      "followUpActions":  [
+                                                              {
+                                                                  "actionId":  "action-CompanyOverviewMcp",
+                                                                  "label":  "查看 CompanyOverviewMcp 回执",
+                                                                  "actionType":  "inspect_tool_receipt",
+                                                                  "toolName":  "CompanyOverviewMcp",
+                                                                  "description":  "核对 CompanyOverviewMcp 的 traceId、warnings 与 evidence。",
+                                                                  "enabled":  true,
+                                                                  "blockedReason":  null
+                                                              },
+                                                              {
+                                                                  "actionId":  "action-MarketContextMcp",
+                                                                  "label":  "查看 MarketContextMcp 回执",
+                                                                  "actionType":  "inspect_tool_receipt",
+                                                                  "toolName":  "MarketContextMcp",
+                                                                  "description":  "核对 MarketContextMcp 的 traceId、warnings 与 evidence。",
+                                                                  "enabled":  true,
+                                                                  "blockedReason":  null
+                                                              },
+                                                              {
+                                                                  "actionId":  "action-StockKlineMcp",
+                                                                  "label":  "查看 StockKlineMcp 回执",
+                                                                  "actionType":  "inspect_tool_receipt",
+                                                                  "toolName":  "StockKlineMcp",
+                                                                  "description":  "核对 StockKlineMcp 的 traceId、warnings 与 evidence。",
+                                                                  "enabled":  true,
+                                                                  "blockedReason":  null
+                                                              },
+                                                              {
+                                                                  "actionId":  "action-StockNewsMcp",
+                                                                  "label":  "查看 StockNewsMcp 回执",
+                                                                  "actionType":  "inspect_tool_receipt",
+                                                                  "toolName":  "StockNewsMcp",
+                                                                  "description":  "核对 StockNewsMcp 的 traceId、warnings 与 evidence。",
+                                                                  "enabled":  true,
+                                                                  "blockedReason":  null
+                                                              },
+                                                              {
+                                                                  "actionId":  "action-next-round",
+                                                                  "label":  "发起下一轮修正",
+                                                                  "actionType":  "retry_live_gate",
+                                                                  "toolName":  null,
+                                                                  "description":  "如果需要更严格的工具计划，可以在修正 prompt 或授权后重新运行 live gate。",
+                                                                  "enabled":  false,
+                                                                  "blockedReason":  "当前 live gate 已完成，可直接进入人工复核。"
+                                                              }
+                                                          ],
+                                      "loopBudget":  {
+                                                         "maxRounds":  1,
+                                                         "maxToolCalls":  6,
+                                                         "maxExternalSearchCalls":  1,
+                                                         "maxTotalLatencyMs":  15000,
+                                                         "maxPollingSteps":  2000
+                                                     },
+                                      "loopExecution":  {
+                                                            "completedRounds":  1,
+                                                            "toolCallsExecuted":  4,
+                                                            "externalSearchCallsExecuted":  0,
+                                                            "totalLatencyMs":  13496,
+                                                            "consumedPollingSteps":  6,
+                                                            "status":  "done",
+                                                            "stopReason":  "completed",
+                                                            "forcedClose":  false
+                                                        },
+                                      "llmTraceId":  "00906074eef44eeea3c9770a6f2e5b29"
+                                  }
+                              ],
+                    "roleContractChecklist":  {
+                                                  "checklistId":  "stock-prompt-mcp-contract-checklist",
+                                                  "version":  "phase-f-20260326-r1",
+                                                  "sourceTaskId":  "GOAL-AGENT-NEW-001-P0-Pre-Phase-F",
+                                                  "generatedAt":  "2026-03-27T02:28:07.2078532Z",
+                                                  "roles":  [
+                                                                {
+                                                                    "roleId":  "company_overview_analyst",
+                                                                    "roleName":  "Company Overview Analyst",
+                                                                    "roleClass":  "analyst",
+                                                                    "toolAccessMode":  "local_required",
+                                                                    "preferredMcpSequence":  [
+                                                                                                 "CompanyOverviewMcp",
+                                                                                                 "MarketContextMcp",
+                                                                                                 "StockNewsMcp",
+                                                                                                 "StockSearchMcp"
+                                                                                             ],
+                                                                    "fallbackRule":  "必须先完成 CompanyOverviewMcp 的本地公司识别；只有本地主营描述或别名字段仍不足时，才允许在 governor 批准后使用 StockSearchMcp 做受控补充。",
+                                                                    "stopRule":  "若 symbol 解析失败、CompanyOverviewMcp 不可用或关键公司字段为空，则停止 analyst fan-out。",
+                                                                    "minimumEvidenceCount":  2,
+                                                                    "allowsDirectQueryTools":  true,
+                                                                    "reason":  null
+                                                                },
+                                                                {
+                                                                    "roleId":  "market_analyst",
+                                                                    "roleName":  "Market Analyst",
+                                                                    "roleClass":  "analyst",
+                                                                    "toolAccessMode":  "local_required",
+                                                                    "preferredMcpSequence":  [
+                                                                                                 "MarketContextMcp",
+                                                                                                 "StockKlineMcp",
+                                                                                                 "StockMinuteMcp",
+                                                                                                 "StockStrategyMcp"
+                                                                                             ],
+                                                                    "fallbackRule":  "仅允许复用已存在的本地 market context 或 company overview 上下文；不允许自动 external fallback，也不允许把网页搜索当作市场结构替代。",
+                                                                    "stopRule":  "任一 local_required 市场工具不可用时立即停止，不得退化为 Web Search 分析。",
+                                                                    "minimumEvidenceCount":  3,
+                                                                    "allowsDirectQueryTools":  true,
+                                                                    "reason":  null
+                                                                },
+                                                                {
+                                                                    "roleId":  "social_sentiment_analyst",
+                                                                    "roleName":  "Social Sentiment Analyst",
+                                                                    "roleClass":  "analyst",
+                                                                    "toolAccessMode":  "local_preferred",
+                                                                    "preferredMcpSequence":  [
+                                                                                                 "SocialSentimentMcp",
+                                                                                                 "StockNewsMcp",
+                                                                                                 "MarketContextMcp",
+                                                                                                 "StockSearchMcp"
+                                                                                             ],
+                                                                    "fallbackRule":  "优先使用 SocialSentimentMcp 的本地 proxy 与本地新闻情绪；仅当本地 proxy 证据不足且 governor 明确批准时，才允许 StockSearchMcp 作为 external_gated 补充。",
+                                                                    "stopRule":  "若本地 proxy 返回 blocked/no_data 且未获外部批准，则停止并保持 degraded 或 blocked。",
+                                                                    "minimumEvidenceCount":  2,
+                                                                    "allowsDirectQueryTools":  true,
+                                                                    "reason":  null
+                                                                },
+                                                                {
+                                                                    "roleId":  "news_analyst",
+                                                                    "roleName":  "News Analyst",
+                                                                    "roleClass":  "analyst",
+                                                                    "toolAccessMode":  "local_required",
+                                                                    "preferredMcpSequence":  [
+                                                                                                 "StockNewsMcp",
+                                                                                                 "MarketContextMcp",
+                                                                                                 "StockSearchMcp"
+                                                                                             ],
+                                                                    "fallbackRule":  "必须先执行 StockNewsMcp 的本地事实收集；只有当本地证据数低于 2、时间窗不新鲜或存在明确缺口时，才允许受控使用 StockSearchMcp。",
+                                                                    "stopRule":  "StockNewsMcp 不可用或本地新闻链路失败时立即停止；未获外部批准不得越过 local-first。",
+                                                                    "minimumEvidenceCount":  2,
+                                                                    "allowsDirectQueryTools":  true,
+                                                                    "reason":  null
+                                                                },
+                                                                {
+                                                                    "roleId":  "fundamentals_analyst",
+                                                                    "roleName":  "Fundamentals Analyst",
+                                                                    "roleClass":  "analyst",
+                                                                    "toolAccessMode":  "local_required",
+                                                                    "preferredMcpSequence":  [
+                                                                                                 "StockFundamentalsMcp",
+                                                                                                 "CompanyOverviewMcp",
+                                                                                                 "MarketContextMcp"
+                                                                                             ],
+                                                                    "fallbackRule":  "只允许复用本地 company overview 与 market context 作为上下文，本角色不触发 external search。",
+                                                                    "stopRule":  "StockFundamentalsMcp 无数据时立即停止，不得用新闻或推断替代基本面。",
+                                                                    "minimumEvidenceCount":  2,
+                                                                    "allowsDirectQueryTools":  true,
+                                                                    "reason":  null
+                                                                },
+                                                                {
+                                                                    "roleId":  "shareholder_analyst",
+                                                                    "roleName":  "Shareholder Analyst",
+                                                                    "roleClass":  "analyst",
+                                                                    "toolAccessMode":  "local_required",
+                                                                    "preferredMcpSequence":  [
+                                                                                                 "StockShareholderMcp",
+                                                                                                 "CompanyOverviewMcp",
+                                                                                                 "StockNewsMcp"
+                                                                                             ],
+                                                                    "fallbackRule":  "仅允许复用本地 company overview 与 local news 作为上下文，不允许 external search 替代股东结构数据。",
+                                                                    "stopRule":  "StockShareholderMcp 缺失时立即停止，不得把 fundamentals 或 product 文本伪装成股东分析。",
+                                                                    "minimumEvidenceCount":  2,
+                                                                    "allowsDirectQueryTools":  true,
+                                                                    "reason":  null
+                                                                },
+                                                                {
+                                                                    "roleId":  "product_analyst",
+                                                                    "roleName":  "Product Analyst",
+                                                                    "roleClass":  "analyst",
+                                                                    "toolAccessMode":  "local_required",
+                                                                    "preferredMcpSequence":  [
+                                                                                                 "StockProductMcp",
+                                                                                                 "CompanyOverviewMcp",
+                                                                                                 "MarketContextMcp",
+                                                                                                 "StockNewsMcp"
+                                                                                             ],
+                                                                    "fallbackRule":  "必须先执行 StockProductMcp；CompanyOverviewMcp、MarketContextMcp 与 StockNewsMcp 只能做上下文补充，不能替代经营范围/主营业务等产品事实。",
+                                                                    "stopRule":  "若 StockProductMcp 未返回经营范围或主营业务等最小产品事实，则立即停止，不得伪造 Product Analyst 结论。",
+                                                                    "minimumEvidenceCount":  2,
+                                                                    "allowsDirectQueryTools":  true,
+                                                                    "reason":  null
+                                                                },
+                                                                {
+                                                                    "roleId":  "bull_researcher",
+                                                                    "roleName":  "Bull Researcher",
+                                                                    "roleClass":  "researcher",
+                                                                    "toolAccessMode":  "disabled",
+                                                                    "preferredMcpSequence":  [
+
+                                                                                             ],
+                                                                    "fallbackRule":  "不允许直接调用查询工具；只能消费 analyst outputs、debate history 与 current report snapshot。",
+                                                                    "stopRule":  "若缺少上游 analyst artifacts，则停止并请求补齐，不得私自取数。",
+                                                                    "minimumEvidenceCount":  3,
+                                                                    "allowsDirectQueryTools":  false,
+                                                                    "reason":  "researcher 角色无直接查询工具权限。"
+                                                                },
+                                                                {
+                                                                    "roleId":  "bear_researcher",
+                                                                    "roleName":  "Bear Researcher",
+                                                                    "roleClass":  "researcher",
+                                                                    "toolAccessMode":  "disabled",
+                                                                    "preferredMcpSequence":  [
+
+                                                                                             ],
+                                                                    "fallbackRule":  "不允许直接调用查询工具；只能消费 analyst outputs、debate history 与 current report snapshot。",
+                                                                    "stopRule":  "若缺少上游 analyst artifacts，则停止并请求补齐，不得私自取数。",
+                                                                    "minimumEvidenceCount":  3,
+                                                                    "allowsDirectQueryTools":  false,
+                                                                    "reason":  "researcher 角色无直接查询工具权限。"
+                                                                },
+                                                                {
+                                                                    "roleId":  "research_manager",
+                                                                    "roleName":  "Research Manager",
+                                                                    "roleClass":  "manager",
+                                                                    "toolAccessMode":  "disabled",
+                                                                    "preferredMcpSequence":  [
+
+                                                                                             ],
+                                                                    "fallbackRule":  "只读 analyst outputs 与 bull/bear debate，不得重新查询工具。",
+                                                                    "stopRule":  "缺少 bull/bear 冲突点或 analyst artifacts 时停止，不得用摘要替代裁决。",
+                                                                    "minimumEvidenceCount":  4,
+                                                                    "allowsDirectQueryTools":  false,
+                                                                    "reason":  "manager 角色无直接查询工具权限。"
+                                                                },
+                                                                {
+                                                                    "roleId":  "trader",
+                                                                    "roleName":  "Trader",
+                                                                    "roleClass":  "trader",
+                                                                    "toolAccessMode":  "disabled",
+                                                                    "preferredMcpSequence":  [
+
+                                                                                             ],
+                                                                    "fallbackRule":  "只读 research decision、market structure artifact 与约束条件，不得直接取数。",
+                                                                    "stopRule":  "research decision 未完成时停止，不得越过 research debate。",
+                                                                    "minimumEvidenceCount":  3,
+                                                                    "allowsDirectQueryTools":  false,
+                                                                    "reason":  "trader 角色无直接查询工具权限。"
+                                                                },
+                                                                {
+                                                                    "roleId":  "aggressive_risk_analyst",
+                                                                    "roleName":  "Aggressive Risk Analyst",
+                                                                    "roleClass":  "risk",
+                                                                    "toolAccessMode":  "disabled",
+                                                                    "preferredMcpSequence":  [
+
+                                                                                             ],
+                                                                    "fallbackRule":  "只读 trader proposal、research summary 与 risk inputs，不得直接取数。",
+                                                                    "stopRule":  "trader proposal 缺失时停止，不得把通用风险提示当作评审。",
+                                                                    "minimumEvidenceCount":  3,
+                                                                    "allowsDirectQueryTools":  false,
+                                                                    "reason":  "risk 角色无直接查询工具权限。"
+                                                                },
+                                                                {
+                                                                    "roleId":  "neutral_risk_analyst",
+                                                                    "roleName":  "Neutral Risk Analyst",
+                                                                    "roleClass":  "risk",
+                                                                    "toolAccessMode":  "disabled",
+                                                                    "preferredMcpSequence":  [
+
+                                                                                             ],
+                                                                    "fallbackRule":  "只读 trader proposal、research summary 与 risk inputs，不得直接取数。",
+                                                                    "stopRule":  "trader proposal 缺失时停止，不得把通用风险提示当作评审。",
+                                                                    "minimumEvidenceCount":  3,
+                                                                    "allowsDirectQueryTools":  false,
+                                                                    "reason":  "risk 角色无直接查询工具权限。"
+                                                                },
+                                                                {
+                                                                    "roleId":  "conservative_risk_analyst",
+                                                                    "roleName":  "Conservative Risk Analyst",
+                                                                    "roleClass":  "risk",
+                                                                    "toolAccessMode":  "disabled",
+                                                                    "preferredMcpSequence":  [
+
+                                                                                             ],
+                                                                    "fallbackRule":  "只读 trader proposal、research summary 与 risk inputs，不得直接取数。",
+                                                                    "stopRule":  "trader proposal 缺失时停止，不得把通用风险提示当作评审。",
+                                                                    "minimumEvidenceCount":  3,
+                                                                    "allowsDirectQueryTools":  false,
+                                                                    "reason":  "risk 角色无直接查询工具权限。"
+                                                                },
+                                                                {
+                                                                    "roleId":  "portfolio_manager",
+                                                                    "roleName":  "Portfolio Manager",
+                                                                    "roleClass":  "portfolio",
+                                                                    "toolAccessMode":  "disabled",
+                                                                    "preferredMcpSequence":  [
+
+                                                                                             ],
+                                                                    "fallbackRule":  "只读 trader proposal、risk debate 与 current report，不得重新查询工具。",
+                                                                    "stopRule":  "缺少 trader proposal 或 risk debate 时停止，不得提前生成 final decision。",
+                                                                    "minimumEvidenceCount":  4,
+                                                                    "allowsDirectQueryTools":  false,
+                                                                    "reason":  "portfolio 角色无直接查询工具权限。"
+                                                                }
+                                                            ]
+                                              }
+                },
+    "acceptance":  {
+                       "symbol":  "sh600000",
+                       "sessionKey":  "sh600000-1774578486771",
+                       "turnId":  "turn-live-908f911ea9224f4b8f67cae8df8b73fa",
+                       "generatedAt":  "2026-03-27T02:28:35.7940554Z",
+                       "overallScore":  70.29,
+                       "approvedToolCallCount":  4,
+                       "executedToolCallCount":  4,
+                       "averageLatencyMs":  3374,
+                       "warningCount":  0,
+                       "degradedFlagCount":  1,
+                       "highlights":  [
+                                          "本轮已执行全部已批准工具。\n",
+                                          "已执行工具具备较高证据覆盖，可支撑 grounded final answer。\n",
+                                          "本轮保持 Local-First，没有触发外部搜索。\n",
+                                          "Replay 基线已有 2 条样本，traceableEvidenceRate=100%。\n",
+                                          "当前还有 0 条 warning、1 条 degraded flag 需要收口。\n",
+                                          "当前 Copilot 验收总分为 70.29/100。\n"
+                                      ],
+                       "metrics":  [
+                                       {
+                                           "key":  "tool_efficiency",
+                                           "label":  "工具效率",
+                                           "value":  100,
+                                           "unit":  "%",
+                                           "status":  "good",
+                                           "description":  "已执行工具数占已批准工具数的比例。"
+                                       },
+                                       {
+                                           "key":  "evidence_coverage",
+                                           "label":  "证据覆盖率",
+                                           "value":  100,
+                                           "unit":  "%",
+                                           "status":  "good",
+                                           "description":  "已执行工具中，实际返回 evidence 的占比。"
+                                       },
+                                       {
+                                           "key":  "local_first_hit",
+                                           "label":  "Local-First 命中率",
+                                           "value":  100,
+                                           "unit":  "%",
+                                           "status":  "good",
+                                           "description":  "本轮执行工具中，Local-First 工具的占比。"
+                                       },
+                                       {
+                                           "key":  "external_search_trigger",
+                                           "label":  "外部搜索触发率",
+                                           "value":  0,
+                                           "unit":  "%",
+                                           "status":  "good",
+                                           "description":  "本轮执行工具中，external-gated 搜索的占比。"
+                                       },
+                                       {
+                                           "key":  "final_answer_traceability",
+                                           "label":  "最终回答可追溯度",
+                                           "value":  100,
+                                           "unit":  "%",
+                                           "status":  "good",
+                                           "description":  "已执行工具中，具备 traceId 或 evidence 的结果占比。"
+                                       },
+                                       {
+                                           "key":  "action_quality",
+                                           "label":  "动作卡就绪度",
+                                           "value":  80,
+                                           "unit":  "%",
+                                           "status":  "good",
+                                           "description":  "当前动作卡中，已可执行动作的占比。"
+                                       },
+                                       {
+                                           "key":  "tool_latency",
+                                           "label":  "工具延迟得分",
+                                           "value":  40,
+                                           "unit":  "%",
+                                           "status":  "risk",
+                                           "description":  "根据平均工具延迟换算出的体验得分。"
+                                       }
+                                   ],
+                       "replayBaseline":  {
+                                              "scope":  "sh600000",
+                                              "generatedAt":  "2026-03-27T02:28:35.7940408Z",
+                                              "sampleCount":  2,
+                                              "traceableEvidenceRate":  100,
+                                              "parseRepairRate":  0.24,
+                                              "pollutedEvidenceRate":  0,
+                                              "revisionCompletenessRate":  100,
+                                              "horizons":  [
+                                                               {
+                                                                   "horizonDays":  1,
+                                                                   "sampleCount":  2,
+                                                                   "hitRate":  50,
+                                                                   "averageReturnPercent":  -0.10,
+                                                                   "brierScore":  0.1565,
+                                                                   "bullWinRate":  0,
+                                                                   "bearWinRate":  0,
+                                                                   "baseWinRate":  100
+                                                               },
+                                                               {
+                                                                   "horizonDays":  3,
+                                                                   "sampleCount":  2,
+                                                                   "hitRate":  50,
+                                                                   "averageReturnPercent":  -0.96,
+                                                                   "brierScore":  0.1565,
+                                                                   "bullWinRate":  0,
+                                                                   "bearWinRate":  0,
+                                                                   "baseWinRate":  100
+                                                               },
+                                                               {
+                                                                   "horizonDays":  5,
+                                                                   "sampleCount":  2,
+                                                                   "hitRate":  0,
+                                                                   "averageReturnPercent":  -5.01,
+                                                                   "brierScore":  0.3059,
+                                                                   "bullWinRate":  0,
+                                                                   "bearWinRate":  0,
+                                                                   "baseWinRate":  0
+                                                               },
+                                                               {
+                                                                   "horizonDays":  10,
+                                                                   "sampleCount":  2,
+                                                                   "hitRate":  0,
+                                                                   "averageReturnPercent":  -3.37,
+                                                                   "brierScore":  0.3059,
+                                                                   "bullWinRate":  0,
+                                                                   "bearWinRate":  0,
+                                                                   "baseWinRate":  0
+                                                               }
+                                                           ],
+                                              "samples":  [
+                                                              {
+                                                                  "historyId":  137,
+                                                                  "symbol":  "sh600000",
+                                                                  "createdAt":  "2026-03-17T10:32:52.7319093",
+                                                                  "direction":  "观察",
+                                                                  "confidenceScore":  0.75,
+                                                                  "bullProbability":  29.92,
+                                                                  "baseProbability":  40.15,
+                                                                  "bearProbability":  29.92,
+                                                                  "return1dPercent":  -0.10,
+                                                                  "return3dPercent":  -0.96,
+                                                                  "return5dPercent":  -5.01,
+                                                                  "return10dPercent":  -3.37,
+                                                                  "evidenceTraceable":  true,
+                                                                  "evidencePolluted":  false,
+                                                                  "revisionExplained":  true,
+                                                                  "summary":  "浦发银行当前处于明显的上升通道中，技术面量价配合良好，且具备高股息的防御属性。尽管上方存在一定获利盘抛压，但市场资金对红利资产的持续配置意愿为股价提供了有力支撑。预计短期内将维持震荡上行态势，重点关注成交量能否有效突破10.45元压力位。",
+                                                                  "traceId":  null
+                                                              },
+                                                              {
+                                                                  "historyId":  136,
+                                                                  "symbol":  "sh600000",
+                                                                  "createdAt":  "2026-03-17T10:21:20.3203462",
+                                                                  "direction":  "加仓",
+                                                                  "confidenceScore":  0.8,
+                                                                  "bullProbability":  35.40,
+                                                                  "baseProbability":  49.60,
+                                                                  "bearProbability":  15,
+                                                                  "return1dPercent":  -0.10,
+                                                                  "return3dPercent":  -0.96,
+                                                                  "return5dPercent":  -5.01,
+                                                                  "return10dPercent":  -3.37,
+                                                                  "evidenceTraceable":  true,
+                                                                  "evidencePolluted":  false,
+                                                                  "revisionExplained":  true,
+                                                                  "summary":  "浦发银行近期呈现稳健的修复性反弹趋势，技术面上有效站稳10元整数关口，均线呈多头排列。基本面方面，银行板块作为高股息防御性资产，受到资金青睐。综合多周期信号，短期看多。",
+                                                                  "traceId":  null
+                                                              }
+                                                          ]
+                                          }
+                   },
+    "llmTraceId":  "00906074eef44eeea3c9770a6f2e5b29",
+    "provider":  "active",
+    "model":  null,
+    "prompt":  "你是 Stock Copilot 的 live LLM gate planner。你的任务不是直接给投资建议，而是为一次受控 MCP 验收生成工具计划 JSON。\r\n硬性规则：\r\n1. 只能使用下方角色 contract 和 tool registry 中真实存在的 roleId 与 toolName。\r\n2. local_required / local_preferred 工具必须优先；external_gated 只能在 allowExternalSearch=true 且本地链路先执行后再考虑。\r\n3. disabled 或 blocked 的角色不得规划任何查询工具。\r\n4. 触发 stop rule 时必须停止，不得通过改写角色、改写 toolName 或伪造 fallback 绕过。\r\n5. 不允许切换 symbol，不允许生成未注册工具，不允许越权调用。\r\n6. 最多输出 6 个 toolCalls，其中最多 1 个 StockSearchMcp。\r\n7. 只返回一个 JSON object，不要输出解释、markdown、代码块或思考过程。\r\n\r\n输出 JSON schema：\r\n{\r\n  \"plannerSummary\": \"string\",\r\n  \"governorSummary\": \"string\",\r\n  \"finalAnswerDraft\": \"string\",\r\n  \"toolCalls\": [\r\n    {\r\n      \"roleId\": \"string\",\r\n      \"toolName\": \"string\",\r\n      \"purpose\": \"string\",\r\n      \"inputSummary\": \"key=value; key=value\"\r\n    }\r\n  ]\r\n}\r\n\r\n当前请求：\r\n- symbol=sh600000\r\n- question=看下浦发银行日线结构和本地新闻证据\r\n- allowExternalSearch=False\r\n- marketStage=分歧\r\n- mainlineSector=单抗概念\r\n- stockSector=银行\r\n- counterTrendWarning=False\r\n\r\ntool registry：\r\n- toolName=CompanyOverviewMcp; policyClass=local_required\r\n- toolName=StockProductMcp; policyClass=local_required\r\n- toolName=StockFundamentalsMcp; policyClass=local_required\r\n- toolName=StockShareholderMcp; policyClass=local_required\r\n- toolName=MarketContextMcp; policyClass=local_required\r\n- toolName=SocialSentimentMcp; policyClass=local_required\r\n- toolName=StockKlineMcp; policyClass=local_required\r\n- toolName=StockMinuteMcp; policyClass=local_required\r\n- toolName=StockStrategyMcp; policyClass=local_required\r\n- toolName=StockNewsMcp; policyClass=local_required\r\n- toolName=StockSearchMcp; policyClass=external_gated\r\n\r\n角色 contract：\r\n- roleId=company_overview_analyst; roleClass=analyst; toolAccessMode=local_required; allowsDirectQueryTools=True; minimumEvidenceCount=2; preferredMcpSequence=[CompanyOverviewMcp, MarketContextMcp, StockNewsMcp, StockSearchMcp]; fallbackRule=必须先完成 CompanyOverviewMcp 的本地公司识别；只有本地主营描述或别名字段仍不足时，才允许在 governor 批准后使用 StockSearchMcp 做受控补充。; stopRule=若 symbol 解析失败、CompanyOverviewMcp 不可用或关键公司字段为空，则停止 analyst fan-out。; reason=none\r\n- roleId=market_analyst; roleClass=analyst; toolAccessMode=local_required; allowsDirectQueryTools=True; minimumEvidenceCount=3; preferredMcpSequence=[MarketContextMcp, StockKlineMcp, StockMinuteMcp, StockStrategyMcp]; fallbackRule=仅允许复用已存在的本地 market context 或 company overview 上下文；不允许自动 external fallback，也不允许把网页搜索当作市场结构替代。; stopRule=任一 local_required 市场工具不可用时立即停止，不得退化为 Web Search 分析。; reason=none\r\n- roleId=social_sentiment_analyst; roleClass=analyst; toolAccessMode=local_preferred; allowsDirectQueryTools=True; minimumEvidenceCount=2; preferredMcpSequence=[SocialSentimentMcp, StockNewsMcp, MarketContextMcp, StockSearchMcp]; fallbackRule=优先使用 SocialSentimentMcp 的本地 proxy 与本地新闻情绪；仅当本地 proxy 证据不足且 governor 明确批准时，才允许 StockSearchMcp 作为 external_gated 补充。; stopRule=若本地 proxy 返回 blocked/no_data 且未获外部批准，则停止并保持 degraded 或 blocked。; reason=none\r\n- roleId=news_analyst; roleClass=analyst; toolAccessMode=local_required; allowsDirectQueryTools=True; minimumEvidenceCount=2; preferredMcpSequence=[StockNewsMcp, MarketContextMcp, StockSearchMcp]; fallbackRule=必须先执行 StockNewsMcp 的本地事实收集；只有当本地证据数低于 2、时间窗不新鲜或存在明确缺口时，才允许受控使用 StockSearchMcp。; stopRule=StockNewsMcp 不可用或本地新闻链路失败时立即停止；未获外部批准不得越过 local-first。; reason=none\r\n- roleId=fundamentals_analyst; roleClass=analyst; toolAccessMode=local_required; allowsDirectQueryTools=True; minimumEvidenceCount=2; preferredMcpSequence=[StockFundamentalsMcp, CompanyOverviewMcp, MarketContextMcp]; fallbackRule=只允许复用本地 company overview 与 market context 作为上下文，本角色不触发 external search。; stopRule=StockFundamentalsMcp 无数据时立即停止，不得用新闻或推断替代基本面。; reason=none\r\n- roleId=shareholder_analyst; roleClass=analyst; toolAccessMode=local_required; allowsDirectQueryTools=True; minimumEvidenceCount=2; preferredMcpSequence=[StockShareholderMcp, CompanyOverviewMcp, StockNewsMcp]; fallbackRule=仅允许复用本地 company overview 与 local news 作为上下文，不允许 external search 替代股东结构数据。; stopRule=StockShareholderMcp 缺失时立即停止，不得把 fundamentals 或 product 文本伪装成股东分析。; reason=none\r\n- roleId=product_analyst; roleClass=analyst; toolAccessMode=local_required; allowsDirectQueryTools=True; minimumEvidenceCount=2; preferredMcpSequence=[StockProductMcp, CompanyOverviewMcp, MarketContextMcp, StockNewsMcp]; fallbackRule=必须先执行 StockProductMcp；CompanyOverviewMcp、MarketContextMcp 与 StockNewsMcp 只能做上下文补充，不能替代经营范围/主营业务等产品事实。; stopRule=若 StockProductMcp 未返回经营范围或主营业务等最小产品事实，则立即停止，不得伪造 Product Analyst 结论。; reason=none\r\n- roleId=bull_researcher; roleClass=researcher; toolAccessMode=disabled; allowsDirectQueryTools=False; minimumEvidenceCount=3; preferredMcpSequence=[none]; fallbackRule=不允许直接调用查询工具；只能消费 analyst outputs、debate history 与 current report snapshot。; stopRule=若缺少上游 analyst artifacts，则停止并请求补齐，不得私自取数。; reason=researcher 角色无直接查询工具权限。\r\n- roleId=bear_researcher; roleClass=researcher; toolAccessMode=disabled; allowsDirectQueryTools=False; minimumEvidenceCount=3; preferredMcpSequence=[none]; fallbackRule=不允许直接调用查询工具；只能消费 analyst outputs、debate history 与 current report snapshot。; stopRule=若缺少上游 analyst artifacts，则停止并请求补齐，不得私自取数。; reason=researcher 角色无直接查询工具权限。\r\n- roleId=research_manager; roleClass=manager; toolAccessMode=disabled; allowsDirectQueryTools=False; minimumEvidenceCount=4; preferredMcpSequence=[none]; fallbackRule=只读 analyst outputs 与 bull/bear debate，不得重新查询工具。; stopRule=缺少 bull/bear 冲突点或 analyst artifacts 时停止，不得用摘要替代裁决。; reason=manager 角色无直接查询工具权限。\r\n- roleId=trader; roleClass=trader; toolAccessMode=disabled; allowsDirectQueryTools=False; minimumEvidenceCount=3; preferredMcpSequence=[none]; fallbackRule=只读 research decision、market structure artifact 与约束条件，不得直接取数。; stopRule=research decision 未完成时停止，不得越过 research debate。; reason=trader 角色无直接查询工具权限。\r\n- roleId=aggressive_risk_analyst; roleClass=risk; toolAccessMode=disabled; allowsDirectQueryTools=False; minimumEvidenceCount=3; preferredMcpSequence=[none]; fallbackRule=只读 trader proposal、research summary 与 risk inputs，不得直接取数。; stopRule=trader proposal 缺失时停止，不得把通用风险提示当作评审。; reason=risk 角色无直接查询工具权限。\r\n- roleId=neutral_risk_analyst; roleClass=risk; toolAccessMode=disabled; allowsDirectQueryTools=False; minimumEvidenceCount=3; preferredMcpSequence=[none]; fallbackRule=只读 trader proposal、research summary 与 risk inputs，不得直接取数。; stopRule=trader proposal 缺失时停止，不得把通用风险提示当作评审。; reason=risk 角色无直接查询工具权限。\r\n- roleId=conservative_risk_analyst; roleClass=risk; toolAccessMode=disabled; allowsDirectQueryTools=False; minimumEvidenceCount=3; preferredMcpSequence=[none]; fallbackRule=只读 trader proposal、research summary 与 risk inputs，不得直接取数。; stopRule=trader proposal 缺失时停止，不得把通用风险提示当作评审。; reason=risk 角色无直接查询工具权限。\r\n- roleId=portfolio_manager; roleClass=portfolio; toolAccessMode=disabled; allowsDirectQueryTools=False; minimumEvidenceCount=4; preferredMcpSequence=[none]; fallbackRule=只读 trader proposal、risk debate 与 current report，不得重新查询工具。; stopRule=缺少 trader proposal 或 risk debate 时停止，不得提前生成 final decision。; reason=portfolio 角色无直接查询工具权限。\r\n\r\n你生成的 finalAnswerDraft 必须明确说明：这是 live gate 的计划草案，真正可采信的事实以后端 tool results 为准。不要在 finalAnswerDraft 中编造尚未执行的工具结论。",
+    "rawModelResponse":  "{\n  \"plannerSummary\": \"计划执行浦发银行(sh600000)的日线结构分析与本地新闻证据收集，严格遵循本地优先原则，不进行外部搜索。\",\n  \"governorSummary\": \"已确认 allowExternalSearch=False，禁止调用 StockSearchMcp。已规划本地工具链以获取日线数据与新闻证据，符合角色权限。\",\n  \"finalAnswerDraft\": \"这是 live gate 的计划草案，真正可采信的事实以后端 tool results 为准。待工具执行后，将结合日线结构、本地新闻及市场情绪计算浦发银行的涨跌概率。目前暂无法提供具体概率数值。\",\n  \"toolCalls\": [\n    {\n      \"roleId\": \"company_overview_analyst\",\n      \"toolName\": \"CompanyOverviewMcp\",\n      \"purpose\": \"获取浦发银行基础信息\",\n      \"inputSummary\": \"symbol=sh600000\"\n    },\n    {\n      \"roleId\": \"market_analyst\",\n      \"toolName\": \"MarketContextMcp\",\n      \"purpose\": \"获取市场环境上下文\",\n      \"inputSummary\": \"symbol=sh600000\"\n    },\n    {\n      \"roleId\": \"market_analyst\",\n      \"toolName\": \"StockKlineMcp\",\n      \"purpose\": \"获取日线结构数据\",\n      \"inputSummary\": \"symbol=sh600000; period=daily\"\n    },\n    {\n      \"roleId\": \"news_analyst\",\n      \"toolName\": \"StockNewsMcp\",\n      \"purpose\": \"获取本地新闻证据\",\n      \"inputSummary\": \"symbol=sh600000\"\n    }\n  ]\n}",
+    "rejectedToolCalls":  [
+
+                          ]
+}

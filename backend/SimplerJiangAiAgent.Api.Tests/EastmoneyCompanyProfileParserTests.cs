@@ -58,4 +58,33 @@ public sealed class EastmoneyCompanyProfileParserTests
         Assert.Contains(profile.Facts, item => item.Label == "证监会行业" && item.Value == "汽车制造业");
         Assert.Contains(profile.Facts, item => item.Label == "所属地区" && item.Value == "广东");
     }
+
+    [Fact]
+    public void ParseFinanceFacts_ShouldPickLatestReportByReportPeriod()
+    {
+        const string financeJson = """
+        {
+          "data": [
+            {
+              "REPORT_DATE_NAME": "2025三季报",
+              "REPORT_DATE": "2025-09-30",
+              "TOTALOPERATEREVE": 123000000000,
+              "PARENTNETPROFIT": 9900000000
+            },
+            {
+              "REPORT_DATE_NAME": "2025年报",
+              "REPORT_DATE": "2025-12-31",
+              "TOTALOPERATEREVE": 168000000000,
+              "PARENTNETPROFIT": 12800000000
+            }
+          ]
+        }
+        """;
+
+        var facts = EastmoneyCompanyProfileParser.ParseFinanceFacts(financeJson);
+
+        Assert.Contains(facts, item => item.Label == "最新财报期" && item.Value == "2025年报");
+        Assert.Contains(facts, item => item.Label == "营业收入" && item.Value == "1680亿元");
+        Assert.Contains(facts, item => item.Label == "归属净利润" && item.Value == "128亿元");
+    }
 }

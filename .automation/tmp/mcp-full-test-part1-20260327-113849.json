@@ -1,0 +1,50 @@
+﻿[
+    {
+        "Expected":  "CompanyOverviewMcp",
+        "HttpStatus":  200,
+        "TraceId":  "03559f8aeb694bf785b44154d5d80513",
+        "ToolName":  "CompanyOverviewMcp",
+        "Summary":  null,
+        "Error":  null
+    },
+    {
+        "Expected":  "StockProductMcp",
+        "HttpStatus":  200,
+        "TraceId":  "662488f52cb44fef8a805d177ca775bc",
+        "ToolName":  "StockProductMcp",
+        "Summary":  null,
+        "Error":  null
+    },
+    {
+        "Expected":  "StockFundamentalsMcp",
+        "HttpStatus":  200,
+        "TraceId":  "35856a11ca5446a1b16e69a276ad85f9",
+        "ToolName":  "StockFundamentalsMcp",
+        "Summary":  null,
+        "Error":  null
+    },
+    {
+        "Expected":  "StockShareholderMcp",
+        "HttpStatus":  200,
+        "TraceId":  "dc854eaefb43426f8ba9b9acac701370",
+        "ToolName":  "StockShareholderMcp",
+        "Summary":  null,
+        "Error":  null
+    },
+    {
+        "Expected":  "MarketContextMcp",
+        "HttpStatus":  200,
+        "TraceId":  "93ca7226a0e1401aaf0e8a28968fdb4f",
+        "ToolName":  "MarketContextMcp",
+        "Summary":  null,
+        "Error":  null
+    },
+    {
+        "Expected":  "SocialSentimentMcp",
+        "HttpStatus":  200,
+        "TraceId":  "7b2874ad524241439387726ab69a79ab",
+        "ToolName":  "SocialSentimentMcp",
+        "Summary":  null,
+        "Error":  null
+    }
+]
