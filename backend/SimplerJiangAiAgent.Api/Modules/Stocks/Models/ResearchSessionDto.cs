@@ -4,7 +4,8 @@ public sealed record ResearchTurnSubmitRequestDto(
     string Symbol,
     string UserPrompt,
     string? SessionKey,
-    string? ContinuationMode);
+    string? ContinuationMode,
+    int? FromStageIndex = null);
 
 public sealed record ResearchTurnSubmitResponseDto(
     long SessionId,

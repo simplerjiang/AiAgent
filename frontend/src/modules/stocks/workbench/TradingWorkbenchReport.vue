@@ -348,6 +348,9 @@ const actionIcon = type => {
   font-size: 12px;
   color: var(--wb-text, #e1e4ea);
   line-height: 1.5;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  white-space: normal;
 }
 .wb-block-summary :deep(p) { margin: 0 0 4px; }
 

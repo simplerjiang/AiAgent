@@ -152,7 +152,7 @@ public sealed class ResearchSessionAndRunnerTests
     }
 
     private static ResearchSessionService CreateSessionService(AppDbContext db) =>
-        new(db, NullLogger<ResearchSessionService>.Instance);
+        new(db, new ResearchEventBus(), NullLogger<ResearchSessionService>.Instance);
 
     #region R1 ResearchSessionService
 

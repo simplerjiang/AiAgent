@@ -58,11 +58,13 @@ export function useTradingWorkbench(symbolRef) {
   const feedItems = ref([])
   const loading = ref(false)
   const error = ref(null)
-  const activeTab = ref('report') // report | progress | feed
+  const activeTab = ref('report') // report | progress | feed | history
 
   // Replay state
   const replayTurnId = ref(null)
   const sessions = ref([])
+  const expandedHistorySessionId = ref(null)
+  const expandedTurns = ref([])
 
   // Polling
   let pollTimer = null
@@ -125,9 +127,9 @@ export function useTradingWorkbench(symbolRef) {
     const signal = cancelPending()
     try {
       const data = await apiGet(`/active-session?symbol=${encodeURIComponent(sym)}`, signal)
-      session.value = data
-      if (data?.id) {
-        await loadSessionDetail(data.id, signal)
+      session.value = data ? { ...data, id: data.sessionId } : null
+      if (session.value?.id) {
+        await loadSessionDetail(session.value.id, signal)
       } else {
         sessionDetail.value = null
         activeTurn.value = null
@@ -148,6 +150,11 @@ export function useTradingWorkbench(symbolRef) {
       const data = await apiGet(`/sessions/${sessionId}`, signal)
       sessionDetail.value = data
       feedItems.value = data?.feedItems ?? []
+
+      // Sync session status from detail response so isRunning updates correctly
+      if (data?.status && session.value) {
+        session.value = { ...session.value, status: data.status }
+      }
 
       // Find active or latest turn
       const turns = data?.turns ?? []
@@ -181,9 +188,9 @@ export function useTradingWorkbench(symbolRef) {
     try {
       const body = {
         symbol: sym,
-        prompt: prompt.trim(),
+        userPrompt: prompt.trim(),
         continuationMode: options.continuationMode ?? 'ContinueSession',
-        sessionId: session.value?.id ?? undefined
+        sessionKey: session.value?.sessionKey || undefined
       }
       const result = await apiPost('/turns', body)
       // Refresh session after submission
@@ -217,6 +224,62 @@ export function useTradingWorkbench(symbolRef) {
     }
   }
 
+  async function expandHistorySession(sessionId) {
+    if (expandedHistorySessionId.value === sessionId) {
+      expandedHistorySessionId.value = null
+      expandedTurns.value = []
+      return
+    }
+    expandedHistorySessionId.value = sessionId
+    try {
+      const detail = await apiGet(`/sessions/${sessionId}`)
+      expandedTurns.value = detail?.turns ?? []
+    } catch (e) {
+      if (e.name !== 'AbortError') expandedTurns.value = []
+    }
+  }
+
+  async function enterReplay(sessionId, turnId) {
+    stopPolling()
+    replayTurnId.value = turnId
+    await loadSessionDetail(sessionId)
+    await loadTurnReport(turnId)
+    activeTab.value = 'report'
+  }
+
+  function exitReplay() {
+    replayTurnId.value = null
+    expandedHistorySessionId.value = null
+    expandedTurns.value = []
+    loadActiveSession()
+  }
+
+  async function rerunFromStage(stageIndex) {
+    const sym = symbolRef.value
+    if (!sym || isRunning.value) return
+    error.value = null
+    try {
+      const body = {
+        symbol: sym,
+        userPrompt: activeTurn.value?.userPrompt || '重新分析',
+        sessionKey: session.value?.sessionKey || undefined,
+        continuationMode: 'PartialRerun',
+        fromStageIndex: stageIndex
+      }
+      const result = await apiPost('/turns', body)
+      if (result?.sessionId) {
+        session.value = { ...session.value, id: result.sessionId, status: 'Running' }
+        startPolling()
+        activeTab.value = 'feed'
+        await loadSessionDetail(result.sessionId)
+      }
+      return result
+    } catch (e) {
+      error.value = e.message
+      throw e
+    }
+  }
+
   // ── Polling ────────────────────────────────────────
 
   function startPolling() {
@@ -228,7 +291,7 @@ export function useTradingWorkbench(symbolRef) {
         // Stop polling when no longer running
         if (!isRunning.value) stopPolling()
       } catch (e) { if (e?.name !== 'AbortError') console.warn('[workbench] poll error:', e) }
-    }, 3000)
+    }, 1500)
   }
 
   function stopPolling() {
@@ -270,6 +333,8 @@ export function useTradingWorkbench(symbolRef) {
     error,
     activeTab,
     sessions,
+    expandedHistorySessionId,
+    expandedTurns,
     replayTurnId,
 
     // Derived
@@ -286,6 +351,10 @@ export function useTradingWorkbench(symbolRef) {
     submitFollowUp,
     loadSessions,
     switchReplayTurn,
+    expandHistorySession,
+    enterReplay,
+    exitReplay,
+    rerunFromStage,
     startPolling,
     stopPolling
   }

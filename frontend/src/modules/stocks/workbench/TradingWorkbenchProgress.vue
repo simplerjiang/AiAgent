@@ -1,8 +1,9 @@
 <script setup>
-defineProps({
+const props = defineProps({
   stages: { type: Array, default: () => [] },
   isRunning: { type: Boolean, default: false }
 })
+const emit = defineEmits(['rerun-from-stage'])
 
 const roleStatusIcon = status => {
   switch (status) {
@@ -31,8 +32,17 @@ const roleStatusIcon = status => {
           {{ stage.status === 'Running' ? '执行中' :
              stage.status === 'Completed' ? '完成' :
              stage.status === 'Failed' ? '失败' :
-             stage.status === 'Pending' ? '待执行' : stage.status }}
+             stage.status === 'Pending' ? '待执行' :
+             stage.status === 'Skipped' ? '已复用' : stage.status }}
         </span>
+        <button
+          v-if="!props.isRunning && (stage.status === 'Completed' || stage.status === 'Failed' || stage.status === 'Degraded')"
+          class="wb-stage-rerun"
+          :title="`从【${stage.label}】开始重新执行`"
+          @click.stop="emit('rerun-from-stage', stages.indexOf(stage))"
+        >
+          🔄 重跑
+        </button>
       </div>
 
       <!-- Role list (expanded when Running or Completed) -->
@@ -115,6 +125,7 @@ const roleStatusIcon = status => {
 .status-completed { color: #66bb6a; background: rgba(102, 187, 106, 0.12); }
 .status-failed { color: #ef5350; background: rgba(239, 83, 80, 0.12); }
 .status-pending { color: #8b8fa3; }
+.status-skipped { color: #9e9e9e; background: rgba(158, 158, 158, 0.12); }
 
 /* ── Role list ─────────────────────────────────── */
 .wb-role-list {
@@ -150,6 +161,26 @@ const roleStatusIcon = status => {
   background: rgba(240, 180, 41, 0.08);
   padding: 1px 6px;
   border-radius: 3px;
+}
+
+.wb-stage-rerun {
+  background: transparent;
+  border: 1px solid var(--wb-accent, #5b9cf6);
+  color: var(--wb-accent, #5b9cf6);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 10px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+.wb-stage-rerun:hover {
+  background: rgba(91, 156, 246, 0.12);
+}
+
+.wb-stage.stage-skipped {
+  border-color: #616161;
+  opacity: 0.6;
 }
 
 .wb-progress-empty {

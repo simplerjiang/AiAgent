@@ -1,0 +1,444 @@
+﻿{
+    "traceId":  "533c9320c0d349588e798d4017c007b4",
+    "taskId":  "pm-mcp-audit-final",
+    "toolName":  "CompanyOverviewMcp",
+    "latencyMs":  8446,
+    "cache":  {
+                  "hit":  false,
+                  "source":  "live",
+                  "generatedAt":  "2026-03-28T00:08:15.4931008+08:00"
+              },
+    "warnings":  [
+
+                 ],
+    "degradedFlags":  [
+
+                      ],
+    "data":  {
+                 "symbol":  "sh600519",
+                 "name":  "贵州茅台",
+                 "sectorName":  "酿酒行业",
+                 "price":  1416.02,
+                 "changePercent":  1.06,
+                 "floatMarketCap":  1773239669844.3,
+                 "peRatio":  20.58,
+                 "shareholderCount":  238512,
+                 "quoteTimestamp":  "2026-03-28T00:08:09.7909010+08:00",
+                 "fundamentalUpdatedAt":  "2026-03-28T00:08:15.4902775+08:00",
+                 "fundamentalFactCount":  34,
+                 "mainBusiness":  null,
+                 "businessScope":  "茅台酒及系列酒的生产与销售;饮料、食品、包装材料的生产、销售;防伪技术开发、信息产业相关产品的研制、开发;酒店经营管理、住宿、餐饮、娱乐、洗浴及停车场管理服务;车辆运输、维修保养;第二类增值电信业务。(具体内容以工商核定登记为准)"
+             },
+    "evidence":  [
+                     {
+                         "point":  "贵州茅台 公司概览",
+                         "title":  "贵州茅台",
+                         "source":  "公司画像缓存",
+                         "publishedAt":  "2026-03-28T00:08:09.7909010+08:00",
+                         "crawledAt":  "2026-03-28T00:08:15.4902775+08:00",
+                         "url":  null,
+                         "excerpt":  "所属板块=酿酒行业; 股东户数=238512; 现价=1416.02; 经营范围=茅台酒及系列酒的生产与销售;饮料、食品、包装材料的生产、销售;防伪技术开发、信息产业相关产品的研制、开发;酒店经营管理、住宿、餐饮、娱乐、洗浴及停车场管理服务;车辆运输、维修保养;第二类增值电信业务。(具体内容以工商核定登记为准)",
+                         "summary":  "所属板块=酿酒行业; 股东户数=238512; 现价=1416.02; 经营范围=茅台酒及系列酒的生产与销售;饮料、食品、包装材料的生产、销售;防伪技术开发、信息产业相关产品的研制、开发;酒店经营管理、住宿、餐饮、娱乐、洗浴及停车场管理服务;车辆运输、维修保养;第二类增值电信业务。(具体内容以工商核定登记为准)",
+                         "readMode":  "local_fact",
+                         "readStatus":  "full",
+                         "ingestedAt":  "2026-03-28T00:08:15.4902775+08:00",
+                         "localFactId":  null,
+                         "sourceRecordId":  "company_profile:sh600519",
+                         "level":  "overview",
+                         "sentiment":  null,
+                         "target":  "sh600519",
+                         "tags":  [
+                                      "company_overview"
+                                  ]
+                     },
+                     {
+                         "point":  "贵州茅台:贵州茅台关于控股股东增持股份结果的公告",
+                         "title":  "贵州茅台:贵州茅台关于控股股东增持股份结果的公告",
+                         "source":  "东方财富公告",
+                         "publishedAt":  "2025-12-29T19:12:59.0000000+08:00",
+                         "crawledAt":  "2026-03-28T00:08:09.0821101+08:00",
+                         "url":  "https://data.eastmoney.com/notices/detail/600519/AN202512291810712359.html",
+                         "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "readMode":  "url_fetched",
+                         "readStatus":  "full_text_read",
+                         "ingestedAt":  "2026-03-28T00:03:30.5509077+08:00",
+                         "localFactId":  71,
+                         "sourceRecordId":  "stock_news:71",
+                         "level":  "announcement",
+                         "sentiment":  "利好",
+                         "target":  "股票:贵州茅台",
+                         "tags":  [
+                                      "资金面"
+                                  ]
+                     },
+                     {
+                         "point":  "贵州茅台:贵州茅台关于回购股份事项通知债权人公告",
+                         "title":  "贵州茅台:贵州茅台关于回购股份事项通知债权人公告",
+                         "source":  "东方财富公告",
+                         "publishedAt":  "2025-11-28T19:26:32.0000000+08:00",
+                         "crawledAt":  "2026-03-28T00:08:09.0821101+08:00",
+                         "url":  "https://data.eastmoney.com/notices/detail/600519/AN202511281790064141.html",
+                         "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "readMode":  "url_fetched",
+                         "readStatus":  "full_text_read",
+                         "ingestedAt":  "2026-03-28T00:03:31.8942823+08:00",
+                         "localFactId":  78,
+                         "sourceRecordId":  "stock_news:78",
+                         "level":  "announcement",
+                         "sentiment":  "利好",
+                         "target":  "股票:贵州茅台",
+                         "tags":  [
+                                      "政策红利"
+                                  ]
+                     },
+                     {
+                         "point":  "贵州茅台:贵州茅台关于回购股份事项前十大股东及前十大无限售条件股东持股情况的公告",
+                         "title":  "贵州茅台:贵州茅台关于回购股份事项前十大股东及前十大无限售条件股东持股情况的公告",
+                         "source":  "东方财富公告",
+                         "publishedAt":  "2025-11-25T18:01:27.0000000+08:00",
+                         "crawledAt":  "2026-03-28T00:08:09.0821101+08:00",
+                         "url":  "https://data.eastmoney.com/notices/detail/600519/AN202511251788129772.html",
+                         "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "readMode":  "url_fetched",
+                         "readStatus":  "full_text_read",
+                         "ingestedAt":  "2026-03-28T00:03:32.4503013+08:00",
+                         "localFactId":  83,
+                         "sourceRecordId":  "stock_news:83",
+                         "level":  "announcement",
+                         "sentiment":  "中性",
+                         "target":  "个股:贵州茅台",
+                         "tags":  [
+                                      "资金面"
+                                  ]
+                     },
+                     {
+                         "point":  "贵州茅台:贵州茅台2025年第一次临时股东大会会议资料",
+                         "title":  "贵州茅台:贵州茅台2025年第一次临时股东大会会议资料",
+                         "source":  "东方财富公告",
+                         "publishedAt":  "2025-11-19T19:03:40.0000000+08:00",
+                         "crawledAt":  "2026-03-28T00:08:09.0821101+08:00",
+                         "url":  "https://data.eastmoney.com/notices/detail/600519/AN202511191784400112.html",
+                         "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "readMode":  "url_fetched",
+                         "readStatus":  "full_text_read",
+                         "ingestedAt":  "2026-03-28T00:03:32.5841412+08:00",
+                         "localFactId":  84,
+                         "sourceRecordId":  "stock_news:84",
+                         "level":  "announcement",
+                         "sentiment":  "中性",
+                         "target":  "个股:贵州茅台",
+                         "tags":  [
+                                      "行业周期"
+                                  ]
+                     },
+                     {
+                         "point":  "贵州茅台:贵州茅台关于回购股份事项前十大股东及前十大无限售条件股东持股情况的公告",
+                         "title":  "贵州茅台:贵州茅台关于回购股份事项前十大股东及前十大无限售条件股东持股情况的公告",
+                         "source":  "东方财富公告",
+                         "publishedAt":  "2025-11-10T19:18:23.0000000+08:00",
+                         "crawledAt":  "2026-03-28T00:08:09.0821101+08:00",
+                         "url":  "https://data.eastmoney.com/notices/detail/600519/AN202511101778790986.html",
+                         "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "readMode":  "url_fetched",
+                         "readStatus":  "full_text_read",
+                         "ingestedAt":  "2026-03-28T00:03:32.6823423+08:00",
+                         "localFactId":  85,
+                         "sourceRecordId":  "stock_news:85",
+                         "level":  "announcement",
+                         "sentiment":  "中性",
+                         "target":  "个股:贵州茅台",
+                         "tags":  [
+                                      "资金面"
+                                  ]
+                     },
+                     {
+                         "point":  "贵州茅台:贵州茅台第四届监事会2025年度第五次会议决议公告",
+                         "title":  "贵州茅台:贵州茅台第四届监事会2025年度第五次会议决议公告",
+                         "source":  "东方财富公告",
+                         "publishedAt":  "2025-11-05T20:58:54.0000000+08:00",
+                         "crawledAt":  "2026-03-28T00:08:09.0821101+08:00",
+                         "url":  "https://data.eastmoney.com/notices/detail/600519/AN202511051775759376.html",
+                         "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "readMode":  "url_fetched",
+                         "readStatus":  "full_text_read",
+                         "ingestedAt":  "2026-03-28T00:03:32.8181601+08:00",
+                         "localFactId":  94,
+                         "sourceRecordId":  "stock_news:94",
+                         "level":  "announcement",
+                         "sentiment":  "中性",
+                         "target":  "个股:贵州茅台",
+                         "tags":  [
+                                      "行业周期"
+                                  ]
+                     },
+                     {
+                         "point":  "贵州茅台:贵州茅台酒股份有限公司股东会议事规则(修订稿)",
+                         "title":  "贵州茅台:贵州茅台酒股份有限公司股东会议事规则(修订稿)",
+                         "source":  "东方财富公告",
+                         "publishedAt":  "2025-11-05T20:58:54.0000000+08:00",
+                         "crawledAt":  "2026-03-28T00:08:09.0821101+08:00",
+                         "url":  "https://data.eastmoney.com/notices/detail/600519/AN202511051775759370.html",
+                         "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "readMode":  "url_fetched",
+                         "readStatus":  "full_text_read",
+                         "ingestedAt":  "2026-03-28T00:03:32.9568954+08:00",
+                         "localFactId":  93,
+                         "sourceRecordId":  "stock_news:93",
+                         "level":  "announcement",
+                         "sentiment":  "中性",
+                         "target":  "个股:贵州茅台",
+                         "tags":  [
+                                      "行业周期"
+                                  ]
+                     },
+                     {
+                         "point":  "贵州茅台:贵州茅台关于修订公司《章程》及附件暨撤销监事会的公告",
+                         "title":  "贵州茅台:贵州茅台关于修订公司《章程》及附件暨撤销监事会的公告",
+                         "source":  "东方财富公告",
+                         "publishedAt":  "2025-11-05T20:58:54.0000000+08:00",
+                         "crawledAt":  "2026-03-28T00:08:09.0821101+08:00",
+                         "url":  "https://data.eastmoney.com/notices/detail/600519/AN202511051775759372.html",
+                         "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "readMode":  "url_fetched",
+                         "readStatus":  "full_text_read",
+                         "ingestedAt":  "2026-03-28T00:03:33.1269598+08:00",
+                         "localFactId":  92,
+                         "sourceRecordId":  "stock_news:92",
+                         "level":  "announcement",
+                         "sentiment":  "中性",
+                         "target":  "个股:贵州茅台",
+                         "tags":  [
+                                      "政策红利"
+                                  ]
+                     },
+                     {
+                         "point":  "贵州茅台:贵州茅台第四届董事会2025年度第十四次会议决议公告",
+                         "title":  "贵州茅台:贵州茅台第四届董事会2025年度第十四次会议决议公告",
+                         "source":  "东方财富公告",
+                         "publishedAt":  "2025-11-05T20:58:54.0000000+08:00",
+                         "crawledAt":  "2026-03-28T00:08:09.0821101+08:00",
+                         "url":  "https://data.eastmoney.com/notices/detail/600519/AN202511051775759369.html",
+                         "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "readMode":  "url_fetched",
+                         "readStatus":  "full_text_read",
+                         "ingestedAt":  "2026-03-28T00:03:33.2183612+08:00",
+                         "localFactId":  91,
+                         "sourceRecordId":  "stock_news:91",
+                         "level":  "announcement",
+                         "sentiment":  "中性",
+                         "target":  "个股:贵州茅台",
+                         "tags":  [
+                                      "行业周期"
+                                  ]
+                     },
+                     {
+                         "point":  "贵州茅台:贵州茅台关于2025年中期利润分配方案暨贯彻落实“提质增效重回报”专项行动方案的公告",
+                         "title":  "贵州茅台:贵州茅台关于2025年中期利润分配方案暨贯彻落实“提质增效重回报”专项行动方案的公告",
+                         "source":  "东方财富公告",
+                         "publishedAt":  "2025-11-05T20:58:54.0000000+08:00",
+                         "crawledAt":  "2026-03-28T00:08:09.0821101+08:00",
+                         "url":  "https://data.eastmoney.com/notices/detail/600519/AN202511051775759374.html",
+                         "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "readMode":  "url_fetched",
+                         "readStatus":  "full_text_read",
+                         "ingestedAt":  "2026-03-28T00:03:33.4078320+08:00",
+                         "localFactId":  90,
+                         "sourceRecordId":  "stock_news:90",
+                         "level":  "announcement",
+                         "sentiment":  "中性",
+                         "target":  "个股:贵州茅台",
+                         "tags":  [
+                                      "行业周期"
+                                  ]
+                     },
+                     {
+                         "point":  "贵州茅台:贵州茅台关于召开2025年第一次临时股东大会的通知",
+                         "title":  "贵州茅台:贵州茅台关于召开2025年第一次临时股东大会的通知",
+                         "source":  "东方财富公告",
+                         "publishedAt":  "2025-11-05T20:58:54.0000000+08:00",
+                         "crawledAt":  "2026-03-28T00:08:09.0821101+08:00",
+                         "url":  "https://data.eastmoney.com/notices/detail/600519/AN202511051775759375.html",
+                         "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "readMode":  "url_fetched",
+                         "readStatus":  "full_text_read",
+                         "ingestedAt":  "2026-03-28T00:03:33.7950494+08:00",
+                         "localFactId":  89,
+                         "sourceRecordId":  "stock_news:89",
+                         "level":  "announcement",
+                         "sentiment":  "中性",
+                         "target":  "个股:贵州茅台",
+                         "tags":  [
+                                      "财报业绩"
+                                  ]
+                     },
+                     {
+                         "point":  "贵州茅台:贵州茅台酒股份有限公司章程(修订稿)",
+                         "title":  "贵州茅台:贵州茅台酒股份有限公司章程(修订稿)",
+                         "source":  "东方财富公告",
+                         "publishedAt":  "2025-11-05T20:58:54.0000000+08:00",
+                         "crawledAt":  "2026-03-28T00:08:09.0821101+08:00",
+                         "url":  "https://data.eastmoney.com/notices/detail/600519/AN202511051775759373.html",
+                         "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "readMode":  "url_fetched",
+                         "readStatus":  "full_text_read",
+                         "ingestedAt":  "2026-03-28T00:03:33.9382481+08:00",
+                         "localFactId":  88,
+                         "sourceRecordId":  "stock_news:88",
+                         "level":  "announcement",
+                         "sentiment":  "中性",
+                         "target":  "个股:贵州茅台",
+                         "tags":  [
+                                      "政策红利"
+                                  ]
+                     },
+                     {
+                         "point":  "贵州茅台:贵州茅台酒股份有限公司关联交易决策管理细则(修订稿)",
+                         "title":  "贵州茅台:贵州茅台酒股份有限公司关联交易决策管理细则(修订稿)",
+                         "source":  "东方财富公告",
+                         "publishedAt":  "2025-11-05T20:58:54.0000000+08:00",
+                         "crawledAt":  "2026-03-28T00:08:09.0821101+08:00",
+                         "url":  "https://data.eastmoney.com/notices/detail/600519/AN202511051775759371.html",
+                         "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "readMode":  "url_fetched",
+                         "readStatus":  "full_text_read",
+                         "ingestedAt":  "2026-03-28T00:03:34.0438479+08:00",
+                         "localFactId":  87,
+                         "sourceRecordId":  "stock_news:87",
+                         "level":  "announcement",
+                         "sentiment":  "中性",
+                         "target":  "个股:贵州茅台",
+                         "tags":  [
+                                      "政策红利"
+                                  ]
+                     },
+                     {
+                         "point":  "贵州茅台:贵州茅台关于以集中竞价交易方式回购公司股份方案的公告",
+                         "title":  "贵州茅台:贵州茅台关于以集中竞价交易方式回购公司股份方案的公告",
+                         "source":  "东方财富公告",
+                         "publishedAt":  "2025-11-05T20:58:54.0000000+08:00",
+                         "crawledAt":  "2026-03-28T00:08:09.0821101+08:00",
+                         "url":  "https://data.eastmoney.com/notices/detail/600519/AN202511051775759367.html",
+                         "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "readMode":  "url_fetched",
+                         "readStatus":  "full_text_read",
+                         "ingestedAt":  "2026-03-28T00:03:34.2087814+08:00",
+                         "localFactId":  86,
+                         "sourceRecordId":  "stock_news:86",
+                         "level":  "announcement",
+                         "sentiment":  "中性",
+                         "target":  "个股:贵州茅台",
+                         "tags":  [
+                                      "资金面",
+                                      "政策红利"
+                                  ]
+                     }
+                 ],
+    "features":  [
+                     {
+                         "name":  "sectorName",
+                         "label":  "Sector Name",
+                         "valueType":  "text",
+                         "numberValue":  null,
+                         "textValue":  "酿酒行业",
+                         "unit":  null,
+                         "description":  "Sector inferred from local company profile or latest quote."
+                     },
+                     {
+                         "name":  "price",
+                         "label":  "Latest Price",
+                         "valueType":  "number",
+                         "numberValue":  1416.02,
+                         "textValue":  null,
+                         "unit":  null,
+                         "description":  "Latest cached or live quote price."
+                     },
+                     {
+                         "name":  "changePercent",
+                         "label":  "Change Percent",
+                         "valueType":  "number",
+                         "numberValue":  1.06,
+                         "textValue":  null,
+                         "unit":  "%",
+                         "description":  "Current price change percent."
+                     },
+                     {
+                         "name":  "shareholderCount",
+                         "label":  "Shareholder Count",
+                         "valueType":  "number",
+                         "numberValue":  238512,
+                         "textValue":  null,
+                         "unit":  null,
+                         "description":  "Latest shareholder count available to the system."
+                     },
+                     {
+                         "name":  "fundamentalFactCount",
+                         "label":  "Fundamental Fact Count",
+                         "valueType":  "number",
+                         "numberValue":  34,
+                         "textValue":  null,
+                         "unit":  null,
+                         "description":  "Number of structured company facts retained for this symbol."
+                     },
+                     {
+                         "name":  "mainBusiness",
+                         "label":  "Main Business",
+                         "valueType":  "text",
+                         "numberValue":  null,
+                         "textValue":  null,
+                         "unit":  null,
+                         "description":  "Main business description extracted from company profile facts."
+                     },
+                     {
+                         "name":  "businessScope",
+                         "label":  "Business Scope",
+                         "valueType":  "text",
+                         "numberValue":  null,
+                         "textValue":  "茅台酒及系列酒的生产与销售;饮料、食品、包装材料的生产、销售;防伪技术开发、信息产业相关产品的研制、开发;酒店经营管理、住宿、餐饮、娱乐、洗浴及停车场管理服务;车辆运输、维修保养;第二类增值电信业务。(具体内容以工商核定登记为准)",
+                         "unit":  null,
+                         "description":  "Business scope description extracted from company profile facts."
+                     },
+                     {
+                         "name":  "fundamentalUpdatedAt",
+                         "label":  "Fundamental Updated At",
+                         "valueType":  "text",
+                         "numberValue":  null,
+                         "textValue":  "2026-03-28 00:08:15",
+                         "unit":  null,
+                         "description":  "Timestamp of the latest structured company-profile update."
+                     }
+                 ],
+    "meta":  {
+                 "version":  "v1",
+                 "policyClass":  "local_required",
+                 "toolName":  "CompanyOverviewMcp",
+                 "symbol":  "sh600519",
+                 "interval":  null,
+                 "query":  null,
+                 "marketContext":  {
+                                       "stageConfidence":  62.0,
+                                       "stockSectorName":  null,
+                                       "mainlineSectorName":  "逆变器",
+                                       "sectorCode":  null,
+                                       "mainlineScore":  89.75
+                                   }
+             },
+    "errorCode":  null,
+    "freshnessTag":  "fresh",
+    "sourceTier":  "local",
+    "cacheHit":  false,
+    "rolePolicyClass":  "local_required"
+}

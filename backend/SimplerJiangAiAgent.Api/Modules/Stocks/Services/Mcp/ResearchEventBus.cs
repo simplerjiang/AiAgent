@@ -18,7 +18,8 @@ public enum ResearchEventType
     TurnCompleted,
     TurnFailed,
     SystemNotice,
-    DegradedNotice
+    DegradedNotice,
+    RetryAttempt
 }
 
 public sealed record ResearchEvent(
@@ -36,6 +37,7 @@ public interface IResearchEventBus
 {
     void Publish(ResearchEvent evt);
     IReadOnlyList<ResearchEvent> Drain(long turnId);
+    IReadOnlyList<ResearchEvent> Peek(long turnId);
 }
 
 public sealed class ResearchEventBus : IResearchEventBus
@@ -51,6 +53,13 @@ public sealed class ResearchEventBus : IResearchEventBus
     public IReadOnlyList<ResearchEvent> Drain(long turnId)
     {
         if (!_queues.TryRemove(turnId, out var queue))
+            return Array.Empty<ResearchEvent>();
+        return queue.ToArray();
+    }
+
+    public IReadOnlyList<ResearchEvent> Peek(long turnId)
+    {
+        if (!_queues.TryGetValue(turnId, out var queue))
             return Array.Empty<ResearchEvent>();
         return queue.ToArray();
     }

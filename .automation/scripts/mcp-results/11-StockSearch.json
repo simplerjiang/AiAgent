@@ -1,0 +1,63 @@
+﻿{
+    "traceId":  "51e0abb98cb248e3acaf04321330203c",
+    "taskId":  "pm-mcp-audit-final",
+    "toolName":  "StockSearchMcp",
+    "latencyMs":  0,
+    "cache":  {
+                  "hit":  false,
+                  "source":  "live",
+                  "generatedAt":  "2026-03-28T00:08:06.8295863+08:00"
+              },
+    "warnings":  [
+                     "外部搜索未启用，StockSearchMcp 当前只返回空结果。请在 LLM 设置中配置 Tavily API Key。"
+                 ],
+    "degradedFlags":  [
+                          "external_search_unavailable"
+                      ],
+    "data":  {
+                 "query":  "贵州茅台",
+                 "provider":  "tavily",
+                 "trustedOnly":  true,
+                 "resultCount":  0,
+                 "results":  [
+
+                             ]
+             },
+    "evidence":  [
+
+                 ],
+    "features":  [
+                     {
+                         "name":  "trustedOnly",
+                         "label":  "Trusted Sources Only",
+                         "valueType":  "text",
+                         "numberValue":  null,
+                         "textValue":  "true",
+                         "unit":  null,
+                         "description":  "Governor gate for external search."
+                     },
+                     {
+                         "name":  "provider",
+                         "label":  "Search Provider",
+                         "valueType":  "text",
+                         "numberValue":  null,
+                         "textValue":  "tavily",
+                         "unit":  null,
+                         "description":  "Current external fallback provider."
+                     }
+                 ],
+    "meta":  {
+                 "version":  "v1",
+                 "policyClass":  "external_gated",
+                 "toolName":  "StockSearchMcp",
+                 "symbol":  null,
+                 "interval":  null,
+                 "query":  "贵州茅台",
+                 "marketContext":  null
+             },
+    "errorCode":  "external_search_unavailable",
+    "freshnessTag":  "no_data",
+    "sourceTier":  "external",
+    "cacheHit":  false,
+    "rolePolicyClass":  "external_gated"
+}

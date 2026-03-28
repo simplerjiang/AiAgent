@@ -107,65 +107,114 @@ internal static class EastmoneyCompanyProfileParser
     private static IReadOnlyList<StockFundamentalFactDto> ParseShareholderFacts(string? shareholderJson)
     {
         if (string.IsNullOrWhiteSpace(shareholderJson))
-        {
             return Array.Empty<StockFundamentalFactDto>();
-        }
 
         using var document = JsonDocument.Parse(shareholderJson);
         var root = document.RootElement;
-        if (!root.TryGetProperty("gdrs", out var gdrsNode) || gdrsNode.ValueKind != JsonValueKind.Array)
+        var facts = new List<StockFundamentalFactDto>();
+        const string source = "东方财富股东研究";
+
+        // ── 股东人数 (gdrs) ──
+        if (root.TryGetProperty("gdrs", out var gdrsNode) && gdrsNode.ValueKind == JsonValueKind.Array)
         {
-            return Array.Empty<StockFundamentalFactDto>();
+            foreach (var item in gdrsNode.EnumerateArray())
+            {
+                if (item.TryGetProperty("END_DATE", out var endDate) && !string.IsNullOrWhiteSpace(endDate.GetString()))
+                    facts.Add(new StockFundamentalFactDto("股东户数统计截止", endDate.GetString()!.Trim(), source));
+
+                if (item.TryGetProperty("HOLD_FOCUS", out var focus) && !string.IsNullOrWhiteSpace(focus.GetString()))
+                    facts.Add(new StockFundamentalFactDto("股权集中度", focus.GetString()!.Trim(), source));
+
+                if (item.TryGetProperty("AVG_HOLD_AMT", out var avgAmt))
+                {
+                    var val = avgAmt.ValueKind == JsonValueKind.Number && avgAmt.TryGetDecimal(out var d)
+                        ? Math.Round(d, 2).ToString("0.##") : avgAmt.GetString()?.Trim();
+                    if (!string.IsNullOrWhiteSpace(val))
+                        facts.Add(new StockFundamentalFactDto("户均持股市值", val, source));
+                }
+
+                if (item.TryGetProperty("AVG_FREE_SHARES", out var avgShares))
+                {
+                    var val = avgShares.ValueKind == JsonValueKind.Number && avgShares.TryGetDecimal(out var d)
+                        ? Math.Round(d, 2).ToString("0.##") : avgShares.GetString()?.Trim();
+                    if (!string.IsNullOrWhiteSpace(val))
+                        facts.Add(new StockFundamentalFactDto("户均流通股", val, source));
+                }
+
+                break; // Only take the most recent period
+            }
         }
 
-        foreach (var item in gdrsNode.EnumerateArray())
+        // ── 十大流通股东 (sdltgd) ──
+        if (root.TryGetProperty("sdltgd", out var ltgdNode) && ltgdNode.ValueKind == JsonValueKind.Array)
         {
-            var facts = new List<StockFundamentalFactDto>();
-
-            if (item.TryGetProperty("END_DATE", out var endDateNode))
+            var rank = 0;
+            foreach (var holder in ltgdNode.EnumerateArray())
             {
-                var endDate = endDateNode.GetString()?.Trim();
-                if (!string.IsNullOrWhiteSpace(endDate))
-                {
-                    facts.Add(new StockFundamentalFactDto("股东户数统计截止", endDate, "东方财富股东研究"));
-                }
-            }
+                if (++rank > 10) break;
+                var name = holder.TryGetProperty("HOLDER_NAME", out var hn) ? hn.GetString()?.Trim() : null;
+                if (string.IsNullOrWhiteSpace(name)) continue;
 
-            if (item.TryGetProperty("HOLD_FOCUS", out var focusNode))
-            {
-                var focus = focusNode.GetString()?.Trim();
-                if (!string.IsNullOrWhiteSpace(focus))
-                {
-                    facts.Add(new StockFundamentalFactDto("股权集中度", focus, "东方财富股东研究"));
-                }
-            }
+                var holdNum = holder.TryGetProperty("HOLD_NUM", out var hnum) && hnum.ValueKind == JsonValueKind.Number
+                    ? hnum.GetDecimal() : (decimal?)null;
+                var holdRatio = holder.TryGetProperty("FREE_HOLDNUM_RATIO", out var ratio) && ratio.ValueKind == JsonValueKind.Number
+                    ? ratio.GetDecimal() : (decimal?)null;
+                var changeStr = holder.TryGetProperty("HOLD_NUM_CHANGE", out var change) && change.ValueKind == JsonValueKind.Number
+                    ? change.GetDecimal().ToString("0.##") : (holder.TryGetProperty("HOLD_NUM_CHANGE", out var cs) ? cs.GetString()?.Trim() : null);
+                var changeType = holder.TryGetProperty("CHANGE_TYPE", out var ct) ? ct.GetString()?.Trim() : null;
 
-            if (item.TryGetProperty("AVG_HOLD_AMT", out var avgHoldAmtNode))
-            {
-                var avgHoldAmt = avgHoldAmtNode.ValueKind == JsonValueKind.Number && avgHoldAmtNode.TryGetDecimal(out var avgHoldAmtValue)
-                    ? Math.Round(avgHoldAmtValue, 2).ToString("0.##")
-                    : avgHoldAmtNode.GetString()?.Trim();
-                if (!string.IsNullOrWhiteSpace(avgHoldAmt))
-                {
-                    facts.Add(new StockFundamentalFactDto("户均持股市值", avgHoldAmt, "东方财富股东研究"));
-                }
-            }
+                var detail = $"{name}";
+                if (holdNum.HasValue)
+                    detail += $"，持股{FormatLargeNumber(holdNum.Value)}股";
+                if (holdRatio.HasValue)
+                    detail += $"，占比{holdRatio.Value:0.##}%";
+                if (!string.IsNullOrWhiteSpace(changeType))
+                    detail += $"，{changeType}";
+                if (!string.IsNullOrWhiteSpace(changeStr) && changeStr != "0")
+                    detail += $"（变动{changeStr}股）";
 
-            if (item.TryGetProperty("AVG_FREE_SHARES", out var avgSharesNode))
-            {
-                var avgShares = avgSharesNode.ValueKind == JsonValueKind.Number && avgSharesNode.TryGetDecimal(out var avgSharesValue)
-                    ? Math.Round(avgSharesValue, 2).ToString("0.##")
-                    : avgSharesNode.GetString()?.Trim();
-                if (!string.IsNullOrWhiteSpace(avgShares))
-                {
-                    facts.Add(new StockFundamentalFactDto("户均流通股", avgShares, "东方财富股东研究"));
-                }
+                facts.Add(new StockFundamentalFactDto($"十大流通股东#{rank}", detail, source));
             }
-
-            return facts;
         }
 
-        return Array.Empty<StockFundamentalFactDto>();
+        // ── 十大股东 (sdgd) ──
+        if (root.TryGetProperty("sdgd", out var gdNode) && gdNode.ValueKind == JsonValueKind.Array)
+        {
+            var rank = 0;
+            foreach (var holder in gdNode.EnumerateArray())
+            {
+                if (++rank > 10) break;
+                var name = holder.TryGetProperty("HOLDER_NAME", out var hn) ? hn.GetString()?.Trim() : null;
+                if (string.IsNullOrWhiteSpace(name)) continue;
+
+                var holdNum = holder.TryGetProperty("HOLD_NUM", out var hnum) && hnum.ValueKind == JsonValueKind.Number
+                    ? hnum.GetDecimal() : (decimal?)null;
+                var holdRatio = holder.TryGetProperty("HOLD_NUM_RATIO", out var ratio) && ratio.ValueKind == JsonValueKind.Number
+                    ? ratio.GetDecimal() : (decimal?)null;
+                var holderType = holder.TryGetProperty("HOLDER_TYPE", out var ht) ? ht.GetString()?.Trim() : null;
+
+                var detail = $"{name}";
+                if (!string.IsNullOrWhiteSpace(holderType))
+                    detail += $"（{holderType}）";
+                if (holdNum.HasValue)
+                    detail += $"，持股{FormatLargeNumber(holdNum.Value)}股";
+                if (holdRatio.HasValue)
+                    detail += $"，占比{holdRatio.Value:0.##}%";
+
+                facts.Add(new StockFundamentalFactDto($"十大股东#{rank}", detail, source));
+            }
+        }
+
+        return facts;
+    }
+
+    private static string FormatLargeNumber(decimal num)
+    {
+        if (Math.Abs(num) >= 100_000_000m)
+            return $"{num / 100_000_000m:0.##}亿";
+        if (Math.Abs(num) >= 10_000m)
+            return $"{num / 10_000m:0.##}万";
+        return num.ToString("0.##");
     }
 
     internal static string? DeriveMainBusinessFromScope(string? businessScope)

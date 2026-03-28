@@ -210,8 +210,10 @@ describe('TradingWorkbenchFeed', () => {
       { turnId: 2, type: 'UserFollowUp', summary: '追问风险' }
     ]
     const wrapper = mount(TradingWorkbenchFeed, { props: { items } })
-    expect(wrapper.findAll('.wb-feed-turn')).toHaveLength(2)
-    expect(wrapper.findAll('.wb-feed-item')).toHaveLength(3)
+    expect(wrapper.findAll('.feed-turn-group')).toHaveLength(2)
+    // 3 items total: 1 divider + 1 role bubble + 1 user bubble
+    const msgs = wrapper.findAll('.feed-divider, .feed-msg, .feed-tool, .feed-system')
+    expect(msgs.length).toBe(3)
   })
 
   it('shows empty state', () => {
@@ -302,15 +304,16 @@ describe('TradingWorkbench', () => {
     expect(wrapper.text()).toContain('多角色研究工作台')
   })
 
-  it('renders all three tabs', () => {
+  it('renders all four tabs', () => {
     const wrapper = mount(TradingWorkbench, {
       props: { symbol: 'sz000001' }
     })
     const tabs = wrapper.findAll('.wb-tab')
-    expect(tabs).toHaveLength(3)
+    expect(tabs).toHaveLength(4)
     expect(tabs[0].text()).toContain('研究报告')
     expect(tabs[1].text()).toContain('团队进度')
     expect(tabs[2].text()).toContain('讨论动态')
+    expect(tabs[3].text()).toContain('历史记录')
   })
 
   it('switches tabs on click', async () => {

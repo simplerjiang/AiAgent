@@ -1,0 +1,126 @@
+﻿{
+    "traceId":  "5a549f9fc30b43c8b10cbee61312f844",
+    "taskId":  "pm-mcp-audit-final2",
+    "toolName":  "MarketContextMcp",
+    "latencyMs":  3,
+    "cache":  {
+                  "hit":  false,
+                  "source":  "live",
+                  "generatedAt":  "2026-03-28T00:08:32.5799199+08:00"
+              },
+    "warnings":  [
+
+                 ],
+    "degradedFlags":  [
+
+                      ],
+    "data":  {
+                 "symbol":  "sh600519",
+                 "available":  true,
+                 "stageConfidence":  62.0,
+                 "stockSectorName":  null,
+                 "mainlineSectorName":  "逆变器",
+                 "sectorCode":  null,
+                 "mainlineScore":  89.75
+             },
+    "evidence":  [
+                     {
+                         "point":  "本地主线板块=逆变器",
+                         "title":  "本地主线板块轮动",
+                         "source":  "本地市场上下文/板块轮动",
+                         "publishedAt":  null,
+                         "crawledAt":  null,
+                         "url":  null,
+                         "excerpt":  "该字段来自本地市场上下文/板块轮动快照，不是东方财富字段。当前主线=逆变器，主线强度=89.75，阶段置信度=62。",
+                         "summary":  "该字段来自本地市场上下文/板块轮动快照，不是东方财富字段。当前主线=逆变器，主线强度=89.75，阶段置信度=62。",
+                         "readMode":  "local_fact",
+                         "readStatus":  "summary_only",
+                         "ingestedAt":  null,
+                         "localFactId":  null,
+                         "sourceRecordId":  "market_context:sh600519:mainline",
+                         "level":  "market_context",
+                         "sentiment":  null,
+                         "target":  "sh600519",
+                         "tags":  [
+                                      "local_market_context",
+                                      "sector_rotation"
+                                  ]
+                     }
+                 ],
+    "features":  [
+                     {
+                         "name":  "available",
+                         "label":  "Context Available",
+                         "valueType":  "text",
+                         "numberValue":  null,
+                         "textValue":  "true",
+                         "unit":  null,
+                         "description":  "Whether a local market-context snapshot was available."
+                     },
+                     {
+                         "name":  "stageConfidence",
+                         "label":  "Stage Confidence",
+                         "valueType":  "number",
+                         "numberValue":  62.0,
+                         "textValue":  null,
+                         "unit":  null,
+                         "description":  "Confidence score retained from the local market-context snapshot."
+                     },
+                     {
+                         "name":  "mainlineScore",
+                         "label":  "Mainline Score",
+                         "valueType":  "number",
+                         "numberValue":  89.75,
+                         "textValue":  null,
+                         "unit":  null,
+                         "description":  "Strength score retained from local market-context / sector-rotation data."
+                     },
+                     {
+                         "name":  "stockSectorName",
+                         "label":  "Stock Sector Name",
+                         "valueType":  "text",
+                         "numberValue":  null,
+                         "textValue":  null,
+                         "unit":  null,
+                         "description":  "Stock sector carried from local market context."
+                     },
+                     {
+                         "name":  "mainlineSectorName",
+                         "label":  "Mainline Sector Name",
+                         "valueType":  "text",
+                         "numberValue":  null,
+                         "textValue":  "逆变器",
+                         "unit":  null,
+                         "description":  "Mainline sector carried from local market context / sector rotation."
+                     },
+                     {
+                         "name":  "sectorCode",
+                         "label":  "Sector Code",
+                         "valueType":  "text",
+                         "numberValue":  null,
+                         "textValue":  null,
+                         "unit":  null,
+                         "description":  "Sector code carried from local market context."
+                     }
+                 ],
+    "meta":  {
+                 "version":  "v1",
+                 "policyClass":  "local_required",
+                 "toolName":  "MarketContextMcp",
+                 "symbol":  "sh600519",
+                 "interval":  null,
+                 "query":  null,
+                 "marketContext":  {
+                                       "stageConfidence":  62.0,
+                                       "stockSectorName":  null,
+                                       "mainlineSectorName":  "逆变器",
+                                       "sectorCode":  null,
+                                       "mainlineScore":  89.75
+                                   }
+             },
+    "errorCode":  null,
+    "freshnessTag":  "fresh",
+    "sourceTier":  "local",
+    "cacheHit":  false,
+    "rolePolicyClass":  "local_required"
+}

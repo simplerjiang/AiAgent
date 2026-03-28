@@ -1,0 +1,2203 @@
+﻿{
+    "traceId":  "ec58ac75485146ad9b1cd7a133ea60e3",
+    "taskId":  "pm-mcp-audit-final",
+    "toolName":  "StockMinuteMcp",
+    "latencyMs":  10678,
+    "cache":  {
+                  "hit":  false,
+                  "source":  "live",
+                  "generatedAt":  "2026-03-28T00:07:51.4776977+08:00"
+              },
+    "warnings":  [
+
+                 ],
+    "degradedFlags":  [
+                          "market_noise_filtered",
+                          "expanded_news_window"
+                      ],
+    "data":  {
+                 "symbol":  "sh600519",
+                 "sessionPhase":  "pre_market",
+                 "windowSize":  256,
+                 "points":  [
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "09:15:00",
+                                    "price":  1401.18,
+                                    "averagePrice":  1401.18,
+                                    "volume":  0
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "09:16:00",
+                                    "price":  1401.27,
+                                    "averagePrice":  1401.27,
+                                    "volume":  0
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "09:17:00",
+                                    "price":  1403.00,
+                                    "averagePrice":  1401.27,
+                                    "volume":  0
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "09:18:00",
+                                    "price":  1401.27,
+                                    "averagePrice":  1403.00,
+                                    "volume":  0
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "09:19:00",
+                                    "price":  1401.27,
+                                    "averagePrice":  1401.27,
+                                    "volume":  0
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "09:20:00",
+                                    "price":  1401.27,
+                                    "averagePrice":  1401.27,
+                                    "volume":  0
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "09:21:00",
+                                    "price":  1401.27,
+                                    "averagePrice":  1401.18,
+                                    "volume":  0
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "09:22:00",
+                                    "price":  1401.18,
+                                    "averagePrice":  1401.06,
+                                    "volume":  0
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "09:23:00",
+                                    "price":  1401.13,
+                                    "averagePrice":  1401.06,
+                                    "volume":  0
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "09:24:00",
+                                    "price":  1401.05,
+                                    "averagePrice":  1401.00,
+                                    "volume":  0
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "09:25:00",
+                                    "price":  1401.00,
+                                    "averagePrice":  1400.01,
+                                    "volume":  0
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "09:26:00",
+                                    "price":  1400.00,
+                                    "averagePrice":  1400.00,
+                                    "volume":  291
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "09:27:00",
+                                    "price":  1400.00,
+                                    "averagePrice":  1400.00,
+                                    "volume":  0
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "09:28:00",
+                                    "price":  1400.00,
+                                    "averagePrice":  1400.00,
+                                    "volume":  0
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "09:29:00",
+                                    "price":  1400.00,
+                                    "averagePrice":  1400.00,
+                                    "volume":  0
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "09:30:00",
+                                    "price":  1400.00,
+                                    "averagePrice":  1400.00,
+                                    "volume":  0
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "09:31:00",
+                                    "price":  1400.00,
+                                    "averagePrice":  1398.14,
+                                    "volume":  897
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "09:32:00",
+                                    "price":  1401.19,
+                                    "averagePrice":  1404.89,
+                                    "volume":  397
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "09:33:00",
+                                    "price":  1404.88,
+                                    "averagePrice":  1405.38,
+                                    "volume":  388
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "09:34:00",
+                                    "price":  1405.80,
+                                    "averagePrice":  1409.99,
+                                    "volume":  713
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "09:35:00",
+                                    "price":  1409.99,
+                                    "averagePrice":  1411.00,
+                                    "volume":  683
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "09:36:00",
+                                    "price":  1410.98,
+                                    "averagePrice":  1414.54,
+                                    "volume":  658
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "09:37:00",
+                                    "price":  1414.51,
+                                    "averagePrice":  1412.06,
+                                    "volume":  293
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "09:38:00",
+                                    "price":  1412.07,
+                                    "averagePrice":  1411.97,
+                                    "volume":  415
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "09:39:00",
+                                    "price":  1411.23,
+                                    "averagePrice":  1410.25,
+                                    "volume":  214
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "09:40:00",
+                                    "price":  1410.21,
+                                    "averagePrice":  1409.05,
+                                    "volume":  224
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "09:41:00",
+                                    "price":  1410.00,
+                                    "averagePrice":  1410.44,
+                                    "volume":  242
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "09:42:00",
+                                    "price":  1410.44,
+                                    "averagePrice":  1409.12,
+                                    "volume":  88
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "09:43:00",
+                                    "price":  1409.76,
+                                    "averagePrice":  1408.53,
+                                    "volume":  159
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "09:44:00",
+                                    "price":  1409.20,
+                                    "averagePrice":  1408.54,
+                                    "volume":  115
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "09:45:00",
+                                    "price":  1409.00,
+                                    "averagePrice":  1408.45,
+                                    "volume":  137
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "09:46:00",
+                                    "price":  1408.44,
+                                    "averagePrice":  1410.33,
+                                    "volume":  152
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "09:47:00",
+                                    "price":  1410.90,
+                                    "averagePrice":  1410.68,
+                                    "volume":  144
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "09:48:00",
+                                    "price":  1410.89,
+                                    "averagePrice":  1412.01,
+                                    "volume":  230
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "09:49:00",
+                                    "price":  1412.00,
+                                    "averagePrice":  1409.01,
+                                    "volume":  107
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "09:50:00",
+                                    "price":  1409.49,
+                                    "averagePrice":  1408.32,
+                                    "volume":  108
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "09:51:00",
+                                    "price":  1408.32,
+                                    "averagePrice":  1407.00,
+                                    "volume":  162
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "09:52:00",
+                                    "price":  1407.21,
+                                    "averagePrice":  1409.21,
+                                    "volume":  79
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "09:53:00",
+                                    "price":  1409.31,
+                                    "averagePrice":  1409.50,
+                                    "volume":  45
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "09:54:00",
+                                    "price":  1409.50,
+                                    "averagePrice":  1409.20,
+                                    "volume":  31
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "09:55:00",
+                                    "price":  1409.44,
+                                    "averagePrice":  1408.23,
+                                    "volume":  85
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "09:56:00",
+                                    "price":  1408.00,
+                                    "averagePrice":  1407.00,
+                                    "volume":  54
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "09:57:00",
+                                    "price":  1406.93,
+                                    "averagePrice":  1408.09,
+                                    "volume":  92
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "09:58:00",
+                                    "price":  1408.10,
+                                    "averagePrice":  1408.89,
+                                    "volume":  76
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "09:59:00",
+                                    "price":  1408.89,
+                                    "averagePrice":  1410.58,
+                                    "volume":  236
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "10:00:00",
+                                    "price":  1410.99,
+                                    "averagePrice":  1411.49,
+                                    "volume":  129
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "10:01:00",
+                                    "price":  1411.63,
+                                    "averagePrice":  1412.50,
+                                    "volume":  260
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "10:02:00",
+                                    "price":  1412.95,
+                                    "averagePrice":  1412.89,
+                                    "volume":  156
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "10:03:00",
+                                    "price":  1412.86,
+                                    "averagePrice":  1412.60,
+                                    "volume":  95
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "10:04:00",
+                                    "price":  1412.50,
+                                    "averagePrice":  1412.48,
+                                    "volume":  416
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "10:05:00",
+                                    "price":  1412.41,
+                                    "averagePrice":  1413.68,
+                                    "volume":  131
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "10:06:00",
+                                    "price":  1413.00,
+                                    "averagePrice":  1412.94,
+                                    "volume":  63
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "10:07:00",
+                                    "price":  1412.94,
+                                    "averagePrice":  1413.12,
+                                    "volume":  149
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "10:08:00",
+                                    "price":  1413.12,
+                                    "averagePrice":  1414.00,
+                                    "volume":  184
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "10:09:00",
+                                    "price":  1414.00,
+                                    "averagePrice":  1414.16,
+                                    "volume":  182
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "10:10:00",
+                                    "price":  1414.16,
+                                    "averagePrice":  1414.66,
+                                    "volume":  138
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "10:11:00",
+                                    "price":  1414.66,
+                                    "averagePrice":  1417.04,
+                                    "volume":  569
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "10:12:00",
+                                    "price":  1417.13,
+                                    "averagePrice":  1417.88,
+                                    "volume":  253
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "10:13:00",
+                                    "price":  1417.95,
+                                    "averagePrice":  1418.80,
+                                    "volume":  313
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "10:14:00",
+                                    "price":  1419.00,
+                                    "averagePrice":  1418.02,
+                                    "volume":  328
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "10:15:00",
+                                    "price":  1418.01,
+                                    "averagePrice":  1422.51,
+                                    "volume":  780
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "10:16:00",
+                                    "price":  1422.24,
+                                    "averagePrice":  1422.30,
+                                    "volume":  363
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "10:17:00",
+                                    "price":  1422.20,
+                                    "averagePrice":  1421.07,
+                                    "volume":  210
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "10:18:00",
+                                    "price":  1421.07,
+                                    "averagePrice":  1422.90,
+                                    "volume":  475
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "10:19:00",
+                                    "price":  1422.82,
+                                    "averagePrice":  1425.01,
+                                    "volume":  530
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "10:20:00",
+                                    "price":  1425.00,
+                                    "averagePrice":  1423.10,
+                                    "volume":  288
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "10:21:00",
+                                    "price":  1423.09,
+                                    "averagePrice":  1423.00,
+                                    "volume":  173
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "10:22:00",
+                                    "price":  1422.69,
+                                    "averagePrice":  1422.84,
+                                    "volume":  148
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "10:23:00",
+                                    "price":  1422.84,
+                                    "averagePrice":  1422.95,
+                                    "volume":  116
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "10:24:00",
+                                    "price":  1422.99,
+                                    "averagePrice":  1422.00,
+                                    "volume":  237
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "10:25:00",
+                                    "price":  1422.54,
+                                    "averagePrice":  1422.00,
+                                    "volume":  127
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "10:26:00",
+                                    "price":  1421.70,
+                                    "averagePrice":  1421.29,
+                                    "volume":  148
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "10:27:00",
+                                    "price":  1421.37,
+                                    "averagePrice":  1421.63,
+                                    "volume":  260
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "10:28:00",
+                                    "price":  1422.00,
+                                    "averagePrice":  1424.01,
+                                    "volume":  132
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "10:29:00",
+                                    "price":  1424.40,
+                                    "averagePrice":  1422.39,
+                                    "volume":  233
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "10:30:00",
+                                    "price":  1422.81,
+                                    "averagePrice":  1420.56,
+                                    "volume":  98
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "10:31:00",
+                                    "price":  1420.28,
+                                    "averagePrice":  1419.99,
+                                    "volume":  82
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "10:32:00",
+                                    "price":  1419.89,
+                                    "averagePrice":  1420.63,
+                                    "volume":  61
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "10:33:00",
+                                    "price":  1421.00,
+                                    "averagePrice":  1419.99,
+                                    "volume":  63
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "10:34:00",
+                                    "price":  1419.99,
+                                    "averagePrice":  1419.14,
+                                    "volume":  61
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "10:35:00",
+                                    "price":  1419.14,
+                                    "averagePrice":  1418.06,
+                                    "volume":  93
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "10:36:00",
+                                    "price":  1418.06,
+                                    "averagePrice":  1419.02,
+                                    "volume":  67
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "10:37:00",
+                                    "price":  1419.09,
+                                    "averagePrice":  1418.00,
+                                    "volume":  79
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "10:38:00",
+                                    "price":  1417.98,
+                                    "averagePrice":  1418.83,
+                                    "volume":  79
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "10:39:00",
+                                    "price":  1418.85,
+                                    "averagePrice":  1417.60,
+                                    "volume":  93
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "10:40:00",
+                                    "price":  1417.61,
+                                    "averagePrice":  1418.99,
+                                    "volume":  98
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "10:41:00",
+                                    "price":  1419.29,
+                                    "averagePrice":  1421.00,
+                                    "volume":  61
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "10:42:00",
+                                    "price":  1421.94,
+                                    "averagePrice":  1421.00,
+                                    "volume":  149
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "10:43:00",
+                                    "price":  1421.01,
+                                    "averagePrice":  1421.99,
+                                    "volume":  89
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "10:44:00",
+                                    "price":  1422.00,
+                                    "averagePrice":  1422.00,
+                                    "volume":  71
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "10:45:00",
+                                    "price":  1422.00,
+                                    "averagePrice":  1420.34,
+                                    "volume":  94
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "10:46:00",
+                                    "price":  1420.35,
+                                    "averagePrice":  1421.05,
+                                    "volume":  27
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "10:47:00",
+                                    "price":  1421.08,
+                                    "averagePrice":  1419.74,
+                                    "volume":  113
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "10:48:00",
+                                    "price":  1419.75,
+                                    "averagePrice":  1421.99,
+                                    "volume":  83
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "10:49:00",
+                                    "price":  1421.99,
+                                    "averagePrice":  1421.86,
+                                    "volume":  95
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "10:50:00",
+                                    "price":  1421.86,
+                                    "averagePrice":  1420.00,
+                                    "volume":  145
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "10:51:00",
+                                    "price":  1420.00,
+                                    "averagePrice":  1418.65,
+                                    "volume":  61
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "10:52:00",
+                                    "price":  1418.87,
+                                    "averagePrice":  1416.69,
+                                    "volume":  110
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "10:53:00",
+                                    "price":  1415.99,
+                                    "averagePrice":  1415.48,
+                                    "volume":  108
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "10:54:00",
+                                    "price":  1415.69,
+                                    "averagePrice":  1416.79,
+                                    "volume":  45
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "10:55:00",
+                                    "price":  1416.79,
+                                    "averagePrice":  1416.00,
+                                    "volume":  66
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "10:56:00",
+                                    "price":  1416.00,
+                                    "averagePrice":  1415.22,
+                                    "volume":  77
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "10:57:00",
+                                    "price":  1415.22,
+                                    "averagePrice":  1415.09,
+                                    "volume":  37
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "10:58:00",
+                                    "price":  1415.10,
+                                    "averagePrice":  1415.39,
+                                    "volume":  53
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "10:59:00",
+                                    "price":  1415.48,
+                                    "averagePrice":  1416.38,
+                                    "volume":  43
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "11:00:00",
+                                    "price":  1416.38,
+                                    "averagePrice":  1415.00,
+                                    "volume":  157
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "11:01:00",
+                                    "price":  1415.00,
+                                    "averagePrice":  1414.89,
+                                    "volume":  74
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "11:02:00",
+                                    "price":  1414.87,
+                                    "averagePrice":  1415.08,
+                                    "volume":  62
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "11:03:00",
+                                    "price":  1415.01,
+                                    "averagePrice":  1415.05,
+                                    "volume":  39
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "11:04:00",
+                                    "price":  1415.24,
+                                    "averagePrice":  1416.77,
+                                    "volume":  53
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "11:05:00",
+                                    "price":  1416.80,
+                                    "averagePrice":  1414.95,
+                                    "volume":  61
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "11:06:00",
+                                    "price":  1414.30,
+                                    "averagePrice":  1415.52,
+                                    "volume":  19
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "11:07:00",
+                                    "price":  1415.08,
+                                    "averagePrice":  1414.93,
+                                    "volume":  35
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "11:08:00",
+                                    "price":  1415.00,
+                                    "averagePrice":  1414.25,
+                                    "volume":  49
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "11:09:00",
+                                    "price":  1414.23,
+                                    "averagePrice":  1415.00,
+                                    "volume":  26
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "11:10:00",
+                                    "price":  1414.99,
+                                    "averagePrice":  1414.50,
+                                    "volume":  34
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "11:11:00",
+                                    "price":  1413.95,
+                                    "averagePrice":  1413.20,
+                                    "volume":  151
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "11:12:00",
+                                    "price":  1413.00,
+                                    "averagePrice":  1414.56,
+                                    "volume":  17
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "11:13:00",
+                                    "price":  1414.51,
+                                    "averagePrice":  1415.09,
+                                    "volume":  40
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "11:14:00",
+                                    "price":  1415.99,
+                                    "averagePrice":  1415.88,
+                                    "volume":  38
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "11:15:00",
+                                    "price":  1415.88,
+                                    "averagePrice":  1415.19,
+                                    "volume":  40
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "11:16:00",
+                                    "price":  1415.20,
+                                    "averagePrice":  1414.61,
+                                    "volume":  32
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "11:17:00",
+                                    "price":  1414.62,
+                                    "averagePrice":  1415.00,
+                                    "volume":  21
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "11:18:00",
+                                    "price":  1415.55,
+                                    "averagePrice":  1415.91,
+                                    "volume":  38
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "11:19:00",
+                                    "price":  1415.90,
+                                    "averagePrice":  1415.98,
+                                    "volume":  23
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "11:20:00",
+                                    "price":  1415.99,
+                                    "averagePrice":  1414.64,
+                                    "volume":  50
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "11:21:00",
+                                    "price":  1414.62,
+                                    "averagePrice":  1414.84,
+                                    "volume":  21
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "11:22:00",
+                                    "price":  1414.71,
+                                    "averagePrice":  1415.06,
+                                    "volume":  9
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "11:23:00",
+                                    "price":  1414.63,
+                                    "averagePrice":  1413.22,
+                                    "volume":  147
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "11:24:00",
+                                    "price":  1413.21,
+                                    "averagePrice":  1412.90,
+                                    "volume":  61
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "11:25:00",
+                                    "price":  1412.91,
+                                    "averagePrice":  1413.14,
+                                    "volume":  24
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "11:26:00",
+                                    "price":  1413.21,
+                                    "averagePrice":  1412.97,
+                                    "volume":  27
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "11:27:00",
+                                    "price":  1413.00,
+                                    "averagePrice":  1413.15,
+                                    "volume":  31
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "11:28:00",
+                                    "price":  1413.82,
+                                    "averagePrice":  1413.00,
+                                    "volume":  34
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "11:29:00",
+                                    "price":  1413.00,
+                                    "averagePrice":  1414.24,
+                                    "volume":  30
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "11:30:00",
+                                    "price":  1414.24,
+                                    "averagePrice":  1413.90,
+                                    "volume":  19
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "13:01:00",
+                                    "price":  1413.91,
+                                    "averagePrice":  1415.98,
+                                    "volume":  224
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "13:02:00",
+                                    "price":  1416.88,
+                                    "averagePrice":  1418.89,
+                                    "volume":  118
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "13:03:00",
+                                    "price":  1418.04,
+                                    "averagePrice":  1419.99,
+                                    "volume":  173
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "13:04:00",
+                                    "price":  1420.00,
+                                    "averagePrice":  1419.26,
+                                    "volume":  129
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "13:05:00",
+                                    "price":  1419.26,
+                                    "averagePrice":  1417.74,
+                                    "volume":  65
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "13:06:00",
+                                    "price":  1417.26,
+                                    "averagePrice":  1417.02,
+                                    "volume":  59
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "13:07:00",
+                                    "price":  1416.94,
+                                    "averagePrice":  1418.88,
+                                    "volume":  172
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "13:08:00",
+                                    "price":  1418.80,
+                                    "averagePrice":  1418.60,
+                                    "volume":  69
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "13:09:00",
+                                    "price":  1418.60,
+                                    "averagePrice":  1418.48,
+                                    "volume":  41
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "13:10:00",
+                                    "price":  1418.57,
+                                    "averagePrice":  1420.01,
+                                    "volume":  110
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "13:11:00",
+                                    "price":  1419.87,
+                                    "averagePrice":  1418.30,
+                                    "volume":  61
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "13:12:00",
+                                    "price":  1418.30,
+                                    "averagePrice":  1417.00,
+                                    "volume":  69
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "13:13:00",
+                                    "price":  1417.63,
+                                    "averagePrice":  1416.98,
+                                    "volume":  78
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "13:14:00",
+                                    "price":  1417.00,
+                                    "averagePrice":  1416.66,
+                                    "volume":  43
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "13:15:00",
+                                    "price":  1416.75,
+                                    "averagePrice":  1417.63,
+                                    "volume":  25
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "13:16:00",
+                                    "price":  1417.97,
+                                    "averagePrice":  1417.62,
+                                    "volume":  36
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "13:17:00",
+                                    "price":  1417.62,
+                                    "averagePrice":  1417.68,
+                                    "volume":  44
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "13:18:00",
+                                    "price":  1417.50,
+                                    "averagePrice":  1416.33,
+                                    "volume":  56
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "13:19:00",
+                                    "price":  1416.00,
+                                    "averagePrice":  1415.00,
+                                    "volume":  83
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "13:20:00",
+                                    "price":  1415.00,
+                                    "averagePrice":  1414.39,
+                                    "volume":  51
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "13:21:00",
+                                    "price":  1414.62,
+                                    "averagePrice":  1415.19,
+                                    "volume":  63
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "13:22:00",
+                                    "price":  1415.19,
+                                    "averagePrice":  1415.77,
+                                    "volume":  52
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "13:23:00",
+                                    "price":  1415.77,
+                                    "averagePrice":  1413.50,
+                                    "volume":  179
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "13:24:00",
+                                    "price":  1413.51,
+                                    "averagePrice":  1412.61,
+                                    "volume":  126
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "13:25:00",
+                                    "price":  1412.77,
+                                    "averagePrice":  1412.86,
+                                    "volume":  102
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "13:26:00",
+                                    "price":  1412.74,
+                                    "averagePrice":  1412.63,
+                                    "volume":  60
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "13:27:00",
+                                    "price":  1412.64,
+                                    "averagePrice":  1412.98,
+                                    "volume":  72
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "13:28:00",
+                                    "price":  1412.98,
+                                    "averagePrice":  1414.56,
+                                    "volume":  43
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "13:29:00",
+                                    "price":  1413.56,
+                                    "averagePrice":  1414.53,
+                                    "volume":  70
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "13:30:00",
+                                    "price":  1414.54,
+                                    "averagePrice":  1414.51,
+                                    "volume":  60
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "13:31:00",
+                                    "price":  1414.17,
+                                    "averagePrice":  1416.00,
+                                    "volume":  93
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "13:32:00",
+                                    "price":  1415.23,
+                                    "averagePrice":  1417.00,
+                                    "volume":  114
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "13:33:00",
+                                    "price":  1417.24,
+                                    "averagePrice":  1416.45,
+                                    "volume":  71
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "13:34:00",
+                                    "price":  1416.57,
+                                    "averagePrice":  1415.28,
+                                    "volume":  48
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "13:35:00",
+                                    "price":  1415.46,
+                                    "averagePrice":  1414.80,
+                                    "volume":  32
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "13:36:00",
+                                    "price":  1414.59,
+                                    "averagePrice":  1415.08,
+                                    "volume":  98
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "13:37:00",
+                                    "price":  1415.59,
+                                    "averagePrice":  1414.98,
+                                    "volume":  42
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "13:38:00",
+                                    "price":  1415.00,
+                                    "averagePrice":  1414.40,
+                                    "volume":  63
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "13:39:00",
+                                    "price":  1414.51,
+                                    "averagePrice":  1415.64,
+                                    "volume":  67
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "13:40:00",
+                                    "price":  1415.99,
+                                    "averagePrice":  1415.61,
+                                    "volume":  31
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "13:41:00",
+                                    "price":  1415.19,
+                                    "averagePrice":  1414.88,
+                                    "volume":  36
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "13:42:00",
+                                    "price":  1415.37,
+                                    "averagePrice":  1414.50,
+                                    "volume":  79
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "13:43:00",
+                                    "price":  1414.48,
+                                    "averagePrice":  1414.78,
+                                    "volume":  34
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "13:44:00",
+                                    "price":  1414.60,
+                                    "averagePrice":  1414.30,
+                                    "volume":  66
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "13:45:00",
+                                    "price":  1414.43,
+                                    "averagePrice":  1415.73,
+                                    "volume":  40
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "13:46:00",
+                                    "price":  1415.73,
+                                    "averagePrice":  1415.35,
+                                    "volume":  31
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "13:47:00",
+                                    "price":  1414.91,
+                                    "averagePrice":  1414.64,
+                                    "volume":  56
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "13:48:00",
+                                    "price":  1415.39,
+                                    "averagePrice":  1415.62,
+                                    "volume":  58
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "13:49:00",
+                                    "price":  1415.36,
+                                    "averagePrice":  1415.30,
+                                    "volume":  26
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "13:50:00",
+                                    "price":  1414.85,
+                                    "averagePrice":  1413.60,
+                                    "volume":  78
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "13:51:00",
+                                    "price":  1413.56,
+                                    "averagePrice":  1413.80,
+                                    "volume":  121
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "13:52:00",
+                                    "price":  1414.40,
+                                    "averagePrice":  1414.43,
+                                    "volume":  48
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "13:53:00",
+                                    "price":  1414.43,
+                                    "averagePrice":  1414.30,
+                                    "volume":  33
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "13:54:00",
+                                    "price":  1414.14,
+                                    "averagePrice":  1413.68,
+                                    "volume":  46
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "13:55:00",
+                                    "price":  1413.69,
+                                    "averagePrice":  1413.89,
+                                    "volume":  64
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "13:56:00",
+                                    "price":  1413.89,
+                                    "averagePrice":  1415.18,
+                                    "volume":  52
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "13:57:00",
+                                    "price":  1415.23,
+                                    "averagePrice":  1415.71,
+                                    "volume":  67
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "13:58:00",
+                                    "price":  1415.03,
+                                    "averagePrice":  1415.49,
+                                    "volume":  36
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "13:59:00",
+                                    "price":  1415.43,
+                                    "averagePrice":  1415.68,
+                                    "volume":  51
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "14:00:00",
+                                    "price":  1415.40,
+                                    "averagePrice":  1415.38,
+                                    "volume":  57
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "14:01:00",
+                                    "price":  1415.33,
+                                    "averagePrice":  1415.61,
+                                    "volume":  55
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "14:02:00",
+                                    "price":  1415.37,
+                                    "averagePrice":  1415.12,
+                                    "volume":  80
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "14:03:00",
+                                    "price":  1415.02,
+                                    "averagePrice":  1414.28,
+                                    "volume":  57
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "14:04:00",
+                                    "price":  1414.21,
+                                    "averagePrice":  1415.09,
+                                    "volume":  102
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "14:05:00",
+                                    "price":  1414.49,
+                                    "averagePrice":  1414.95,
+                                    "volume":  41
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "14:06:00",
+                                    "price":  1414.98,
+                                    "averagePrice":  1414.49,
+                                    "volume":  68
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "14:07:00",
+                                    "price":  1414.47,
+                                    "averagePrice":  1415.08,
+                                    "volume":  45
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "14:08:00",
+                                    "price":  1414.52,
+                                    "averagePrice":  1414.55,
+                                    "volume":  47
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "14:09:00",
+                                    "price":  1414.51,
+                                    "averagePrice":  1414.14,
+                                    "volume":  156
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "14:10:00",
+                                    "price":  1413.67,
+                                    "averagePrice":  1413.77,
+                                    "volume":  111
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "14:11:00",
+                                    "price":  1415.00,
+                                    "averagePrice":  1414.59,
+                                    "volume":  60
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "14:12:00",
+                                    "price":  1415.35,
+                                    "averagePrice":  1414.50,
+                                    "volume":  34
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "14:13:00",
+                                    "price":  1414.49,
+                                    "averagePrice":  1415.10,
+                                    "volume":  76
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "14:14:00",
+                                    "price":  1415.50,
+                                    "averagePrice":  1414.51,
+                                    "volume":  42
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "14:15:00",
+                                    "price":  1414.59,
+                                    "averagePrice":  1414.54,
+                                    "volume":  57
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "14:16:00",
+                                    "price":  1414.54,
+                                    "averagePrice":  1414.63,
+                                    "volume":  67
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "14:17:00",
+                                    "price":  1414.69,
+                                    "averagePrice":  1415.02,
+                                    "volume":  94
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "14:18:00",
+                                    "price":  1415.40,
+                                    "averagePrice":  1415.41,
+                                    "volume":  91
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "14:19:00",
+                                    "price":  1415.55,
+                                    "averagePrice":  1416.00,
+                                    "volume":  63
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "14:20:00",
+                                    "price":  1416.00,
+                                    "averagePrice":  1415.59,
+                                    "volume":  85
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "14:21:00",
+                                    "price":  1415.60,
+                                    "averagePrice":  1415.80,
+                                    "volume":  75
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "14:22:00",
+                                    "price":  1415.61,
+                                    "averagePrice":  1417.43,
+                                    "volume":  231
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "14:23:00",
+                                    "price":  1417.01,
+                                    "averagePrice":  1418.20,
+                                    "volume":  144
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "14:24:00",
+                                    "price":  1418.16,
+                                    "averagePrice":  1416.51,
+                                    "volume":  86
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "14:25:00",
+                                    "price":  1416.31,
+                                    "averagePrice":  1416.33,
+                                    "volume":  52
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "14:26:00",
+                                    "price":  1416.29,
+                                    "averagePrice":  1416.09,
+                                    "volume":  78
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "14:27:00",
+                                    "price":  1416.21,
+                                    "averagePrice":  1416.15,
+                                    "volume":  49
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "14:28:00",
+                                    "price":  1416.19,
+                                    "averagePrice":  1415.98,
+                                    "volume":  47
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "14:29:00",
+                                    "price":  1415.67,
+                                    "averagePrice":  1415.77,
+                                    "volume":  44
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "14:30:00",
+                                    "price":  1415.63,
+                                    "averagePrice":  1415.29,
+                                    "volume":  73
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "14:31:00",
+                                    "price":  1415.51,
+                                    "averagePrice":  1416.27,
+                                    "volume":  96
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "14:32:00",
+                                    "price":  1416.28,
+                                    "averagePrice":  1416.05,
+                                    "volume":  69
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "14:33:00",
+                                    "price":  1416.03,
+                                    "averagePrice":  1416.26,
+                                    "volume":  68
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "14:34:00",
+                                    "price":  1416.30,
+                                    "averagePrice":  1416.29,
+                                    "volume":  56
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "14:35:00",
+                                    "price":  1416.23,
+                                    "averagePrice":  1415.72,
+                                    "volume":  91
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "14:36:00",
+                                    "price":  1415.72,
+                                    "averagePrice":  1416.50,
+                                    "volume":  136
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "14:37:00",
+                                    "price":  1416.53,
+                                    "averagePrice":  1416.39,
+                                    "volume":  79
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "14:38:00",
+                                    "price":  1416.35,
+                                    "averagePrice":  1416.47,
+                                    "volume":  93
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "14:39:00",
+                                    "price":  1416.42,
+                                    "averagePrice":  1416.65,
+                                    "volume":  76
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "14:40:00",
+                                    "price":  1416.61,
+                                    "averagePrice":  1416.40,
+                                    "volume":  81
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "14:41:00",
+                                    "price":  1416.26,
+                                    "averagePrice":  1416.01,
+                                    "volume":  94
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "14:42:00",
+                                    "price":  1416.38,
+                                    "averagePrice":  1417.47,
+                                    "volume":  249
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "14:43:00",
+                                    "price":  1417.42,
+                                    "averagePrice":  1417.79,
+                                    "volume":  160
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "14:44:00",
+                                    "price":  1417.83,
+                                    "averagePrice":  1417.80,
+                                    "volume":  274
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "14:45:00",
+                                    "price":  1417.79,
+                                    "averagePrice":  1417.61,
+                                    "volume":  184
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "14:46:00",
+                                    "price":  1417.63,
+                                    "averagePrice":  1417.61,
+                                    "volume":  196
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "14:47:00",
+                                    "price":  1417.62,
+                                    "averagePrice":  1417.70,
+                                    "volume":  225
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "14:48:00",
+                                    "price":  1417.73,
+                                    "averagePrice":  1417.74,
+                                    "volume":  333
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "14:49:00",
+                                    "price":  1417.68,
+                                    "averagePrice":  1417.68,
+                                    "volume":  157
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "14:50:00",
+                                    "price":  1417.68,
+                                    "averagePrice":  1417.60,
+                                    "volume":  175
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "14:51:00",
+                                    "price":  1417.59,
+                                    "averagePrice":  1417.00,
+                                    "volume":  207
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "14:52:00",
+                                    "price":  1417.00,
+                                    "averagePrice":  1416.26,
+                                    "volume":  161
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "14:53:00",
+                                    "price":  1416.21,
+                                    "averagePrice":  1416.01,
+                                    "volume":  140
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "14:54:00",
+                                    "price":  1416.04,
+                                    "averagePrice":  1415.94,
+                                    "volume":  161
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "14:55:00",
+                                    "price":  1415.94,
+                                    "averagePrice":  1415.95,
+                                    "volume":  204
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "14:56:00",
+                                    "price":  1415.95,
+                                    "averagePrice":  1416.49,
+                                    "volume":  165
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "14:57:00",
+                                    "price":  1416.44,
+                                    "averagePrice":  1416.70,
+                                    "volume":  209
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "14:58:00",
+                                    "price":  1417.02,
+                                    "averagePrice":  1417.02,
+                                    "volume":  5
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "14:59:00",
+                                    "price":  1417.02,
+                                    "averagePrice":  1417.02,
+                                    "volume":  0
+                                },
+                                {
+                                    "date":  "2026-03-27",
+                                    "time":  "15:00:00",
+                                    "price":  1416.02,
+                                    "averagePrice":  1416.02,
+                                    "volume":  398
+                                }
+                            ],
+                 "vwap":  1414.7798,
+                 "openingDrivePercent":  1.70,
+                 "afternoonDriftPercent":  0.13,
+                 "intradayRangePercent":  1.79
+             },
+    "evidence":  [
+                     {
+                         "point":  "贵州茅台:贵州茅台关于控股股东增持股份结果的公告",
+                         "title":  "贵州茅台:贵州茅台关于控股股东增持股份结果的公告",
+                         "source":  "东方财富公告",
+                         "publishedAt":  "2025-12-29T19:12:59.0000000+08:00",
+                         "crawledAt":  "2026-03-28T00:07:50.7542854+08:00",
+                         "url":  "https://data.eastmoney.com/notices/detail/600519/AN202512291810712359.html",
+                         "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "readMode":  "url_fetched",
+                         "readStatus":  "full_text_read",
+                         "ingestedAt":  "2026-03-28T00:03:30.5509077+08:00",
+                         "localFactId":  71,
+                         "sourceRecordId":  "stock_news:71",
+                         "level":  "announcement",
+                         "sentiment":  "利好",
+                         "target":  "股票:贵州茅台",
+                         "tags":  [
+                                      "资金面"
+                                  ]
+                     },
+                     {
+                         "point":  "贵州茅台:贵州茅台关于回购股份事项通知债权人公告",
+                         "title":  "贵州茅台:贵州茅台关于回购股份事项通知债权人公告",
+                         "source":  "东方财富公告",
+                         "publishedAt":  "2025-11-28T19:26:32.0000000+08:00",
+                         "crawledAt":  "2026-03-28T00:07:50.7542854+08:00",
+                         "url":  "https://data.eastmoney.com/notices/detail/600519/AN202511281790064141.html",
+                         "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "readMode":  "url_fetched",
+                         "readStatus":  "full_text_read",
+                         "ingestedAt":  "2026-03-28T00:03:31.8942823+08:00",
+                         "localFactId":  78,
+                         "sourceRecordId":  "stock_news:78",
+                         "level":  "announcement",
+                         "sentiment":  "利好",
+                         "target":  "股票:贵州茅台",
+                         "tags":  [
+                                      "政策红利"
+                                  ]
+                     },
+                     {
+                         "point":  "贵州茅台:贵州茅台关于回购股份事项前十大股东及前十大无限售条件股东持股情况的公告",
+                         "title":  "贵州茅台:贵州茅台关于回购股份事项前十大股东及前十大无限售条件股东持股情况的公告",
+                         "source":  "东方财富公告",
+                         "publishedAt":  "2025-11-25T18:01:27.0000000+08:00",
+                         "crawledAt":  "2026-03-28T00:07:50.7542854+08:00",
+                         "url":  "https://data.eastmoney.com/notices/detail/600519/AN202511251788129772.html",
+                         "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "readMode":  "url_fetched",
+                         "readStatus":  "full_text_read",
+                         "ingestedAt":  "2026-03-28T00:03:32.4503013+08:00",
+                         "localFactId":  83,
+                         "sourceRecordId":  "stock_news:83",
+                         "level":  "announcement",
+                         "sentiment":  "中性",
+                         "target":  "个股:贵州茅台",
+                         "tags":  [
+                                      "资金面"
+                                  ]
+                     },
+                     {
+                         "point":  "贵州茅台:贵州茅台2025年第一次临时股东大会会议资料",
+                         "title":  "贵州茅台:贵州茅台2025年第一次临时股东大会会议资料",
+                         "source":  "东方财富公告",
+                         "publishedAt":  "2025-11-19T19:03:40.0000000+08:00",
+                         "crawledAt":  "2026-03-28T00:07:50.7542854+08:00",
+                         "url":  "https://data.eastmoney.com/notices/detail/600519/AN202511191784400112.html",
+                         "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "readMode":  "url_fetched",
+                         "readStatus":  "full_text_read",
+                         "ingestedAt":  "2026-03-28T00:03:32.5841412+08:00",
+                         "localFactId":  84,
+                         "sourceRecordId":  "stock_news:84",
+                         "level":  "announcement",
+                         "sentiment":  "中性",
+                         "target":  "个股:贵州茅台",
+                         "tags":  [
+                                      "行业周期"
+                                  ]
+                     },
+                     {
+                         "point":  "贵州茅台:贵州茅台关于回购股份事项前十大股东及前十大无限售条件股东持股情况的公告",
+                         "title":  "贵州茅台:贵州茅台关于回购股份事项前十大股东及前十大无限售条件股东持股情况的公告",
+                         "source":  "东方财富公告",
+                         "publishedAt":  "2025-11-10T19:18:23.0000000+08:00",
+                         "crawledAt":  "2026-03-28T00:07:50.7542854+08:00",
+                         "url":  "https://data.eastmoney.com/notices/detail/600519/AN202511101778790986.html",
+                         "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "readMode":  "url_fetched",
+                         "readStatus":  "full_text_read",
+                         "ingestedAt":  "2026-03-28T00:03:32.6823423+08:00",
+                         "localFactId":  85,
+                         "sourceRecordId":  "stock_news:85",
+                         "level":  "announcement",
+                         "sentiment":  "中性",
+                         "target":  "个股:贵州茅台",
+                         "tags":  [
+                                      "资金面"
+                                  ]
+                     },
+                     {
+                         "point":  "贵州茅台:贵州茅台第四届监事会2025年度第五次会议决议公告",
+                         "title":  "贵州茅台:贵州茅台第四届监事会2025年度第五次会议决议公告",
+                         "source":  "东方财富公告",
+                         "publishedAt":  "2025-11-05T20:58:54.0000000+08:00",
+                         "crawledAt":  "2026-03-28T00:07:50.7542854+08:00",
+                         "url":  "https://data.eastmoney.com/notices/detail/600519/AN202511051775759376.html",
+                         "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "readMode":  "url_fetched",
+                         "readStatus":  "full_text_read",
+                         "ingestedAt":  "2026-03-28T00:03:32.8181601+08:00",
+                         "localFactId":  94,
+                         "sourceRecordId":  "stock_news:94",
+                         "level":  "announcement",
+                         "sentiment":  "中性",
+                         "target":  "个股:贵州茅台",
+                         "tags":  [
+                                      "行业周期"
+                                  ]
+                     },
+                     {
+                         "point":  "贵州茅台:贵州茅台酒股份有限公司股东会议事规则(修订稿)",
+                         "title":  "贵州茅台:贵州茅台酒股份有限公司股东会议事规则(修订稿)",
+                         "source":  "东方财富公告",
+                         "publishedAt":  "2025-11-05T20:58:54.0000000+08:00",
+                         "crawledAt":  "2026-03-28T00:07:50.7542854+08:00",
+                         "url":  "https://data.eastmoney.com/notices/detail/600519/AN202511051775759370.html",
+                         "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "readMode":  "url_fetched",
+                         "readStatus":  "full_text_read",
+                         "ingestedAt":  "2026-03-28T00:03:32.9568954+08:00",
+                         "localFactId":  93,
+                         "sourceRecordId":  "stock_news:93",
+                         "level":  "announcement",
+                         "sentiment":  "中性",
+                         "target":  "个股:贵州茅台",
+                         "tags":  [
+                                      "行业周期"
+                                  ]
+                     },
+                     {
+                         "point":  "贵州茅台:贵州茅台关于修订公司《章程》及附件暨撤销监事会的公告",
+                         "title":  "贵州茅台:贵州茅台关于修订公司《章程》及附件暨撤销监事会的公告",
+                         "source":  "东方财富公告",
+                         "publishedAt":  "2025-11-05T20:58:54.0000000+08:00",
+                         "crawledAt":  "2026-03-28T00:07:50.7542854+08:00",
+                         "url":  "https://data.eastmoney.com/notices/detail/600519/AN202511051775759372.html",
+                         "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "readMode":  "url_fetched",
+                         "readStatus":  "full_text_read",
+                         "ingestedAt":  "2026-03-28T00:03:33.1269598+08:00",
+                         "localFactId":  92,
+                         "sourceRecordId":  "stock_news:92",
+                         "level":  "announcement",
+                         "sentiment":  "中性",
+                         "target":  "个股:贵州茅台",
+                         "tags":  [
+                                      "政策红利"
+                                  ]
+                     },
+                     {
+                         "point":  "贵州茅台:贵州茅台第四届董事会2025年度第十四次会议决议公告",
+                         "title":  "贵州茅台:贵州茅台第四届董事会2025年度第十四次会议决议公告",
+                         "source":  "东方财富公告",
+                         "publishedAt":  "2025-11-05T20:58:54.0000000+08:00",
+                         "crawledAt":  "2026-03-28T00:07:50.7542854+08:00",
+                         "url":  "https://data.eastmoney.com/notices/detail/600519/AN202511051775759369.html",
+                         "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "readMode":  "url_fetched",
+                         "readStatus":  "full_text_read",
+                         "ingestedAt":  "2026-03-28T00:03:33.2183612+08:00",
+                         "localFactId":  91,
+                         "sourceRecordId":  "stock_news:91",
+                         "level":  "announcement",
+                         "sentiment":  "中性",
+                         "target":  "个股:贵州茅台",
+                         "tags":  [
+                                      "行业周期"
+                                  ]
+                     },
+                     {
+                         "point":  "贵州茅台:贵州茅台关于2025年中期利润分配方案暨贯彻落实“提质增效重回报”专项行动方案的公告",
+                         "title":  "贵州茅台:贵州茅台关于2025年中期利润分配方案暨贯彻落实“提质增效重回报”专项行动方案的公告",
+                         "source":  "东方财富公告",
+                         "publishedAt":  "2025-11-05T20:58:54.0000000+08:00",
+                         "crawledAt":  "2026-03-28T00:07:50.7542854+08:00",
+                         "url":  "https://data.eastmoney.com/notices/detail/600519/AN202511051775759374.html",
+                         "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "readMode":  "url_fetched",
+                         "readStatus":  "full_text_read",
+                         "ingestedAt":  "2026-03-28T00:03:33.4078320+08:00",
+                         "localFactId":  90,
+                         "sourceRecordId":  "stock_news:90",
+                         "level":  "announcement",
+                         "sentiment":  "中性",
+                         "target":  "个股:贵州茅台",
+                         "tags":  [
+                                      "行业周期"
+                                  ]
+                     },
+                     {
+                         "point":  "贵州茅台:贵州茅台关于召开2025年第一次临时股东大会的通知",
+                         "title":  "贵州茅台:贵州茅台关于召开2025年第一次临时股东大会的通知",
+                         "source":  "东方财富公告",
+                         "publishedAt":  "2025-11-05T20:58:54.0000000+08:00",
+                         "crawledAt":  "2026-03-28T00:07:50.7542854+08:00",
+                         "url":  "https://data.eastmoney.com/notices/detail/600519/AN202511051775759375.html",
+                         "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "readMode":  "url_fetched",
+                         "readStatus":  "full_text_read",
+                         "ingestedAt":  "2026-03-28T00:03:33.7950494+08:00",
+                         "localFactId":  89,
+                         "sourceRecordId":  "stock_news:89",
+                         "level":  "announcement",
+                         "sentiment":  "中性",
+                         "target":  "个股:贵州茅台",
+                         "tags":  [
+                                      "财报业绩"
+                                  ]
+                     },
+                     {
+                         "point":  "贵州茅台:贵州茅台酒股份有限公司章程(修订稿)",
+                         "title":  "贵州茅台:贵州茅台酒股份有限公司章程(修订稿)",
+                         "source":  "东方财富公告",
+                         "publishedAt":  "2025-11-05T20:58:54.0000000+08:00",
+                         "crawledAt":  "2026-03-28T00:07:50.7542854+08:00",
+                         "url":  "https://data.eastmoney.com/notices/detail/600519/AN202511051775759373.html",
+                         "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "readMode":  "url_fetched",
+                         "readStatus":  "full_text_read",
+                         "ingestedAt":  "2026-03-28T00:03:33.9382481+08:00",
+                         "localFactId":  88,
+                         "sourceRecordId":  "stock_news:88",
+                         "level":  "announcement",
+                         "sentiment":  "中性",
+                         "target":  "个股:贵州茅台",
+                         "tags":  [
+                                      "政策红利"
+                                  ]
+                     },
+                     {
+                         "point":  "贵州茅台:贵州茅台酒股份有限公司关联交易决策管理细则(修订稿)",
+                         "title":  "贵州茅台:贵州茅台酒股份有限公司关联交易决策管理细则(修订稿)",
+                         "source":  "东方财富公告",
+                         "publishedAt":  "2025-11-05T20:58:54.0000000+08:00",
+                         "crawledAt":  "2026-03-28T00:07:50.7542854+08:00",
+                         "url":  "https://data.eastmoney.com/notices/detail/600519/AN202511051775759371.html",
+                         "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "readMode":  "url_fetched",
+                         "readStatus":  "full_text_read",
+                         "ingestedAt":  "2026-03-28T00:03:34.0438479+08:00",
+                         "localFactId":  87,
+                         "sourceRecordId":  "stock_news:87",
+                         "level":  "announcement",
+                         "sentiment":  "中性",
+                         "target":  "个股:贵州茅台",
+                         "tags":  [
+                                      "政策红利"
+                                  ]
+                     },
+                     {
+                         "point":  "贵州茅台:贵州茅台关于以集中竞价交易方式回购公司股份方案的公告",
+                         "title":  "贵州茅台:贵州茅台关于以集中竞价交易方式回购公司股份方案的公告",
+                         "source":  "东方财富公告",
+                         "publishedAt":  "2025-11-05T20:58:54.0000000+08:00",
+                         "crawledAt":  "2026-03-28T00:07:50.7542854+08:00",
+                         "url":  "https://data.eastmoney.com/notices/detail/600519/AN202511051775759367.html",
+                         "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "readMode":  "url_fetched",
+                         "readStatus":  "full_text_read",
+                         "ingestedAt":  "2026-03-28T00:03:34.2087814+08:00",
+                         "localFactId":  86,
+                         "sourceRecordId":  "stock_news:86",
+                         "level":  "announcement",
+                         "sentiment":  "中性",
+                         "target":  "个股:贵州茅台",
+                         "tags":  [
+                                      "资金面",
+                                      "政策红利"
+                                  ]
+                     }
+                 ],
+    "features":  [
+                     {
+                         "name":  "coverageScore",
+                         "label":  "Evidence Coverage",
+                         "valueType":  "number",
+                         "numberValue":  100,
+                         "textValue":  null,
+                         "unit":  null,
+                         "description":  "Higher means the agent has better recent traceable evidence coverage."
+                     },
+                     {
+                         "name":  "conflictScore",
+                         "label":  "Evidence Conflict",
+                         "valueType":  "number",
+                         "numberValue":  46.15,
+                         "textValue":  null,
+                         "unit":  null,
+                         "description":  "Higher means bullish and bearish evidence are fighting each other."
+                     },
+                     {
+                         "name":  "freshnessHours",
+                         "label":  "Evidence Freshness",
+                         "valueType":  "number",
+                         "numberValue":  8.00,
+                         "textValue":  null,
+                         "unit":  "h",
+                         "description":  "Hours since the latest retained evidence was published."
+                     },
+                     {
+                         "name":  "trendState",
+                         "label":  "Trend State",
+                         "valueType":  "text",
+                         "numberValue":  null,
+                         "textValue":  "盘整",
+                         "unit":  null,
+                         "description":  "Deterministic trend-state computed from MA and return windows."
+                     },
+                     {
+                         "name":  "atrPercent",
+                         "label":  "ATR Percent",
+                         "valueType":  "number",
+                         "numberValue":  1.79,
+                         "textValue":  null,
+                         "unit":  "%",
+                         "description":  "Rolling ATR percent of price."
+                     },
+                     {
+                         "name":  "peBand",
+                         "label":  "PE Band",
+                         "valueType":  "text",
+                         "numberValue":  null,
+                         "textValue":  "fair",
+                         "unit":  null,
+                         "description":  "Valuation bucket used by commander guardrails."
+                     },
+                     {
+                         "name":  "volatilityScore",
+                         "label":  "Volatility Score",
+                         "valueType":  "number",
+                         "numberValue":  14.80,
+                         "textValue":  null,
+                         "unit":  null,
+                         "description":  "Risk score synthesized from ATR and turnover."
+                     }
+                 ],
+    "meta":  {
+                 "version":  "v1",
+                 "policyClass":  "local_required",
+                 "toolName":  "StockMinuteMcp",
+                 "symbol":  "sh600519",
+                 "interval":  "minute",
+                 "query":  null,
+                 "marketContext":  {
+                                       "stageConfidence":  62.0,
+                                       "stockSectorName":  null,
+                                       "mainlineSectorName":  "逆变器",
+                                       "sectorCode":  null,
+                                       "mainlineScore":  89.75
+                                   }
+             },
+    "errorCode":  "market_noise_filtered",
+    "freshnessTag":  "stale",
+    "sourceTier":  "local",
+    "cacheHit":  false,
+    "rolePolicyClass":  "local_required"
+}

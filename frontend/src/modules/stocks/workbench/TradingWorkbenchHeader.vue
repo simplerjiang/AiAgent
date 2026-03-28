@@ -5,9 +5,10 @@ defineProps({
   sessionStatus: { type: Object, default: () => ({ label: '空闲', cls: 'status-idle' }) },
   currentStage: { type: String, default: null },
   isRunning: { type: Boolean, default: false },
-  error: { type: String, default: null }
+  error: { type: String, default: null },
+  isFullscreen: { type: Boolean, default: false }
 })
-defineEmits(['refresh'])
+defineEmits(['refresh', 'toggle-fullscreen'])
 </script>
 
 <template>
@@ -26,6 +27,9 @@ defineEmits(['refresh'])
         </span>
       </div>
       <button class="wb-refresh-btn" title="刷新" @click="$emit('refresh')">↻</button>
+      <button class="wb-fullscreen-btn" :title="isFullscreen ? '退出全屏' : '全屏模式'" :aria-label="isFullscreen ? '退出全屏' : '全屏模式'" @click="$emit('toggle-fullscreen')">
+        {{ isFullscreen ? '⛶' : '⛶' }}
+      </button>
     </div>
 
     <div v-if="currentStage" class="wb-stage-indicator">
@@ -122,6 +126,17 @@ defineEmits(['refresh'])
   font-size: 14px;
 }
 .wb-refresh-btn:hover { color: var(--wb-text, #e1e4ea); }
+
+.wb-fullscreen-btn {
+  background: transparent;
+  border: 1px solid var(--wb-border, #2a2d35);
+  color: var(--wb-text-muted, #8b8fa3);
+  border-radius: 4px;
+  padding: 2px 8px;
+  cursor: pointer;
+  font-size: 14px;
+}
+.wb-fullscreen-btn:hover { color: var(--wb-text, #e1e4ea); background: rgba(255,255,255,0.05); }
 
 .wb-error {
   margin-top: 6px;

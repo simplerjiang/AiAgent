@@ -1,0 +1,206 @@
+=== Clicking 深科技 from history ===
+Clicked 深科技 chip, waiting for data...
+TABS: ["📋研究报告","⏱️团队进度","💬讨论动态","📚历史记录"]
+
+=== HISTORY TAB ===
+HISTORY: —
+帮我评判一下下周走势
+3/28 16:18
+已完成
+▸
+—
+你怎么看最近的深科技震荡?还有下周走势会如何 应该如何操作？
+3/28 15:37
+已完成
+▸
+—
+帮我看下周可能的情况和操作指示
+3/28 13:04
+失败
+▸
+—
+下周你怎么看
+3/28 12:18
+失败
+▸
+—
+分析下下周情况
+3/28 12:11
+失败
+▸
+SESSION_ITEMS_COUNT: 11
+HAS_SESSION_DATA: true
+
+=== PROGRESS TAB ===
+PROGRESS: 🏢
+公司概览
+完成
+🔄 重跑
+✅
+company_overview_analyst
+📊
+分析师团队
+完成
+🔄 重跑
+✅
+market_analyst
+✅
+social_sentiment_analyst
+✅
+news_analyst
+✅
+fundamentals_analyst
+✅
+shareholder_analyst
+✅
+product_analyst
+⚔️
+研究辩论
+完成
+🔄 重跑
+✅
+bull_researcher
+✅
+bear_researcher
+✅
+research_manager
+✅
+bull_researcher
+✅
+bear_researcher
+✅
+research_manager
+✅
+bull_researcher
+✅
+bear_researcher
+✅
+research_manager
+💹
+交易方案
+完成
+🔄 重跑
+✅
+trader
+🛡️
+风险评估
+完成
+🔄 重跑
+✅
+aggressive_risk_analyst
+✅
+neutral_risk_analyst
+✅
+conservative_risk_analyst
+✅
+aggressive_risk_analyst
+✅
+neutral_risk_analyst
+✅
+conservative_risk_analyst
+✅
+aggressive_risk_analyst
+✅
+neutral_risk_analyst
+✅
+conservative_risk_analyst
+🎯
+投资决策
+完成
+🔄 重跑
+✅
+portfolio_manager
+RERUN_TEXT_BTNS: 6
+RERUN_EMOJI_BTNS: 6
+PROGRESS_HTML_SNIPPET: <div data-v-ddba71e8="" data-v-01f78622="" class="wb-report" style="display: none;"><!----><div data-v-ddba71e8="" class="wb-decision"><div data-v-ddba71e8="" class="wb-decision-header"><span data-v-ddba71e8="" class="wb-decision-icon">🎯</span><span data-v-ddba71e8="" class="wb-decision-title">投资决策</span><!----></div><!----><!----><!----></div><div data-v-ddba71e8="" class="wb-actions"><div data-v-ddba71e8="" class="wb-actions-title">下一步操作</div><div data-v-ddba71e8="" class="wb-actions-list"><button data-v-ddba71e8="" class="wb-action-btn" title="确认技术面趋势与决策一致性"><span data-v-ddba71e8="" class="wb-action-icon">📊</span><span data-v-ddba71e8="" class="wb-action-label">看日K线</span></button><button data-v-ddba71e8="" class="wb-action-btn" title="观察盘中量价走势"><span data-v-ddba71e8="" class="wb-action-icon">⏱️</span><span data-v-ddba71e8="" class="wb-action-label">看分时</span></button><button data-v-ddba71e8="" class="wb-action-btn" title="审查支撑决策的关键证据"><span data-v-ddba71e8="" class="wb-action-ico
+
+=== FEED TAB ===
+FEED: Turn 7
+ℹ️
+Turn 0 started for sz000021
+16:18:16
+🏢 公司概览
+•
+company_overview_analyst 开始分析
+16:18:16
+🔧
+Dispatching CompanyOverviewMcp
+16:18:16
+🔧
+CompanyOverviewMcp completed
+16:18:28
+🔧
+Dispatching MarketContextMcp
+16:18:28
+🔧
+MarketContextMcp completed
+16:18:28
+🔧
+Dispatching StockNewsMcp
+16:18:28
+🔧
+StockNewsMcp completed
+16:18:31
+🔧
+Dispatching StockSearchMcp
+16:18:31
+🔧
+StockSearchMcp completed
+16:18:34
+🤖
+company_overview_analyst 16:18:49
+
+计算机软硬件系统、通讯设备、电子仪器仪表及零配件的研发、生产与销售；金融终端设备及系统集成；LED照明及节能服务。
+
+•
+company_overview_analyst 分析完成
+16:18:49
+🏢 公司概览
+📊 分析师团队
+•
+市场分析师 开始分析
+16:18:49
+🔧
+Dispatching MarketContextMcp
+16:18:49
+•
+情绪分析师 开始分析
+16:18:49
+🔧
+Dispatching SocialSentimentMcp
+16:18:49
+•
+新闻分析师 开始分析
+16:18:49
+🔧
+Dispatching StockNewsMcp
+16:18:49
+•
+基本面分析师 开始分析
+16:18:49
+🔧
+Dispatching StockFundame
+FEED_LIFECYCLE_CLASSES: 216
+FEED_COMPACT_CLASSES: 0
+FEED_SYSTEM_REFS: 68
+
+=== REPORT TAB ===
+REPORT: 🎯
+投资决策
+下一步操作
+📊
+看日K线
+⏱️
+看分时
+🔍
+查看证据
+📂
+查看本地事实
+📊
+基本面
+
+{"content":"{\n \u0022qualityView\u0022: \u0022\u6539\u5584\u0022,\n \u0022valuationView\u0022: \u0022\u504F\u8D35\u0022,\n \u0022metrics\u0022: {\n \u0022revenue\u0022: \u0022112.78\u4EBF\u5143\u0022,\n \u0022revenueYoY\u0022: \u00223.93%\u0022,\n \u0022netProfit\u0022: \u00227.56\u4EBF\u5143\u0022,\n \u0022netProfitYoY\u0022: \u002214.27%\u0022,\n \u0022eps\u0022: \u00220.48\u5143\u0022,\n \u0022roe\u0022: \u00226.16%\u0022,\n \u0022debtRatio\u0022: \u002242.49%\u0022,\n \u0022peRatio\u0022: 42.88\n },\n \u0022highlights\u0022: [\n \u0022\u51C0\u5229\u6DA6\u589E\u901F\uFF0814.27%\uFF09\u663E\u8457\u9AD8\u4E8E\u8425\u6536\u589E\u901F\uFF083.93%\uFF09\uFF0C\u663E\u793A\u516C\u53F8\u7ECF\u8425\u6548\u7387\u4E0E\u76C8\u5229\u80FD\u529B\u
+
+UNICODE_ESCAPES: 1442
+
+CONSOLE_ERRORS: ["Failed to load resource: the server responded with a status of 404 (Not Found)"]

@@ -158,6 +158,7 @@ public sealed class ResearchReportService : IResearchReportService
         string? headline = null, summary = null;
         var keyPoints = new List<string>();
         var disagreements = new List<string>();
+        var roleSummaries = new List<string>();
 
         foreach (var output in outputs)
         {
@@ -171,9 +172,17 @@ public sealed class ResearchReportService : IResearchReportService
                 headline = parsed.Headline ?? "研究辩论裁决";
                 summary = parsed.Summary;
             }
+            else if (parsed.Summary is not null)
+            {
+                roleSummaries.Add($"**{roleId}**: {parsed.Summary}");
+            }
 
             if (parsed.KeyPointsJson is not null) keyPoints.Add(parsed.KeyPointsJson);
         }
+
+        // Aggregate from other roles when designated role has no summary
+        if (summary is null && roleSummaries.Count > 0)
+            summary = string.Join("\n\n", roleSummaries);
 
         _dbContext.ResearchReportBlocks.Add(new ResearchReportBlock
         {
@@ -228,6 +237,7 @@ public sealed class ResearchReportService : IResearchReportService
         var riskLimits = new List<string>();
         var invalidations = new List<string>();
         var disagreements = new List<string>();
+        var roleSummaries = new List<string>();
 
         foreach (var output in outputs)
         {
@@ -245,7 +255,15 @@ public sealed class ResearchReportService : IResearchReportService
                 headline = "风险审查";
                 summary = parsed.Summary;
             }
+            else if (parsed.Summary is not null)
+            {
+                roleSummaries.Add($"**{roleId}**: {parsed.Summary}");
+            }
         }
+
+        // Aggregate from other roles when designated role has no summary
+        if (summary is null && roleSummaries.Count > 0)
+            summary = string.Join("\n\n", roleSummaries);
 
         _dbContext.ResearchReportBlocks.Add(new ResearchReportBlock
         {
@@ -421,6 +439,12 @@ public sealed class ResearchReportService : IResearchReportService
             var jsonStart = content.IndexOf('{');
             if (jsonStart < 0) return new(null, content, null, null, null, null, null);
             var jsonText = ResearchRunner.UnwrapContentWrapper(content[jsonStart..]);
+
+            // Additional safety: trim to last } to handle trailing text
+            var jsonEnd = jsonText.LastIndexOf('}');
+            if (jsonEnd >= 0 && jsonEnd < jsonText.Length - 1)
+                jsonText = jsonText[..(jsonEnd + 1)];
+
             using var doc = JsonDocument.Parse(jsonText);
             var root = doc.RootElement;
 
@@ -436,7 +460,11 @@ public sealed class ResearchReportService : IResearchReportService
                 root.TryGetProperty("invalidations", out var inv) ? inv.GetRawText() : null
             );
         }
-        catch { return new(null, content, null, null, null, null, null); }
+        catch
+        {
+            var readable = ExtractReadableContent(content);
+            return new(null, readable, null, null, null, null, null);
+        }
     }
 
     private static ParsedBlock ParseGenericBlock(string content)
@@ -446,15 +474,47 @@ public sealed class ResearchReportService : IResearchReportService
             var jsonStart = content.IndexOf('{');
             if (jsonStart < 0) return new(null, content, null, null, null, null, null);
             var jsonText = ResearchRunner.UnwrapContentWrapper(content[jsonStart..]);
+
+            // Additional safety: trim to last } to handle trailing text
+            var jsonEnd = jsonText.LastIndexOf('}');
+            if (jsonEnd >= 0 && jsonEnd < jsonText.Length - 1)
+                jsonText = jsonText[..(jsonEnd + 1)];
+
             using var doc = JsonDocument.Parse(jsonText);
             var root = doc.RootElement;
 
-            return new(
-                root.TryGetProperty("headline", out var h) ? h.GetString() :
-                    root.TryGetProperty("executive_summary", out var es) ? es.GetString() : null,
-                root.TryGetProperty("summary", out var s) ? s.GetString() :
+            var headline = root.TryGetProperty("headline", out var h) ? h.GetString() :
+                    root.TryGetProperty("executive_summary", out var es) ? es.GetString() : null;
+
+            var summary = root.TryGetProperty("summary", out var s) ? s.GetString() :
                     root.TryGetProperty("analysis", out var a) ? a.GetString() :
-                    root.TryGetProperty("rationale", out var r) ? r.GetString() : null,
+                    root.TryGetProperty("rationale", out var r) ? r.GetString() :
+                    root.TryGetProperty("recommendation", out var rec) ? rec.GetString() :
+                    root.TryGetProperty("conclusion", out var conc) ? conc.GetString() :
+                    root.TryGetProperty("verdict", out var vrd) ? vrd.GetString() :
+                    root.TryGetProperty("assessment", out var ass) ? ass.GetString() :
+                    root.TryGetProperty("overview", out var ov) ? ov.GetString() : null;
+
+            // If no named summary field, try first substantial string property
+            if (summary is null)
+            {
+                foreach (var prop in root.EnumerateObject())
+                {
+                    if (prop.Value.ValueKind == JsonValueKind.String)
+                    {
+                        var text = prop.Value.GetString();
+                        if (text is not null && text.Length > 30)
+                        {
+                            summary = text;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            return new(
+                headline,
+                summary,
                 root.TryGetProperty("key_points", out var kp) ? kp.GetRawText() : null,
                 root.TryGetProperty("evidence_refs", out var er) ? er.GetRawText() :
                     root.TryGetProperty("supporting_evidence", out var se) ? se.GetRawText() : null,
@@ -463,6 +523,34 @@ public sealed class ResearchReportService : IResearchReportService
                 root.TryGetProperty("invalidations", out var inv) ? inv.GetRawText() : null
             );
         }
-        catch { return new(null, content, null, null, null, null, null); }
+        catch
+        {
+            // Instead of returning raw JSON, try to extract decoded text
+            var readable = ExtractReadableContent(content);
+            return new(null, readable, null, null, null, null, null);
+        }
+    }
+
+    /// <summary>Best-effort extract readable text from raw content, unwrapping JSON wrappers.</summary>
+    private static string? ExtractReadableContent(string content)
+    {
+        if (string.IsNullOrWhiteSpace(content)) return null;
+        try
+        {
+            var jsonStart = content.IndexOf('{');
+            var jsonEnd = content.LastIndexOf('}');
+            if (jsonStart >= 0 && jsonEnd > jsonStart)
+            {
+                using var doc = JsonDocument.Parse(content[jsonStart..(jsonEnd + 1)]);
+                // Extract from {"content":"..."} wrapper
+                if (doc.RootElement.TryGetProperty("content", out var c) && c.ValueKind == JsonValueKind.String)
+                {
+                    var inner = c.GetString();
+                    if (!string.IsNullOrWhiteSpace(inner)) return inner;
+                }
+            }
+        }
+        catch { /* ignore */ }
+        return content;
     }
 }

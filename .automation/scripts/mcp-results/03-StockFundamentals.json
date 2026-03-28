@@ -1,0 +1,820 @@
+﻿{
+    "traceId":  "2660f3d5adc14d819dc5424c5ac6efdc",
+    "taskId":  "pm-mcp-audit-final",
+    "toolName":  "StockFundamentalsMcp",
+    "latencyMs":  2456,
+    "cache":  {
+                  "hit":  false,
+                  "source":  "live",
+                  "generatedAt":  "2026-03-28T00:08:23.4487289+08:00"
+              },
+    "warnings":  [
+
+                 ],
+    "degradedFlags":  [
+
+                      ],
+    "data":  {
+                 "symbol":  "sh600519",
+                 "updatedAt":  "2026-03-28T00:08:23.4473616+08:00",
+                 "factCount":  29,
+                 "facts":  [
+                               {
+                                   "label":  "最新财报期",
+                                   "value":  "2025三季报",
+                                   "source":  "东方财富最新财报"
+                               },
+                               {
+                                   "label":  "营业收入",
+                                   "value":  "1309.04亿元",
+                                   "source":  "东方财富最新财报"
+                               },
+                               {
+                                   "label":  "归属净利润",
+                                   "value":  "646.27亿元",
+                                   "source":  "东方财富最新财报"
+                               },
+                               {
+                                   "label":  "扣非净利润",
+                                   "value":  "646.81亿元",
+                                   "source":  "东方财富最新财报"
+                               },
+                               {
+                                   "label":  "营收同比",
+                                   "value":  "6.32%",
+                                   "source":  "东方财富最新财报"
+                               },
+                               {
+                                   "label":  "归属净利同比",
+                                   "value":  "6.25%",
+                                   "source":  "东方财富最新财报"
+                               },
+                               {
+                                   "label":  "基本每股收益",
+                                   "value":  "51.53元",
+                                   "source":  "东方财富最新财报"
+                               },
+                               {
+                                   "label":  "每股净资产",
+                                   "value":  "205.28元",
+                                   "source":  "东方财富最新财报"
+                               },
+                               {
+                                   "label":  "净资产收益率(ROE)",
+                                   "value":  "24.64%",
+                                   "source":  "东方财富最新财报"
+                               },
+                               {
+                                   "label":  "销售毛利率",
+                                   "value":  "91.29%",
+                                   "source":  "东方财富最新财报"
+                               },
+                               {
+                                   "label":  "销售净利率",
+                                   "value":  "52.08%",
+                                   "source":  "东方财富最新财报"
+                               },
+                               {
+                                   "label":  "资产负债率",
+                                   "value":  "12.81%",
+                                   "source":  "东方财富最新财报"
+                               },
+                               {
+                                   "label":  "公司全称",
+                                   "value":  "贵州茅台酒股份有限公司",
+                                   "source":  "东方财富公司概况"
+                               },
+                               {
+                                   "label":  "英文名称",
+                                   "value":  "Kweichow Moutai Co.,Ltd.",
+                                   "source":  "东方财富公司概况"
+                               },
+                               {
+                                   "label":  "证券类别",
+                                   "value":  "上交所主板A股",
+                                   "source":  "东方财富公司概况"
+                               },
+                               {
+                                   "label":  "上市交易所",
+                                   "value":  "上海证券交易所",
+                                   "source":  "东方财富公司概况"
+                               },
+                               {
+                                   "label":  "注册地址",
+                                   "value":  "贵州省仁怀市茅台镇",
+                                   "source":  "东方财富公司概况"
+                               },
+                               {
+                                   "label":  "办公地址",
+                                   "value":  "贵州省仁怀市茅台镇",
+                                   "source":  "东方财富公司概况"
+                               },
+                               {
+                                   "label":  "公司网站",
+                                   "value":  "www.moutaichina.com",
+                                   "source":  "东方财富公司概况"
+                               },
+                               {
+                                   "label":  "总经理",
+                                   "value":  "王莉(代)",
+                                   "source":  "东方财富公司概况"
+                               },
+                               {
+                                   "label":  "法人代表",
+                                   "value":  "陈华",
+                                   "source":  "东方财富公司概况"
+                               },
+                               {
+                                   "label":  "董事长",
+                                   "value":  "陈华",
+                                   "source":  "东方财富公司概况"
+                               },
+                               {
+                                   "label":  "注册资本",
+                                   "value":  "12.52亿",
+                                   "source":  "东方财富公司概况"
+                               },
+                               {
+                                   "label":  "联系电话",
+                                   "value":  "0851-22386002",
+                                   "source":  "东方财富公司概况"
+                               },
+                               {
+                                   "label":  "电子邮箱",
+                                   "value":  "mtdm@moutaichina.com",
+                                   "source":  "东方财富公司概况"
+                               },
+                               {
+                                   "label":  "经营范围",
+                                   "value":  "茅台酒及系列酒的生产与销售;饮料、食品、包装材料的生产、销售;防伪技术开发、信息产业相关产品的研制、开发;酒店经营管理、住宿、餐饮、娱乐、洗浴及停车场管理服务;车辆运输、维修保养;第二类增值电信业务。(具体内容以工商核定登记为准)",
+                                   "source":  "东方财富公司概况"
+                               },
+                               {
+                                   "label":  "所属行业",
+                                   "value":  "酿酒行业",
+                                   "source":  "东方财富公司概况"
+                               },
+                               {
+                                   "label":  "证监会行业",
+                                   "value":  "制造业-酒、饮料和精制茶制造业",
+                                   "source":  "东方财富公司概况"
+                               },
+                               {
+                                   "label":  "所属地区",
+                                   "value":  "贵州",
+                                   "source":  "东方财富公司概况"
+                               }
+                           ]
+             },
+    "evidence":  [
+                     {
+                         "point":  "最新财报期: 2025三季报",
+                         "title":  "最新财报期",
+                         "source":  "东方财富最新财报",
+                         "publishedAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "crawledAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "url":  null,
+                         "excerpt":  "2025三季报",
+                         "summary":  "2025三季报",
+                         "readMode":  "local_fact",
+                         "readStatus":  "full",
+                         "ingestedAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "localFactId":  null,
+                         "sourceRecordId":  "company_profile:sh600519",
+                         "level":  "fundamental",
+                         "sentiment":  null,
+                         "target":  "sh600519",
+                         "tags":  [
+                                      "fundamental"
+                                  ]
+                     },
+                     {
+                         "point":  "营业收入: 1309.04亿元",
+                         "title":  "营业收入",
+                         "source":  "东方财富最新财报",
+                         "publishedAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "crawledAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "url":  null,
+                         "excerpt":  "1309.04亿元",
+                         "summary":  "1309.04亿元",
+                         "readMode":  "local_fact",
+                         "readStatus":  "full",
+                         "ingestedAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "localFactId":  null,
+                         "sourceRecordId":  "company_profile:sh600519",
+                         "level":  "fundamental",
+                         "sentiment":  null,
+                         "target":  "sh600519",
+                         "tags":  [
+                                      "fundamental"
+                                  ]
+                     },
+                     {
+                         "point":  "归属净利润: 646.27亿元",
+                         "title":  "归属净利润",
+                         "source":  "东方财富最新财报",
+                         "publishedAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "crawledAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "url":  null,
+                         "excerpt":  "646.27亿元",
+                         "summary":  "646.27亿元",
+                         "readMode":  "local_fact",
+                         "readStatus":  "full",
+                         "ingestedAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "localFactId":  null,
+                         "sourceRecordId":  "company_profile:sh600519",
+                         "level":  "fundamental",
+                         "sentiment":  null,
+                         "target":  "sh600519",
+                         "tags":  [
+                                      "fundamental"
+                                  ]
+                     },
+                     {
+                         "point":  "扣非净利润: 646.81亿元",
+                         "title":  "扣非净利润",
+                         "source":  "东方财富最新财报",
+                         "publishedAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "crawledAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "url":  null,
+                         "excerpt":  "646.81亿元",
+                         "summary":  "646.81亿元",
+                         "readMode":  "local_fact",
+                         "readStatus":  "full",
+                         "ingestedAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "localFactId":  null,
+                         "sourceRecordId":  "company_profile:sh600519",
+                         "level":  "fundamental",
+                         "sentiment":  null,
+                         "target":  "sh600519",
+                         "tags":  [
+                                      "fundamental"
+                                  ]
+                     },
+                     {
+                         "point":  "营收同比: 6.32%",
+                         "title":  "营收同比",
+                         "source":  "东方财富最新财报",
+                         "publishedAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "crawledAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "url":  null,
+                         "excerpt":  "6.32%",
+                         "summary":  "6.32%",
+                         "readMode":  "local_fact",
+                         "readStatus":  "full",
+                         "ingestedAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "localFactId":  null,
+                         "sourceRecordId":  "company_profile:sh600519",
+                         "level":  "fundamental",
+                         "sentiment":  null,
+                         "target":  "sh600519",
+                         "tags":  [
+                                      "fundamental"
+                                  ]
+                     },
+                     {
+                         "point":  "归属净利同比: 6.25%",
+                         "title":  "归属净利同比",
+                         "source":  "东方财富最新财报",
+                         "publishedAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "crawledAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "url":  null,
+                         "excerpt":  "6.25%",
+                         "summary":  "6.25%",
+                         "readMode":  "local_fact",
+                         "readStatus":  "full",
+                         "ingestedAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "localFactId":  null,
+                         "sourceRecordId":  "company_profile:sh600519",
+                         "level":  "fundamental",
+                         "sentiment":  null,
+                         "target":  "sh600519",
+                         "tags":  [
+                                      "fundamental"
+                                  ]
+                     },
+                     {
+                         "point":  "基本每股收益: 51.53元",
+                         "title":  "基本每股收益",
+                         "source":  "东方财富最新财报",
+                         "publishedAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "crawledAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "url":  null,
+                         "excerpt":  "51.53元",
+                         "summary":  "51.53元",
+                         "readMode":  "local_fact",
+                         "readStatus":  "full",
+                         "ingestedAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "localFactId":  null,
+                         "sourceRecordId":  "company_profile:sh600519",
+                         "level":  "fundamental",
+                         "sentiment":  null,
+                         "target":  "sh600519",
+                         "tags":  [
+                                      "fundamental"
+                                  ]
+                     },
+                     {
+                         "point":  "每股净资产: 205.28元",
+                         "title":  "每股净资产",
+                         "source":  "东方财富最新财报",
+                         "publishedAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "crawledAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "url":  null,
+                         "excerpt":  "205.28元",
+                         "summary":  "205.28元",
+                         "readMode":  "local_fact",
+                         "readStatus":  "full",
+                         "ingestedAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "localFactId":  null,
+                         "sourceRecordId":  "company_profile:sh600519",
+                         "level":  "fundamental",
+                         "sentiment":  null,
+                         "target":  "sh600519",
+                         "tags":  [
+                                      "fundamental"
+                                  ]
+                     },
+                     {
+                         "point":  "净资产收益率(ROE): 24.64%",
+                         "title":  "净资产收益率(ROE)",
+                         "source":  "东方财富最新财报",
+                         "publishedAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "crawledAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "url":  null,
+                         "excerpt":  "24.64%",
+                         "summary":  "24.64%",
+                         "readMode":  "local_fact",
+                         "readStatus":  "full",
+                         "ingestedAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "localFactId":  null,
+                         "sourceRecordId":  "company_profile:sh600519",
+                         "level":  "fundamental",
+                         "sentiment":  null,
+                         "target":  "sh600519",
+                         "tags":  [
+                                      "fundamental"
+                                  ]
+                     },
+                     {
+                         "point":  "销售毛利率: 91.29%",
+                         "title":  "销售毛利率",
+                         "source":  "东方财富最新财报",
+                         "publishedAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "crawledAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "url":  null,
+                         "excerpt":  "91.29%",
+                         "summary":  "91.29%",
+                         "readMode":  "local_fact",
+                         "readStatus":  "full",
+                         "ingestedAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "localFactId":  null,
+                         "sourceRecordId":  "company_profile:sh600519",
+                         "level":  "fundamental",
+                         "sentiment":  null,
+                         "target":  "sh600519",
+                         "tags":  [
+                                      "fundamental"
+                                  ]
+                     },
+                     {
+                         "point":  "销售净利率: 52.08%",
+                         "title":  "销售净利率",
+                         "source":  "东方财富最新财报",
+                         "publishedAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "crawledAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "url":  null,
+                         "excerpt":  "52.08%",
+                         "summary":  "52.08%",
+                         "readMode":  "local_fact",
+                         "readStatus":  "full",
+                         "ingestedAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "localFactId":  null,
+                         "sourceRecordId":  "company_profile:sh600519",
+                         "level":  "fundamental",
+                         "sentiment":  null,
+                         "target":  "sh600519",
+                         "tags":  [
+                                      "fundamental"
+                                  ]
+                     },
+                     {
+                         "point":  "资产负债率: 12.81%",
+                         "title":  "资产负债率",
+                         "source":  "东方财富最新财报",
+                         "publishedAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "crawledAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "url":  null,
+                         "excerpt":  "12.81%",
+                         "summary":  "12.81%",
+                         "readMode":  "local_fact",
+                         "readStatus":  "full",
+                         "ingestedAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "localFactId":  null,
+                         "sourceRecordId":  "company_profile:sh600519",
+                         "level":  "fundamental",
+                         "sentiment":  null,
+                         "target":  "sh600519",
+                         "tags":  [
+                                      "fundamental"
+                                  ]
+                     },
+                     {
+                         "point":  "公司全称: 贵州茅台酒股份有限公司",
+                         "title":  "公司全称",
+                         "source":  "东方财富公司概况",
+                         "publishedAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "crawledAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "url":  null,
+                         "excerpt":  "贵州茅台酒股份有限公司",
+                         "summary":  "贵州茅台酒股份有限公司",
+                         "readMode":  "local_fact",
+                         "readStatus":  "full",
+                         "ingestedAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "localFactId":  null,
+                         "sourceRecordId":  "company_profile:sh600519",
+                         "level":  "fundamental",
+                         "sentiment":  null,
+                         "target":  "sh600519",
+                         "tags":  [
+                                      "fundamental"
+                                  ]
+                     },
+                     {
+                         "point":  "英文名称: Kweichow Moutai Co.,Ltd.",
+                         "title":  "英文名称",
+                         "source":  "东方财富公司概况",
+                         "publishedAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "crawledAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "url":  null,
+                         "excerpt":  "Kweichow Moutai Co.,Ltd.",
+                         "summary":  "Kweichow Moutai Co.,Ltd.",
+                         "readMode":  "local_fact",
+                         "readStatus":  "full",
+                         "ingestedAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "localFactId":  null,
+                         "sourceRecordId":  "company_profile:sh600519",
+                         "level":  "fundamental",
+                         "sentiment":  null,
+                         "target":  "sh600519",
+                         "tags":  [
+                                      "fundamental"
+                                  ]
+                     },
+                     {
+                         "point":  "证券类别: 上交所主板A股",
+                         "title":  "证券类别",
+                         "source":  "东方财富公司概况",
+                         "publishedAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "crawledAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "url":  null,
+                         "excerpt":  "上交所主板A股",
+                         "summary":  "上交所主板A股",
+                         "readMode":  "local_fact",
+                         "readStatus":  "full",
+                         "ingestedAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "localFactId":  null,
+                         "sourceRecordId":  "company_profile:sh600519",
+                         "level":  "fundamental",
+                         "sentiment":  null,
+                         "target":  "sh600519",
+                         "tags":  [
+                                      "fundamental"
+                                  ]
+                     },
+                     {
+                         "point":  "上市交易所: 上海证券交易所",
+                         "title":  "上市交易所",
+                         "source":  "东方财富公司概况",
+                         "publishedAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "crawledAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "url":  null,
+                         "excerpt":  "上海证券交易所",
+                         "summary":  "上海证券交易所",
+                         "readMode":  "local_fact",
+                         "readStatus":  "full",
+                         "ingestedAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "localFactId":  null,
+                         "sourceRecordId":  "company_profile:sh600519",
+                         "level":  "fundamental",
+                         "sentiment":  null,
+                         "target":  "sh600519",
+                         "tags":  [
+                                      "fundamental"
+                                  ]
+                     },
+                     {
+                         "point":  "注册地址: 贵州省仁怀市茅台镇",
+                         "title":  "注册地址",
+                         "source":  "东方财富公司概况",
+                         "publishedAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "crawledAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "url":  null,
+                         "excerpt":  "贵州省仁怀市茅台镇",
+                         "summary":  "贵州省仁怀市茅台镇",
+                         "readMode":  "local_fact",
+                         "readStatus":  "full",
+                         "ingestedAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "localFactId":  null,
+                         "sourceRecordId":  "company_profile:sh600519",
+                         "level":  "fundamental",
+                         "sentiment":  null,
+                         "target":  "sh600519",
+                         "tags":  [
+                                      "fundamental"
+                                  ]
+                     },
+                     {
+                         "point":  "办公地址: 贵州省仁怀市茅台镇",
+                         "title":  "办公地址",
+                         "source":  "东方财富公司概况",
+                         "publishedAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "crawledAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "url":  null,
+                         "excerpt":  "贵州省仁怀市茅台镇",
+                         "summary":  "贵州省仁怀市茅台镇",
+                         "readMode":  "local_fact",
+                         "readStatus":  "full",
+                         "ingestedAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "localFactId":  null,
+                         "sourceRecordId":  "company_profile:sh600519",
+                         "level":  "fundamental",
+                         "sentiment":  null,
+                         "target":  "sh600519",
+                         "tags":  [
+                                      "fundamental"
+                                  ]
+                     },
+                     {
+                         "point":  "公司网站: www.moutaichina.com",
+                         "title":  "公司网站",
+                         "source":  "东方财富公司概况",
+                         "publishedAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "crawledAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "url":  null,
+                         "excerpt":  "www.moutaichina.com",
+                         "summary":  "www.moutaichina.com",
+                         "readMode":  "local_fact",
+                         "readStatus":  "full",
+                         "ingestedAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "localFactId":  null,
+                         "sourceRecordId":  "company_profile:sh600519",
+                         "level":  "fundamental",
+                         "sentiment":  null,
+                         "target":  "sh600519",
+                         "tags":  [
+                                      "fundamental"
+                                  ]
+                     },
+                     {
+                         "point":  "总经理: 王莉(代)",
+                         "title":  "总经理",
+                         "source":  "东方财富公司概况",
+                         "publishedAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "crawledAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "url":  null,
+                         "excerpt":  "王莉(代)",
+                         "summary":  "王莉(代)",
+                         "readMode":  "local_fact",
+                         "readStatus":  "full",
+                         "ingestedAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "localFactId":  null,
+                         "sourceRecordId":  "company_profile:sh600519",
+                         "level":  "fundamental",
+                         "sentiment":  null,
+                         "target":  "sh600519",
+                         "tags":  [
+                                      "fundamental"
+                                  ]
+                     },
+                     {
+                         "point":  "法人代表: 陈华",
+                         "title":  "法人代表",
+                         "source":  "东方财富公司概况",
+                         "publishedAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "crawledAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "url":  null,
+                         "excerpt":  "陈华",
+                         "summary":  "陈华",
+                         "readMode":  "local_fact",
+                         "readStatus":  "full",
+                         "ingestedAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "localFactId":  null,
+                         "sourceRecordId":  "company_profile:sh600519",
+                         "level":  "fundamental",
+                         "sentiment":  null,
+                         "target":  "sh600519",
+                         "tags":  [
+                                      "fundamental"
+                                  ]
+                     },
+                     {
+                         "point":  "董事长: 陈华",
+                         "title":  "董事长",
+                         "source":  "东方财富公司概况",
+                         "publishedAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "crawledAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "url":  null,
+                         "excerpt":  "陈华",
+                         "summary":  "陈华",
+                         "readMode":  "local_fact",
+                         "readStatus":  "full",
+                         "ingestedAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "localFactId":  null,
+                         "sourceRecordId":  "company_profile:sh600519",
+                         "level":  "fundamental",
+                         "sentiment":  null,
+                         "target":  "sh600519",
+                         "tags":  [
+                                      "fundamental"
+                                  ]
+                     },
+                     {
+                         "point":  "注册资本: 12.52亿",
+                         "title":  "注册资本",
+                         "source":  "东方财富公司概况",
+                         "publishedAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "crawledAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "url":  null,
+                         "excerpt":  "12.52亿",
+                         "summary":  "12.52亿",
+                         "readMode":  "local_fact",
+                         "readStatus":  "full",
+                         "ingestedAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "localFactId":  null,
+                         "sourceRecordId":  "company_profile:sh600519",
+                         "level":  "fundamental",
+                         "sentiment":  null,
+                         "target":  "sh600519",
+                         "tags":  [
+                                      "fundamental"
+                                  ]
+                     },
+                     {
+                         "point":  "联系电话: 0851-22386002",
+                         "title":  "联系电话",
+                         "source":  "东方财富公司概况",
+                         "publishedAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "crawledAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "url":  null,
+                         "excerpt":  "0851-22386002",
+                         "summary":  "0851-22386002",
+                         "readMode":  "local_fact",
+                         "readStatus":  "full",
+                         "ingestedAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "localFactId":  null,
+                         "sourceRecordId":  "company_profile:sh600519",
+                         "level":  "fundamental",
+                         "sentiment":  null,
+                         "target":  "sh600519",
+                         "tags":  [
+                                      "fundamental"
+                                  ]
+                     },
+                     {
+                         "point":  "电子邮箱: mtdm@moutaichina.com",
+                         "title":  "电子邮箱",
+                         "source":  "东方财富公司概况",
+                         "publishedAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "crawledAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "url":  null,
+                         "excerpt":  "mtdm@moutaichina.com",
+                         "summary":  "mtdm@moutaichina.com",
+                         "readMode":  "local_fact",
+                         "readStatus":  "full",
+                         "ingestedAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "localFactId":  null,
+                         "sourceRecordId":  "company_profile:sh600519",
+                         "level":  "fundamental",
+                         "sentiment":  null,
+                         "target":  "sh600519",
+                         "tags":  [
+                                      "fundamental"
+                                  ]
+                     },
+                     {
+                         "point":  "经营范围: 茅台酒及系列酒的生产与销售;饮料、食品、包装材料的生产、销售;防伪技术开发、信息产业相关产品的研制、开发;酒店经营管理、住宿、餐饮、娱乐、洗浴及停车场管理服务;车辆运输、维修保养;第二类增值电信业务。(具体内容以工商核定登记为准)",
+                         "title":  "经营范围",
+                         "source":  "东方财富公司概况",
+                         "publishedAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "crawledAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "url":  null,
+                         "excerpt":  "茅台酒及系列酒的生产与销售;饮料、食品、包装材料的生产、销售;防伪技术开发、信息产业相关产品的研制、开发;酒店经营管理、住宿、餐饮、娱乐、洗浴及停车场管理服务;车辆运输、维修保养;第二类增值电信业务。(具体内容以工商核定登记为准)",
+                         "summary":  "茅台酒及系列酒的生产与销售;饮料、食品、包装材料的生产、销售;防伪技术开发、信息产业相关产品的研制、开发;酒店经营管理、住宿、餐饮、娱乐、洗浴及停车场管理服务;车辆运输、维修保养;第二类增值电信业务。(具体内容以工商核定登记为准)",
+                         "readMode":  "local_fact",
+                         "readStatus":  "full",
+                         "ingestedAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "localFactId":  null,
+                         "sourceRecordId":  "company_profile:sh600519",
+                         "level":  "fundamental",
+                         "sentiment":  null,
+                         "target":  "sh600519",
+                         "tags":  [
+                                      "fundamental"
+                                  ]
+                     },
+                     {
+                         "point":  "所属行业: 酿酒行业",
+                         "title":  "所属行业",
+                         "source":  "东方财富公司概况",
+                         "publishedAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "crawledAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "url":  null,
+                         "excerpt":  "酿酒行业",
+                         "summary":  "酿酒行业",
+                         "readMode":  "local_fact",
+                         "readStatus":  "full",
+                         "ingestedAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "localFactId":  null,
+                         "sourceRecordId":  "company_profile:sh600519",
+                         "level":  "fundamental",
+                         "sentiment":  null,
+                         "target":  "sh600519",
+                         "tags":  [
+                                      "fundamental"
+                                  ]
+                     },
+                     {
+                         "point":  "证监会行业: 制造业-酒、饮料和精制茶制造业",
+                         "title":  "证监会行业",
+                         "source":  "东方财富公司概况",
+                         "publishedAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "crawledAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "url":  null,
+                         "excerpt":  "制造业-酒、饮料和精制茶制造业",
+                         "summary":  "制造业-酒、饮料和精制茶制造业",
+                         "readMode":  "local_fact",
+                         "readStatus":  "full",
+                         "ingestedAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "localFactId":  null,
+                         "sourceRecordId":  "company_profile:sh600519",
+                         "level":  "fundamental",
+                         "sentiment":  null,
+                         "target":  "sh600519",
+                         "tags":  [
+                                      "fundamental"
+                                  ]
+                     },
+                     {
+                         "point":  "所属地区: 贵州",
+                         "title":  "所属地区",
+                         "source":  "东方财富公司概况",
+                         "publishedAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "crawledAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "url":  null,
+                         "excerpt":  "贵州",
+                         "summary":  "贵州",
+                         "readMode":  "local_fact",
+                         "readStatus":  "full",
+                         "ingestedAt":  "2026-03-28T00:08:23.4473616+08:00",
+                         "localFactId":  null,
+                         "sourceRecordId":  "company_profile:sh600519",
+                         "level":  "fundamental",
+                         "sentiment":  null,
+                         "target":  "sh600519",
+                         "tags":  [
+                                      "fundamental"
+                                  ]
+                     }
+                 ],
+    "features":  [
+                     {
+                         "name":  "factCount",
+                         "label":  "Fact Count",
+                         "valueType":  "number",
+                         "numberValue":  29,
+                         "textValue":  null,
+                         "unit":  null,
+                         "description":  "Total number of structured fundamental facts available before applying factSkip/factTake."
+                     },
+                     {
+                         "name":  "updatedAt",
+                         "label":  "Updated At",
+                         "valueType":  "text",
+                         "numberValue":  null,
+                         "textValue":  "2026-03-28 00:08:23",
+                         "unit":  null,
+                         "description":  "Timestamp of the latest fundamental snapshot."
+                     }
+                 ],
+    "meta":  {
+                 "version":  "v1",
+                 "policyClass":  "local_required",
+                 "toolName":  "StockFundamentalsMcp",
+                 "symbol":  "sh600519",
+                 "interval":  null,
+                 "query":  null,
+                 "marketContext":  {
+                                       "stageConfidence":  62.0,
+                                       "stockSectorName":  null,
+                                       "mainlineSectorName":  "逆变器",
+                                       "sectorCode":  null,
+                                       "mainlineScore":  89.75
+                                   }
+             },
+    "errorCode":  null,
+    "freshnessTag":  "fresh",
+    "sourceTier":  "local",
+    "cacheHit":  false,
+    "rolePolicyClass":  "local_required"
+}

@@ -11,11 +11,13 @@ public sealed class ResearchSessionService : IResearchSessionService
     private static readonly ConcurrentDictionary<string, SemaphoreSlim> SymbolLocks = new();
 
     private readonly AppDbContext _dbContext;
+    private readonly IResearchEventBus _eventBus;
     private readonly ILogger<ResearchSessionService> _logger;
 
-    public ResearchSessionService(AppDbContext dbContext, ILogger<ResearchSessionService> logger)
+    public ResearchSessionService(AppDbContext dbContext, IResearchEventBus eventBus, ILogger<ResearchSessionService> logger)
     {
         _dbContext = dbContext;
+        _eventBus = eventBus;
         _logger = logger;
     }
 
@@ -23,7 +25,7 @@ public sealed class ResearchSessionService : IResearchSessionService
     {
         var session = await _dbContext.ResearchSessions
             .AsNoTracking()
-            .Where(s => s.Symbol == symbol && (s.Status == ResearchSessionStatus.Running || s.Status == ResearchSessionStatus.Degraded))
+            .Where(s => s.Symbol == symbol && s.Status != ResearchSessionStatus.Closed && s.Status != ResearchSessionStatus.Failed)
             .OrderByDescending(s => s.UpdatedAt)
             .FirstOrDefaultAsync(cancellationToken);
 
@@ -72,7 +74,27 @@ public sealed class ResearchSessionService : IResearchSessionService
             .SelectMany(t => t.FeedItems.Select(fi => new ResearchFeedItemDto(
                 fi.Id, fi.TurnId, fi.ItemType.ToString(), fi.RoleId, fi.Content, fi.TraceId, fi.CreatedAt)))
             .OrderBy(fi => fi.CreatedAt)
-            .ToArray();
+            .ToList();
+
+        // Merge in-memory events for running turns so the frontend sees real-time progress
+        if (session.Status == ResearchSessionStatus.Running && latestTurn is not null)
+        {
+            var liveEvents = _eventBus.Peek(latestTurn.Id);
+            if (liveEvents.Count > 0)
+            {
+                var existingKeys = new HashSet<(string, string?, string)>(
+                    feedItems.Where(f => f.TurnId == latestTurn.Id)
+                             .Select(f => (f.ItemType, f.RoleId, f.Content ?? "")));
+
+                foreach (var evt in liveEvents)
+                {
+                    if (existingKeys.Contains((evt.EventType.ToString(), evt.RoleId, evt.Summary))) continue;
+                    feedItems.Add(new ResearchFeedItemDto(
+                        0, evt.TurnId, evt.EventType.ToString(), evt.RoleId, evt.Summary, evt.TraceId, evt.Timestamp));
+                }
+                feedItems = feedItems.OrderBy(fi => fi.CreatedAt).ToList();
+            }
+        }
 
         return new ResearchSessionDetailDto(
             session.Id, session.SessionKey, session.Symbol, session.Name,
@@ -158,13 +180,15 @@ public sealed class ResearchSessionService : IResearchSessionService
         }
 
         var turnIndex = session.Turns.Count;
+        var effectiveMode = request.FromStageIndex.HasValue ? ResearchContinuationMode.PartialRerun : mode;
         var turn = new ResearchTurn
         {
             SessionId = session.Id,
             TurnIndex = turnIndex,
             UserPrompt = request.UserPrompt,
             Status = ResearchTurnStatus.Queued,
-            ContinuationMode = mode,
+            ContinuationMode = effectiveMode,
+            RerunScope = request.FromStageIndex?.ToString(),
             RequestedAt = DateTime.UtcNow
         };
 

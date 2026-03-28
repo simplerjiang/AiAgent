@@ -1,0 +1,791 @@
+﻿{
+    "traceId":  "df04477422194b138288f1eb24246d01",
+    "taskId":  "pm-mcp-audit-final2",
+    "toolName":  "SocialSentimentMcp",
+    "latencyMs":  2436,
+    "cache":  {
+                  "hit":  false,
+                  "source":  "live",
+                  "generatedAt":  "2026-03-28T00:08:35.0203958+08:00"
+              },
+    "warnings":  [
+                     "SocialSentimentMcp v1 是本地情绪相关证据聚合工具，仅汇总本地新闻与市场代理快照，不会自行给出社交情绪结论。"
+                 ],
+    "degradedFlags":  [
+                          "no_live_social_source",
+                          "degraded.local_news_and_market_proxy"
+                      ],
+    "data":  {
+                 "symbol":  "sh600519",
+                 "status":  "degraded",
+                 "blocked":  false,
+                 "blockedReason":  null,
+                 "approximationMode":  "local_news_and_market_proxy",
+                 "evidenceCount":  31,
+                 "latestEvidenceAt":  "2026-03-28T00:08:32.7122661+08:00",
+                 "stockNews":  {
+                                   "positiveCount":  2,
+                                   "negativeCount":  0,
+                                   "neutralCount":  12,
+                                   "totalCount":  14,
+                                   "latestPublishedAt":  "2025-12-29T19:12:59.0000000+08:00"
+                               },
+                 "sectorReports":  {
+                                       "positiveCount":  3,
+                                       "negativeCount":  0,
+                                       "neutralCount":  1,
+                                       "totalCount":  4,
+                                       "latestPublishedAt":  "2026-03-28T00:08:32.7122661+08:00"
+                                   },
+                 "marketReports":  {
+                                       "positiveCount":  5,
+                                       "negativeCount":  4,
+                                       "neutralCount":  3,
+                                       "totalCount":  12,
+                                       "latestPublishedAt":  "2026-03-28T00:08:32.7122661+08:00"
+                                   },
+                 "marketProxy":  {
+                                     "stageLabel":  "混沌",
+                                     "stageConfidence":  62.0,
+                                     "snapshotTime":  "2026-03-22T10:59:01.0947151+08:00"
+                                 }
+             },
+    "evidence":  [
+                     {
+                         "point":  "贵州茅台:贵州茅台关于控股股东增持股份结果的公告",
+                         "title":  "贵州茅台:贵州茅台关于控股股东增持股份结果的公告",
+                         "source":  "东方财富公告",
+                         "publishedAt":  "2025-12-29T19:12:59.0000000+08:00",
+                         "crawledAt":  "2026-03-28T00:08:34.1308964+08:00",
+                         "url":  "https://data.eastmoney.com/notices/detail/600519/AN202512291810712359.html",
+                         "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "readMode":  "url_fetched",
+                         "readStatus":  "full_text_read",
+                         "ingestedAt":  "2026-03-28T00:03:30.5509077+08:00",
+                         "localFactId":  71,
+                         "sourceRecordId":  "stock_news:71",
+                         "level":  "announcement",
+                         "sentiment":  "利好",
+                         "target":  "股票:贵州茅台",
+                         "tags":  [
+                                      "资金面"
+                                  ]
+                     },
+                     {
+                         "point":  "贵州茅台:贵州茅台关于回购股份事项通知债权人公告",
+                         "title":  "贵州茅台:贵州茅台关于回购股份事项通知债权人公告",
+                         "source":  "东方财富公告",
+                         "publishedAt":  "2025-11-28T19:26:32.0000000+08:00",
+                         "crawledAt":  "2026-03-28T00:08:34.1308964+08:00",
+                         "url":  "https://data.eastmoney.com/notices/detail/600519/AN202511281790064141.html",
+                         "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "readMode":  "url_fetched",
+                         "readStatus":  "full_text_read",
+                         "ingestedAt":  "2026-03-28T00:03:31.8942823+08:00",
+                         "localFactId":  78,
+                         "sourceRecordId":  "stock_news:78",
+                         "level":  "announcement",
+                         "sentiment":  "利好",
+                         "target":  "股票:贵州茅台",
+                         "tags":  [
+                                      "政策红利"
+                                  ]
+                     },
+                     {
+                         "point":  "贵州茅台:贵州茅台关于回购股份事项前十大股东及前十大无限售条件股东持股情况的公告",
+                         "title":  "贵州茅台:贵州茅台关于回购股份事项前十大股东及前十大无限售条件股东持股情况的公告",
+                         "source":  "东方财富公告",
+                         "publishedAt":  "2025-11-25T18:01:27.0000000+08:00",
+                         "crawledAt":  "2026-03-28T00:08:34.1308964+08:00",
+                         "url":  "https://data.eastmoney.com/notices/detail/600519/AN202511251788129772.html",
+                         "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "readMode":  "url_fetched",
+                         "readStatus":  "full_text_read",
+                         "ingestedAt":  "2026-03-28T00:03:32.4503013+08:00",
+                         "localFactId":  83,
+                         "sourceRecordId":  "stock_news:83",
+                         "level":  "announcement",
+                         "sentiment":  "中性",
+                         "target":  "个股:贵州茅台",
+                         "tags":  [
+                                      "资金面"
+                                  ]
+                     },
+                     {
+                         "point":  "贵州茅台:贵州茅台2025年第一次临时股东大会会议资料",
+                         "title":  "贵州茅台:贵州茅台2025年第一次临时股东大会会议资料",
+                         "source":  "东方财富公告",
+                         "publishedAt":  "2025-11-19T19:03:40.0000000+08:00",
+                         "crawledAt":  "2026-03-28T00:08:34.1308964+08:00",
+                         "url":  "https://data.eastmoney.com/notices/detail/600519/AN202511191784400112.html",
+                         "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "readMode":  "url_fetched",
+                         "readStatus":  "full_text_read",
+                         "ingestedAt":  "2026-03-28T00:03:32.5841412+08:00",
+                         "localFactId":  84,
+                         "sourceRecordId":  "stock_news:84",
+                         "level":  "announcement",
+                         "sentiment":  "中性",
+                         "target":  "个股:贵州茅台",
+                         "tags":  [
+                                      "行业周期"
+                                  ]
+                     },
+                     {
+                         "point":  "贵州茅台:贵州茅台关于回购股份事项前十大股东及前十大无限售条件股东持股情况的公告",
+                         "title":  "贵州茅台:贵州茅台关于回购股份事项前十大股东及前十大无限售条件股东持股情况的公告",
+                         "source":  "东方财富公告",
+                         "publishedAt":  "2025-11-10T19:18:23.0000000+08:00",
+                         "crawledAt":  "2026-03-28T00:08:34.1308964+08:00",
+                         "url":  "https://data.eastmoney.com/notices/detail/600519/AN202511101778790986.html",
+                         "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "readMode":  "url_fetched",
+                         "readStatus":  "full_text_read",
+                         "ingestedAt":  "2026-03-28T00:03:32.6823423+08:00",
+                         "localFactId":  85,
+                         "sourceRecordId":  "stock_news:85",
+                         "level":  "announcement",
+                         "sentiment":  "中性",
+                         "target":  "个股:贵州茅台",
+                         "tags":  [
+                                      "资金面"
+                                  ]
+                     },
+                     {
+                         "point":  "贵州茅台:贵州茅台第四届监事会2025年度第五次会议决议公告",
+                         "title":  "贵州茅台:贵州茅台第四届监事会2025年度第五次会议决议公告",
+                         "source":  "东方财富公告",
+                         "publishedAt":  "2025-11-05T20:58:54.0000000+08:00",
+                         "crawledAt":  "2026-03-28T00:08:34.1308964+08:00",
+                         "url":  "https://data.eastmoney.com/notices/detail/600519/AN202511051775759376.html",
+                         "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "readMode":  "url_fetched",
+                         "readStatus":  "full_text_read",
+                         "ingestedAt":  "2026-03-28T00:03:32.8181601+08:00",
+                         "localFactId":  94,
+                         "sourceRecordId":  "stock_news:94",
+                         "level":  "announcement",
+                         "sentiment":  "中性",
+                         "target":  "个股:贵州茅台",
+                         "tags":  [
+                                      "行业周期"
+                                  ]
+                     },
+                     {
+                         "point":  "贵州茅台:贵州茅台酒股份有限公司股东会议事规则(修订稿)",
+                         "title":  "贵州茅台:贵州茅台酒股份有限公司股东会议事规则(修订稿)",
+                         "source":  "东方财富公告",
+                         "publishedAt":  "2025-11-05T20:58:54.0000000+08:00",
+                         "crawledAt":  "2026-03-28T00:08:34.1308964+08:00",
+                         "url":  "https://data.eastmoney.com/notices/detail/600519/AN202511051775759370.html",
+                         "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "readMode":  "url_fetched",
+                         "readStatus":  "full_text_read",
+                         "ingestedAt":  "2026-03-28T00:03:32.9568954+08:00",
+                         "localFactId":  93,
+                         "sourceRecordId":  "stock_news:93",
+                         "level":  "announcement",
+                         "sentiment":  "中性",
+                         "target":  "个股:贵州茅台",
+                         "tags":  [
+                                      "行业周期"
+                                  ]
+                     },
+                     {
+                         "point":  "贵州茅台:贵州茅台关于修订公司《章程》及附件暨撤销监事会的公告",
+                         "title":  "贵州茅台:贵州茅台关于修订公司《章程》及附件暨撤销监事会的公告",
+                         "source":  "东方财富公告",
+                         "publishedAt":  "2025-11-05T20:58:54.0000000+08:00",
+                         "crawledAt":  "2026-03-28T00:08:34.1308964+08:00",
+                         "url":  "https://data.eastmoney.com/notices/detail/600519/AN202511051775759372.html",
+                         "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "readMode":  "url_fetched",
+                         "readStatus":  "full_text_read",
+                         "ingestedAt":  "2026-03-28T00:03:33.1269598+08:00",
+                         "localFactId":  92,
+                         "sourceRecordId":  "stock_news:92",
+                         "level":  "announcement",
+                         "sentiment":  "中性",
+                         "target":  "个股:贵州茅台",
+                         "tags":  [
+                                      "政策红利"
+                                  ]
+                     },
+                     {
+                         "point":  "贵州茅台:贵州茅台第四届董事会2025年度第十四次会议决议公告",
+                         "title":  "贵州茅台:贵州茅台第四届董事会2025年度第十四次会议决议公告",
+                         "source":  "东方财富公告",
+                         "publishedAt":  "2025-11-05T20:58:54.0000000+08:00",
+                         "crawledAt":  "2026-03-28T00:08:34.1308964+08:00",
+                         "url":  "https://data.eastmoney.com/notices/detail/600519/AN202511051775759369.html",
+                         "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "readMode":  "url_fetched",
+                         "readStatus":  "full_text_read",
+                         "ingestedAt":  "2026-03-28T00:03:33.2183612+08:00",
+                         "localFactId":  91,
+                         "sourceRecordId":  "stock_news:91",
+                         "level":  "announcement",
+                         "sentiment":  "中性",
+                         "target":  "个股:贵州茅台",
+                         "tags":  [
+                                      "行业周期"
+                                  ]
+                     },
+                     {
+                         "point":  "贵州茅台:贵州茅台关于2025年中期利润分配方案暨贯彻落实“提质增效重回报”专项行动方案的公告",
+                         "title":  "贵州茅台:贵州茅台关于2025年中期利润分配方案暨贯彻落实“提质增效重回报”专项行动方案的公告",
+                         "source":  "东方财富公告",
+                         "publishedAt":  "2025-11-05T20:58:54.0000000+08:00",
+                         "crawledAt":  "2026-03-28T00:08:34.1308964+08:00",
+                         "url":  "https://data.eastmoney.com/notices/detail/600519/AN202511051775759374.html",
+                         "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "readMode":  "url_fetched",
+                         "readStatus":  "full_text_read",
+                         "ingestedAt":  "2026-03-28T00:03:33.4078320+08:00",
+                         "localFactId":  90,
+                         "sourceRecordId":  "stock_news:90",
+                         "level":  "announcement",
+                         "sentiment":  "中性",
+                         "target":  "个股:贵州茅台",
+                         "tags":  [
+                                      "行业周期"
+                                  ]
+                     },
+                     {
+                         "point":  "贵州茅台:贵州茅台关于召开2025年第一次临时股东大会的通知",
+                         "title":  "贵州茅台:贵州茅台关于召开2025年第一次临时股东大会的通知",
+                         "source":  "东方财富公告",
+                         "publishedAt":  "2025-11-05T20:58:54.0000000+08:00",
+                         "crawledAt":  "2026-03-28T00:08:34.1308964+08:00",
+                         "url":  "https://data.eastmoney.com/notices/detail/600519/AN202511051775759375.html",
+                         "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "readMode":  "url_fetched",
+                         "readStatus":  "full_text_read",
+                         "ingestedAt":  "2026-03-28T00:03:33.7950494+08:00",
+                         "localFactId":  89,
+                         "sourceRecordId":  "stock_news:89",
+                         "level":  "announcement",
+                         "sentiment":  "中性",
+                         "target":  "个股:贵州茅台",
+                         "tags":  [
+                                      "财报业绩"
+                                  ]
+                     },
+                     {
+                         "point":  "贵州茅台:贵州茅台酒股份有限公司章程(修订稿)",
+                         "title":  "贵州茅台:贵州茅台酒股份有限公司章程(修订稿)",
+                         "source":  "东方财富公告",
+                         "publishedAt":  "2025-11-05T20:58:54.0000000+08:00",
+                         "crawledAt":  "2026-03-28T00:08:34.1308964+08:00",
+                         "url":  "https://data.eastmoney.com/notices/detail/600519/AN202511051775759373.html",
+                         "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "readMode":  "url_fetched",
+                         "readStatus":  "full_text_read",
+                         "ingestedAt":  "2026-03-28T00:03:33.9382481+08:00",
+                         "localFactId":  88,
+                         "sourceRecordId":  "stock_news:88",
+                         "level":  "announcement",
+                         "sentiment":  "中性",
+                         "target":  "个股:贵州茅台",
+                         "tags":  [
+                                      "政策红利"
+                                  ]
+                     },
+                     {
+                         "point":  "贵州茅台:贵州茅台酒股份有限公司关联交易决策管理细则(修订稿)",
+                         "title":  "贵州茅台:贵州茅台酒股份有限公司关联交易决策管理细则(修订稿)",
+                         "source":  "东方财富公告",
+                         "publishedAt":  "2025-11-05T20:58:54.0000000+08:00",
+                         "crawledAt":  "2026-03-28T00:08:34.1308964+08:00",
+                         "url":  "https://data.eastmoney.com/notices/detail/600519/AN202511051775759371.html",
+                         "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "readMode":  "url_fetched",
+                         "readStatus":  "full_text_read",
+                         "ingestedAt":  "2026-03-28T00:03:34.0438479+08:00",
+                         "localFactId":  87,
+                         "sourceRecordId":  "stock_news:87",
+                         "level":  "announcement",
+                         "sentiment":  "中性",
+                         "target":  "个股:贵州茅台",
+                         "tags":  [
+                                      "政策红利"
+                                  ]
+                     },
+                     {
+                         "point":  "贵州茅台:贵州茅台关于以集中竞价交易方式回购公司股份方案的公告",
+                         "title":  "贵州茅台:贵州茅台关于以集中竞价交易方式回购公司股份方案的公告",
+                         "source":  "东方财富公告",
+                         "publishedAt":  "2025-11-05T20:58:54.0000000+08:00",
+                         "crawledAt":  "2026-03-28T00:08:34.1308964+08:00",
+                         "url":  "https://data.eastmoney.com/notices/detail/600519/AN202511051775759367.html",
+                         "excerpt":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "summary":  "银行 基金 理财 保险 债券 视频 股吧 基金吧 博客 搜索 数据中心 全球财经快讯 行情中心 Choice数据 妙想大模型...",
+                         "readMode":  "url_fetched",
+                         "readStatus":  "full_text_read",
+                         "ingestedAt":  "2026-03-28T00:03:34.2087814+08:00",
+                         "localFactId":  86,
+                         "sourceRecordId":  "stock_news:86",
+                         "level":  "announcement",
+                         "sentiment":  "中性",
+                         "target":  "个股:贵州茅台",
+                         "tags":  [
+                                      "资金面",
+                                      "政策红利"
+                                  ]
+                     },
+                     {
+                         "point":  "酿酒行业板块暂无专属本地资讯，以下补充最新市场环境要点作为板块上下文参考",
+                         "title":  "酿酒行业板块暂无专属本地资讯，以下补充最新市场环境要点作为板块上下文参考",
+                         "source":  "本地市场环境摘要",
+                         "publishedAt":  "2026-03-28T00:08:32.7122661+08:00",
+                         "crawledAt":  "2026-03-28T00:08:32.5842506+08:00",
+                         "url":  null,
+                         "excerpt":  "酿酒行业板块使用市场环境兜底。",
+                         "summary":  "酿酒行业板块使用市场环境兜底。",
+                         "readMode":  "local_fact",
+                         "readStatus":  "summary_only",
+                         "ingestedAt":  "2026-03-28T00:08:32.5842506+08:00",
+                         "localFactId":  null,
+                         "sourceRecordId":  "sector_market_fallback:酿酒行业",
+                         "level":  "sector_market_summary",
+                         "sentiment":  "中性",
+                         "target":  "板块:酿酒行业",
+                         "tags":  [
+                                      "板块上下文兜底",
+                                      "酿酒行业",
+                                      "市场环境"
+                                  ]
+                     },
+                     {
+                         "point":  "人保健康2025年保费规模迈上500亿平台 总裁邵利铎：盈利水平持续保持良好水平主要有五方面原因",
+                         "title":  "人保健康2025年保费规模迈上500亿平台 总裁邵利铎：盈利水平持续保持良好水平主要有五方面原因",
+                         "source":  "",
+                         "publishedAt":  "2026-03-28T00:08:32.7122661+08:00",
+                         "crawledAt":  "2026-03-28T00:08:32.5842506+08:00",
+                         "url":  "https://finance.sina.com.cn/stock/relnews/cn/2026-03-27/doc-inhsmxrq1918995.shtml",
+                         "excerpt":  "人保健康2025年保费规模迈上500亿平台 总裁邵利铎：盈利水平持续保持良好水平主要有五方面原因",
+                         "summary":  "人保健康2025年保费规模迈上500亿平台 总裁邵利铎：盈利水平持续保持良好水平主要有五方面原因",
+                         "readMode":  "local_fact",
+                         "readStatus":  "title_only",
+                         "ingestedAt":  "2026-03-28T00:06:21.2081262+08:00",
+                         "localFactId":  444,
+                         "sourceRecordId":  "sector_report:444",
+                         "level":  "sector_market_fallback",
+                         "sentiment":  "利好",
+                         "target":  "行业:保险",
+                         "tags":  [
+                                      "财报业绩",
+                                      "酿酒行业",
+                                      "市场环境"
+                                  ]
+                     },
+                     {
+                         "point":  "华尔街抢跑“战后交易主题”! 消费股蓄势王者归来 软件股或将上演“反攻时刻”",
+                         "title":  "华尔街抢跑“战后交易主题”! 消费股蓄势王者归来 软件股或将上演“反攻时刻”",
+                         "source":  "市场资讯",
+                         "publishedAt":  "2026-03-28T00:08:32.7122649+08:00",
+                         "crawledAt":  "2026-03-28T00:08:32.5842506+08:00",
+                         "url":  "https://finance.sina.com.cn/stock/hkstock/hkstocknews/2026-03-27/doc-inhsmxrr8176520.shtml",
+                         "excerpt":  "华尔街抢跑“战后交易主题”! 消费股蓄势王者归来 软件股或将上演“反攻时刻”",
+                         "summary":  "华尔街抢跑“战后交易主题”! 消费股蓄势王者归来 软件股或将上演“反攻时刻”",
+                         "readMode":  "local_fact",
+                         "readStatus":  "title_only",
+                         "ingestedAt":  "2026-03-28T00:06:21.2081298+08:00",
+                         "localFactId":  445,
+                         "sourceRecordId":  "sector_report:445",
+                         "level":  "sector_market_fallback",
+                         "sentiment":  "利好",
+                         "target":  "大盘",
+                         "tags":  [
+                                      "行业周期",
+                                      "酿酒行业",
+                                      "市场环境"
+                                  ]
+                     },
+                     {
+                         "point":  "迅捷兴：董事会审议通过《关于\u003c2025年度总经理工作报告\u003e的议案》等多项议案",
+                         "title":  "迅捷兴：董事会审议通过《关于\u003c2025年度总经理工作报告\u003e的议案》等多项议案",
+                         "source":  "证券日报网",
+                         "publishedAt":  "2026-03-28T00:08:32.7122637+08:00",
+                         "crawledAt":  "2026-03-28T00:08:32.5842506+08:00",
+                         "url":  "https://finance.sina.com.cn/stock/relnews/cn/2026-03-27/doc-inhsmxri9390108.shtml",
+                         "excerpt":  "迅捷兴：董事会审议通过《关于\u003c2025年度总经理工作报告\u003e的议案》等多项议案",
+                         "summary":  "迅捷兴：董事会审议通过《关于\u003c2025年度总经理工作报告\u003e的议案》等多项议案",
+                         "readMode":  "local_fact",
+                         "readStatus":  "title_only",
+                         "ingestedAt":  "2026-03-28T00:06:21.2081321+08:00",
+                         "localFactId":  446,
+                         "sourceRecordId":  "sector_report:446",
+                         "level":  "sector_market_fallback",
+                         "sentiment":  "利好",
+                         "target":  "个股:锐捷升",
+                         "tags":  [
+                                      "财报业绩",
+                                      "酿酒行业",
+                                      "市场环境"
+                                  ]
+                     },
+                     {
+                         "point":  "人保健康2025年保费规模迈上500亿平台 总裁邵利铎：盈利水平持续保持良好水平主要有五方面原因",
+                         "title":  "人保健康2025年保费规模迈上500亿平台 总裁邵利铎：盈利水平持续保持良好水平主要有五方面原因",
+                         "source":  "",
+                         "publishedAt":  "2026-03-28T00:08:32.7122661+08:00",
+                         "crawledAt":  "2026-03-28T00:08:32.5842506+08:00",
+                         "url":  "https://finance.sina.com.cn/stock/relnews/cn/2026-03-27/doc-inhsmxrq1918995.shtml",
+                         "excerpt":  "人保健康2025年保费规模迈上500亿平台 总裁邵利铎：盈利水平持续保持良好水平主要有五方面原因",
+                         "summary":  "人保健康2025年保费规模迈上500亿平台 总裁邵利铎：盈利水平持续保持良好水平主要有五方面原因",
+                         "readMode":  "local_fact",
+                         "readStatus":  "title_only",
+                         "ingestedAt":  "2026-03-28T00:06:21.2081262+08:00",
+                         "localFactId":  444,
+                         "sourceRecordId":  "sector_report:444",
+                         "level":  "market",
+                         "sentiment":  "利好",
+                         "target":  "行业:保险",
+                         "tags":  [
+                                      "财报业绩"
+                                  ]
+                     },
+                     {
+                         "point":  "华尔街抢跑“战后交易主题”! 消费股蓄势王者归来 软件股或将上演“反攻时刻”",
+                         "title":  "华尔街抢跑“战后交易主题”! 消费股蓄势王者归来 软件股或将上演“反攻时刻”",
+                         "source":  "市场资讯",
+                         "publishedAt":  "2026-03-28T00:08:32.7122649+08:00",
+                         "crawledAt":  "2026-03-28T00:08:32.5842506+08:00",
+                         "url":  "https://finance.sina.com.cn/stock/hkstock/hkstocknews/2026-03-27/doc-inhsmxrr8176520.shtml",
+                         "excerpt":  "华尔街抢跑“战后交易主题”! 消费股蓄势王者归来 软件股或将上演“反攻时刻”",
+                         "summary":  "华尔街抢跑“战后交易主题”! 消费股蓄势王者归来 软件股或将上演“反攻时刻”",
+                         "readMode":  "local_fact",
+                         "readStatus":  "title_only",
+                         "ingestedAt":  "2026-03-28T00:06:21.2081298+08:00",
+                         "localFactId":  445,
+                         "sourceRecordId":  "sector_report:445",
+                         "level":  "market",
+                         "sentiment":  "利好",
+                         "target":  "大盘",
+                         "tags":  [
+                                      "行业周期"
+                                  ]
+                     },
+                     {
+                         "point":  "迅捷兴：董事会审议通过《关于\u003c2025年度总经理工作报告\u003e的议案》等多项议案",
+                         "title":  "迅捷兴：董事会审议通过《关于\u003c2025年度总经理工作报告\u003e的议案》等多项议案",
+                         "source":  "证券日报网",
+                         "publishedAt":  "2026-03-28T00:08:32.7122637+08:00",
+                         "crawledAt":  "2026-03-28T00:08:32.5842506+08:00",
+                         "url":  "https://finance.sina.com.cn/stock/relnews/cn/2026-03-27/doc-inhsmxri9390108.shtml",
+                         "excerpt":  "迅捷兴：董事会审议通过《关于\u003c2025年度总经理工作报告\u003e的议案》等多项议案",
+                         "summary":  "迅捷兴：董事会审议通过《关于\u003c2025年度总经理工作报告\u003e的议案》等多项议案",
+                         "readMode":  "local_fact",
+                         "readStatus":  "title_only",
+                         "ingestedAt":  "2026-03-28T00:06:21.2081321+08:00",
+                         "localFactId":  446,
+                         "sourceRecordId":  "sector_report:446",
+                         "level":  "market",
+                         "sentiment":  "利好",
+                         "target":  "个股:锐捷升",
+                         "tags":  [
+                                      "财报业绩"
+                                  ]
+                     },
+                     {
+                         "point":  "国茂股份：2026年4月13日召开2026年第一次临时股东会",
+                         "title":  "国茂股份：2026年4月13日召开2026年第一次临时股东会",
+                         "source":  "证券日报网",
+                         "publishedAt":  "2026-03-28T00:08:32.7122626+08:00",
+                         "crawledAt":  "2026-03-28T00:08:32.5842506+08:00",
+                         "url":  "https://finance.sina.com.cn/stock/relnews/cn/2026-03-27/doc-inhsmxrr8177600.shtml",
+                         "excerpt":  "国茂股份：2026年4月13日召开2026年第一次临时股东会",
+                         "summary":  "国茂股份：2026年4月13日召开2026年第一次临时股东会",
+                         "readMode":  "local_fact",
+                         "readStatus":  "title_only",
+                         "ingestedAt":  "2026-03-28T00:06:21.2081345+08:00",
+                         "localFactId":  447,
+                         "sourceRecordId":  "sector_report:447",
+                         "level":  "market",
+                         "sentiment":  "中性",
+                         "target":  "无明确靶点",
+                         "tags":  [
+                                      "政策红利"
+                                  ]
+                     },
+                     {
+                         "point":  "中宏人寿被罚146.8万元：未按照规定开展客户尽职调查、未按照规定报告可疑交易",
+                         "title":  "中宏人寿被罚146.8万元：未按照规定开展客户尽职调查、未按照规定报告可疑交易",
+                         "source":  "金融一线",
+                         "publishedAt":  "2026-03-28T00:08:32.7122616+08:00",
+                         "crawledAt":  "2026-03-28T00:08:32.5842506+08:00",
+                         "url":  "https://finance.sina.com.cn/jryx/fd/2026-03-27/doc-inhsmxri9378804.shtml",
+                         "excerpt":  "中宏人寿被罚146.8万元：未按照规定开展客户尽职调查、未按照规定报告可疑交易",
+                         "summary":  "中宏人寿被罚146.8万元：未按照规定开展客户尽职调查、未按照规定报告可疑交易",
+                         "readMode":  "local_fact",
+                         "readStatus":  "title_only",
+                         "ingestedAt":  "2026-03-28T00:06:21.2081371+08:00",
+                         "localFactId":  448,
+                         "sourceRecordId":  "sector_report:448",
+                         "level":  "market",
+                         "sentiment":  "利空",
+                         "target":  "个人金融机构",
+                         "tags":  [
+                                      "监管政策"
+                                  ]
+                     },
+                     {
+                         "point":  "交通银行董事长任德奇年报致辞：“十四五”时期，交行走过了极不寻常、极不平凡的五年",
+                         "title":  "交通银行董事长任德奇年报致辞：“十四五”时期，交行走过了极不寻常、极不平凡的五年",
+                         "source":  "金融一线",
+                         "publishedAt":  "2026-03-28T00:08:32.7122607+08:00",
+                         "crawledAt":  "2026-03-28T00:08:32.5842506+08:00",
+                         "url":  "https://finance.sina.com.cn/jryx/bank/2026-03-27/doc-inhsmxrq1914218.shtml",
+                         "excerpt":  "新浪首页 新闻 体育 财经 娱乐 科技 博客 图片 专栏 更多 汽车 教育 时尚 女性 星座 健康 房产历史视频收藏育儿读书 佛学游戏旅游邮箱导航 移动客户端 新浪微博 新浪新闻 新浪财经 新浪体育 新浪众测 新浪博客 新浪视频...",
+                         "summary":  "新浪首页 新闻 体育 财经 娱乐 科技 博客 图片 专栏 更多 汽车 教育 时尚 女性 星座 健康 房产历史视频收藏育儿读书 佛学游戏旅游邮箱导航 移动客户端 新浪微博 新浪新闻 新浪财经 新浪体育 新浪众测 新浪博客 新浪视频...",
+                         "readMode":  "url_fetched",
+                         "readStatus":  "full_text_read",
+                         "ingestedAt":  "2026-03-28T00:06:22.4444496+08:00",
+                         "localFactId":  449,
+                         "sourceRecordId":  "sector_report:449",
+                         "level":  "market",
+                         "sentiment":  "中性",
+                         "target":  "大盘",
+                         "tags":  [
+                                      "宏观货币"
+                                  ]
+                     },
+                     {
+                         "point":  "3月机构调研公司数量稳步增长 电子行业成绝对主力",
+                         "title":  "3月机构调研公司数量稳步增长 电子行业成绝对主力",
+                         "source":  "大众证券报",
+                         "publishedAt":  "2026-03-28T00:08:32.7122598+08:00",
+                         "crawledAt":  "2026-03-28T00:08:32.5842506+08:00",
+                         "url":  "https://finance.sina.com.cn/stock/relnews/cn/2026-03-27/doc-inhsmxrr8181291.shtml",
+                         "excerpt":  "3月机构调研公司数量稳步增长 电子行业成绝对主力",
+                         "summary":  "3月机构调研公司数量稳步增长 电子行业成绝对主力",
+                         "readMode":  "local_fact",
+                         "readStatus":  "title_only",
+                         "ingestedAt":  "2026-03-28T00:06:22.4444762+08:00",
+                         "localFactId":  450,
+                         "sourceRecordId":  "sector_report:450",
+                         "level":  "market",
+                         "sentiment":  "利好",
+                         "target":  "行业:电子",
+                         "tags":  [
+                                      "行业周期"
+                                  ]
+                     },
+                     {
+                         "point":  "武汉城市一卡通支付被罚89万元：未按照规定存放备付金、未按照规定开展客户尽职调查",
+                         "title":  "武汉城市一卡通支付被罚89万元：未按照规定存放备付金、未按照规定开展客户尽职调查",
+                         "source":  "金融一线",
+                         "publishedAt":  "2026-03-28T00:08:32.7122588+08:00",
+                         "crawledAt":  "2026-03-28T00:08:32.5842506+08:00",
+                         "url":  "https://finance.sina.com.cn/jryx/fd/2026-03-27/doc-inhsmxri9380127.shtml",
+                         "excerpt":  "武汉城市一卡通支付被罚89万元：未按照规定存放备付金、未按照规定开展客户尽职调查",
+                         "summary":  "武汉城市一卡通支付被罚89万元：未按照规定存放备付金、未按照规定开展客户尽职调查",
+                         "readMode":  "local_fact",
+                         "readStatus":  "title_only",
+                         "ingestedAt":  "2026-03-28T00:06:22.4444847+08:00",
+                         "localFactId":  451,
+                         "sourceRecordId":  "sector_report:451",
+                         "level":  "market",
+                         "sentiment":  "利空",
+                         "target":  "无明确靶点",
+                         "tags":  [
+                                      "监管政策"
+                                  ]
+                     },
+                     {
+                         "point":  "因违反金融统计相关规定等10项违法违规行为，湖北银行被罚249.9万元",
+                         "title":  "因违反金融统计相关规定等10项违法违规行为，湖北银行被罚249.9万元",
+                         "source":  "金融一线",
+                         "publishedAt":  "2026-03-28T00:08:32.7122578+08:00",
+                         "crawledAt":  "2026-03-28T00:08:32.5842506+08:00",
+                         "url":  "https://finance.sina.com.cn/jryx/fd/2026-03-27/doc-inhsmxrr8179529.shtml",
+                         "excerpt":  "因违反金融统计相关规定等10项违法违规行为，湖北银行被罚249.9万元",
+                         "summary":  "因违反金融统计相关规定等10项违法违规行为，湖北银行被罚249.9万元",
+                         "readMode":  "local_fact",
+                         "readStatus":  "title_only",
+                         "ingestedAt":  "2026-03-28T00:06:22.4444908+08:00",
+                         "localFactId":  452,
+                         "sourceRecordId":  "sector_report:452",
+                         "level":  "market",
+                         "sentiment":  "利空",
+                         "target":  "个股:湖北银行",
+                         "tags":  [
+                                      "监管政策"
+                                  ]
+                     },
+                     {
+                         "point":  "道指深夜下挫近500点，中概股普跌，小马智行跌6%，加密货币超12万人爆仓",
+                         "title":  "道指深夜下挫近500点，中概股普跌，小马智行跌6%，加密货币超12万人爆仓",
+                         "source":  "21世纪经济报道",
+                         "publishedAt":  "2026-03-28T00:08:32.7122569+08:00",
+                         "crawledAt":  "2026-03-28T00:08:32.5842506+08:00",
+                         "url":  "https://finance.sina.com.cn/wm/2026-03-27/doc-inhsmxrr8180935.shtml",
+                         "excerpt":  "道指深夜下挫近500点，中概股普跌，小马智行跌6%，加密货币超12万人爆仓",
+                         "summary":  "道指深夜下挫近500点，中概股普跌，小马智行跌6%，加密货币超12万人爆仓",
+                         "readMode":  "local_fact",
+                         "readStatus":  "title_only",
+                         "ingestedAt":  "2026-03-28T00:06:22.4444964+08:00",
+                         "localFactId":  453,
+                         "sourceRecordId":  "sector_report:453",
+                         "level":  "market",
+                         "sentiment":  "利空",
+                         "target":  "大盘",
+                         "tags":  [
+                                      "行业周期"
+                                  ]
+                     },
+                     {
+                         "point":  "交通银行行长张宝江年报致辞：全力以赴在“十五五”开局之年展现更大作为",
+                         "title":  "交通银行行长张宝江年报致辞：全力以赴在“十五五”开局之年展现更大作为",
+                         "source":  "金融一线",
+                         "publishedAt":  "2026-03-28T00:08:32.7122557+08:00",
+                         "crawledAt":  "2026-03-28T00:08:32.5842506+08:00",
+                         "url":  "https://finance.sina.com.cn/jryx/bank/2026-03-27/doc-inhsmxri9380592.shtml",
+                         "excerpt":  "新浪首页 新闻 体育 财经 娱乐 科技 博客 图片 专栏 更多 汽车 教育 时尚 女性 星座 健康 房产历史视频收藏育儿读书 佛学游戏旅游邮箱导航 移动客户端 新浪微博 新浪新闻 新浪财经 新浪体育 新浪众测 新浪博客 新浪视频...",
+                         "summary":  "新浪首页 新闻 体育 财经 娱乐 科技 博客 图片 专栏 更多 汽车 教育 时尚 女性 星座 健康 房产历史视频收藏育儿读书 佛学游戏旅游邮箱导航 移动客户端 新浪微博 新浪新闻 新浪财经 新浪体育 新浪众测 新浪博客 新浪视频...",
+                         "readMode":  "url_fetched",
+                         "readStatus":  "full_text_read",
+                         "ingestedAt":  "2026-03-28T00:06:23.1848917+08:00",
+                         "localFactId":  454,
+                         "sourceRecordId":  "sector_report:454",
+                         "level":  "market",
+                         "sentiment":  "利好",
+                         "target":  "大盘",
+                         "tags":  [
+                                      "政策红利"
+                                  ]
+                     },
+                     {
+                         "point":  "泡泡玛特不追求激进增收，创始人王宁财富缩水720亿",
+                         "title":  "泡泡玛特不追求激进增收，创始人王宁财富缩水720亿",
+                         "source":  "市场资讯",
+                         "publishedAt":  "2026-03-28T00:08:32.7122548+08:00",
+                         "crawledAt":  "2026-03-28T00:08:32.5842506+08:00",
+                         "url":  "https://finance.sina.com.cn/stock/s/2026-03-27/doc-inhsmxrq1917486.shtml",
+                         "excerpt":  "泡泡玛特不追求激进增收，创始人王宁财富缩水720亿",
+                         "summary":  "泡泡玛特不追求激进增收，创始人王宁财富缩水720亿",
+                         "readMode":  "local_fact",
+                         "readStatus":  "title_only",
+                         "ingestedAt":  "2026-03-28T00:06:23.1849072+08:00",
+                         "localFactId":  455,
+                         "sourceRecordId":  "sector_report:455",
+                         "level":  "market",
+                         "sentiment":  "中性",
+                         "target":  "无明确靶点",
+                         "tags":  [
+                                      "行业周期"
+                                  ]
+                     },
+                     {
+                         "point":  "本地市场代理阶段=混沌",
+                         "title":  "本地市场代理快照",
+                         "source":  "本地市场上下文/情绪快照",
+                         "publishedAt":  "2026-03-22T10:59:01.0947151+08:00",
+                         "crawledAt":  "2026-03-22T10:59:01.0947151+08:00",
+                         "url":  null,
+                         "excerpt":  "市场阶段=混沌，置信度=62，扩散=56.03，延续=86.27。",
+                         "summary":  "市场阶段=混沌，置信度=62，扩散=56.03，延续=86.27。",
+                         "readMode":  "local_fact",
+                         "readStatus":  "summary_only",
+                         "ingestedAt":  "2026-03-22T10:59:01.0947151+08:00",
+                         "localFactId":  null,
+                         "sourceRecordId":  "market_sentiment:20260322025901",
+                         "level":  "market",
+                         "sentiment":  null,
+                         "target":  "市场",
+                         "tags":  [
+                                      "market_sentiment_proxy"
+                                  ]
+                     }
+                 ],
+    "features":  [
+                     {
+                         "name":  "status",
+                         "label":  "Contract Status",
+                         "valueType":  "text",
+                         "numberValue":  null,
+                         "textValue":  "degraded",
+                         "unit":  null,
+                         "description":  "SocialSentimentMcp v1 is a local sentiment-evidence aggregation tool, not an autonomous sentiment judge."
+                     },
+                     {
+                         "name":  "approximationMode",
+                         "label":  "Approximation Mode",
+                         "valueType":  "text",
+                         "numberValue":  null,
+                         "textValue":  "local_news_and_market_proxy",
+                         "unit":  null,
+                         "description":  "Explains whether the contract is driven by local news, market proxy, or both."
+                     },
+                     {
+                         "name":  "stockNewsCount",
+                         "label":  "Stock News Count",
+                         "valueType":  "number",
+                         "numberValue":  14,
+                         "textValue":  null,
+                         "unit":  null,
+                         "description":  "Count of local stock-news items included in the approximation."
+                     },
+                     {
+                         "name":  "sectorReportCount",
+                         "label":  "Sector Report Count",
+                         "valueType":  "number",
+                         "numberValue":  4,
+                         "textValue":  null,
+                         "unit":  null,
+                         "description":  "Count of local sector-report items included in the approximation."
+                     },
+                     {
+                         "name":  "marketReportCount",
+                         "label":  "Market Report Count",
+                         "valueType":  "number",
+                         "numberValue":  12,
+                         "textValue":  null,
+                         "unit":  null,
+                         "description":  "Count of local market-report items included in the approximation."
+                     },
+                     {
+                         "name":  "marketProxyAvailable",
+                         "label":  "Market Proxy Available",
+                         "valueType":  "text",
+                         "numberValue":  null,
+                         "textValue":  "true",
+                         "unit":  null,
+                         "description":  "Whether a market sentiment snapshot was available as a proxy signal."
+                     }
+                 ],
+    "meta":  {
+                 "version":  "v1",
+                 "policyClass":  "local_required",
+                 "toolName":  "SocialSentimentMcp",
+                 "symbol":  "sh600519",
+                 "interval":  null,
+                 "query":  null,
+                 "marketContext":  {
+                                       "stageConfidence":  62.0,
+                                       "stockSectorName":  null,
+                                       "mainlineSectorName":  "逆变器",
+                                       "sectorCode":  null,
+                                       "mainlineScore":  89.75
+                                   }
+             },
+    "errorCode":  "no_live_social_source",
+    "freshnessTag":  "fresh",
+    "sourceTier":  "local",
+    "cacheHit":  false,
+    "rolePolicyClass":  "local_required"
+}

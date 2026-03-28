@@ -75,10 +75,100 @@ public sealed class ResearchRunner : IResearchRunner
 
         var upstreamArtifacts = new List<string>();
         var turnDegraded = false;
+        var fromStageIndex = 0;
+
+        // ── Partial rerun: reuse artifacts from previous turn for skipped stages ──
+        if (int.TryParse(turn.RerunScope, out var rerunFrom) && rerunFrom > 0 && rerunFrom < Pipeline.Count)
+        {
+            var previousTurnId = await _dbContext.ResearchTurns
+                .Where(t => t.SessionId == session.Id && t.Id < turn.Id &&
+                    (t.Status == ResearchTurnStatus.Completed || t.Status == ResearchTurnStatus.Failed))
+                .OrderByDescending(t => t.Id)
+                .Select(t => (long?)t.Id)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (previousTurnId.HasValue)
+            {
+                fromStageIndex = rerunFrom;
+
+                // Load upstream artifacts from previous turn's completed stages
+                var previousOutputs = await _dbContext.ResearchRoleStates
+                    .Where(rs => rs.Stage.TurnId == previousTurnId.Value &&
+                                rs.Stage.StageRunIndex < fromStageIndex &&
+                                rs.OutputContentJson != null)
+                    .OrderBy(rs => rs.Stage.StageRunIndex).ThenBy(rs => rs.Id)
+                    .Select(rs => new { rs.RoleId, rs.OutputContentJson })
+                    .ToListAsync(cancellationToken);
+
+                foreach (var rs in previousOutputs)
+                    upstreamArtifacts.Add($"[{rs.RoleId}]\n{rs.OutputContentJson}");
+
+                // Create "Reused" stage snapshots for skipped stages
+                for (var si = 0; si < fromStageIndex; si++)
+                {
+                    var sd = Pipeline[si];
+                    _dbContext.ResearchStageSnapshots.Add(new ResearchStageSnapshot
+                    {
+                        TurnId = turn.Id,
+                        StageType = sd.StageType,
+                        StageRunIndex = si,
+                        ExecutionMode = sd.ExecutionMode,
+                        Status = ResearchStageStatus.Skipped,
+                        Summary = "Reused from previous turn",
+                        StartedAt = DateTime.UtcNow,
+                        CompletedAt = DateTime.UtcNow
+                    });
+                }
+                await _dbContext.SaveChangesAsync(cancellationToken);
+
+                // Copy report blocks from previous turn for skipped stages
+                var skippedStageTypes = Pipeline.Take(fromStageIndex).Select(s => s.StageType.ToString()).ToHashSet();
+                var previousBlocks = await _dbContext.ResearchReportBlocks
+                    .AsNoTracking()
+                    .Where(b => b.TurnId == previousTurnId.Value && skippedStageTypes.Contains(b.SourceStageType!))
+                    .ToListAsync(cancellationToken);
+
+                foreach (var block in previousBlocks)
+                {
+                    _dbContext.ResearchReportBlocks.Add(new Data.Entities.ResearchReportBlock
+                    {
+                        SessionId = session.Id,
+                        TurnId = turn.Id,
+                        BlockType = block.BlockType,
+                        VersionIndex = block.VersionIndex,
+                        Headline = block.Headline,
+                        Summary = block.Summary,
+                        KeyPointsJson = block.KeyPointsJson,
+                        EvidenceRefsJson = block.EvidenceRefsJson,
+                        CounterEvidenceRefsJson = block.CounterEvidenceRefsJson,
+                        DisagreementsJson = block.DisagreementsJson,
+                        RiskLimitsJson = block.RiskLimitsJson,
+                        InvalidationsJson = block.InvalidationsJson,
+                        RecommendedActionsJson = block.RecommendedActionsJson,
+                        Status = block.Status,
+                        DegradedFlagsJson = block.DegradedFlagsJson,
+                        MissingEvidence = block.MissingEvidence,
+                        ConfidenceImpact = block.ConfidenceImpact,
+                        SourceStageType = block.SourceStageType,
+                        SourceArtifactId = block.SourceArtifactId,
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
+                    });
+                }
+                await _dbContext.SaveChangesAsync(cancellationToken);
+
+                _logger.LogInformation("Partial rerun from stage {FromStage}: reused {ArtifactCount} artifacts from turn {PrevTurn}",
+                    fromStageIndex, upstreamArtifacts.Count, previousTurnId.Value);
+            }
+            else
+            {
+                _logger.LogWarning("Partial rerun requested but no previous completed turn found; running full pipeline");
+            }
+        }
 
         try
         {
-            for (var i = 0; i < Pipeline.Count; i++)
+            for (var i = fromStageIndex; i < Pipeline.Count; i++)
             {
                 var stageDef = Pipeline[i];
                 cancellationToken.ThrowIfCancellationRequested();
@@ -744,7 +834,9 @@ public sealed class ResearchRunner : IResearchRunner
                 if (inner is not null)
                 {
                     var innerStart = inner.IndexOf('{');
-                    if (innerStart >= 0) return inner[innerStart..];
+                    var innerEnd = inner.LastIndexOf('}');
+                    if (innerStart >= 0 && innerEnd > innerStart)
+                        return inner[innerStart..(innerEnd + 1)];
                 }
             }
         }

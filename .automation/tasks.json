@@ -1,6 +1,17 @@
 {
   "tasks": [
     {
+      "id": "GOAL-UI-NEW-001",
+      "title": "Non-agent full UI redesign roadmap",
+      "status": "todo",
+      "stages": {
+        "plan": "done",
+        "dev": "todo",
+        "test": "todo"
+      },
+      "notes": "2026-03-28 已接受“非 Agent 功能”的 UI 全面重构规划请求。规划范围覆盖 App 壳层导航、股票信息页、情绪轮动、全量资讯库、股票推荐与管理页的视觉与布局重构，允许调整显示位置、宽度、高度与模块折叠/聚焦能力；明确排除 Agent 工作台与多 Agent 交互链路。详细计划书：`.automation/reports/GOAL-UI-NEW-001-PLAN-20260328.md`。"
+    },
+    {
       "id": "MANUAL-20260324-BUGLIST-CLOSEOUT",
       "title": "Close remaining buglist items",
       "status": "done",
@@ -560,6 +571,17 @@
         "test": "todo"
       },
       "notes": "验收必须跑真实多轮链路：查股 -> 提问 -> 多角色推进 -> debate -> 风控评审 -> manager decision -> follow-up 继续同一 session -> 交易计划联动。同时继续执行 Browser MCP 和桌面打包验证，避免再次出现只有静态 UI、没有真实运行闭环的假完成。现已在任务文件中细化分层测试装配、Browser MCP 验收、回归清单与验收证据要求，明确 R7 是质量门禁总装配而不是附录。此任务已扩展为测试目标、回归测试、多维验收和门禁总文件：`.automation/plan/GOAL-AGENT-NEW-001/GOAL-AGENT-NEW-001-R7.md`。"
+    },
+    {
+      "id": "GOAL-AGENT-NEW-003",
+      "title": "Dynamic workbench transparency and follow-up orchestration",
+      "status": "todo",
+      "stages": {
+        "plan": "done",
+        "dev": "todo",
+        "test": "todo"
+      },
+      "notes": "2026-03-28 已完成规划，重点修复动态页面的可解释性与会话追问编排。范围包括：1) `company_overview_analyst` 必须完整展示已获取基础面数据（如市盈率、量比、股东户数、流通市值等），禁止只露出主营业务；2) MCP 在 UI 中除状态外必须提供可点击折叠面板，按可读 Markdown 摘要展示获取结果（不直接暴露 JSON 原文）；3) `社交情绪` 等所有板块禁止直接输出 JSON，统一走 Markdown 渲染与可读排版；4) 一轮分析完成后的会话追问先由 `组合经理` 进行意图判定与编排（复用现有结果 / 仅调部分 Agent / 新开 turn），选择权交给 LLM；5) `研究报告` 区块中残留 JSON 统一结构化转 Markdown，标题支持 key 中文化映射。规划报告：`.automation/reports/GOAL-AGENT-NEW-003-PLAN-20260328.md`。"
     },
     {
       "id": "GOAL-015",

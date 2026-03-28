@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using SimplerJiangAiAgent.Api.Data.Entities;
 using SimplerJiangAiAgent.Api.Infrastructure.Llm;
@@ -49,6 +50,14 @@ public sealed class ResearchRoleExecutor : IResearchRoleExecutor
         _logger = logger;
     }
 
+    private const int MaxLlmRetries = 2;
+    private const int MaxToolRetries = 1;
+    private static readonly int[] LlmRetryDelaysMs = [2000, 5000];
+    private static readonly JsonSerializerOptions RelaxedJsonOptions = new(JsonSerializerDefaults.Web)
+    {
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    };
+
     public async Task<RoleExecutionResult> ExecuteRoleAsync(RoleExecutionContext context, CancellationToken cancellationToken = default)
     {
         var contract = _contractRegistry.GetRequired(context.RoleId);
@@ -87,27 +96,53 @@ public sealed class ResearchRoleExecutor : IResearchRoleExecutor
                     context.RoleId, null,
                     $"Dispatching {toolName}", null, DateTime.UtcNow));
 
-                try
+                var toolSuccess = false;
+                for (var attempt = 0; attempt <= MaxToolRetries; attempt++)
                 {
-                    var toolResult = await DispatchToolAsync(toolName, context.Symbol, cancellationToken);
-                    toolResults.Add($"[{toolName}]\n{toolResult}");
+                    try
+                    {
+                        if (attempt > 0)
+                        {
+                            _eventBus.Publish(new ResearchEvent(
+                                ResearchEventType.RetryAttempt,
+                                context.SessionId, context.TurnId, context.StageId,
+                                context.RoleId, null,
+                                $"Retrying {toolName} (attempt {attempt + 1})", null, DateTime.UtcNow));
+                            await Task.Delay(2000, cancellationToken);
+                        }
 
-                    _eventBus.Publish(new ResearchEvent(
-                        ResearchEventType.ToolCompleted,
-                        context.SessionId, context.TurnId, context.StageId,
-                        context.RoleId, null,
-                        $"{toolName} completed", null, DateTime.UtcNow));
+                        var toolResult = await DispatchToolAsync(toolName, context.Symbol, cancellationToken);
+                        toolResults.Add($"[{toolName}]\n{toolResult}");
+
+                        _eventBus.Publish(new ResearchEvent(
+                            ResearchEventType.ToolCompleted,
+                            context.SessionId, context.TurnId, context.StageId,
+                            context.RoleId, null,
+                            $"{toolName} completed", null, DateTime.UtcNow));
+                        toolSuccess = true;
+                        break;
+                    }
+                    catch (OperationCanceledException) { throw; }
+                    catch (Exception ex) when (attempt < MaxToolRetries)
+                    {
+                        _logger.LogWarning(ex, "Role {RoleId}: tool {Tool} failed (attempt {Attempt}), will retry",
+                            context.RoleId, toolName, attempt + 1);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Role {RoleId}: tool {Tool} failed after {MaxAttempts} attempts",
+                            context.RoleId, toolName, MaxToolRetries + 1);
+                    }
                 }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Role {RoleId}: tool {Tool} failed", context.RoleId, toolName);
-                    degradedFlags.Add($"tool_error:{toolName}");
 
+                if (!toolSuccess)
+                {
+                    degradedFlags.Add($"tool_error:{toolName}");
                     _eventBus.Publish(new ResearchEvent(
                         ResearchEventType.ToolCompleted,
                         context.SessionId, context.TurnId, context.StageId,
                         context.RoleId, null,
-                        $"{toolName} failed: {ex.Message}", null, DateTime.UtcNow));
+                        $"{toolName} failed after retries", null, DateTime.UtcNow));
                 }
             }
         }
@@ -117,65 +152,95 @@ public sealed class ResearchRoleExecutor : IResearchRoleExecutor
             degradedFlags.Add($"insufficient_evidence:{toolResults.Count}/{contract.MinimumEvidenceCount}");
         }
 
-        // Phase 2: Build prompt and call LLM
-        try
+        // Phase 2: Build prompt and call LLM (with retry)
+        var systemPrompt = TradingWorkbenchPromptTemplates.GetSystemPrompt(context.RoleId);
+        var userContent = BuildUserContent(context, toolResults);
+        var traceId = $"research-{context.SessionId}-{context.TurnId}-{context.RoleId}";
+        Exception? lastLlmException = null;
+
+        for (var attempt = 0; attempt <= MaxLlmRetries; attempt++)
         {
-            var systemPrompt = TradingWorkbenchPromptTemplates.GetSystemPrompt(context.RoleId);
-            var userContent = BuildUserContent(context, toolResults);
-            var traceId = $"research-{context.SessionId}-{context.TurnId}-{context.RoleId}";
+            try
+            {
+                if (attempt > 0)
+                {
+                    var delayMs = LlmRetryDelaysMs[Math.Min(attempt - 1, LlmRetryDelaysMs.Length - 1)];
+                    _eventBus.Publish(new ResearchEvent(
+                        ResearchEventType.RetryAttempt,
+                        context.SessionId, context.TurnId, context.StageId,
+                        context.RoleId, null,
+                        $"LLM retry attempt {attempt + 1}/{MaxLlmRetries + 1} (waiting {delayMs}ms)",
+                        null, DateTime.UtcNow));
+                    await Task.Delay(delayMs, cancellationToken);
+                }
 
-            var llmResult = await _llmService.ChatAsync("active",
-                new LlmChatRequest($"{systemPrompt}\n\n{userContent}", null, 0.3, false, traceId),
-                cancellationToken);
+                var llmResult = await _llmService.ChatAsync("active",
+                    new LlmChatRequest($"{systemPrompt}\n\n{userContent}", null, 0.3, false, traceId),
+                    cancellationToken);
 
-            _eventBus.Publish(new ResearchEvent(
-                ResearchEventType.RoleSummaryReady,
-                context.SessionId, context.TurnId, context.StageId,
-                context.RoleId, llmResult.TraceId,
-                $"Role {context.RoleId} LLM ready", null, DateTime.UtcNow));
+                var feedSummary = ExtractFeedSummary(llmResult.Content);
 
-            var status = degradedFlags.Count > 0 ? ResearchRoleStatus.Degraded : ResearchRoleStatus.Completed;
+                _eventBus.Publish(new ResearchEvent(
+                    ResearchEventType.RoleSummaryReady,
+                    context.SessionId, context.TurnId, context.StageId,
+                    context.RoleId, llmResult.TraceId,
+                    feedSummary, null, DateTime.UtcNow));
 
-            _eventBus.Publish(new ResearchEvent(
-                ResearchEventType.RoleCompleted,
-                context.SessionId, context.TurnId, context.StageId,
-                context.RoleId, llmResult.TraceId,
-                $"Role {context.RoleId} {status}", null, DateTime.UtcNow));
+                var status = degradedFlags.Count > 0 ? ResearchRoleStatus.Degraded : ResearchRoleStatus.Completed;
 
-            return new RoleExecutionResult(context.RoleId, status,
-                JsonSerializer.Serialize(new { content = llmResult.Content }),
-                llmResult.TraceId, degradedFlags, null, null);
+                _eventBus.Publish(new ResearchEvent(
+                    ResearchEventType.RoleCompleted,
+                    context.SessionId, context.TurnId, context.StageId,
+                    context.RoleId, llmResult.TraceId,
+                    $"Role {context.RoleId} {status}", null, DateTime.UtcNow));
+
+                return new RoleExecutionResult(context.RoleId, status,
+                    JsonSerializer.Serialize(new { content = llmResult.Content }, RelaxedJsonOptions),
+                    llmResult.TraceId, degradedFlags, null, null);
+            }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception ex) when (attempt < MaxLlmRetries)
+            {
+                lastLlmException = ex;
+                _logger.LogWarning(ex, "Role {RoleId}: LLM attempt {Attempt} failed, will retry",
+                    context.RoleId, attempt + 1);
+            }
+            catch (Exception ex)
+            {
+                lastLlmException = ex;
+            }
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Role {RoleId}: LLM failed", context.RoleId);
 
-            _eventBus.Publish(new ResearchEvent(
-                ResearchEventType.RoleFailed,
-                context.SessionId, context.TurnId, context.StageId,
-                context.RoleId, null,
-                $"Role {context.RoleId} LLM failed: {ex.Message}", null, DateTime.UtcNow));
+        // All LLM retries exhausted
+        _logger.LogError(lastLlmException, "Role {RoleId}: LLM failed after {MaxAttempts} attempts",
+            context.RoleId, MaxLlmRetries + 1);
 
-            return new RoleExecutionResult(context.RoleId, ResearchRoleStatus.Failed,
-                null, null, degradedFlags, "LLM_FAILED", ex.Message);
-        }
+        _eventBus.Publish(new ResearchEvent(
+            ResearchEventType.RoleFailed,
+            context.SessionId, context.TurnId, context.StageId,
+            context.RoleId, null,
+            $"Role {context.RoleId} LLM failed after {MaxLlmRetries + 1} attempts: {lastLlmException?.Message}",
+            null, DateTime.UtcNow));
+
+        return new RoleExecutionResult(context.RoleId, ResearchRoleStatus.Failed,
+            null, null, degradedFlags, "LLM_FAILED", lastLlmException?.Message);
     }
 
     private async Task<string> DispatchToolAsync(string toolName, string symbol, CancellationToken ct)
     {
         return toolName switch
         {
-            StockMcpToolNames.CompanyOverview => JsonSerializer.Serialize(await _mcpGateway.GetCompanyOverviewAsync(symbol, null, null, ct)),
-            StockMcpToolNames.Product => JsonSerializer.Serialize(await _mcpGateway.GetProductAsync(symbol, null, null, ct)),
-            StockMcpToolNames.Fundamentals => JsonSerializer.Serialize(await _mcpGateway.GetFundamentalsAsync(symbol, null, null, ct)),
-            StockMcpToolNames.Shareholder => JsonSerializer.Serialize(await _mcpGateway.GetShareholderAsync(symbol, null, null, ct)),
-            StockMcpToolNames.MarketContext => JsonSerializer.Serialize(await _mcpGateway.GetMarketContextAsync(symbol, null, null, ct)),
-            StockMcpToolNames.SocialSentiment => JsonSerializer.Serialize(await _mcpGateway.GetSocialSentimentAsync(symbol, null, null, ct)),
-            StockMcpToolNames.Kline => JsonSerializer.Serialize(await _mcpGateway.GetKlineAsync(symbol, "day", 60, null, null, null, ct)),
-            StockMcpToolNames.Minute => JsonSerializer.Serialize(await _mcpGateway.GetMinuteAsync(symbol, null, null, null, ct)),
-            StockMcpToolNames.Strategy => JsonSerializer.Serialize(await _mcpGateway.GetStrategyAsync(symbol, "day", 60, null, null, null, null, ct)),
-            StockMcpToolNames.News => JsonSerializer.Serialize(await _mcpGateway.GetNewsAsync(symbol, "stock", null, null, ct)),
-            StockMcpToolNames.Search => JsonSerializer.Serialize(await _mcpGateway.SearchAsync(symbol, true, null, ct)),
+            StockMcpToolNames.CompanyOverview => JsonSerializer.Serialize(await _mcpGateway.GetCompanyOverviewAsync(symbol, null, null, ct), RelaxedJsonOptions),
+            StockMcpToolNames.Product => JsonSerializer.Serialize(await _mcpGateway.GetProductAsync(symbol, null, null, ct), RelaxedJsonOptions),
+            StockMcpToolNames.Fundamentals => JsonSerializer.Serialize(await _mcpGateway.GetFundamentalsAsync(symbol, null, null, ct), RelaxedJsonOptions),
+            StockMcpToolNames.Shareholder => JsonSerializer.Serialize(await _mcpGateway.GetShareholderAsync(symbol, null, null, ct), RelaxedJsonOptions),
+            StockMcpToolNames.MarketContext => JsonSerializer.Serialize(await _mcpGateway.GetMarketContextAsync(symbol, null, null, ct), RelaxedJsonOptions),
+            StockMcpToolNames.SocialSentiment => JsonSerializer.Serialize(await _mcpGateway.GetSocialSentimentAsync(symbol, null, null, ct), RelaxedJsonOptions),
+            StockMcpToolNames.Kline => JsonSerializer.Serialize(await _mcpGateway.GetKlineAsync(symbol, "day", 60, null, null, null, ct), RelaxedJsonOptions),
+            StockMcpToolNames.Minute => JsonSerializer.Serialize(await _mcpGateway.GetMinuteAsync(symbol, null, null, null, ct), RelaxedJsonOptions),
+            StockMcpToolNames.Strategy => JsonSerializer.Serialize(await _mcpGateway.GetStrategyAsync(symbol, "day", 60, null, null, null, null, ct), RelaxedJsonOptions),
+            StockMcpToolNames.News => JsonSerializer.Serialize(await _mcpGateway.GetNewsAsync(symbol, "stock", null, null, ct), RelaxedJsonOptions),
+            StockMcpToolNames.Search => JsonSerializer.Serialize(await _mcpGateway.SearchAsync(symbol, true, null, ct), RelaxedJsonOptions),
             _ => throw new ArgumentException($"Unknown tool: {toolName}")
         };
     }
@@ -207,5 +272,50 @@ public sealed class ResearchRoleExecutor : IResearchRoleExecutor
         }
 
         return sb.ToString();
+    }
+
+    /// <summary>Extract a human-readable summary from LLM output for feed display.</summary>
+    internal static string ExtractFeedSummary(string? llmContent, int maxLength = 600)
+    {
+        if (string.IsNullOrWhiteSpace(llmContent)) return "分析完成";
+
+        try
+        {
+            var jsonStart = llmContent.IndexOf('{');
+            var jsonEnd = llmContent.LastIndexOf('}');
+            if (jsonStart >= 0 && jsonEnd > jsonStart)
+            {
+                using var doc = JsonDocument.Parse(llmContent[jsonStart..(jsonEnd + 1)]);
+                var root = doc.RootElement;
+                foreach (var field in new[] { "summary", "analysis", "headline", "executive_summary",
+                    "rationale", "recommendation", "conclusion", "verdict", "assessment", "claim" })
+                {
+                    if (root.TryGetProperty(field, out var val) && val.ValueKind == JsonValueKind.String)
+                    {
+                        var text = val.GetString();
+                        if (!string.IsNullOrWhiteSpace(text)) return text;
+                    }
+                }
+
+                // No named summary field found — try first substantial string property
+                foreach (var prop in root.EnumerateObject())
+                {
+                    if (prop.Value.ValueKind == JsonValueKind.String)
+                    {
+                        var text = prop.Value.GetString();
+                        if (text is not null && text.Length > 30) return text;
+                    }
+                }
+            }
+        }
+        catch { /* JSON parse failed — try plain text */ }
+
+        // Fallback: if it looks like raw JSON, give generic message
+        var trimmed = llmContent.TrimStart();
+        if (trimmed.StartsWith('{') || trimmed.StartsWith('['))
+            return "分析完成（详见研究报告）";
+
+        // Plain text/markdown — use as-is, truncated
+        return llmContent.Length > maxLength ? llmContent[..maxLength] + "..." : llmContent;
     }
 }
