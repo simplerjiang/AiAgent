@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using SimplerJiangAiAgent.Api.Data;
@@ -126,6 +126,17 @@ internal sealed class StubRoleExecutor : IResearchRoleExecutor
             return Task.FromResult(r with { RoleId = context.RoleId });
         return Task.FromResult(DefaultResult with { RoleId = context.RoleId });
     }
+}
+
+internal sealed class NullReportService : IResearchReportService
+{
+    public Task GenerateBlocksFromStageAsync(long sessionId, long turnId, ResearchStageType stageType,
+        IReadOnlyList<string> outputs, IReadOnlyList<string> degradedFlags, CancellationToken ct = default)
+        => Task.CompletedTask;
+    public Task<ResearchTurnReportDto?> GetTurnReportAsync(long turnId, CancellationToken ct = default)
+        => Task.FromResult<ResearchTurnReportDto?>(null);
+    public Task<ResearchFinalDecisionDto?> GetFinalDecisionAsync(long turnId, CancellationToken ct = default)
+        => Task.FromResult<ResearchFinalDecisionDto?>(null);
 }
 
 #endregion
@@ -515,7 +526,7 @@ public sealed class ResearchSessionAndRunnerTests
         {
             var executor = new StubRoleExecutor();
             var bus = new ResearchEventBus();
-            var runner = new ResearchRunner(db, executor, bus, NullLogger<ResearchRunner>.Instance);
+            var runner = new ResearchRunner(db, executor, bus, new NullReportService(), NullLogger<ResearchRunner>.Instance);
 
             await runner.RunTurnAsync(turn.Id);
 
@@ -553,7 +564,7 @@ public sealed class ResearchSessionAndRunnerTests
                 null, null, Array.Empty<string>(), "TOOL_BLOCKED", "Required tool blocked");
 
             var bus = new ResearchEventBus();
-            var runner = new ResearchRunner(db, executor, bus, NullLogger<ResearchRunner>.Instance);
+            var runner = new ResearchRunner(db, executor, bus, new NullReportService(), NullLogger<ResearchRunner>.Instance);
 
             await runner.RunTurnAsync(turn.Id);
 
@@ -583,7 +594,7 @@ public sealed class ResearchSessionAndRunnerTests
                 null, null);
 
             var bus = new ResearchEventBus();
-            var runner = new ResearchRunner(db, executor, bus, NullLogger<ResearchRunner>.Instance);
+            var runner = new ResearchRunner(db, executor, bus, new NullReportService(), NullLogger<ResearchRunner>.Instance);
 
             await runner.RunTurnAsync(turn.Id);
 
@@ -603,7 +614,7 @@ public sealed class ResearchSessionAndRunnerTests
         {
             var executor = new StubRoleExecutor();
             var bus = new ResearchEventBus();
-            var runner = new ResearchRunner(db, executor, bus, NullLogger<ResearchRunner>.Instance);
+            var runner = new ResearchRunner(db, executor, bus, new NullReportService(), NullLogger<ResearchRunner>.Instance);
 
             using var cts = new CancellationTokenSource();
             cts.Cancel();
@@ -624,7 +635,7 @@ public sealed class ResearchSessionAndRunnerTests
         {
             var executor = new StubRoleExecutor();
             var bus = new ResearchEventBus();
-            var runner = new ResearchRunner(db, executor, bus, NullLogger<ResearchRunner>.Instance);
+            var runner = new ResearchRunner(db, executor, bus, new NullReportService(), NullLogger<ResearchRunner>.Instance);
 
             await runner.RunTurnAsync(turn.Id);
 
@@ -660,7 +671,7 @@ public sealed class ResearchSessionAndRunnerTests
         {
             var executor = new StubRoleExecutor();
             var bus = new ResearchEventBus();
-            var runner = new ResearchRunner(db, executor, bus, NullLogger<ResearchRunner>.Instance);
+            var runner = new ResearchRunner(db, executor, bus, new NullReportService(), NullLogger<ResearchRunner>.Instance);
 
             await runner.RunTurnAsync(turn.Id);
 
@@ -703,7 +714,7 @@ public sealed class ResearchSessionAndRunnerTests
                 null, null);
 
             var bus = new ResearchEventBus();
-            var runner = new ResearchRunner(db, executor, bus, NullLogger<ResearchRunner>.Instance);
+            var runner = new ResearchRunner(db, executor, bus, new NullReportService(), NullLogger<ResearchRunner>.Instance);
 
             await runner.RunTurnAsync(turn.Id);
 

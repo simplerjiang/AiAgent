@@ -37,17 +37,20 @@ public sealed class ResearchRunner : IResearchRunner
     private readonly AppDbContext _dbContext;
     private readonly IResearchRoleExecutor _roleExecutor;
     private readonly IResearchEventBus _eventBus;
+    private readonly IResearchReportService _reportService;
     private readonly ILogger<ResearchRunner> _logger;
 
     public ResearchRunner(
         AppDbContext dbContext,
         IResearchRoleExecutor roleExecutor,
         IResearchEventBus eventBus,
+        IResearchReportService reportService,
         ILogger<ResearchRunner> logger)
     {
         _dbContext = dbContext;
         _roleExecutor = roleExecutor;
         _eventBus = eventBus;
+        _reportService = reportService;
         _logger = logger;
     }
 
@@ -110,6 +113,9 @@ public sealed class ResearchRunner : IResearchRunner
 
                 // R5: persist structured debate/risk/proposal artifacts from role outputs
                 await PersistStructuredArtifactsAsync(session, turn, stageDef, stageResult, cancellationToken);
+
+                // R6: generate report block(s) from completed stage
+                await GenerateReportBlocksSafe(session.Id, turn.Id, stageDef, stageResult, cancellationToken);
 
                 if (stageDef.StageType == ResearchStageType.PortfolioDecision && stageResult.Outputs.Count > 0)
                     await CreateDecisionSnapshotAsync(session, turn, stageResult.Outputs[0], cancellationToken);
@@ -382,7 +388,15 @@ public sealed class ResearchRunner : IResearchRunner
             {
                 SessionId = session.Id, TurnId = turn.Id,
                 Rating = rating, Action = action, ExecutiveSummary = summary,
+                InvestmentThesis = dec.TryGetProperty("investment_thesis", out var it) ? it.GetString() : null,
                 FinalDecisionJson = outputContent, Confidence = confidence,
+                ConfidenceExplanation = dec.TryGetProperty("confidence_explanation", out var cex) ? cex.GetString() : null,
+                SupportingEvidenceJson = dec.TryGetProperty("supporting_evidence", out var se) ? se.GetRawText() : null,
+                CounterEvidenceJson = dec.TryGetProperty("counter_evidence", out var ce) ? ce.GetRawText() : null,
+                RiskConsensus = dec.TryGetProperty("risk_consensus", out var rc2) ? rc2.GetString() : null,
+                DissentJson = dec.TryGetProperty("dissent", out var dis) ? dis.GetRawText() : null,
+                NextActionsJson = dec.TryGetProperty("next_actions", out var na) ? na.GetRawText() : null,
+                InvalidationConditionsJson = dec.TryGetProperty("invalidation_conditions", out var ic) ? ic.GetRawText() : null,
                 CreatedAt = DateTime.UtcNow
             };
             _dbContext.ResearchDecisionSnapshots.Add(decision);
@@ -438,6 +452,31 @@ public sealed class ResearchRunner : IResearchRunner
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to persist R5 artifacts for stage {StageType}", stageDef.StageType);
+        }
+    }
+
+    private async Task GenerateReportBlocksSafe(
+        long sessionId, long turnId,
+        StageDefinition stageDef, StageResult stageResult,
+        CancellationToken cancellationToken)
+    {
+        if (stageResult.Status == ResearchStageStatus.Failed || stageResult.Outputs.Count == 0)
+            return;
+
+        try
+        {
+            await _reportService.GenerateBlocksFromStageAsync(
+                sessionId, turnId, stageDef.StageType,
+                stageResult.Outputs, stageResult.DegradedFlags, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to generate R6 report blocks for stage {StageType}", stageDef.StageType);
+            // Surface degradation without breaking the pipeline
+            _eventBus.Publish(new ResearchEvent(
+                ResearchEventType.DegradedNotice, sessionId, turnId, null, null, null,
+                $"Report block generation failed for {stageDef.StageType}: {ex.Message}",
+                null, DateTime.UtcNow));
         }
     }
 
@@ -694,7 +733,7 @@ public sealed class ResearchRunner : IResearchRunner
     }
 
     /// <summary>If the raw JSON has a {"content":"..."} wrapper, extract the inner JSON string. No leaked JsonDocument.</summary>
-    private static string UnwrapContentWrapper(string rawJson)
+    internal static string UnwrapContentWrapper(string rawJson)
     {
         try
         {

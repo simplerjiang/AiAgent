@@ -55,6 +55,7 @@ public sealed class AppDbContext : DbContext
     public DbSet<ResearchManagerVerdict> ResearchManagerVerdicts => Set<ResearchManagerVerdict>();
     public DbSet<ResearchTraderProposal> ResearchTraderProposals => Set<ResearchTraderProposal>();
     public DbSet<ResearchRiskAssessment> ResearchRiskAssessments => Set<ResearchRiskAssessment>();
+    public DbSet<ResearchReportBlock> ResearchReportBlocks => Set<ResearchReportBlock>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -493,6 +494,20 @@ public sealed class AppDbContext : DbContext
         modelBuilder.Entity<ResearchRiskAssessment>()
             .HasOne(x => x.Stage).WithMany()
             .HasForeignKey(x => x.StageId).OnDelete(DeleteBehavior.NoAction);
+
+        // ── R6: Report blocks ────────────────────────────────────────
+        modelBuilder.Entity<ResearchReportBlock>()
+            .HasIndex(x => new { x.TurnId, x.BlockType, x.VersionIndex }).IsUnique();
+        modelBuilder.Entity<ResearchReportBlock>()
+            .Property(x => x.BlockType).HasConversion<string>().HasMaxLength(30);
+        modelBuilder.Entity<ResearchReportBlock>()
+            .Property(x => x.Status).HasConversion<string>().HasMaxLength(20);
+        modelBuilder.Entity<ResearchReportBlock>()
+            .HasOne(x => x.Session).WithMany()
+            .HasForeignKey(x => x.SessionId).OnDelete(DeleteBehavior.Cascade);
+        modelBuilder.Entity<ResearchReportBlock>()
+            .HasOne(b => b.Turn).WithMany()
+            .HasForeignKey(b => b.TurnId).OnDelete(DeleteBehavior.NoAction);
 
         foreach (var entityType in modelBuilder.Model.GetEntityTypes())
         {

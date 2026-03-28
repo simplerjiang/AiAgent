@@ -230,6 +230,46 @@ public static class ResearchSessionSchemaInitializer
             "CREATE INDEX IX_ResearchTraderProposals_Session_Turn_Version ON dbo.ResearchTraderProposals(SessionId, TurnId, Version);", cancellationToken);
         await EnsureIndexAsync(dbContext, "IX_ResearchRiskAssessments_Session_Turn_Role_Round",
             "CREATE INDEX IX_ResearchRiskAssessments_Session_Turn_Role_Round ON dbo.ResearchRiskAssessments(SessionId, TurnId, StageId, RoleId, RoundIndex);", cancellationToken);
+
+        // ── R6: Report blocks ────────────────────────────────────────
+        await dbContext.Database.ExecuteSqlRawAsync(@"
+            IF OBJECT_ID(N'dbo.ResearchReportBlocks', N'U') IS NULL
+            CREATE TABLE dbo.ResearchReportBlocks (
+                Id              BIGINT          IDENTITY(1,1) PRIMARY KEY,
+                SessionId       BIGINT          NOT NULL REFERENCES dbo.ResearchSessions(Id) ON DELETE CASCADE,
+                TurnId          BIGINT          NOT NULL,
+                BlockType       NVARCHAR(30)    NOT NULL,
+                VersionIndex    INT             NOT NULL DEFAULT 0,
+                Headline        NVARCHAR(500)   NULL,
+                Summary         NVARCHAR(MAX)   NULL,
+                KeyPointsJson           NVARCHAR(MAX) NULL,
+                EvidenceRefsJson        NVARCHAR(MAX) NULL,
+                CounterEvidenceRefsJson NVARCHAR(MAX) NULL,
+                DisagreementsJson       NVARCHAR(MAX) NULL,
+                RiskLimitsJson          NVARCHAR(MAX) NULL,
+                InvalidationsJson       NVARCHAR(MAX) NULL,
+                RecommendedActionsJson  NVARCHAR(MAX) NULL,
+                Status          NVARCHAR(20)    NOT NULL DEFAULT 'Pending',
+                DegradedFlagsJson       NVARCHAR(MAX) NULL,
+                MissingEvidence         NVARCHAR(MAX) NULL,
+                ConfidenceImpact        NVARCHAR(50)  NULL,
+                SourceStageType         NVARCHAR(50)  NULL,
+                SourceArtifactId        BIGINT        NULL,
+                CreatedAt       DATETIME2       NOT NULL DEFAULT SYSUTCDATETIME(),
+                UpdatedAt       DATETIME2       NOT NULL DEFAULT SYSUTCDATETIME()
+            );", cancellationToken);
+
+        await EnsureIndexAsync(dbContext, "UQ_ResearchReportBlocks_Turn_Block_Version",
+            "CREATE UNIQUE INDEX UQ_ResearchReportBlocks_Turn_Block_Version ON dbo.ResearchReportBlocks(TurnId, BlockType, VersionIndex);", cancellationToken);
+
+        // R6: Add missing columns to ResearchDecisionSnapshots
+        await dbContext.Database.ExecuteSqlRawAsync(@"
+            IF COL_LENGTH('dbo.ResearchDecisionSnapshots','SupportingEvidenceJson') IS NULL
+                ALTER TABLE dbo.ResearchDecisionSnapshots ADD SupportingEvidenceJson NVARCHAR(MAX) NULL;
+            IF COL_LENGTH('dbo.ResearchDecisionSnapshots','CounterEvidenceJson') IS NULL
+                ALTER TABLE dbo.ResearchDecisionSnapshots ADD CounterEvidenceJson NVARCHAR(MAX) NULL;
+            IF COL_LENGTH('dbo.ResearchDecisionSnapshots','ConfidenceExplanation') IS NULL
+                ALTER TABLE dbo.ResearchDecisionSnapshots ADD ConfidenceExplanation NVARCHAR(MAX) NULL;", cancellationToken);
     }
 
     private static async Task EnsureIndexAsync(AppDbContext dbContext, string indexName, string createSql, CancellationToken ct)

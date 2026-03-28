@@ -15,6 +15,9 @@ public sealed class ResearchDecisionSnapshot
     public string? DissentJson { get; set; }
     public string? NextActionsJson { get; set; }
     public string? InvalidationConditionsJson { get; set; }
+    public string? SupportingEvidenceJson { get; set; }
+    public string? CounterEvidenceJson { get; set; }
+    public string? ConfidenceExplanation { get; set; }
     public decimal? Confidence { get; set; }
     public DateTime CreatedAt { get; set; }
 

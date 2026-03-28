@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using SimplerJiangAiAgent.Api.Data;
 using SimplerJiangAiAgent.Api.Data.Entities;
+using SimplerJiangAiAgent.Api.Modules.Stocks.Models;
 using SimplerJiangAiAgent.Api.Modules.Stocks.Services;
 using System.Text.Json;
 
@@ -66,7 +67,7 @@ public sealed class ResearchArtifactTests
         });
 
         var eventBus = new ResearchEventBus();
-        var runner = new ResearchRunner(db, executor, eventBus, NullLogger<ResearchRunner>.Instance);
+        var runner = new ResearchRunner(db, executor, eventBus, new NullReportService(), NullLogger<ResearchRunner>.Instance);
 
         await runner.RunTurnAsync(turn.Id);
 
@@ -123,7 +124,7 @@ public sealed class ResearchArtifactTests
         });
 
         var eventBus = new ResearchEventBus();
-        var runner = new ResearchRunner(db, executor, eventBus, NullLogger<ResearchRunner>.Instance);
+        var runner = new ResearchRunner(db, executor, eventBus, new NullReportService(), NullLogger<ResearchRunner>.Instance);
 
         await runner.RunTurnAsync(turn.Id);
 
@@ -182,7 +183,7 @@ public sealed class ResearchArtifactTests
         });
 
         var eventBus = new ResearchEventBus();
-        var runner = new ResearchRunner(db, executor, eventBus, NullLogger<ResearchRunner>.Instance);
+        var runner = new ResearchRunner(db, executor, eventBus, new NullReportService(), NullLogger<ResearchRunner>.Instance);
 
         await runner.RunTurnAsync(turn.Id);
 
@@ -218,7 +219,7 @@ public sealed class ResearchArtifactTests
         });
 
         var eventBus = new ResearchEventBus();
-        var runner = new ResearchRunner(db, executor, eventBus, NullLogger<ResearchRunner>.Instance);
+        var runner = new ResearchRunner(db, executor, eventBus, new NullReportService(), NullLogger<ResearchRunner>.Instance);
         await runner.RunTurnAsync(turn1.Id);
 
         // Create second turn
@@ -244,7 +245,7 @@ public sealed class ResearchArtifactTests
                 return JsonSerializer.Serialize(new { content = "{\"claim\":\"CONVERGED\",\"converged\":true}" });
             return "{\"content\":\"data\"}";
         });
-        var runner2 = new ResearchRunner(db, executor2, eventBus, NullLogger<ResearchRunner>.Instance);
+        var runner2 = new ResearchRunner(db, executor2, eventBus, new NullReportService(), NullLogger<ResearchRunner>.Instance);
         await runner2.RunTurnAsync(turn2.Id);
 
         var proposals = await db.ResearchTraderProposals
@@ -415,5 +416,17 @@ public sealed class ResearchArtifactTests
                 context.RoleId, ResearchRoleStatus.Completed, output,
                 $"trace-{context.RoleId}", Array.Empty<string>(), null, null));
         }
+    }
+
+    /// <summary>No-op report service for tests that don't need report generation.</summary>
+    private sealed class NullReportService : IResearchReportService
+    {
+        public Task GenerateBlocksFromStageAsync(long sessionId, long turnId, ResearchStageType stageType,
+            IReadOnlyList<string> outputs, IReadOnlyList<string> degradedFlags, CancellationToken ct = default)
+            => Task.CompletedTask;
+        public Task<ResearchTurnReportDto?> GetTurnReportAsync(long turnId, CancellationToken ct = default)
+            => Task.FromResult<ResearchTurnReportDto?>(null);
+        public Task<ResearchFinalDecisionDto?> GetFinalDecisionAsync(long turnId, CancellationToken ct = default)
+            => Task.FromResult<ResearchFinalDecisionDto?>(null);
     }
 }

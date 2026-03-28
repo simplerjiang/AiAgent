@@ -73,6 +73,7 @@ public sealed class StocksModule : IModule
         services.AddScoped<IResearchRunner, ResearchRunner>();
         services.AddSingleton<IResearchEventBus, ResearchEventBus>();
         services.AddScoped<IResearchArtifactService, ResearchArtifactService>();
+        services.AddScoped<IResearchReportService, ResearchReportService>();
         services.AddHostedService<TradingPlanTriggerWorker>();
         services.AddHostedService<TradingPlanReviewWorker>();
     }
@@ -1065,6 +1066,23 @@ public sealed class StocksModule : IModule
             return Results.Ok(list);
         })
         .WithName("GetResearchProposalHistory")
+        .WithOpenApi();
+
+        // ── R6: Report & Decision endpoints ──────────────────────────
+        group.MapGet("/research/turns/{turnId:long}/report", async (long turnId, IResearchReportService reportService, CancellationToken ct) =>
+        {
+            var report = await reportService.GetTurnReportAsync(turnId, ct);
+            return report is null ? Results.NotFound() : Results.Ok(report);
+        })
+        .WithName("GetResearchTurnReport")
+        .WithOpenApi();
+
+        group.MapGet("/research/turns/{turnId:long}/decision", async (long turnId, IResearchReportService reportService, CancellationToken ct) =>
+        {
+            var decision = await reportService.GetFinalDecisionAsync(turnId, ct);
+            return decision is null ? Results.NotFound() : Results.Ok(decision);
+        })
+        .WithName("GetResearchFinalDecision")
         .WithOpenApi();
     }
 

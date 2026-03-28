@@ -1,0 +1,468 @@
+using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
+using SimplerJiangAiAgent.Api.Data;
+using SimplerJiangAiAgent.Api.Data.Entities;
+using SimplerJiangAiAgent.Api.Modules.Stocks.Models;
+
+namespace SimplerJiangAiAgent.Api.Modules.Stocks.Services;
+
+public interface IResearchReportService
+{
+    /// <summary>Generate report block(s) from a completed stage's outputs.</summary>
+    Task GenerateBlocksFromStageAsync(
+        long sessionId, long turnId,
+        ResearchStageType stageType, IReadOnlyList<string> outputs,
+        IReadOnlyList<string> degradedFlags,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Get full report (all blocks + final decision) for a turn.</summary>
+    Task<ResearchTurnReportDto?> GetTurnReportAsync(long turnId, CancellationToken cancellationToken = default);
+
+    /// <summary>Get enhanced final decision with structured nextActions for a turn.</summary>
+    Task<ResearchFinalDecisionDto?> GetFinalDecisionAsync(long turnId, CancellationToken cancellationToken = default);
+}
+
+public sealed class ResearchReportService : IResearchReportService
+{
+    private readonly AppDbContext _dbContext;
+
+    public ResearchReportService(AppDbContext dbContext) => _dbContext = dbContext;
+
+    // ── Role → BlockType mapping ─────────────────────────────────────
+
+    private static readonly IReadOnlyDictionary<string, ReportBlockType> RoleToBlockType =
+        new Dictionary<string, ReportBlockType>
+        {
+            [StockAgentRoleIds.MarketAnalyst] = ReportBlockType.Market,
+            [StockAgentRoleIds.SocialSentimentAnalyst] = ReportBlockType.Social,
+            [StockAgentRoleIds.NewsAnalyst] = ReportBlockType.News,
+            [StockAgentRoleIds.FundamentalsAnalyst] = ReportBlockType.Fundamentals,
+        };
+
+    // ── Block generation from stage outputs ──────────────────────────
+
+    public async Task GenerateBlocksFromStageAsync(
+        long sessionId, long turnId,
+        ResearchStageType stageType, IReadOnlyList<string> outputs,
+        IReadOnlyList<string> degradedFlags,
+        CancellationToken cancellationToken = default)
+    {
+        var now = DateTime.UtcNow;
+        var hasDegradation = degradedFlags.Count > 0;
+        var degradedJson = hasDegradation ? JsonSerializer.Serialize(degradedFlags) : null;
+
+        switch (stageType)
+        {
+            case ResearchStageType.AnalystTeam:
+                foreach (var output in outputs)
+                {
+                    var (roleId, content) = SplitRoleOutput(output);
+                    if (roleId is null || !RoleToBlockType.TryGetValue(roleId, out var blockType))
+                        continue;
+
+                    var parsed = ParseAnalystBlock(content);
+                    var roleDegraded = hasDegradation && degradedFlags.Any(f => f.Contains(roleId, StringComparison.OrdinalIgnoreCase));
+
+                    _dbContext.ResearchReportBlocks.Add(new ResearchReportBlock
+                    {
+                        SessionId = sessionId, TurnId = turnId,
+                        BlockType = blockType, VersionIndex = 0,
+                        Headline = parsed.Headline,
+                        Summary = parsed.Summary,
+                        KeyPointsJson = parsed.KeyPointsJson,
+                        EvidenceRefsJson = parsed.EvidenceRefsJson,
+                        CounterEvidenceRefsJson = parsed.CounterEvidenceRefsJson,
+                        Status = roleDegraded ? ReportBlockStatus.Degraded : ReportBlockStatus.Complete,
+                        DegradedFlagsJson = roleDegraded ? degradedJson : null,
+                        SourceStageType = stageType.ToString(),
+                        CreatedAt = now, UpdatedAt = now
+                    });
+                }
+                break;
+
+            case ResearchStageType.ResearchDebate:
+                BuildDebateBlock(sessionId, turnId, outputs, hasDegradation, degradedJson, now);
+                break;
+
+            case ResearchStageType.TraderProposal:
+                BuildTraderProposalBlock(sessionId, turnId, outputs, hasDegradation, degradedJson, now);
+                break;
+
+            case ResearchStageType.RiskDebate:
+                BuildRiskReviewBlock(sessionId, turnId, outputs, hasDegradation, degradedJson, now);
+                break;
+
+            case ResearchStageType.PortfolioDecision:
+                BuildPortfolioDecisionBlock(sessionId, turnId, outputs, hasDegradation, degradedJson, now);
+                break;
+        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    // ── Query methods ────────────────────────────────────────────────
+
+    public async Task<ResearchTurnReportDto?> GetTurnReportAsync(long turnId, CancellationToken cancellationToken = default)
+    {
+        var turnExists = await _dbContext.ResearchTurns
+            .AsNoTracking().AnyAsync(t => t.Id == turnId, cancellationToken);
+        if (!turnExists) return null;
+
+        var blocks = await _dbContext.ResearchReportBlocks
+            .AsNoTracking()
+            .Where(b => b.TurnId == turnId)
+            .OrderBy(b => b.BlockType).ThenBy(b => b.VersionIndex)
+            .Select(b => new ResearchReportBlockDto(
+                b.Id, b.TurnId, b.BlockType.ToString(), b.VersionIndex,
+                b.Headline, b.Summary, b.KeyPointsJson, b.EvidenceRefsJson,
+                b.CounterEvidenceRefsJson, b.DisagreementsJson,
+                b.RiskLimitsJson, b.InvalidationsJson, b.RecommendedActionsJson,
+                b.Status.ToString(), b.DegradedFlagsJson, b.MissingEvidence,
+                b.ConfidenceImpact, b.SourceStageType, b.SourceArtifactId,
+                b.CreatedAt, b.UpdatedAt))
+            .ToArrayAsync(cancellationToken);
+
+        var decision = await GetFinalDecisionAsync(turnId, cancellationToken);
+
+        return new ResearchTurnReportDto(turnId, blocks, decision);
+    }
+
+    public async Task<ResearchFinalDecisionDto?> GetFinalDecisionAsync(long turnId, CancellationToken cancellationToken = default)
+    {
+        var snapshot = await _dbContext.ResearchDecisionSnapshots
+            .AsNoTracking()
+            .Where(d => d.TurnId == turnId)
+            .OrderByDescending(d => d.CreatedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (snapshot is null) return null;
+
+        var nextActions = BuildNextActionsFromDecision(snapshot);
+
+        return new ResearchFinalDecisionDto(
+            snapshot.Id, snapshot.TurnId,
+            snapshot.Rating, snapshot.Action, snapshot.ExecutiveSummary,
+            snapshot.InvestmentThesis, snapshot.Confidence, snapshot.ConfidenceExplanation,
+            snapshot.SupportingEvidenceJson, snapshot.CounterEvidenceJson,
+            snapshot.RiskConsensus, snapshot.DissentJson,
+            snapshot.InvalidationConditionsJson,
+            nextActions, snapshot.CreatedAt);
+    }
+
+    // ── Block builders ───────────────────────────────────────────────
+
+    private void BuildDebateBlock(
+        long sessionId, long turnId, IReadOnlyList<string> outputs,
+        bool hasDegradation, string? degradedJson, DateTime now)
+    {
+        string? headline = null, summary = null;
+        var keyPoints = new List<string>();
+        var disagreements = new List<string>();
+
+        foreach (var output in outputs)
+        {
+            var (roleId, content) = SplitRoleOutput(output);
+            if (roleId is null) continue;
+
+            var parsed = ParseGenericBlock(content);
+
+            if (roleId == StockAgentRoleIds.ResearchManager)
+            {
+                headline = parsed.Headline ?? "研究辩论裁决";
+                summary = parsed.Summary;
+            }
+
+            if (parsed.KeyPointsJson is not null) keyPoints.Add(parsed.KeyPointsJson);
+        }
+
+        _dbContext.ResearchReportBlocks.Add(new ResearchReportBlock
+        {
+            SessionId = sessionId, TurnId = turnId,
+            BlockType = ReportBlockType.ResearchDebate, VersionIndex = 0,
+            Headline = headline ?? "研究辩论",
+            Summary = summary,
+            KeyPointsJson = FlattenJsonFragments(keyPoints),
+            DisagreementsJson = disagreements.Count > 0 ? JsonSerializer.Serialize(disagreements) : null,
+            Status = hasDegradation ? ReportBlockStatus.Degraded : ReportBlockStatus.Complete,
+            DegradedFlagsJson = hasDegradation ? degradedJson : null,
+            SourceStageType = ResearchStageType.ResearchDebate.ToString(),
+            CreatedAt = now, UpdatedAt = now
+        });
+    }
+
+    private void BuildTraderProposalBlock(
+        long sessionId, long turnId, IReadOnlyList<string> outputs,
+        bool hasDegradation, string? degradedJson, DateTime now)
+    {
+        string? headline = null, summary = null, riskLimits = null;
+
+        foreach (var output in outputs)
+        {
+            var (roleId, content) = SplitRoleOutput(output);
+            if (roleId != StockAgentRoleIds.Trader) continue;
+
+            var parsed = ParseGenericBlock(content);
+            headline = parsed.Headline ?? "交易方案";
+            summary = parsed.Summary;
+            riskLimits = parsed.RiskLimitsJson;
+        }
+
+        _dbContext.ResearchReportBlocks.Add(new ResearchReportBlock
+        {
+            SessionId = sessionId, TurnId = turnId,
+            BlockType = ReportBlockType.TraderProposal, VersionIndex = 0,
+            Headline = headline ?? "交易提案",
+            Summary = summary, RiskLimitsJson = riskLimits,
+            Status = hasDegradation ? ReportBlockStatus.Degraded : ReportBlockStatus.Complete,
+            DegradedFlagsJson = hasDegradation ? degradedJson : null,
+            SourceStageType = ResearchStageType.TraderProposal.ToString(),
+            CreatedAt = now, UpdatedAt = now
+        });
+    }
+
+    private void BuildRiskReviewBlock(
+        long sessionId, long turnId, IReadOnlyList<string> outputs,
+        bool hasDegradation, string? degradedJson, DateTime now)
+    {
+        string? headline = null, summary = null;
+        var riskLimits = new List<string>();
+        var invalidations = new List<string>();
+        var disagreements = new List<string>();
+
+        foreach (var output in outputs)
+        {
+            var (roleId, content) = SplitRoleOutput(output);
+            if (roleId is null) continue;
+
+            var parsed = ParseGenericBlock(content);
+
+            if (parsed.RiskLimitsJson is not null) riskLimits.Add(parsed.RiskLimitsJson);
+            if (parsed.InvalidationsJson is not null) invalidations.Add(parsed.InvalidationsJson);
+
+            // Use conservative analyst's view as the block summary
+            if (roleId == StockAgentRoleIds.ConservativeRiskAnalyst)
+            {
+                headline = "风险审查";
+                summary = parsed.Summary;
+            }
+        }
+
+        _dbContext.ResearchReportBlocks.Add(new ResearchReportBlock
+        {
+            SessionId = sessionId, TurnId = turnId,
+            BlockType = ReportBlockType.RiskReview, VersionIndex = 0,
+            Headline = headline ?? "风险审查",
+            Summary = summary,
+            RiskLimitsJson = FlattenJsonFragments(riskLimits),
+            InvalidationsJson = FlattenJsonFragments(invalidations),
+            DisagreementsJson = disagreements.Count > 0 ? JsonSerializer.Serialize(disagreements) : null,
+            Status = hasDegradation ? ReportBlockStatus.Degraded : ReportBlockStatus.Complete,
+            DegradedFlagsJson = hasDegradation ? degradedJson : null,
+            SourceStageType = ResearchStageType.RiskDebate.ToString(),
+            CreatedAt = now, UpdatedAt = now
+        });
+    }
+
+    private void BuildPortfolioDecisionBlock(
+        long sessionId, long turnId, IReadOnlyList<string> outputs,
+        bool hasDegradation, string? degradedJson, DateTime now)
+    {
+        string? headline = null, summary = null;
+        string? evidenceRefs = null, counterEvidence = null;
+        string? riskLimits = null, invalidations = null;
+
+        foreach (var output in outputs)
+        {
+            var (_, content) = SplitRoleOutput(output);
+            var parsed = ParseGenericBlock(content);
+            headline = parsed.Headline;
+            summary = parsed.Summary;
+            evidenceRefs = parsed.EvidenceRefsJson;
+            counterEvidence = parsed.CounterEvidenceRefsJson;
+            riskLimits = parsed.RiskLimitsJson;
+            invalidations = parsed.InvalidationsJson;
+        }
+
+        _dbContext.ResearchReportBlocks.Add(new ResearchReportBlock
+        {
+            SessionId = sessionId, TurnId = turnId,
+            BlockType = ReportBlockType.PortfolioDecision, VersionIndex = 0,
+            Headline = headline ?? "投资组合决策",
+            Summary = summary,
+            EvidenceRefsJson = evidenceRefs,
+            CounterEvidenceRefsJson = counterEvidence,
+            RiskLimitsJson = riskLimits,
+            InvalidationsJson = invalidations,
+            Status = hasDegradation ? ReportBlockStatus.Degraded : ReportBlockStatus.Complete,
+            DegradedFlagsJson = hasDegradation ? degradedJson : null,
+            SourceStageType = ResearchStageType.PortfolioDecision.ToString(),
+            CreatedAt = now, UpdatedAt = now
+        });
+    }
+
+    // ── NextAction builder ───────────────────────────────────────────
+
+    internal static IReadOnlyList<NextActionDto> BuildNextActionsFromDecision(ResearchDecisionSnapshot snapshot)
+    {
+        var actions = new List<NextActionDto>();
+
+        // Parse stored next actions JSON if available
+        if (snapshot.NextActionsJson is not null)
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(snapshot.NextActionsJson);
+                if (doc.RootElement.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var item in doc.RootElement.EnumerateArray())
+                    {
+                        var actionType = item.TryGetProperty("action_type", out var at) ? at.GetString() : null;
+                        var label = item.TryGetProperty("label", out var lb) ? lb.GetString() : null;
+                        if (actionType is null || label is null) continue;
+
+                        actions.Add(new NextActionDto(
+                            actionType, label,
+                            item.TryGetProperty("target_surface", out var ts) ? ts.GetString() : null,
+                            snapshot.SessionId, snapshot.TurnId,
+                            null, snapshot.Id,
+                            item.TryGetProperty("artifact_refs", out var ar) ? ar.GetRawText() : null,
+                            item.TryGetProperty("reason", out var rs) ? rs.GetString() :
+                                item.TryGetProperty("reason_summary", out var rsum) ? rsum.GetString() :
+                                item.TryGetProperty("rationale", out var rat) ? rat.GetString() : null,
+                            item.TryGetProperty("requires_new_focus", out var rnf) && rnf.GetBoolean()));
+                    }
+                }
+            }
+            catch { /* ignore malformed JSON */ }
+        }
+
+        // If LLM didn't produce structured actions, generate sensible defaults
+        if (actions.Count == 0)
+        {
+            actions.Add(new NextActionDto(
+                nameof(NextActionType.ViewDailyChart), "看日K线",
+                "kline-chart", snapshot.SessionId, snapshot.TurnId,
+                null, snapshot.Id, null,
+                "确认技术面趋势与决策一致性", false));
+
+            actions.Add(new NextActionDto(
+                nameof(NextActionType.ViewMinuteChart), "看分时",
+                "minute-chart", snapshot.SessionId, snapshot.TurnId,
+                null, snapshot.Id, null,
+                "观察盘中量价走势", false));
+
+            if (snapshot.Rating is not null && snapshot.Rating != "hold")
+            {
+                actions.Add(new NextActionDto(
+                    nameof(NextActionType.DraftTradingPlan), "起草交易计划",
+                    "trading-plan", snapshot.SessionId, snapshot.TurnId,
+                    null, snapshot.Id, null,
+                    "基于投资决策起草可执行的交易计划", true));
+            }
+
+            actions.Add(new NextActionDto(
+                nameof(NextActionType.ViewEvidence), "查看证据",
+                "evidence-panel", snapshot.SessionId, snapshot.TurnId,
+                null, snapshot.Id, null,
+                "审查支撑决策的关键证据", false));
+
+            actions.Add(new NextActionDto(
+                nameof(NextActionType.ViewLocalFacts), "查看本地事实",
+                "local-facts", snapshot.SessionId, snapshot.TurnId,
+                null, snapshot.Id, null,
+                "核实本地事实数据时效性", false));
+        }
+
+        return actions;
+    }
+
+    // ── JSON flatten helper ─────────────────────────────────────────
+
+    /// <summary>Flatten a list of JSON fragments (which may be arrays or scalars) into a single JSON array string.</summary>
+    private static string? FlattenJsonFragments(List<string> fragments)
+    {
+        if (fragments.Count == 0) return null;
+        var items = new List<string>();
+        foreach (var frag in fragments)
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(frag);
+                if (doc.RootElement.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var el in doc.RootElement.EnumerateArray())
+                        items.Add(el.GetRawText());
+                }
+                else
+                {
+                    items.Add(frag);
+                }
+            }
+            catch { items.Add(JsonSerializer.Serialize(frag)); }
+        }
+        return $"[{string.Join(",", items)}]";
+    }
+
+    // ── Parsing helpers ──────────────────────────────────────────────
+
+    private static (string? RoleId, string Content) SplitRoleOutput(string output)
+        => ResearchRunner.SplitRoleOutput(output);
+
+    private record ParsedBlock(
+        string? Headline, string? Summary,
+        string? KeyPointsJson, string? EvidenceRefsJson,
+        string? CounterEvidenceRefsJson, string? RiskLimitsJson,
+        string? InvalidationsJson);
+
+    private static ParsedBlock ParseAnalystBlock(string content)
+    {
+        try
+        {
+            var jsonStart = content.IndexOf('{');
+            if (jsonStart < 0) return new(null, content, null, null, null, null, null);
+            var jsonText = ResearchRunner.UnwrapContentWrapper(content[jsonStart..]);
+            using var doc = JsonDocument.Parse(jsonText);
+            var root = doc.RootElement;
+
+            return new(
+                root.TryGetProperty("headline", out var h) ? h.GetString() : null,
+                root.TryGetProperty("summary", out var s) ? s.GetString() :
+                    root.TryGetProperty("analysis", out var a2) ? a2.GetString() : content,
+                root.TryGetProperty("key_points", out var kp) ? kp.GetRawText() : null,
+                root.TryGetProperty("evidence_refs", out var er) ? er.GetRawText() :
+                    root.TryGetProperty("supporting_evidence_refs", out var ser) ? ser.GetRawText() : null,
+                root.TryGetProperty("counter_evidence", out var ce) ? ce.GetRawText() : null,
+                root.TryGetProperty("risk_limits", out var rl) ? rl.GetRawText() : null,
+                root.TryGetProperty("invalidations", out var inv) ? inv.GetRawText() : null
+            );
+        }
+        catch { return new(null, content, null, null, null, null, null); }
+    }
+
+    private static ParsedBlock ParseGenericBlock(string content)
+    {
+        try
+        {
+            var jsonStart = content.IndexOf('{');
+            if (jsonStart < 0) return new(null, content, null, null, null, null, null);
+            var jsonText = ResearchRunner.UnwrapContentWrapper(content[jsonStart..]);
+            using var doc = JsonDocument.Parse(jsonText);
+            var root = doc.RootElement;
+
+            return new(
+                root.TryGetProperty("headline", out var h) ? h.GetString() :
+                    root.TryGetProperty("executive_summary", out var es) ? es.GetString() : null,
+                root.TryGetProperty("summary", out var s) ? s.GetString() :
+                    root.TryGetProperty("analysis", out var a) ? a.GetString() :
+                    root.TryGetProperty("rationale", out var r) ? r.GetString() : null,
+                root.TryGetProperty("key_points", out var kp) ? kp.GetRawText() : null,
+                root.TryGetProperty("evidence_refs", out var er) ? er.GetRawText() :
+                    root.TryGetProperty("supporting_evidence", out var se) ? se.GetRawText() : null,
+                root.TryGetProperty("counter_evidence", out var ce) ? ce.GetRawText() : null,
+                root.TryGetProperty("risk_limits", out var rl) ? rl.GetRawText() : null,
+                root.TryGetProperty("invalidations", out var inv) ? inv.GetRawText() : null
+            );
+        }
+        catch { return new(null, content, null, null, null, null, null); }
+    }
+}
