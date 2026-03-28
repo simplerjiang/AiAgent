@@ -44,6 +44,13 @@ public sealed class AppDbContext : DbContext
     public DbSet<NewsSourceVerificationRun> NewsSourceVerificationRuns => Set<NewsSourceVerificationRun>();
     public DbSet<CrawlerChangeQueue> CrawlerChangeQueues => Set<CrawlerChangeQueue>();
     public DbSet<CrawlerChangeRun> CrawlerChangeRuns => Set<CrawlerChangeRun>();
+    public DbSet<ResearchSession> ResearchSessions => Set<ResearchSession>();
+    public DbSet<ResearchTurn> ResearchTurns => Set<ResearchTurn>();
+    public DbSet<ResearchStageSnapshot> ResearchStageSnapshots => Set<ResearchStageSnapshot>();
+    public DbSet<ResearchRoleState> ResearchRoleStates => Set<ResearchRoleState>();
+    public DbSet<ResearchFeedItem> ResearchFeedItems => Set<ResearchFeedItem>();
+    public DbSet<ResearchReportSnapshot> ResearchReportSnapshots => Set<ResearchReportSnapshot>();
+    public DbSet<ResearchDecisionSnapshot> ResearchDecisionSnapshots => Set<ResearchDecisionSnapshot>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -379,6 +386,66 @@ public sealed class AppDbContext : DbContext
             .WithMany(x => x.HealthDailies)
             .HasForeignKey(x => x.SourceId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        // Research Session entities
+        modelBuilder.Entity<ResearchSession>()
+            .HasIndex(x => x.SessionKey).IsUnique();
+        modelBuilder.Entity<ResearchSession>()
+            .HasIndex(x => new { x.Symbol, x.Status });
+        modelBuilder.Entity<ResearchSession>()
+            .HasIndex(x => new { x.Symbol, x.UpdatedAt });
+        modelBuilder.Entity<ResearchSession>()
+            .Property(x => x.Status).HasConversion<string>().HasMaxLength(32);
+
+        modelBuilder.Entity<ResearchTurn>()
+            .HasIndex(x => new { x.SessionId, x.TurnIndex }).IsUnique();
+        modelBuilder.Entity<ResearchTurn>()
+            .Property(x => x.Status).HasConversion<string>().HasMaxLength(32);
+        modelBuilder.Entity<ResearchTurn>()
+            .Property(x => x.ContinuationMode).HasConversion<string>().HasMaxLength(32);
+        modelBuilder.Entity<ResearchTurn>()
+            .HasOne(x => x.Session).WithMany(x => x.Turns)
+            .HasForeignKey(x => x.SessionId).OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ResearchStageSnapshot>()
+            .HasIndex(x => new { x.TurnId, x.StageType, x.StageRunIndex });
+        modelBuilder.Entity<ResearchStageSnapshot>()
+            .Property(x => x.StageType).HasConversion<string>().HasMaxLength(64);
+        modelBuilder.Entity<ResearchStageSnapshot>()
+            .Property(x => x.Status).HasConversion<string>().HasMaxLength(32);
+        modelBuilder.Entity<ResearchStageSnapshot>()
+            .Property(x => x.ExecutionMode).HasConversion<string>().HasMaxLength(32);
+        modelBuilder.Entity<ResearchStageSnapshot>()
+            .HasOne(x => x.Turn).WithMany(x => x.StageSnapshots)
+            .HasForeignKey(x => x.TurnId).OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ResearchRoleState>()
+            .HasIndex(x => new { x.StageId, x.RoleId, x.RunIndex });
+        modelBuilder.Entity<ResearchRoleState>()
+            .Property(x => x.Status).HasConversion<string>().HasMaxLength(32);
+        modelBuilder.Entity<ResearchRoleState>()
+            .HasOne(x => x.Stage).WithMany(x => x.RoleStates)
+            .HasForeignKey(x => x.StageId).OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ResearchFeedItem>()
+            .HasIndex(x => new { x.TurnId, x.CreatedAt });
+        modelBuilder.Entity<ResearchFeedItem>()
+            .Property(x => x.ItemType).HasConversion<string>().HasMaxLength(32);
+        modelBuilder.Entity<ResearchFeedItem>()
+            .HasOne(x => x.Turn).WithMany(x => x.FeedItems)
+            .HasForeignKey(x => x.TurnId).OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ResearchReportSnapshot>()
+            .HasIndex(x => new { x.SessionId, x.TurnId, x.VersionIndex });
+        modelBuilder.Entity<ResearchReportSnapshot>()
+            .HasOne(x => x.Session).WithMany(x => x.Reports)
+            .HasForeignKey(x => x.SessionId).OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ResearchDecisionSnapshot>()
+            .HasIndex(x => new { x.SessionId, x.TurnId });
+        modelBuilder.Entity<ResearchDecisionSnapshot>()
+            .HasOne(x => x.Session).WithMany(x => x.Decisions)
+            .HasForeignKey(x => x.SessionId).OnDelete(DeleteBehavior.Cascade);
 
         foreach (var entityType in modelBuilder.Model.GetEntityTypes())
         {

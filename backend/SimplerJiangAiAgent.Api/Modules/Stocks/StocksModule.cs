@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using SimplerJiangAiAgent.Api.Data;
 using SimplerJiangAiAgent.Api.Infrastructure.Jobs;
 using SimplerJiangAiAgent.Api.Modules.Market.Models;
@@ -67,6 +68,10 @@ public sealed class StocksModule : IModule
         services.AddScoped<IStockNewsImpactService, StockNewsImpactService>();
         services.AddScoped<IStockSignalService, StockSignalService>();
         services.AddScoped<IStockPositionGuidanceService, StockPositionGuidanceService>();
+        services.AddScoped<IResearchSessionService, ResearchSessionService>();
+        services.AddScoped<IResearchRoleExecutor, ResearchRoleExecutor>();
+        services.AddScoped<IResearchRunner, ResearchRunner>();
+        services.AddSingleton<IResearchEventBus, ResearchEventBus>();
         services.AddHostedService<TradingPlanTriggerWorker>();
         services.AddHostedService<TradingPlanReviewWorker>();
     }
@@ -966,6 +971,73 @@ public sealed class StocksModule : IModule
             return Results.Ok(sources);
         })
         .WithName("GetStockSources")
+        .WithOpenApi();
+
+        // ── Research Session endpoints ──────────────────────────────────────
+
+        group.MapGet("/research/active-session", async (string symbol, IResearchSessionService researchService, CancellationToken ct) =>
+        {
+            if (string.IsNullOrWhiteSpace(symbol))
+                return Results.BadRequest(new { message = "symbol 不能为空" });
+
+            var dto = await researchService.GetActiveSessionAsync(symbol.Trim(), ct);
+            return dto is null ? Results.NotFound() : Results.Ok(dto);
+        })
+        .WithName("GetActiveResearchSession")
+        .WithOpenApi();
+
+        group.MapGet("/research/sessions/{sessionId:long}", async (long sessionId, IResearchSessionService researchService, CancellationToken ct) =>
+        {
+            var dto = await researchService.GetSessionDetailAsync(sessionId, ct);
+            return dto is null ? Results.NotFound() : Results.Ok(dto);
+        })
+        .WithName("GetResearchSessionDetail")
+        .WithOpenApi();
+
+        group.MapGet("/research/sessions", async (string symbol, int? limit, IResearchSessionService researchService, CancellationToken ct) =>
+        {
+            if (string.IsNullOrWhiteSpace(symbol))
+                return Results.BadRequest(new { message = "symbol 不能为空" });
+
+            var list = await researchService.ListSessionsAsync(symbol.Trim(), limit ?? 20, ct);
+            return Results.Ok(list);
+        })
+        .WithName("ListResearchSessions")
+        .WithOpenApi();
+
+        group.MapPost("/research/turns", async (ResearchTurnSubmitRequestDto request, IResearchSessionService researchService, IResearchRunner runner, IServiceScopeFactory scopeFactory, CancellationToken ct) =>
+        {
+            if (string.IsNullOrWhiteSpace(request.Symbol))
+                return Results.BadRequest(new { message = "symbol 不能为空" });
+
+            if (string.IsNullOrWhiteSpace(request.UserPrompt))
+                return Results.BadRequest(new { message = "userPrompt 不能为空" });
+
+            if (request.UserPrompt.Length > 2000)
+                return Results.BadRequest(new { message = "userPrompt 长度不能超过 2000 字符" });
+
+            var response = await researchService.SubmitTurnAsync(request, ct);
+
+            // Fire-and-forget: run the research pipeline in a background scope
+            var turnId = response.TurnId;
+            _ = Task.Run(async () =>
+            {
+                using var scope = scopeFactory.CreateScope();
+                var scopedRunner = scope.ServiceProvider.GetRequiredService<IResearchRunner>();
+                try
+                {
+                    await scopedRunner.RunTurnAsync(turnId, CancellationToken.None);
+                }
+                catch (Exception ex)
+                {
+                    var logger = scope.ServiceProvider.GetService<ILogger<StocksModule>>();
+                    logger?.LogError(ex, "Research turn {TurnId} pipeline failed", turnId);
+                }
+            });
+
+            return Results.Ok(response);
+        })
+        .WithName("SubmitResearchTurn")
         .WithOpenApi();
     }
 

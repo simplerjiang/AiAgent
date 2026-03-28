@@ -11,6 +11,7 @@ using SimplerJiangAiAgent.Api.Infrastructure.Security;
 using SimplerJiangAiAgent.Api.Infrastructure.Serialization;
 using SimplerJiangAiAgent.Api.Infrastructure.Storage;
 using SimplerJiangAiAgent.Api.Modules;
+using SimplerJiangAiAgent.Api.Modules.Stocks.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -101,6 +102,7 @@ using (var scope = app.Services.CreateScope())
     await SourceGovernanceSchemaInitializer.EnsureAsync(dbContext);
     await TradingPlanSchemaInitializer.EnsureAsync(dbContext);
     await MarketSentimentSchemaInitializer.EnsureAsync(dbContext);
+    await ResearchSessionSchemaInitializer.EnsureAsync(dbContext);
 }
 
 // 中间件管道
