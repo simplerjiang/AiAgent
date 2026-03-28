@@ -51,6 +51,10 @@ public sealed class AppDbContext : DbContext
     public DbSet<ResearchFeedItem> ResearchFeedItems => Set<ResearchFeedItem>();
     public DbSet<ResearchReportSnapshot> ResearchReportSnapshots => Set<ResearchReportSnapshot>();
     public DbSet<ResearchDecisionSnapshot> ResearchDecisionSnapshots => Set<ResearchDecisionSnapshot>();
+    public DbSet<ResearchDebateMessage> ResearchDebateMessages => Set<ResearchDebateMessage>();
+    public DbSet<ResearchManagerVerdict> ResearchManagerVerdicts => Set<ResearchManagerVerdict>();
+    public DbSet<ResearchTraderProposal> ResearchTraderProposals => Set<ResearchTraderProposal>();
+    public DbSet<ResearchRiskAssessment> ResearchRiskAssessments => Set<ResearchRiskAssessment>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -446,6 +450,49 @@ public sealed class AppDbContext : DbContext
         modelBuilder.Entity<ResearchDecisionSnapshot>()
             .HasOne(x => x.Session).WithMany(x => x.Decisions)
             .HasForeignKey(x => x.SessionId).OnDelete(DeleteBehavior.Cascade);
+
+        // R5 – Debate, Risk, Proposal structured objects
+        modelBuilder.Entity<ResearchDebateMessage>()
+            .HasIndex(x => new { x.SessionId, x.TurnId, x.StageId, x.RoundIndex });
+        modelBuilder.Entity<ResearchDebateMessage>()
+            .Property(x => x.Side).HasConversion<string>().HasMaxLength(20);
+        modelBuilder.Entity<ResearchDebateMessage>()
+            .HasOne(x => x.Session).WithMany()
+            .HasForeignKey(x => x.SessionId).OnDelete(DeleteBehavior.Cascade);
+        modelBuilder.Entity<ResearchDebateMessage>()
+            .HasOne(x => x.Stage).WithMany()
+            .HasForeignKey(x => x.StageId).OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<ResearchManagerVerdict>()
+            .HasIndex(x => new { x.SessionId, x.TurnId, x.StageId });
+        modelBuilder.Entity<ResearchManagerVerdict>()
+            .HasOne(x => x.Session).WithMany()
+            .HasForeignKey(x => x.SessionId).OnDelete(DeleteBehavior.Cascade);
+        modelBuilder.Entity<ResearchManagerVerdict>()
+            .HasOne(x => x.Stage).WithMany()
+            .HasForeignKey(x => x.StageId).OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<ResearchTraderProposal>()
+            .HasIndex(x => new { x.SessionId, x.TurnId, x.Version });
+        modelBuilder.Entity<ResearchTraderProposal>()
+            .Property(x => x.Status).HasConversion<string>().HasMaxLength(20);
+        modelBuilder.Entity<ResearchTraderProposal>()
+            .HasOne(x => x.Session).WithMany()
+            .HasForeignKey(x => x.SessionId).OnDelete(DeleteBehavior.Cascade);
+        modelBuilder.Entity<ResearchTraderProposal>()
+            .HasOne(x => x.Stage).WithMany()
+            .HasForeignKey(x => x.StageId).OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<ResearchRiskAssessment>()
+            .HasIndex(x => new { x.SessionId, x.TurnId, x.StageId, x.RoleId, x.RoundIndex });
+        modelBuilder.Entity<ResearchRiskAssessment>()
+            .Property(x => x.Tier).HasConversion<string>().HasMaxLength(20);
+        modelBuilder.Entity<ResearchRiskAssessment>()
+            .HasOne(x => x.Session).WithMany()
+            .HasForeignKey(x => x.SessionId).OnDelete(DeleteBehavior.Cascade);
+        modelBuilder.Entity<ResearchRiskAssessment>()
+            .HasOne(x => x.Stage).WithMany()
+            .HasForeignKey(x => x.StageId).OnDelete(DeleteBehavior.NoAction);
 
         foreach (var entityType in modelBuilder.Model.GetEntityTypes())
         {

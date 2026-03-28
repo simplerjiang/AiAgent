@@ -72,6 +72,7 @@ public sealed class StocksModule : IModule
         services.AddScoped<IResearchRoleExecutor, ResearchRoleExecutor>();
         services.AddScoped<IResearchRunner, ResearchRunner>();
         services.AddSingleton<IResearchEventBus, ResearchEventBus>();
+        services.AddScoped<IResearchArtifactService, ResearchArtifactService>();
         services.AddHostedService<TradingPlanTriggerWorker>();
         services.AddHostedService<TradingPlanReviewWorker>();
     }
@@ -1038,6 +1039,32 @@ public sealed class StocksModule : IModule
             return Results.Ok(response);
         })
         .WithName("SubmitResearchTurn")
+        .WithOpenApi();
+
+        // ── R5: Structured artifact endpoints ──────────────────────────────
+
+        group.MapGet("/research/turns/{turnId:long}/artifacts", async (long turnId, IResearchArtifactService artifactService, CancellationToken ct) =>
+        {
+            var dto = await artifactService.GetTurnArtifactsAsync(turnId, ct);
+            return dto is null ? Results.NotFound() : Results.Ok(dto);
+        })
+        .WithName("GetResearchTurnArtifacts")
+        .WithOpenApi();
+
+        group.MapGet("/research/sessions/{sessionId:long}/debates", async (long sessionId, IResearchArtifactService artifactService, CancellationToken ct) =>
+        {
+            var list = await artifactService.GetDebateHistoryAsync(sessionId, ct);
+            return Results.Ok(list);
+        })
+        .WithName("GetResearchDebateHistory")
+        .WithOpenApi();
+
+        group.MapGet("/research/sessions/{sessionId:long}/proposals", async (long sessionId, IResearchArtifactService artifactService, CancellationToken ct) =>
+        {
+            var list = await artifactService.GetProposalHistoryAsync(sessionId, ct);
+            return Results.Ok(list);
+        })
+        .WithName("GetResearchProposalHistory")
         .WithOpenApi();
     }
 

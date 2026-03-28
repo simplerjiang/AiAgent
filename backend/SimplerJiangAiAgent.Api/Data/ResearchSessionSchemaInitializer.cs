@@ -149,6 +149,87 @@ public static class ResearchSessionSchemaInitializer
             "CREATE INDEX IX_ResearchReportSnapshots_SessionId_TurnId ON dbo.ResearchReportSnapshots(SessionId, TurnId, VersionIndex);", cancellationToken);
         await EnsureIndexAsync(dbContext, "IX_ResearchDecisionSnapshots_SessionId_TurnId",
             "CREATE INDEX IX_ResearchDecisionSnapshots_SessionId_TurnId ON dbo.ResearchDecisionSnapshots(SessionId, TurnId);", cancellationToken);
+
+        // R5 – Debate, Risk, Proposal tables
+        await dbContext.Database.ExecuteSqlRawAsync(
+            "IF OBJECT_ID(N'dbo.ResearchDebateMessages', N'U') IS NULL " +
+            "CREATE TABLE dbo.ResearchDebateMessages(" +
+            "Id BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_ResearchDebateMessages PRIMARY KEY, " +
+            "SessionId BIGINT NOT NULL, " +
+            "TurnId BIGINT NOT NULL, " +
+            "StageId BIGINT NOT NULL, " +
+            "Side NVARCHAR(20) NOT NULL, " +
+            "RoleId NVARCHAR(64) NOT NULL, " +
+            "RoundIndex INT NOT NULL, " +
+            "Claim NVARCHAR(MAX) NOT NULL, " +
+            "SupportingEvidenceRefsJson NVARCHAR(MAX) NULL, " +
+            "CounterTargetRole NVARCHAR(64) NULL, " +
+            "CounterPointsJson NVARCHAR(MAX) NULL, " +
+            "OpenQuestionsJson NVARCHAR(MAX) NULL, " +
+            "LlmTraceId NVARCHAR(256) NULL, " +
+            "CreatedAt DATETIME2 NOT NULL);", cancellationToken);
+
+        await dbContext.Database.ExecuteSqlRawAsync(
+            "IF OBJECT_ID(N'dbo.ResearchManagerVerdicts', N'U') IS NULL " +
+            "CREATE TABLE dbo.ResearchManagerVerdicts(" +
+            "Id BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_ResearchManagerVerdicts PRIMARY KEY, " +
+            "SessionId BIGINT NOT NULL, " +
+            "TurnId BIGINT NOT NULL, " +
+            "StageId BIGINT NOT NULL, " +
+            "RoundIndex INT NOT NULL, " +
+            "AdoptedBullPointsJson NVARCHAR(MAX) NULL, " +
+            "AdoptedBearPointsJson NVARCHAR(MAX) NULL, " +
+            "ShelvedDisputesJson NVARCHAR(MAX) NULL, " +
+            "ResearchConclusion NVARCHAR(MAX) NULL, " +
+            "InvestmentPlanDraftJson NVARCHAR(MAX) NULL, " +
+            "IsConverged BIT NOT NULL DEFAULT 0, " +
+            "LlmTraceId NVARCHAR(256) NULL, " +
+            "CreatedAt DATETIME2 NOT NULL);", cancellationToken);
+
+        await dbContext.Database.ExecuteSqlRawAsync(
+            "IF OBJECT_ID(N'dbo.ResearchTraderProposals', N'U') IS NULL " +
+            "CREATE TABLE dbo.ResearchTraderProposals(" +
+            "Id BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_ResearchTraderProposals PRIMARY KEY, " +
+            "SessionId BIGINT NOT NULL, " +
+            "TurnId BIGINT NOT NULL, " +
+            "StageId BIGINT NOT NULL, " +
+            "Version INT NOT NULL, " +
+            "Status NVARCHAR(20) NOT NULL, " +
+            "Direction NVARCHAR(64) NULL, " +
+            "EntryPlanJson NVARCHAR(MAX) NULL, " +
+            "ExitPlanJson NVARCHAR(MAX) NULL, " +
+            "PositionSizingJson NVARCHAR(MAX) NULL, " +
+            "Rationale NVARCHAR(MAX) NULL, " +
+            "SupersededByProposalId BIGINT NULL, " +
+            "LlmTraceId NVARCHAR(256) NULL, " +
+            "CreatedAt DATETIME2 NOT NULL);", cancellationToken);
+
+        await dbContext.Database.ExecuteSqlRawAsync(
+            "IF OBJECT_ID(N'dbo.ResearchRiskAssessments', N'U') IS NULL " +
+            "CREATE TABLE dbo.ResearchRiskAssessments(" +
+            "Id BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_ResearchRiskAssessments PRIMARY KEY, " +
+            "SessionId BIGINT NOT NULL, " +
+            "TurnId BIGINT NOT NULL, " +
+            "StageId BIGINT NOT NULL, " +
+            "RoleId NVARCHAR(64) NOT NULL, " +
+            "Tier NVARCHAR(20) NOT NULL, " +
+            "RoundIndex INT NOT NULL, " +
+            "RiskLimitsJson NVARCHAR(MAX) NULL, " +
+            "InvalidationsJson NVARCHAR(MAX) NULL, " +
+            "ProposalAssessment NVARCHAR(MAX) NULL, " +
+            "AnalysisContent NVARCHAR(MAX) NULL, " +
+            "ResponseToArtifactId BIGINT NULL, " +
+            "LlmTraceId NVARCHAR(256) NULL, " +
+            "CreatedAt DATETIME2 NOT NULL);", cancellationToken);
+
+        await EnsureIndexAsync(dbContext, "IX_ResearchDebateMessages_Session_Turn_Stage_Round",
+            "CREATE INDEX IX_ResearchDebateMessages_Session_Turn_Stage_Round ON dbo.ResearchDebateMessages(SessionId, TurnId, StageId, RoundIndex);", cancellationToken);
+        await EnsureIndexAsync(dbContext, "IX_ResearchManagerVerdicts_Session_Turn_Stage",
+            "CREATE INDEX IX_ResearchManagerVerdicts_Session_Turn_Stage ON dbo.ResearchManagerVerdicts(SessionId, TurnId, StageId);", cancellationToken);
+        await EnsureIndexAsync(dbContext, "IX_ResearchTraderProposals_Session_Turn_Version",
+            "CREATE INDEX IX_ResearchTraderProposals_Session_Turn_Version ON dbo.ResearchTraderProposals(SessionId, TurnId, Version);", cancellationToken);
+        await EnsureIndexAsync(dbContext, "IX_ResearchRiskAssessments_Session_Turn_Role_Round",
+            "CREATE INDEX IX_ResearchRiskAssessments_Session_Turn_Role_Round ON dbo.ResearchRiskAssessments(SessionId, TurnId, StageId, RoleId, RoundIndex);", cancellationToken);
     }
 
     private static async Task EnsureIndexAsync(AppDbContext dbContext, string indexName, string createSql, CancellationToken ct)

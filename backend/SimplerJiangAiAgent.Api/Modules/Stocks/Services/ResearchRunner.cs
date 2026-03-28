@@ -108,6 +108,9 @@ public sealed class ResearchRunner : IResearchRunner
 
                 upstreamArtifacts.AddRange(stageResult.Outputs);
 
+                // R5: persist structured debate/risk/proposal artifacts from role outputs
+                await PersistStructuredArtifactsAsync(session, turn, stageDef, stageResult, cancellationToken);
+
                 if (stageDef.StageType == ResearchStageType.PortfolioDecision && stageResult.Outputs.Count > 0)
                     await CreateDecisionSnapshotAsync(session, turn, stageResult.Outputs[0], cancellationToken);
             }
@@ -399,6 +402,319 @@ public sealed class ResearchRunner : IResearchRunner
             await _dbContext.SaveChangesAsync(cancellationToken);
         }
     }
+
+    private async Task PersistStructuredArtifactsAsync(
+        ResearchSession session, ResearchTurn turn,
+        StageDefinition stageDef, StageResult stageResult,
+        CancellationToken cancellationToken)
+    {
+        if (stageResult.Status == ResearchStageStatus.Failed || stageResult.Outputs.Count == 0)
+            return;
+
+        try
+        {
+            var stageSnapshot = await _dbContext.ResearchStageSnapshots
+                .Where(s => s.TurnId == turn.Id && s.StageType == stageDef.StageType)
+                .OrderByDescending(s => s.StageRunIndex)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (stageSnapshot is null) return;
+
+            switch (stageDef.StageType)
+            {
+                case ResearchStageType.ResearchDebate:
+                    PersistDebateArtifacts(session, turn, stageSnapshot, stageResult.Outputs);
+                    break;
+                case ResearchStageType.TraderProposal:
+                    await PersistTraderProposalAsync(session, turn, stageSnapshot, stageResult.Outputs, cancellationToken);
+                    break;
+                case ResearchStageType.RiskDebate:
+                    PersistRiskArtifacts(session, turn, stageSnapshot, stageResult.Outputs);
+                    break;
+            }
+
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to persist R5 artifacts for stage {StageType}", stageDef.StageType);
+        }
+    }
+
+    private void PersistDebateArtifacts(
+        ResearchSession session, ResearchTurn turn,
+        ResearchStageSnapshot stage, List<string> outputs)
+    {
+        var roundIndex = 0;
+        foreach (var output in outputs)
+        {
+            var (roleId, content) = SplitRoleOutput(output);
+            if (roleId is null) continue;
+
+            var side = roleId switch
+            {
+                StockAgentRoleIds.BullResearcher => ResearchDebateSide.Bull,
+                StockAgentRoleIds.BearResearcher => ResearchDebateSide.Bear,
+                StockAgentRoleIds.ResearchManager => ResearchDebateSide.Manager,
+                _ => (ResearchDebateSide?)null
+            };
+
+            if (side is null) continue;
+
+            // Parse structured fields from LLM JSON output
+            var (claim, evidenceRefs, counterTarget, counterPoints, openQuestions, traceId) = ParseDebateContent(content);
+
+            _dbContext.ResearchDebateMessages.Add(new ResearchDebateMessage
+            {
+                SessionId = session.Id, TurnId = turn.Id, StageId = stage.Id,
+                Side = side.Value, RoleId = roleId, RoundIndex = roundIndex / DebateParticipantsPerRound,
+                Claim = claim ?? content,
+                SupportingEvidenceRefsJson = evidenceRefs,
+                CounterTargetRole = counterTarget,
+                CounterPointsJson = counterPoints,
+                OpenQuestionsJson = openQuestions,
+                LlmTraceId = traceId,
+                CreatedAt = DateTime.UtcNow
+            });
+
+            // If this is the research manager, also create a verdict
+            if (side == ResearchDebateSide.Manager)
+            {
+                var (adopted, shelved, conclusion, planDraft, isConverged, verdictTraceId) = ParseManagerVerdict(content);
+                _dbContext.ResearchManagerVerdicts.Add(new ResearchManagerVerdict
+                {
+                    SessionId = session.Id, TurnId = turn.Id, StageId = stage.Id,
+                    RoundIndex = roundIndex / DebateParticipantsPerRound,
+                    AdoptedBullPointsJson = adopted?.bull,
+                    AdoptedBearPointsJson = adopted?.bear,
+                    ShelvedDisputesJson = shelved,
+                    ResearchConclusion = conclusion,
+                    InvestmentPlanDraftJson = planDraft,
+                    IsConverged = isConverged,
+                    LlmTraceId = verdictTraceId,
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+
+            roundIndex++;
+        }
+    }
+
+    private async Task PersistTraderProposalAsync(
+        ResearchSession session, ResearchTurn turn,
+        ResearchStageSnapshot stage, List<string> outputs,
+        CancellationToken cancellationToken)
+    {
+        // Only supersede proposals from prior turns
+        var priorActive = _dbContext.ResearchTraderProposals
+            .Where(p => p.SessionId == session.Id && p.TurnId != turn.Id && p.Status == TraderProposalStatus.Active)
+            .ToList();
+
+        var newVersion = priorActive.Count > 0 ? priorActive.Max(p => p.Version) + 1 : 1;
+
+        foreach (var output in outputs)
+        {
+            var (roleId, content) = SplitRoleOutput(output);
+            if (roleId != StockAgentRoleIds.Trader) continue;
+
+            var (direction, entryPlan, exitPlan, sizing, rationale, traceId) = ParseTraderProposal(content);
+
+            var proposal = new ResearchTraderProposal
+            {
+                SessionId = session.Id, TurnId = turn.Id, StageId = stage.Id,
+                Version = newVersion,
+                Status = TraderProposalStatus.Active,
+                Direction = direction, EntryPlanJson = entryPlan,
+                ExitPlanJson = exitPlan, PositionSizingJson = sizing,
+                Rationale = rationale, LlmTraceId = traceId,
+                CreatedAt = DateTime.UtcNow
+            };
+            _dbContext.ResearchTraderProposals.Add(proposal);
+
+            // Save to obtain the new proposal's Id for linking
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            // Mark prior active proposals as superseded with backlink
+            foreach (var prior in priorActive)
+            {
+                prior.Status = TraderProposalStatus.Superseded;
+                prior.SupersededByProposalId = proposal.Id;
+            }
+        }
+    }
+
+    private void PersistRiskArtifacts(
+        ResearchSession session, ResearchTurn turn,
+        ResearchStageSnapshot stage, List<string> outputs)
+    {
+        // Link risk assessments to the current active trader proposal
+        var activeProposalId = _dbContext.ResearchTraderProposals
+            .Where(p => p.SessionId == session.Id && p.Status == TraderProposalStatus.Active)
+            .OrderByDescending(p => p.Version)
+            .Select(p => (long?)p.Id)
+            .FirstOrDefault();
+
+        var roundIndex = 0;
+        foreach (var output in outputs)
+        {
+            var (roleId, content) = SplitRoleOutput(output);
+            if (roleId is null) continue;
+
+            var tier = roleId switch
+            {
+                StockAgentRoleIds.AggressiveRiskAnalyst => RiskAnalystTier.Aggressive,
+                StockAgentRoleIds.NeutralRiskAnalyst => RiskAnalystTier.Neutral,
+                StockAgentRoleIds.ConservativeRiskAnalyst => RiskAnalystTier.Conservative,
+                _ => (RiskAnalystTier?)null
+            };
+
+            if (tier is null) continue;
+
+            var (riskLimits, invalidations, assessment, analysis, traceId) = ParseRiskAssessment(content);
+
+            _dbContext.ResearchRiskAssessments.Add(new ResearchRiskAssessment
+            {
+                SessionId = session.Id, TurnId = turn.Id, StageId = stage.Id,
+                RoleId = roleId, Tier = tier.Value,
+                RoundIndex = roundIndex / RiskAnalystsPerRound,
+                RiskLimitsJson = riskLimits, InvalidationsJson = invalidations,
+                ProposalAssessment = assessment, AnalysisContent = analysis,
+                ResponseToArtifactId = activeProposalId,
+                LlmTraceId = traceId,
+                CreatedAt = DateTime.UtcNow
+            });
+
+            roundIndex++;
+        }
+    }
+
+    /// <summary>Split "[roleId]\ncontent" format from stage outputs.</summary>
+    internal static (string? RoleId, string Content) SplitRoleOutput(string output)
+    {
+        if (output.StartsWith('['))
+        {
+            var closeBracket = output.IndexOf(']');
+            if (closeBracket > 1)
+            {
+                var roleId = output[1..closeBracket];
+                var content = output[(closeBracket + 1)..].TrimStart('\n', '\r');
+                return (roleId, content);
+            }
+        }
+        return (null, output);
+    }
+
+    /// <summary>Best-effort parse of debate LLM JSON output.</summary>
+    private static (string? Claim, string? EvidenceRefs, string? CounterTarget, string? CounterPoints, string? OpenQuestions, string? TraceId) ParseDebateContent(string content)
+    {
+        try
+        {
+            var jsonStart = content.IndexOf('{');
+            if (jsonStart < 0) return (content, null, null, null, null, null);
+            var jsonText = UnwrapContentWrapper(content[jsonStart..]);
+            using var doc = JsonDocument.Parse(jsonText);
+            var root = doc.RootElement;
+            return (
+                root.TryGetProperty("claim", out var cl) ? cl.GetString() : content,
+                root.TryGetProperty("supporting_evidence_refs", out var e) ? e.GetRawText() : null,
+                root.TryGetProperty("counter_target_role", out var ct) ? ct.GetString() : null,
+                root.TryGetProperty("counter_points", out var cp) ? cp.GetRawText() : null,
+                root.TryGetProperty("open_questions", out var oq) ? oq.GetRawText() : null,
+                root.TryGetProperty("trace_id", out var t) ? t.GetString() : null
+            );
+        }
+        catch { return (content, null, null, null, null, null); }
+    }
+
+    /// <summary>Best-effort parse of manager verdict from JSON.</summary>
+    private static ((string? bull, string? bear)? Adopted, string? Shelved, string? Conclusion, string? PlanDraft, bool IsConverged, string? TraceId) ParseManagerVerdict(string content)
+    {
+        try
+        {
+            var jsonStart = content.IndexOf('{');
+            if (jsonStart < 0) return (null, null, content, null, false, null);
+            var jsonText = UnwrapContentWrapper(content[jsonStart..]);
+            using var doc = JsonDocument.Parse(jsonText);
+            var root = doc.RootElement;
+            var bull = root.TryGetProperty("adopted_bull_points", out var bp) ? bp.GetRawText() : null;
+            var bear = root.TryGetProperty("adopted_bear_points", out var brp) ? brp.GetRawText() : null;
+            var shelved = root.TryGetProperty("shelved_disputes", out var sd) ? sd.GetRawText() : null;
+            var conclusion = root.TryGetProperty("research_conclusion", out var rc) ? rc.GetString() : null;
+            var planDraft = root.TryGetProperty("investment_plan_draft", out var ip) ? ip.GetRawText() : null;
+            var isConverged = (root.TryGetProperty("converged", out var cv) && cv.GetBoolean())
+                || (conclusion?.Contains("CONVERGED", StringComparison.OrdinalIgnoreCase) ?? false)
+                || (conclusion?.Contains("收敛", StringComparison.Ordinal) ?? false);
+            var traceId = root.TryGetProperty("trace_id", out var t) ? t.GetString() : null;
+            return ((bull, bear), shelved, conclusion, planDraft, isConverged, traceId);
+        }
+        catch { return (null, null, content, null, false, null); }
+    }
+
+    /// <summary>Best-effort parse of trader proposal from JSON.</summary>
+    private static (string? Direction, string? EntryPlan, string? ExitPlan, string? Sizing, string? Rationale, string? TraceId) ParseTraderProposal(string content)
+    {
+        try
+        {
+            var jsonStart = content.IndexOf('{');
+            if (jsonStart < 0) return (null, null, null, null, content, null);
+            var jsonText = UnwrapContentWrapper(content[jsonStart..]);
+            using var doc = JsonDocument.Parse(jsonText);
+            var root = doc.RootElement;
+            return (
+                root.TryGetProperty("direction", out var d) ? d.GetString() : null,
+                root.TryGetProperty("entry_plan", out var ep) ? ep.GetRawText() : null,
+                root.TryGetProperty("exit_plan", out var xp) ? xp.GetRawText() : null,
+                root.TryGetProperty("position_sizing", out var ps) ? ps.GetRawText() : null,
+                root.TryGetProperty("rationale", out var r) ? r.GetString() : null,
+                root.TryGetProperty("trace_id", out var t) ? t.GetString() : null
+            );
+        }
+        catch { return (null, null, null, null, content, null); }
+    }
+
+    /// <summary>Best-effort parse of risk assessment from JSON.</summary>
+    private static (string? RiskLimits, string? Invalidations, string? Assessment, string? Analysis, string? TraceId) ParseRiskAssessment(string content)
+    {
+        try
+        {
+            var jsonStart = content.IndexOf('{');
+            if (jsonStart < 0) return (null, null, null, content, null);
+            var jsonText = UnwrapContentWrapper(content[jsonStart..]);
+            using var doc = JsonDocument.Parse(jsonText);
+            var root = doc.RootElement;
+            return (
+                root.TryGetProperty("risk_limits", out var rl) ? rl.GetRawText() : null,
+                root.TryGetProperty("invalidations", out var inv) ? inv.GetRawText() : null,
+                root.TryGetProperty("proposal_assessment", out var pa) ? pa.GetString() : null,
+                root.TryGetProperty("analysis", out var a) ? a.GetString() : null,
+                root.TryGetProperty("trace_id", out var t) ? t.GetString() : null
+            );
+        }
+        catch { return (null, null, null, content, null); }
+    }
+
+    /// <summary>If the raw JSON has a {"content":"..."} wrapper, extract the inner JSON string. No leaked JsonDocument.</summary>
+    private static string UnwrapContentWrapper(string rawJson)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(rawJson);
+            if (doc.RootElement.TryGetProperty("content", out var c) && c.ValueKind == JsonValueKind.String)
+            {
+                var inner = c.GetString();
+                if (inner is not null)
+                {
+                    var innerStart = inner.IndexOf('{');
+                    if (innerStart >= 0) return inner[innerStart..];
+                }
+            }
+        }
+        catch { /* not valid JSON or no wrapper — return as-is */ }
+        return rawJson;
+    }
+
+    private const int DebateParticipantsPerRound = 3;
+    private const int RiskAnalystsPerRound = 3;
 
     private async Task PersistFeedItemsAsync(long turnId, CancellationToken cancellationToken)
     {
