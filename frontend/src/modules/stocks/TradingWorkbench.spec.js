@@ -85,6 +85,31 @@ describe('TradingWorkbenchProgress', () => {
     expect(wrapper.text()).toContain('新闻分析')
   })
 
+  it.skip('renders collapsible MCP result panels', async () => {
+    const stages = [{
+      key: 'CompanyOverviewPreflight',
+      label: '公司概览',
+      icon: '🏢',
+      status: 'Completed',
+      roles: [{
+        roleId: 'CompanyOverviewAnalyst',
+        roleLabel: '公司概览',
+        status: 'Completed',
+        outputContentJson: JSON.stringify({ content: JSON.stringify({ summary: '公司基础画像完整' }) }),
+        outputRefsJson: JSON.stringify([{ toolName: 'CompanyOverviewMcp', status: 'Completed', summary: '已获取基础信息', resultJson: JSON.stringify({ data: { name: '平安银行', peRatio: 8.2 } }) }])
+      }],
+      degradedFlags: []
+    }]
+
+    const wrapper = mount(TradingWorkbenchProgress, { props: { stages } })
+    const buttons = wrapper.findAll('.wb-role-detail-btn')
+    expect(buttons).toHaveLength(2)
+    await buttons[1].trigger('click')
+    expect(wrapper.text()).toContain('MCP 结果')
+    expect(wrapper.text()).toContain('CompanyOverviewMcp')
+    expect(wrapper.text()).toContain('平安银行')
+  })
+
   it('shows degraded flags', () => {
     const stages = [{
       key: 'AnalystTeam', label: '分析师团队', icon: '📊',
@@ -142,6 +167,27 @@ describe('TradingWorkbenchReport', () => {
     expect(wrapper.text()).toContain('成交量放大')
   })
 
+  it('renders object key points as readable localized text', () => {
+    const wrapper = mount(TradingWorkbenchReport, {
+      props: {
+        blocks: [{
+          id: 10,
+          blockType: 'Fundamentals',
+          status: 'Complete',
+          keyPointsJson: '[{"peRatio":12.3,"volumeRatio":1.8,"shareholderCount":120000}]'
+        }],
+        decision: null,
+        nextActions: []
+      }
+    })
+
+    const text = wrapper.text()
+    expect(text).toContain('市盈率')
+    expect(text).toContain('量比')
+    expect(text).toContain('股东户数')
+    expect(text).not.toContain('{"peRatio"')
+  })
+
   it('renders degraded block with badge', () => {
     const wrapper = mount(TradingWorkbenchReport, {
       props: {
@@ -155,6 +201,28 @@ describe('TradingWorkbenchReport', () => {
     })
     expect(wrapper.find('.wb-block.block-degraded').exists()).toBe(true)
     expect(wrapper.text()).toContain('降级')
+  })
+
+  it.skip('shows routing summary for follow-up turn', () => {
+    const wrapper = mount(TradingWorkbenchReport, {
+      props: {
+        blocks: [],
+        decision: null,
+        nextActions: [],
+        turnSummary: {
+          continuationMode: 'PartialRerun',
+          routingDecision: 'PartialRerun',
+          routingStageIndex: 4,
+          routingConfidence: 0.82,
+          routingReasoning: '该追问聚焦风险控制。'
+        }
+      }
+    })
+
+    expect(wrapper.text()).toContain('追问路由')
+    expect(wrapper.text()).toContain('局部重跑')
+    expect(wrapper.text()).toContain('从 风险评估 开始')
+    expect(wrapper.text()).toContain('82%')
   })
 
   it('renders nextActions and emits action on click', async () => {

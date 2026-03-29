@@ -48,6 +48,10 @@ public sealed record ResearchTurnSummaryDto(
     string UserPrompt,
     string Status,
     string ContinuationMode,
+    string? RoutingDecision,
+    string? RoutingReasoning,
+    decimal? RoutingConfidence,
+    int? RoutingStageIndex,
     DateTime RequestedAt,
     DateTime? CompletedAt);
 
@@ -58,6 +62,7 @@ public sealed record ResearchStageSnapshotDto(
     string ExecutionMode,
     string Status,
     string? Summary,
+    IReadOnlyList<string> DegradedFlags,
     IReadOnlyList<ResearchRoleStateDto> RoleStates,
     DateTime? StartedAt,
     DateTime? CompletedAt);
@@ -70,6 +75,9 @@ public sealed record ResearchRoleStateDto(
     string? ErrorCode,
     string? ErrorMessage,
     string? LlmTraceId,
+    string? OutputRefsJson,
+    string? OutputContentJson,
+    IReadOnlyList<string> DegradedFlags,
     DateTime? StartedAt,
     DateTime? CompletedAt);
 
@@ -80,7 +88,8 @@ public sealed record ResearchFeedItemDto(
     string? RoleId,
     string Content,
     string? TraceId,
-    DateTime CreatedAt);
+    DateTime CreatedAt,
+    string? MetadataJson = null);
 
 public sealed record ResearchReportSnapshotDto(
     long Id,

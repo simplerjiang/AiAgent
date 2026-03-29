@@ -44,11 +44,16 @@ public static class TradingWorkbenchPromptTemplates
 
         ### 输出格式
         以 JSON 结构输出：
+        - headline: 标题
+        - summary: 公司基础画像摘要
         - companyName: 公司全称
         - shortName: 简称
         - industry: 行业分类
         - mainBusiness: 主营业务概述
+        - businessScope: 经营范围摘要
         - listingBoard: 上市板块
+        - keyPoints: 关键字段列表，必须尽可能覆盖已获取到的基础信息
+        - dataCoverage: { acquiredCount, displayedCount, missingFields }
         - marketContext: 当前市场环境摘要
         - identificationConfidence: 识别置信度（高/中/低）
         - degradedFlags: 降级标记列表（如有）
@@ -300,6 +305,7 @@ public static class TradingWorkbenchPromptTemplates
         - bearStrengths: Bear 论点中被采纳的部分
         - investmentPlan: { direction, timeHorizon, keyTriggers, invalidConditions, riskWarnings }
         - openIssues: 仍未解决的疑问
+        - converged: true/false 辩论是否已充分收敛（如果你在本轮的判断方向与上一轮一致，且双方没有提出新的实质性论据或重大反驳，标记为 true）
 
         ### 深度要求
         - reasoning（决策推理过程）不少于300字，必须逐条分析双方关键论据的强弱。
@@ -390,6 +396,7 @@ public static class TradingWorkbenchPromptTemplates
         - supportArguments: 支持方面的风险论据
         - counterArguments: [{ opposingView, rebuttal }]（平衡激进/保守观点）
         - recommendation: 风险调整后的建议
+        - converged: true/false — 风险辩论是否已充分收敛（如果本轮三方风险评估的核心结论方向与上一轮一致，且没有新的实质性风险发现或重大分歧变化，标记为 true）
 
         ### 约束
         - 基于 Trader 计划和研究摘要开展分析，禁止直接查询数据。
@@ -446,6 +453,9 @@ public static class TradingWorkbenchPromptTemplates
         - confidence: 决策置信度
         - nextActions: [{ action, priority, description }]
         - invalidationConditions: 决策失效条件列表
+
+        ### Follow-up 路由规则
+        若当前输入本质上是对上一轮分析的追问、澄清或局部修订，应明确指出更适合延续、局部重跑还是全量重跑的原因。优先复用已有研究，不要默认开启全新完整轮次。
 
         ### 约束
         - 评级必须为五选一：Buy / Overweight / Hold / Underweight / Sell，禁止发明其他评级。

@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using SimplerJiangAiAgent.Api.Data;
 using SimplerJiangAiAgent.Api.Data.Entities;
@@ -12,12 +13,14 @@ public sealed class ResearchSessionService : IResearchSessionService
 
     private readonly AppDbContext _dbContext;
     private readonly IResearchEventBus _eventBus;
+    private readonly IResearchFollowUpRoutingService _followUpRoutingService;
     private readonly ILogger<ResearchSessionService> _logger;
 
-    public ResearchSessionService(AppDbContext dbContext, IResearchEventBus eventBus, ILogger<ResearchSessionService> logger)
+    public ResearchSessionService(AppDbContext dbContext, IResearchEventBus eventBus, IResearchFollowUpRoutingService followUpRoutingService, ILogger<ResearchSessionService> logger)
     {
         _dbContext = dbContext;
         _eventBus = eventBus;
+        _followUpRoutingService = followUpRoutingService;
         _logger = logger;
     }
 
@@ -64,15 +67,18 @@ public sealed class ResearchSessionService : IResearchSessionService
             .Select(ss => new ResearchStageSnapshotDto(
                 ss.Id, ss.StageType.ToString(), ss.StageRunIndex, ss.ExecutionMode.ToString(), ss.Status.ToString(),
                 ss.Summary,
+                ParseJsonStringArray(ss.DegradedFlagsJson),
                 ss.RoleStates.OrderBy(rs => rs.RunIndex).Select(rs => new ResearchRoleStateDto(
                     rs.Id, rs.RoleId, rs.RunIndex, rs.Status.ToString(),
-                    rs.ErrorCode, rs.ErrorMessage, rs.LlmTraceId, rs.StartedAt, rs.CompletedAt)).ToArray(),
+                    rs.ErrorCode, rs.ErrorMessage, rs.LlmTraceId,
+                    rs.OutputRefsJson, rs.OutputContentJson, ParseJsonStringArray(rs.DegradedFlagsJson),
+                    rs.StartedAt, rs.CompletedAt)).ToArray(),
                 ss.StartedAt, ss.CompletedAt)).ToArray()
             ?? Array.Empty<ResearchStageSnapshotDto>();
 
         var feedItems = orderedTurns
             .SelectMany(t => t.FeedItems.Select(fi => new ResearchFeedItemDto(
-                fi.Id, fi.TurnId, fi.ItemType.ToString(), fi.RoleId, fi.Content, fi.TraceId, fi.CreatedAt)))
+                fi.Id, fi.TurnId, fi.ItemType.ToString(), fi.RoleId, fi.Content, fi.TraceId, fi.CreatedAt, fi.MetadataJson)))
             .OrderBy(fi => fi.CreatedAt)
             .ToList();
 
@@ -90,7 +96,7 @@ public sealed class ResearchSessionService : IResearchSessionService
                 {
                     if (existingKeys.Contains((evt.EventType.ToString(), evt.RoleId, evt.Summary))) continue;
                     feedItems.Add(new ResearchFeedItemDto(
-                        0, evt.TurnId, evt.EventType.ToString(), evt.RoleId, evt.Summary, evt.TraceId, evt.Timestamp));
+                        0, evt.TurnId, evt.EventType.ToString(), evt.RoleId, evt.Summary, evt.TraceId, evt.Timestamp, evt.DetailJson));
                 }
                 feedItems = feedItems.OrderBy(fi => fi.CreatedAt).ToList();
             }
@@ -141,6 +147,7 @@ public sealed class ResearchSessionService : IResearchSessionService
     {
         var mode = ParseContinuationMode(request.ContinuationMode);
         ResearchSession session;
+        ResearchFollowUpRoutingDecision? routingDecision = null;
 
         if (mode == ResearchContinuationMode.NewSession || string.IsNullOrWhiteSpace(request.SessionKey))
         {
@@ -177,10 +184,18 @@ public sealed class ResearchSessionService : IResearchSessionService
 
             session.LastUserIntent = request.UserPrompt;
             session.UpdatedAt = DateTime.UtcNow;
+
+            if (!request.FromStageIndex.HasValue && mode == ResearchContinuationMode.ContinueSession)
+            {
+                routingDecision = await _followUpRoutingService.DecideAsync(session.Id, request.UserPrompt, cancellationToken);
+            }
         }
 
         var turnIndex = session.Turns.Count;
-        var effectiveMode = request.FromStageIndex.HasValue ? ResearchContinuationMode.PartialRerun : mode;
+        var effectiveMode = request.FromStageIndex.HasValue
+            ? ResearchContinuationMode.PartialRerun
+            : routingDecision?.ContinuationMode ?? mode;
+        var routingStageIndex = request.FromStageIndex ?? routingDecision?.FromStageIndex;
         var turn = new ResearchTurn
         {
             SessionId = session.Id,
@@ -188,7 +203,13 @@ public sealed class ResearchSessionService : IResearchSessionService
             UserPrompt = request.UserPrompt,
             Status = ResearchTurnStatus.Queued,
             ContinuationMode = effectiveMode,
-            RerunScope = request.FromStageIndex?.ToString(),
+            ReuseScope = routingDecision?.ReuseScope,
+            RerunScope = routingStageIndex?.ToString(),
+            ChangeSummary = routingDecision?.ChangeSummary,
+            RoutingDecision = routingDecision?.ContinuationMode.ToString(),
+            RoutingReasoning = routingDecision?.Reasoning,
+            RoutingConfidence = routingDecision?.Confidence,
+            RoutingStageIndex = routingStageIndex,
             RequestedAt = DateTime.UtcNow
         };
 
@@ -216,5 +237,34 @@ public sealed class ResearchSessionService : IResearchSessionService
 
     private static ResearchTurnSummaryDto MapTurnSummary(ResearchTurn t) =>
         new(t.Id, t.TurnIndex, t.UserPrompt, t.Status.ToString(),
-            t.ContinuationMode.ToString(), t.RequestedAt, t.CompletedAt);
+            t.ContinuationMode.ToString(), t.RoutingDecision, t.RoutingReasoning,
+            t.RoutingConfidence, t.RoutingStageIndex, t.RequestedAt, t.CompletedAt);
+
+    private static IReadOnlyList<string> ParseJsonStringArray(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return Array.Empty<string>();
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.ValueKind != JsonValueKind.Array)
+            {
+                return Array.Empty<string>();
+            }
+
+            return doc.RootElement.EnumerateArray()
+                .Where(item => item.ValueKind == JsonValueKind.String)
+                .Select(item => item.GetString())
+                .Where(item => !string.IsNullOrWhiteSpace(item))
+                .Cast<string>()
+                .ToArray();
+        }
+        catch
+        {
+            return Array.Empty<string>();
+        }
+    }
 }

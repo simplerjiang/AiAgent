@@ -69,11 +69,13 @@ public sealed class StocksModule : IModule
         services.AddScoped<IStockSignalService, StockSignalService>();
         services.AddScoped<IStockPositionGuidanceService, StockPositionGuidanceService>();
         services.AddScoped<IResearchSessionService, ResearchSessionService>();
+        services.AddScoped<IResearchFollowUpRoutingService, ResearchFollowUpRoutingService>();
         services.AddScoped<IResearchRoleExecutor, ResearchRoleExecutor>();
         services.AddScoped<IResearchRunner, ResearchRunner>();
         services.AddSingleton<IResearchEventBus, ResearchEventBus>();
         services.AddScoped<IResearchArtifactService, ResearchArtifactService>();
         services.AddScoped<IResearchReportService, ResearchReportService>();
+        services.AddSingleton<IJsonKeyTranslationService, JsonKeyTranslationService>();
         services.AddHostedService<TradingPlanTriggerWorker>();
         services.AddHostedService<TradingPlanReviewWorker>();
     }
@@ -973,6 +975,76 @@ public sealed class StocksModule : IModule
             return Results.Ok(sources);
         })
         .WithName("GetStockSources")
+        .WithOpenApi();
+
+        // ── Translation endpoints ────────────────────────────────────────
+
+        group.MapGet("/translations/json-keys", (IJsonKeyTranslationService translationService) =>
+        {
+            return Results.Ok(translationService.GetCachedTranslations());
+        })
+        .WithName("GetJsonKeyTranslations")
+        .WithOpenApi();
+
+        group.MapPost("/translations/json-keys", async (string[] keys, IJsonKeyTranslationService translationService, CancellationToken ct) =>
+        {
+            if (keys is null || keys.Length == 0)
+                return Results.BadRequest(new { message = "keys 不能为空" });
+            if (keys.Length > 200)
+                return Results.BadRequest(new { message = "单次最多翻译 200 个 key" });
+
+            var translations = await translationService.TranslateKeysAsync(keys, ct);
+            return Results.Ok(translations);
+        })
+        .WithName("TranslateJsonKeys")
+        .WithOpenApi();
+
+        // ── StockPosition endpoints ──────────────────────────────────────
+
+        group.MapGet("/position", async (string symbol, AppDbContext db, CancellationToken ct) =>
+        {
+            if (string.IsNullOrWhiteSpace(symbol))
+                return Results.BadRequest(new { message = "symbol 不能为空" });
+
+            var pos = await db.StockPositions
+                .FirstOrDefaultAsync(p => p.Symbol == symbol, ct);
+            if (pos is null)
+                return Results.Ok(new { symbol, quantityLots = 0, averageCostPrice = 0m, notes = (string?)null });
+            return Results.Ok(new { pos.Symbol, pos.QuantityLots, pos.AverageCostPrice, pos.Notes });
+        })
+        .WithName("GetStockPosition")
+        .WithOpenApi();
+
+        group.MapPut("/position", async (StockPositionUpsertDto request, AppDbContext db, CancellationToken ct) =>
+        {
+            if (string.IsNullOrWhiteSpace(request.Symbol))
+                return Results.BadRequest(new { message = "symbol 不能为空" });
+
+            var pos = await db.StockPositions
+                .FirstOrDefaultAsync(p => p.Symbol == request.Symbol, ct);
+            if (pos is null)
+            {
+                pos = new Data.Entities.StockPosition
+                {
+                    Symbol = request.Symbol,
+                    QuantityLots = request.QuantityLots,
+                    AverageCostPrice = request.AverageCostPrice,
+                    Notes = request.Notes,
+                    UpdatedAt = DateTime.UtcNow
+                };
+                db.StockPositions.Add(pos);
+            }
+            else
+            {
+                pos.QuantityLots = request.QuantityLots;
+                pos.AverageCostPrice = request.AverageCostPrice;
+                pos.Notes = request.Notes;
+                pos.UpdatedAt = DateTime.UtcNow;
+            }
+            await db.SaveChangesAsync(ct);
+            return Results.Ok(new { pos.Symbol, pos.QuantityLots, pos.AverageCostPrice, pos.Notes });
+        })
+        .WithName("UpsertStockPosition")
         .WithOpenApi();
 
         // ── Research Session endpoints ──────────────────────────────────────

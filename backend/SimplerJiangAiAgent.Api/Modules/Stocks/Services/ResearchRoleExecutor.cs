@@ -9,7 +9,8 @@ namespace SimplerJiangAiAgent.Api.Modules.Stocks.Services;
 public sealed record RoleExecutionContext(
     long SessionId, long TurnId, long StageId,
     string Symbol, string RoleId, string UserPrompt,
-    IReadOnlyList<string> UpstreamArtifacts);
+    IReadOnlyList<string> UpstreamArtifacts,
+    string? PositionContext = null);
 
 public sealed record RoleExecutionResult(
     string RoleId,
@@ -18,7 +19,16 @@ public sealed record RoleExecutionResult(
     string? LlmTraceId,
     IReadOnlyList<string> DegradedFlags,
     string? ErrorCode,
-    string? ErrorMessage);
+    string? ErrorMessage,
+    string? OutputRefsJson = null);
+
+internal sealed record ResearchToolOutputRef(
+    string ToolName,
+    string Status,
+    string Summary,
+    string? ResultJson,
+    string? ErrorMessage,
+    IReadOnlyList<string> DegradedFlags);
 
 public interface IResearchRoleExecutor
 {
@@ -63,6 +73,7 @@ public sealed class ResearchRoleExecutor : IResearchRoleExecutor
         var contract = _contractRegistry.GetRequired(context.RoleId);
         var degradedFlags = new List<string>();
         var toolResults = new List<string>();
+        var toolOutputRefs = new List<ResearchToolOutputRef>();
 
         _eventBus.Publish(new ResearchEvent(
             ResearchEventType.RoleStarted,
@@ -82,11 +93,26 @@ public sealed class ResearchRoleExecutor : IResearchRoleExecutor
                 {
                     if (isLocalRequired)
                     {
+                        toolOutputRefs.Add(new ResearchToolOutputRef(
+                            toolName,
+                            "Blocked",
+                            $"{toolName} 被策略拦截，无法执行。",
+                            null,
+                            auth.Reason,
+                            new[] { $"tool_blocked:{toolName}" }));
                         return new RoleExecutionResult(context.RoleId, ResearchRoleStatus.Failed,
                             null, null, [$"tool_blocked:{toolName}"], "TOOL_BLOCKED",
-                            $"Required tool {toolName} blocked: {auth.Reason}");
+                            $"Required tool {toolName} blocked: {auth.Reason}",
+                            JsonSerializer.Serialize(toolOutputRefs, RelaxedJsonOptions));
                     }
                     degradedFlags.Add($"tool_unavailable:{toolName}");
+                    toolOutputRefs.Add(new ResearchToolOutputRef(
+                        toolName,
+                        "Unavailable",
+                        $"{toolName} 当前不可用，角色已按降级路径继续。",
+                        null,
+                        auth.Reason,
+                        new[] { $"tool_unavailable:{toolName}" }));
                     continue;
                 }
 
@@ -94,7 +120,9 @@ public sealed class ResearchRoleExecutor : IResearchRoleExecutor
                     ResearchEventType.ToolDispatched,
                     context.SessionId, context.TurnId, context.StageId,
                     context.RoleId, null,
-                    $"Dispatching {toolName}", null, DateTime.UtcNow));
+                    $"正在调用 {toolName}",
+                    JsonSerializer.Serialize(new { toolName, symbol = context.Symbol, requestedAt = DateTime.UtcNow }),
+                    DateTime.UtcNow));
 
                 var toolSuccess = false;
                 for (var attempt = 0; attempt <= MaxToolRetries; attempt++)
@@ -113,12 +141,22 @@ public sealed class ResearchRoleExecutor : IResearchRoleExecutor
 
                         var toolResult = await DispatchToolAsync(toolName, context.Symbol, cancellationToken);
                         toolResults.Add($"[{toolName}]\n{toolResult}");
+                        toolOutputRefs.Add(new ResearchToolOutputRef(
+                            toolName,
+                            "Completed",
+                            BuildToolSummary(toolName, toolResult),
+                            toolResult,
+                            null,
+                            Array.Empty<string>()));
 
+                        var toolSummary = BuildToolSummary(toolName, toolResult);
                         _eventBus.Publish(new ResearchEvent(
                             ResearchEventType.ToolCompleted,
                             context.SessionId, context.TurnId, context.StageId,
                             context.RoleId, null,
-                            $"{toolName} completed", null, DateTime.UtcNow));
+                            $"{toolName} 完成",
+                            JsonSerializer.Serialize(new { toolName, status = "Completed", summary = toolSummary, resultPreview = toolResult.Length > 4000 ? toolResult[..4000] + "…(truncated)" : toolResult }),
+                            DateTime.UtcNow));
                         toolSuccess = true;
                         break;
                     }
@@ -138,6 +176,13 @@ public sealed class ResearchRoleExecutor : IResearchRoleExecutor
                 if (!toolSuccess)
                 {
                     degradedFlags.Add($"tool_error:{toolName}");
+                    toolOutputRefs.Add(new ResearchToolOutputRef(
+                        toolName,
+                        "Failed",
+                        $"{toolName} 获取失败，已按降级路径继续。",
+                        null,
+                        "tool execution failed after retries",
+                        new[] { $"tool_error:{toolName}" }));
                     _eventBus.Publish(new ResearchEvent(
                         ResearchEventType.ToolCompleted,
                         context.SessionId, context.TurnId, context.StageId,
@@ -180,11 +225,15 @@ public sealed class ResearchRoleExecutor : IResearchRoleExecutor
 
                 var feedSummary = ExtractFeedSummary(llmResult.Content);
 
+                // Store full LLM content in DetailJson so frontend can show expandable report
+                var roleSummaryDetail = feedSummary != llmResult.Content
+                    ? llmResult.Content
+                    : null;
                 _eventBus.Publish(new ResearchEvent(
                     ResearchEventType.RoleSummaryReady,
                     context.SessionId, context.TurnId, context.StageId,
                     context.RoleId, llmResult.TraceId,
-                    feedSummary, null, DateTime.UtcNow));
+                    feedSummary, roleSummaryDetail, DateTime.UtcNow));
 
                 var status = degradedFlags.Count > 0 ? ResearchRoleStatus.Degraded : ResearchRoleStatus.Completed;
 
@@ -196,7 +245,8 @@ public sealed class ResearchRoleExecutor : IResearchRoleExecutor
 
                 return new RoleExecutionResult(context.RoleId, status,
                     JsonSerializer.Serialize(new { content = llmResult.Content }, RelaxedJsonOptions),
-                    llmResult.TraceId, degradedFlags, null, null);
+                    llmResult.TraceId, degradedFlags, null, null,
+                    JsonSerializer.Serialize(toolOutputRefs, RelaxedJsonOptions));
             }
             catch (OperationCanceledException) { throw; }
             catch (Exception ex) when (attempt < MaxLlmRetries)
@@ -223,7 +273,8 @@ public sealed class ResearchRoleExecutor : IResearchRoleExecutor
             null, DateTime.UtcNow));
 
         return new RoleExecutionResult(context.RoleId, ResearchRoleStatus.Failed,
-            null, null, degradedFlags, "LLM_FAILED", lastLlmException?.Message);
+            null, null, degradedFlags, "LLM_FAILED", lastLlmException?.Message,
+            JsonSerializer.Serialize(toolOutputRefs, RelaxedJsonOptions));
     }
 
     private async Task<string> DispatchToolAsync(string toolName, string symbol, CancellationToken ct)
@@ -251,6 +302,11 @@ public sealed class ResearchRoleExecutor : IResearchRoleExecutor
         sb.AppendLine($"## 目标个股: {context.Symbol}");
         sb.AppendLine($"## 用户意图: {context.UserPrompt}");
 
+        if (!string.IsNullOrEmpty(context.PositionContext))
+        {
+            sb.AppendLine($"\n## 用户持仓信息:\n{context.PositionContext}");
+        }
+
         if (context.UpstreamArtifacts.Count > 0)
         {
             sb.AppendLine("\n## 上游角色产出:");
@@ -272,6 +328,46 @@ public sealed class ResearchRoleExecutor : IResearchRoleExecutor
         }
 
         return sb.ToString();
+    }
+
+    private static string BuildToolSummary(string toolName, string toolResultJson)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(toolResultJson);
+            var root = doc.RootElement;
+            var evidenceCount = root.TryGetProperty("evidence", out var evidenceNode) && evidenceNode.ValueKind == JsonValueKind.Array
+                ? evidenceNode.GetArrayLength()
+                : 0;
+
+            if (root.TryGetProperty("data", out var dataNode) && dataNode.ValueKind == JsonValueKind.Object)
+            {
+                var fragments = new List<string>();
+                foreach (var prop in dataNode.EnumerateObject())
+                {
+                    if (fragments.Count >= 3)
+                    {
+                        break;
+                    }
+
+                    if (prop.Value.ValueKind is JsonValueKind.String or JsonValueKind.Number or JsonValueKind.True or JsonValueKind.False)
+                    {
+                        fragments.Add($"{prop.Name}={prop.Value}");
+                    }
+                }
+
+                if (fragments.Count > 0)
+                {
+                    return $"{toolName}: {string.Join("，", fragments)}；evidence={evidenceCount}";
+                }
+            }
+
+            return $"{toolName}: 已获取结果；evidence={evidenceCount}";
+        }
+        catch
+        {
+            return $"{toolName}: 已获取结果";
+        }
     }
 
     /// <summary>Extract a human-readable summary from LLM output for feed display.</summary>

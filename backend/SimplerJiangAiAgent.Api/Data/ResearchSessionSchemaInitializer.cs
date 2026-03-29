@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using SimplerJiangAiAgent.Api.Data;
 
@@ -49,6 +50,10 @@ public static class ResearchSessionSchemaInitializer
             "ReuseScope NVARCHAR(MAX) NULL, " +
             "RerunScope NVARCHAR(MAX) NULL, " +
             "ChangeSummary NVARCHAR(MAX) NULL, " +
+            "RoutingDecision NVARCHAR(32) NULL, " +
+            "RoutingReasoning NVARCHAR(MAX) NULL, " +
+            "RoutingConfidence DECIMAL(18,2) NULL, " +
+            "RoutingStageIndex INT NULL, " +
             "StopReason NVARCHAR(MAX) NULL, " +
             "DegradedFlagsJson NVARCHAR(MAX) NULL, " +
             "RequestedAt DATETIME2 NOT NULL, " +
@@ -266,6 +271,16 @@ public static class ResearchSessionSchemaInitializer
         await EnsureIndexAsync(dbContext, "UQ_ResearchReportBlocks_Turn_Block_Version",
             "CREATE UNIQUE INDEX UQ_ResearchReportBlocks_Turn_Block_Version ON dbo.ResearchReportBlocks(TurnId, BlockType, VersionIndex);", cancellationToken);
 
+        await dbContext.Database.ExecuteSqlRawAsync(@"
+            IF COL_LENGTH('dbo.ResearchTurns','RoutingDecision') IS NULL
+                ALTER TABLE dbo.ResearchTurns ADD RoutingDecision NVARCHAR(32) NULL;
+            IF COL_LENGTH('dbo.ResearchTurns','RoutingReasoning') IS NULL
+                ALTER TABLE dbo.ResearchTurns ADD RoutingReasoning NVARCHAR(MAX) NULL;
+            IF COL_LENGTH('dbo.ResearchTurns','RoutingConfidence') IS NULL
+                ALTER TABLE dbo.ResearchTurns ADD RoutingConfidence DECIMAL(18,2) NULL;
+            IF COL_LENGTH('dbo.ResearchTurns','RoutingStageIndex') IS NULL
+                ALTER TABLE dbo.ResearchTurns ADD RoutingStageIndex INT NULL;", cancellationToken);
+
         // R6: Add missing columns to ResearchDecisionSnapshots
         await dbContext.Database.ExecuteSqlRawAsync(@"
             IF COL_LENGTH('dbo.ResearchDecisionSnapshots','SupportingEvidenceJson') IS NULL
@@ -274,12 +289,29 @@ public static class ResearchSessionSchemaInitializer
                 ALTER TABLE dbo.ResearchDecisionSnapshots ADD CounterEvidenceJson NVARCHAR(MAX) NULL;
             IF COL_LENGTH('dbo.ResearchDecisionSnapshots','ConfidenceExplanation') IS NULL
                 ALTER TABLE dbo.ResearchDecisionSnapshots ADD ConfidenceExplanation NVARCHAR(MAX) NULL;", cancellationToken);
+
+        // GOAL-004 R5: StockPositions table
+        await dbContext.Database.ExecuteSqlRawAsync(
+            "IF OBJECT_ID(N'dbo.StockPositions', N'U') IS NULL " +
+            "CREATE TABLE dbo.StockPositions(" +
+            "Id BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_StockPositions PRIMARY KEY, " +
+            "Symbol NVARCHAR(32) NOT NULL, " +
+            "QuantityLots INT NOT NULL DEFAULT 0, " +
+            "AverageCostPrice DECIMAL(18,4) NOT NULL DEFAULT 0, " +
+            "Notes NVARCHAR(MAX) NULL, " +
+            "UpdatedAt DATETIME2 NOT NULL);", cancellationToken);
+
+        await EnsureIndexAsync(dbContext, "UQ_StockPositions_Symbol",
+            "CREATE UNIQUE INDEX UQ_StockPositions_Symbol ON dbo.StockPositions(Symbol);", cancellationToken);
     }
 
     private static async Task EnsureIndexAsync(AppDbContext dbContext, string indexName, string createSql, CancellationToken ct)
     {
+        SqlIdentifierGuard.ValidateSqlIdentifier(indexName, nameof(indexName));
+#pragma warning disable EF1002 // DDL: indexName is developer-controlled and validated above
         await dbContext.Database.ExecuteSqlRawAsync(
             $"IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'{indexName}') {createSql}", ct);
+#pragma warning restore EF1002
     }
 
     private static async Task EnsureSqliteAsync(AppDbContext dbContext, CancellationToken cancellationToken)
@@ -313,6 +345,10 @@ public static class ResearchSessionSchemaInitializer
                 ReuseScope          TEXT    NULL,
                 RerunScope          TEXT    NULL,
                 ChangeSummary       TEXT    NULL,
+                RoutingDecision     TEXT    NULL,
+                RoutingReasoning    TEXT    NULL,
+                RoutingConfidence   REAL    NULL,
+                RoutingStageIndex   INTEGER NULL,
                 StopReason          TEXT    NULL,
                 DegradedFlagsJson   TEXT    NULL,
                 RequestedAt         TEXT    NOT NULL,
@@ -534,22 +570,69 @@ public static class ResearchSessionSchemaInitializer
         await dbContext.Database.ExecuteSqlRawAsync(
             "CREATE UNIQUE INDEX IF NOT EXISTS UQ_ResearchReportBlocks_Turn_Block_Version ON ResearchReportBlocks(TurnId, BlockType, VersionIndex);", cancellationToken);
 
+        await EnsureSqliteColumnAsync(dbContext, "ResearchTurns", "RoutingDecision", "TEXT", cancellationToken);
+        await EnsureSqliteColumnAsync(dbContext, "ResearchTurns", "RoutingReasoning", "TEXT", cancellationToken);
+        await EnsureSqliteColumnAsync(dbContext, "ResearchTurns", "RoutingConfidence", "REAL", cancellationToken);
+        await EnsureSqliteColumnAsync(dbContext, "ResearchTurns", "RoutingStageIndex", "INTEGER", cancellationToken);
+
         // R6: Ensure columns added after initial schema exist on ResearchDecisionSnapshots
         await EnsureSqliteColumnAsync(dbContext, "ResearchDecisionSnapshots", "SupportingEvidenceJson", "TEXT", cancellationToken);
         await EnsureSqliteColumnAsync(dbContext, "ResearchDecisionSnapshots", "CounterEvidenceJson", "TEXT", cancellationToken);
         await EnsureSqliteColumnAsync(dbContext, "ResearchDecisionSnapshots", "ConfidenceExplanation", "TEXT", cancellationToken);
+
+        // GOAL-004 R5: StockPositions table
+        await dbContext.Database.ExecuteSqlRawAsync(@"
+            CREATE TABLE IF NOT EXISTS StockPositions (
+                Id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+                Symbol              TEXT    NOT NULL,
+                QuantityLots        INTEGER NOT NULL DEFAULT 0,
+                AverageCostPrice    REAL    NOT NULL DEFAULT 0,
+                Notes               TEXT    NULL,
+                UpdatedAt           TEXT    NOT NULL
+            );", cancellationToken);
+        await dbContext.Database.ExecuteSqlRawAsync(
+            "CREATE UNIQUE INDEX IF NOT EXISTS UQ_StockPositions_Symbol ON StockPositions(Symbol);", cancellationToken);
     }
 
     private static async Task EnsureSqliteColumnAsync(AppDbContext dbContext, string table, string column, string sqlType, CancellationToken ct)
     {
+        SqlIdentifierGuard.ValidateSqlIdentifier(table, nameof(table));
+        SqlIdentifierGuard.ValidateSqlIdentifier(column, nameof(column));
+        SqlIdentifierGuard.ValidateSqlColumnType(sqlType);
         try
         {
+#pragma warning disable EF1002 // DDL: identifiers are developer-controlled and validated above
             await dbContext.Database.ExecuteSqlRawAsync(
                 $"ALTER TABLE \"{table}\" ADD COLUMN \"{column}\" {sqlType} NULL;", ct);
+#pragma warning restore EF1002
         }
         catch
         {
             // Column already exists — safe to ignore
         }
+    }
+}
+
+// ── SQL-safety helpers ────────────────────────────────────────────────
+file static class SqlIdentifierGuard
+{
+    private static readonly Regex SafeIdentifier =
+        new(@"^\w+$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    private static readonly HashSet<string> AllowedColumnTypes =
+        new(StringComparer.OrdinalIgnoreCase) { "TEXT", "REAL", "INTEGER", "BLOB", "NUMERIC" };
+
+    internal static void ValidateSqlIdentifier(string value, string paramName)
+    {
+        if (string.IsNullOrWhiteSpace(value) || !SafeIdentifier.IsMatch(value))
+            throw new ArgumentException(
+                $"SQL identifier '{paramName}' contains unsafe characters: '{value}'.", paramName);
+    }
+
+    internal static void ValidateSqlColumnType(string sqlType)
+    {
+        if (!AllowedColumnTypes.Contains(sqlType))
+            throw new ArgumentException(
+                $"SQL column type '{sqlType}' is not in the allowed list: {string.Join(", ", AllowedColumnTypes)}.", nameof(sqlType));
     }
 }

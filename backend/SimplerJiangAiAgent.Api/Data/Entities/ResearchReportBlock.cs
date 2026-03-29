@@ -2,10 +2,13 @@ namespace SimplerJiangAiAgent.Api.Data.Entities;
 
 public enum ReportBlockType
 {
+    CompanyOverview,
     Market,
     Social,
     News,
     Fundamentals,
+    Shareholder,
+    Product,
     ResearchDebate,
     TraderProposal,
     RiskReview,

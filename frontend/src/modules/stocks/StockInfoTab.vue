@@ -893,6 +893,24 @@ const handleChartViewChange = viewId => {
   chartActiveView.value = viewId || 'day'
 }
 
+const handleWorkbenchNavigateChart = action => {
+  if (action.actionType === 'ViewMinuteChart') {
+    chartActiveView.value = 'minute'
+  } else {
+    chartActiveView.value = 'day'
+  }
+}
+
+const handleWorkbenchNavigatePlan = () => {
+  const workspace = currentWorkspace.value
+  if (!workspace) return
+  workspace.planForm = createTradingPlanForm({
+    symbol: workspace.detail?.quote?.symbol ?? '',
+    name: workspace.detail?.quote?.name ?? ''
+  })
+  workspace.planModalOpen = true
+}
+
 const handleChartStrategyVisibilityChange = payload => {
   if (payload?.viewId !== 'minute' || payload?.strategyId !== 'minuteTdSequential') {
     return
@@ -1132,6 +1150,7 @@ watch(currentStockKey, () => {
               :minute-lines="detail.minuteLines"
               :base-price="Number(detail.quote.price) - Number(detail.quote.change)"
               :interval="interval"
+              :focused-view="chartActiveView"
               @update:interval="interval = $event"
               @view-change="handleChartViewChange"
               @strategy-visibility-change="handleChartStrategyVisibilityChange"
@@ -1204,6 +1223,8 @@ watch(currentStockKey, () => {
 
         <TradingWorkbench
           :symbol="detail?.quote?.symbol ?? ''"
+          @navigate-chart="handleWorkbenchNavigateChart"
+          @navigate-plan="handleWorkbenchNavigatePlan"
         />
 
         <StockTradingPlanModal

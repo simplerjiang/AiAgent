@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import DOMPurify from 'dompurify'
 import { marked } from 'marked'
+import { valueToSafeHtml, translateSignal } from '../../../utils/jsonMarkdownService.js'
 
 const props = defineProps({
   blocks: { type: Array, default: () => [] },
@@ -13,6 +14,7 @@ defineEmits(['action'])
 
 const blockTypeLabel = type => {
   const map = {
+    CompanyOverview: '公司概览',
     Market: '市场分析',
     Social: '社交情绪',
     News: '新闻动态',
@@ -20,17 +22,21 @@ const blockTypeLabel = type => {
     ResearchDebate: '研究辩论',
     TraderProposal: '交易方案',
     RiskReview: '风险评估',
-    PortfolioDecision: '投资决策'
+    PortfolioDecision: '投资决策',
+    Product: '产品与业务',
+    Shareholder: '股东分析'
   }
-  return map[type] ?? type
+  // case-insensitive lookup fallback
+  return map[type] ?? map[Object.keys(map).find(k => k.toLowerCase() === (type || '').toLowerCase())] ?? type
 }
 
 const blockTypeIcon = type => {
   const map = {
-    Market: '📈', Social: '💬', News: '📰', Fundamentals: '📊',
-    ResearchDebate: '⚔️', TraderProposal: '💹', RiskReview: '🛡️', PortfolioDecision: '🎯'
+    CompanyOverview: '🏢', Market: '📈', Social: '💬', News: '📰', Fundamentals: '📊',
+    ResearchDebate: '⚔️', TraderProposal: '💹', RiskReview: '🛡️', PortfolioDecision: '🎯',
+    Product: '🏭', Shareholder: '👥'
   }
-  return map[type] ?? '📋'
+  return map[type] ?? map[Object.keys(map).find(k => k.toLowerCase() === (type || '').toLowerCase())] ?? '📋'
 }
 
 const statusCls = status => {
@@ -82,6 +88,51 @@ const actionIcon = type => {
     DraftTradingPlan: '📝', FollowUpDispute: '🔁'
   }
   return map[type] ?? '➡️'
+}
+
+const SOURCE_LABELS = {
+  StockProductMcp: '产品分析',
+  CompanyOverviewMcp: '公司概况',
+  MarketContextMcp: '市场背景',
+  TechnicalMcp: '技术分析',
+  StockFundamentalsMcp: '基本面分析',
+  FundamentalsMcp: '基本面分析',
+  NewsMcp: '新闻工具',
+  SocialMcp: '社交舆情',
+  SocialSentimentMcp: '社交情绪',
+  StockShareholderMcp: '股东分析',
+  ShareholderMcp: '股东分析',
+  StockAnnouncementMcp: '公告分析',
+  AnnouncementMcp: '公告分析',
+  StockKlineMcp: 'K线数据',
+  StockMinuteMcp: '分时数据',
+  StockNewsMcp: '个股新闻',
+  StockSearchMcp: '股票搜索',
+  StockDetailMcp: '股票详情',
+  StockStrategyMcp: '策略分析',
+  SectorRotationMcp: '板块轮动'
+}
+
+const evidenceLabel = ev => {
+  if (typeof ev === 'string') return SOURCE_LABELS[ev] || ev
+  if (typeof ev === 'object' && ev !== null) {
+    const parts = []
+    const rawName = ev.metric || ev.indicator || ev.title || ev.name || ev.label || ev.source || ''
+    const name = SOURCE_LABELS[rawName] || rawName
+    if (name) parts.push(name)
+    const val = ev.value || ev.currentValue || ''
+    if (val) parts.push(String(val))
+    const assessment = ev.assessment || ev.signal || ev.significance || ''
+    if (assessment) parts.push(translateSignal(assessment))
+    // Translate source field separately if it wasn't used as the primary name
+    if (ev.source && ev.source !== rawName) {
+      const translatedSource = SOURCE_LABELS[ev.source] || ev.source
+      parts.push(`来源: ${translatedSource}`)
+    }
+    if (parts.length > 0) return parts.join(' · ')
+    return Object.values(ev).filter(v => typeof v === 'string' || typeof v === 'number').join(' · ') || '证据'
+  }
+  return String(ev)
 }
 </script>
 
@@ -149,13 +200,16 @@ const actionIcon = type => {
       </div>
 
       <div v-if="block.headline" class="wb-block-headline">{{ block.headline }}</div>
-      <div v-if="block.summary" class="wb-block-summary" v-html="safeHtml(block.summary)" />
+      <div v-if="block.summary" class="wb-block-summary" v-html="valueToSafeHtml(block.summary)" />
 
       <!-- Key points -->
       <div v-if="parseJsonArray(block.keyPointsJson).length" class="wb-block-section">
         <div class="wb-section-label">关键要点</div>
         <ul class="wb-point-list">
-          <li v-for="(pt, i) in parseJsonArray(block.keyPointsJson)" :key="i">{{ typeof pt === 'string' ? pt : JSON.stringify(pt) }}</li>
+          <li v-for="(pt, i) in parseJsonArray(block.keyPointsJson)" :key="i">
+            <template v-if="typeof pt === 'string'">{{ pt }}</template>
+            <span v-else v-html="valueToSafeHtml(pt)" />
+          </li>
         </ul>
       </div>
 
@@ -163,7 +217,10 @@ const actionIcon = type => {
       <div v-if="parseJsonArray(block.riskLimitsJson).length" class="wb-block-section">
         <div class="wb-section-label">风险限制</div>
         <ul class="wb-point-list risk">
-          <li v-for="(rl, i) in parseJsonArray(block.riskLimitsJson)" :key="i">{{ typeof rl === 'string' ? rl : JSON.stringify(rl) }}</li>
+          <li v-for="(rl, i) in parseJsonArray(block.riskLimitsJson)" :key="i">
+            <template v-if="typeof rl === 'string'">{{ rl }}</template>
+            <span v-else v-html="valueToSafeHtml(rl)" />
+          </li>
         </ul>
       </div>
 
@@ -171,7 +228,10 @@ const actionIcon = type => {
       <div v-if="parseJsonArray(block.invalidationsJson).length" class="wb-block-section">
         <div class="wb-section-label">失效条件</div>
         <ul class="wb-point-list warn">
-          <li v-for="(inv, i) in parseJsonArray(block.invalidationsJson)" :key="i">{{ typeof inv === 'string' ? inv : JSON.stringify(inv) }}</li>
+          <li v-for="(inv, i) in parseJsonArray(block.invalidationsJson)" :key="i">
+            <template v-if="typeof inv === 'string'">{{ inv }}</template>
+            <span v-else v-html="valueToSafeHtml(inv)" />
+          </li>
         </ul>
       </div>
 
@@ -179,13 +239,13 @@ const actionIcon = type => {
       <div v-if="parseJsonArray(block.evidenceRefsJson).length" class="wb-block-section">
         <div class="wb-section-label">支撑证据</div>
         <div class="wb-evidence-tags">
-          <span v-for="(ev, i) in parseJsonArray(block.evidenceRefsJson)" :key="i" class="wb-evidence-tag positive">{{ typeof ev === 'string' ? ev : JSON.stringify(ev) }}</span>
+          <span v-for="(ev, i) in parseJsonArray(block.evidenceRefsJson)" :key="i" class="wb-evidence-tag positive">{{ evidenceLabel(ev) }}</span>
         </div>
       </div>
       <div v-if="parseJsonArray(block.counterEvidenceRefsJson).length" class="wb-block-section">
         <div class="wb-section-label">反面证据</div>
         <div class="wb-evidence-tags">
-          <span v-for="(ev, i) in parseJsonArray(block.counterEvidenceRefsJson)" :key="i" class="wb-evidence-tag negative">{{ typeof ev === 'string' ? ev : JSON.stringify(ev) }}</span>
+          <span v-for="(ev, i) in parseJsonArray(block.counterEvidenceRefsJson)" :key="i" class="wb-evidence-tag negative">{{ evidenceLabel(ev) }}</span>
         </div>
       </div>
     </div>
@@ -219,10 +279,10 @@ const actionIcon = type => {
   gap: 6px;
   margin-bottom: 6px;
 }
-.wb-decision-icon { font-size: 14px; }
-.wb-decision-title { font-size: 13px; font-weight: 600; color: var(--wb-text, #e1e4ea); }
+.wb-decision-icon { font-size: 16px; }
+.wb-decision-title { font-size: 15px; font-weight: 600; color: var(--wb-text, #e1e4ea); }
 .wb-rating {
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
   padding: 1px 8px;
   border-radius: 3px;
@@ -235,7 +295,7 @@ const actionIcon = type => {
 .rating-strong-sell { color: #fff; background: #c62828; }
 
 .wb-decision-summary {
-  font-size: 12px;
+  font-size: 14px;
   color: var(--wb-text, #e1e4ea);
   line-height: 1.6;
   margin-bottom: 6px;
@@ -248,7 +308,7 @@ const actionIcon = type => {
   gap: 8px;
   margin: 6px 0;
 }
-.wb-conf-label { font-size: 11px; color: var(--wb-text-muted, #8b8fa3); }
+.wb-conf-label { font-size: 13px; color: var(--wb-text-muted, #8b8fa3); }
 .wb-conf-bar {
   flex: 1;
   height: 4px;
@@ -261,10 +321,10 @@ const actionIcon = type => {
   border-radius: 2px;
   transition: width 0.4s ease;
 }
-.wb-conf-value { font-size: 12px; font-weight: 600; min-width: 36px; text-align: right; }
+.wb-conf-value { font-size: 14px; font-weight: 600; min-width: 36px; text-align: right; }
 
 .wb-decision-explain {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--wb-text-muted, #8b8fa3);
   line-height: 1.4;
   font-style: italic;
@@ -275,7 +335,7 @@ const actionIcon = type => {
   padding: 4px 0;
 }
 .wb-actions-title {
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--wb-text-muted, #8b8fa3);
   margin-bottom: 6px;
@@ -294,7 +354,7 @@ const actionIcon = type => {
   border-radius: 5px;
   background: var(--wb-card-bg, rgba(255,255,255,0.03));
   color: var(--wb-text, #e1e4ea);
-  font-size: 11px;
+  font-size: 13px;
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s;
 }
@@ -302,7 +362,7 @@ const actionIcon = type => {
   background: rgba(91, 156, 246, 0.08);
   border-color: var(--wb-accent, #5b9cf6);
 }
-.wb-action-icon { font-size: 12px; }
+.wb-action-icon { font-size: 14px; }
 
 /* ── Report blocks ─────────────────────────────── */
 .wb-block {
@@ -320,16 +380,16 @@ const actionIcon = type => {
   gap: 5px;
   margin-bottom: 4px;
 }
-.wb-block-icon { font-size: 12px; }
+.wb-block-icon { font-size: 14px; }
 .wb-block-type {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--wb-text-muted, #8b8fa3);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 .wb-block-badge {
-  font-size: 9px;
+  font-size: 11px;
   padding: 0 5px;
   border-radius: 3px;
   font-weight: 700;
@@ -339,13 +399,13 @@ const actionIcon = type => {
 .wb-block-badge.failed { color: #ef5350; background: rgba(239,83,80,0.12); }
 
 .wb-block-headline {
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--wb-text, #e1e4ea);
   margin-bottom: 4px;
 }
 .wb-block-summary {
-  font-size: 12px;
+  font-size: 14px;
   color: var(--wb-text, #e1e4ea);
   line-height: 1.5;
   word-wrap: break-word;
@@ -359,7 +419,7 @@ const actionIcon = type => {
   margin-top: 6px;
 }
 .wb-section-label {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--wb-text-muted, #8b8fa3);
   margin-bottom: 3px;
@@ -367,7 +427,7 @@ const actionIcon = type => {
 .wb-point-list {
   margin: 0;
   padding-left: 16px;
-  font-size: 11px;
+  font-size: 13px;
   color: var(--wb-text, #e1e4ea);
   line-height: 1.5;
 }
@@ -380,7 +440,7 @@ const actionIcon = type => {
   gap: 4px;
 }
 .wb-evidence-tag {
-  font-size: 10px;
+  font-size: 12px;
   padding: 1px 6px;
   border-radius: 3px;
 }
@@ -395,7 +455,7 @@ const actionIcon = type => {
   gap: 8px;
   padding: 32px 12px;
   color: var(--wb-text-muted, #8b8fa3);
-  font-size: 12px;
+  font-size: 14px;
 }
 .pulse-dot {
   width: 6px;
@@ -414,6 +474,6 @@ const actionIcon = type => {
   padding: 24px 12px;
   color: var(--wb-text-muted, #8b8fa3);
 }
-.wb-report-empty p { font-size: 12px; margin: 0 0 4px; }
-.wb-report-empty-hint { font-size: 11px; }
+.wb-report-empty p { font-size: 14px; margin: 0 0 4px; }
+.wb-report-empty-hint { font-size: 13px; }
 </style>

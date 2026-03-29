@@ -1,14 +1,66 @@
 <script setup>
-defineProps({
+import { ref, watch } from 'vue'
+
+const props = defineProps({
   session: { type: Object, default: null },
   activeTurn: { type: Object, default: null },
   sessionStatus: { type: Object, default: () => ({ label: '空闲', cls: 'status-idle' }) },
   currentStage: { type: String, default: null },
   isRunning: { type: Boolean, default: false },
   error: { type: String, default: null },
-  isFullscreen: { type: Boolean, default: false }
+  isFullscreen: { type: Boolean, default: false },
+  symbol: { type: String, default: '' }
 })
 defineEmits(['refresh', 'toggle-fullscreen'])
+
+// Position state
+const posQuantity = ref(0)
+const posCost = ref(0)
+const posNotes = ref('')
+const posEditing = ref(false)
+const posSaving = ref(false)
+const posLoaded = ref(false)
+
+async function loadPosition() {
+  if (!props.symbol) return
+  try {
+    const resp = await fetch(`/api/stocks/position?symbol=${encodeURIComponent(props.symbol)}`)
+    if (resp.ok) {
+      const data = await resp.json()
+      posQuantity.value = data.quantityLots ?? 0
+      posCost.value = data.averageCostPrice ?? 0
+      posNotes.value = data.notes ?? ''
+      posLoaded.value = true
+    }
+  } catch { /* silent */ }
+}
+
+async function savePosition() {
+  if (!props.symbol) return
+  posSaving.value = true
+  try {
+    const resp = await fetch('/api/stocks/position', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        symbol: props.symbol,
+        quantityLots: posQuantity.value,
+        averageCostPrice: posCost.value,
+        notes: posNotes.value || null
+      })
+    })
+    if (resp.ok) {
+      posEditing.value = false
+    }
+  } catch { /* silent */ }
+  finally { posSaving.value = false }
+}
+
+watch(() => props.symbol, () => {
+  posEditing.value = false
+  posLoaded.value = false
+  loadPosition()
+}, { immediate: true })
 </script>
 
 <template>
@@ -30,6 +82,28 @@ defineEmits(['refresh', 'toggle-fullscreen'])
       <button class="wb-fullscreen-btn" :title="isFullscreen ? '退出全屏' : '全屏模式'" :aria-label="isFullscreen ? '退出全屏' : '全屏模式'" @click="$emit('toggle-fullscreen')">
         {{ isFullscreen ? '⛶' : '⛶' }}
       </button>
+    </div>
+
+    <!-- Position row -->
+    <div v-if="symbol" class="wb-position-row">
+      <template v-if="!posEditing">
+        <span class="wb-pos-label" @click="posEditing = true" title="点击编辑持仓">
+          <template v-if="posLoaded && posQuantity > 0">
+            📦 持仓 {{ posQuantity }} 手 @ ¥{{ posCost.toFixed(2) }}
+            <span v-if="posNotes" class="wb-pos-notes">· {{ posNotes }}</span>
+          </template>
+          <template v-else>📦 未设置持仓 (点击编辑)</template>
+        </span>
+      </template>
+      <template v-else>
+        <div class="wb-pos-form">
+          <label class="wb-pos-field">手数<input v-model.number="posQuantity" type="number" min="0" step="1" /></label>
+          <label class="wb-pos-field">均价<input v-model.number="posCost" type="number" min="0" step="0.01" /></label>
+          <label class="wb-pos-field">备注<input v-model="posNotes" type="text" placeholder="可选" /></label>
+          <button class="wb-pos-save" :disabled="posSaving" @click="savePosition">{{ posSaving ? '...' : '保存' }}</button>
+          <button class="wb-pos-cancel" @click="posEditing = false">取消</button>
+        </div>
+      </template>
     </div>
 
     <div v-if="currentStage" class="wb-stage-indicator">
@@ -64,7 +138,7 @@ defineEmits(['refresh', 'toggle-fullscreen'])
 }
 
 .wb-session-badge, .wb-turn-badge {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
   padding: 2px 6px;
   border-radius: 4px;
@@ -80,7 +154,7 @@ defineEmits(['refresh', 'toggle-fullscreen'])
 }
 
 .wb-status {
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 500;
   display: flex;
   align-items: center;
@@ -107,7 +181,7 @@ defineEmits(['refresh', 'toggle-fullscreen'])
 
 .wb-stage-indicator {
   margin-top: 6px;
-  font-size: 11px;
+  font-size: 13px;
   color: var(--wb-text-muted, #8b8fa3);
 }
 .wb-stage-label { margin-right: 4px; }
@@ -123,7 +197,7 @@ defineEmits(['refresh', 'toggle-fullscreen'])
   border-radius: 4px;
   padding: 2px 8px;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 16px;
 }
 .wb-refresh-btn:hover { color: var(--wb-text, #e1e4ea); }
 
@@ -134,7 +208,7 @@ defineEmits(['refresh', 'toggle-fullscreen'])
   border-radius: 4px;
   padding: 2px 8px;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 16px;
 }
 .wb-fullscreen-btn:hover { color: var(--wb-text, #e1e4ea); background: rgba(255,255,255,0.05); }
 
@@ -143,12 +217,66 @@ defineEmits(['refresh', 'toggle-fullscreen'])
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: 11px;
+  font-size: 13px;
   color: #ef5350;
   background: rgba(239, 83, 80, 0.1);
   padding: 4px 8px;
   border-radius: 4px;
 }
-.wb-error-icon { font-size: 12px; }
+.wb-error-icon { font-size: 14px; }
 .wb-error-text { line-height: 1.3; }
+
+/* Position row */
+.wb-position-row {
+  margin-top: 8px;
+  font-size: 14px;
+  color: var(--wb-text-muted, #8b8fa3);
+}
+.wb-pos-label {
+  cursor: pointer;
+  transition: color 0.15s;
+}
+.wb-pos-label:hover { color: var(--wb-text, #e1e4ea); }
+.wb-pos-notes { opacity: 0.7; }
+.wb-pos-form {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+.wb-pos-field {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 14px;
+  color: var(--wb-text-muted, #8b8fa3);
+}
+.wb-pos-field input {
+  width: 100px;
+  padding: 5px 8px;
+  font-size: 14px;
+  background: var(--wb-input-bg, #14161a);
+  border: 1px solid var(--wb-border, #2a2d35);
+  color: var(--wb-text, #e1e4ea);
+  border-radius: 4px;
+}
+.wb-pos-field input[type=text] { width: 120px; }
+.wb-pos-save, .wb-pos-cancel {
+  padding: 5px 14px;
+  font-size: 14px;
+  border-radius: 4px;
+  cursor: pointer;
+  border: 1px solid var(--wb-border, #2a2d35);
+}
+.wb-pos-save {
+  background: var(--wb-accent, #5b9cf6);
+  color: #fff;
+  border-color: transparent;
+}
+.wb-pos-save:disabled { opacity: 0.5; cursor: default; }
+.wb-pos-cancel {
+  background: transparent;
+  color: var(--wb-text-muted, #8b8fa3);
+}
 </style>

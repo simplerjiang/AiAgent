@@ -81,7 +81,7 @@ function handleKeydown(e) {
   margin-bottom: 6px;
 }
 .wb-mode-select {
-  font-size: 11px;
+  font-size: 13px;
   padding: 2px 6px;
   border: 1px solid var(--wb-border, #2a2d35);
   border-radius: 4px;
@@ -90,7 +90,7 @@ function handleKeydown(e) {
   outline: none;
 }
 .wb-mode-desc {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--wb-text-muted, #8b8fa3);
 }
 
@@ -107,7 +107,7 @@ function handleKeydown(e) {
   background: var(--wb-bg, #1a1d23);
   color: var(--wb-text, #e1e4ea);
   padding: 6px 10px;
-  font-size: 12px;
+  font-size: 14px;
   font-family: inherit;
   line-height: 1.4;
   outline: none;
@@ -132,7 +132,7 @@ function handleKeydown(e) {
   border-radius: 6px;
   background: var(--wb-accent, #5b9cf6);
   color: #fff;
-  font-size: 14px;
+  font-size: 16px;
   cursor: pointer;
   display: flex;
   align-items: center;

@@ -13,6 +13,101 @@ public sealed class ResearchReportTests
     // ── Report block generation from AnalystTeam stage ───────────────
 
     [Fact]
+    public async Task GenerateBlocks_CompanyOverviewStage_CreatesCoverageBlock()
+    {
+        await using var db = CreateDbContext();
+        var (session, turn) = await SeedSessionAndTurn(db);
+
+        var stage = new ResearchStageSnapshot
+        {
+            TurnId = turn.Id,
+            StageType = ResearchStageType.CompanyOverviewPreflight,
+            StageRunIndex = 0,
+            ExecutionMode = ResearchStageExecutionMode.Sequential,
+            Status = ResearchStageStatus.Completed,
+            StartedAt = DateTime.UtcNow,
+            CompletedAt = DateTime.UtcNow
+        };
+        db.ResearchStageSnapshots.Add(stage);
+        await db.SaveChangesAsync();
+
+        var toolRefs = JsonSerializer.Serialize(new[]
+        {
+            new
+            {
+                toolName = StockMcpToolNames.CompanyOverview,
+                status = "Completed",
+                summary = "company",
+                resultJson = JsonSerializer.Serialize(new
+                {
+                    data = new
+                    {
+                        name = "平安银行",
+                        sectorName = "银行",
+                        mainBusiness = "银行业务",
+                        businessScope = "公司金融、零售金融",
+                        price = 12.3,
+                        changePercent = 1.5,
+                        floatMarketCap = 1000000000,
+                        peRatio = 8.2,
+                        volumeRatio = 1.8,
+                        shareholderCount = 123456,
+                        quoteTimestamp = "2026-03-28 10:00:00"
+                    }
+                }),
+                errorMessage = (string?)null,
+                degradedFlags = Array.Empty<string>()
+            },
+            new
+            {
+                toolName = StockMcpToolNames.MarketContext,
+                status = "Completed",
+                summary = "market",
+                resultJson = JsonSerializer.Serialize(new
+                {
+                    data = new
+                    {
+                        stockSectorName = "银行",
+                        mainlineSectorName = "金融",
+                        stageConfidence = 78
+                    }
+                }),
+                errorMessage = (string?)null,
+                degradedFlags = Array.Empty<string>()
+            }
+        });
+
+        db.ResearchRoleStates.Add(new ResearchRoleState
+        {
+            StageId = stage.Id,
+            RoleId = StockAgentRoleIds.CompanyOverviewAnalyst,
+            RunIndex = 0,
+            Status = ResearchRoleStatus.Completed,
+            OutputRefsJson = toolRefs,
+            OutputContentJson = JsonSerializer.Serialize(new { content = JsonSerializer.Serialize(new { summary = "公司基础画像完整" }) }),
+            StartedAt = DateTime.UtcNow,
+            CompletedAt = DateTime.UtcNow
+        });
+        await db.SaveChangesAsync();
+
+        var service = new ResearchReportService(db);
+        var wrappedOutput = JsonSerializer.Serialize(new { content = JsonSerializer.Serialize(new { summary = "公司基础画像完整" }) });
+        await service.GenerateBlocksFromStageAsync(
+            session.Id,
+            turn.Id,
+            ResearchStageType.CompanyOverviewPreflight,
+            new[] { $"[{StockAgentRoleIds.CompanyOverviewAnalyst}]\n{wrappedOutput}" },
+            Array.Empty<string>());
+
+        var block = await db.ResearchReportBlocks.FirstOrDefaultAsync(b => b.TurnId == turn.Id && b.BlockType == ReportBlockType.CompanyOverview);
+        Assert.NotNull(block);
+        var keyPoints = JsonSerializer.Deserialize<string[]>(block!.KeyPointsJson ?? "[]") ?? Array.Empty<string>();
+        Assert.Contains("数据覆盖", block!.Summary);
+        Assert.Contains(keyPoints, item => item.Contains("量比", StringComparison.Ordinal));
+        Assert.Contains("平安银行", block.Headline);
+    }
+
+    [Fact]
     public async Task GenerateBlocks_AnalystTeam_CreatesMarketSocialNewsFundamentalsBlocks()
     {
         await using var db = CreateDbContext();

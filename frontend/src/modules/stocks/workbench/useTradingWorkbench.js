@@ -1,6 +1,40 @@
 import { ref, computed, watch, onUnmounted } from 'vue'
+import { loadTranslations } from '../../../utils/jsonMarkdownService'
 
 const API_BASE = '/api/stocks/research'
+const ROLE_LABELS = {
+  CompanyOverviewAnalyst: '公司概览',
+  MarketAnalyst: '市场分析',
+  SocialSentimentAnalyst: '社交情绪',
+  NewsAnalyst: '新闻事件',
+  FundamentalsAnalyst: '基本面',
+  ShareholderAnalyst: '股东结构',
+  ProductAnalyst: '产品业务',
+  BullResearcher: '看多研究员',
+  BearResearcher: '看空研究员',
+  ResearchManager: '研究主管',
+  Trader: '交易员',
+  AggressiveRiskAnalyst: '激进风控',
+  NeutralRiskAnalyst: '中性风控',
+  ConservativeRiskAnalyst: '保守风控',
+  PortfolioManager: '组合经理',
+  // snake_case variants (backend sends these)
+  company_overview_analyst: '公司概览',
+  market_analyst: '市场分析',
+  social_sentiment_analyst: '社交情绪',
+  news_analyst: '新闻事件',
+  fundamentals_analyst: '基本面',
+  shareholder_analyst: '股东结构',
+  product_analyst: '产品业务',
+  bull_researcher: '看多研究员',
+  bear_researcher: '看空研究员',
+  research_manager: '研究主管',
+  trader: '交易员',
+  aggressive_risk_analyst: '激进风控',
+  neutral_risk_analyst: '中性风控',
+  conservative_risk_analyst: '保守风控',
+  portfolio_manager: '组合经理'
+}
 
 async function apiGet(path, signal) {
   const res = await fetch(`${API_BASE}${path}`, { signal })
@@ -49,6 +83,9 @@ export const STATUS_MAP = {
  * @param {import('vue').Ref<string>} symbolRef - reactive symbol string
  */
 export function useTradingWorkbench(symbolRef) {
+  // Load backend translation dictionary for JSON key labels
+  loadTranslations()
+
   // ── Core state ─────────────────────────────────────
   const session = ref(null)
   const sessionDetail = ref(null)
@@ -80,7 +117,10 @@ export function useTradingWorkbench(symbolRef) {
       return {
         ...s,
         status: snap?.status ?? 'Pending',
-        roles: snap?.roleStates ?? [],
+        roles: (snap?.roleStates ?? []).map(role => ({
+          ...role,
+          roleLabel: ROLE_LABELS[role.roleId] ?? role.roleId
+        })),
         degradedFlags: snap?.degradedFlags ?? [],
         started: snap?.startedAt,
         finished: snap?.finishedAt

@@ -56,6 +56,7 @@ public sealed class AppDbContext : DbContext
     public DbSet<ResearchTraderProposal> ResearchTraderProposals => Set<ResearchTraderProposal>();
     public DbSet<ResearchRiskAssessment> ResearchRiskAssessments => Set<ResearchRiskAssessment>();
     public DbSet<ResearchReportBlock> ResearchReportBlocks => Set<ResearchReportBlock>();
+    public DbSet<StockPosition> StockPositions => Set<StockPosition>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -408,6 +409,8 @@ public sealed class AppDbContext : DbContext
             .Property(x => x.Status).HasConversion<string>().HasMaxLength(32);
         modelBuilder.Entity<ResearchTurn>()
             .Property(x => x.ContinuationMode).HasConversion<string>().HasMaxLength(32);
+        modelBuilder.Entity<ResearchTurn>()
+            .Property(x => x.RoutingDecision).HasMaxLength(32);
         modelBuilder.Entity<ResearchTurn>()
             .HasOne(x => x.Session).WithMany(x => x.Turns)
             .HasForeignKey(x => x.SessionId).OnDelete(DeleteBehavior.Cascade);

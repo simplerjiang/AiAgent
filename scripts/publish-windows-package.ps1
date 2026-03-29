@@ -18,7 +18,13 @@ if (Test-Path $packageRoot) {
 New-Item -ItemType Directory -Force -Path $packageRoot | Out-Null
 
 Write-Host "Building frontend..."
-npm --prefix (Join-Path $root "frontend") run build
+$frontendDir = Join-Path $root "frontend"
+# Use cmd /c so that Vite chunk-size warnings on stderr do not trigger
+# PowerShell's $ErrorActionPreference = "Stop" for NativeCommandError.
+cmd /c "npm --prefix `"$frontendDir`" run build 2>&1"
+if ($LASTEXITCODE -ne 0) {
+    throw "Frontend build failed with exit code $LASTEXITCODE"
+}
 
 Write-Host "Publishing backend..."
 dotnet publish (Join-Path $root "backend/SimplerJiangAiAgent.Api/SimplerJiangAiAgent.Api.csproj") `

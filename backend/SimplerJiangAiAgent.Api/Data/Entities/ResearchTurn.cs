@@ -29,6 +29,10 @@ public sealed class ResearchTurn
     public string? ReuseScope { get; set; }
     public string? RerunScope { get; set; }
     public string? ChangeSummary { get; set; }
+    public string? RoutingDecision { get; set; }
+    public string? RoutingReasoning { get; set; }
+    public decimal? RoutingConfidence { get; set; }
+    public int? RoutingStageIndex { get; set; }
     public string? StopReason { get; set; }
     public string? DegradedFlagsJson { get; set; }
     public DateTime RequestedAt { get; set; }

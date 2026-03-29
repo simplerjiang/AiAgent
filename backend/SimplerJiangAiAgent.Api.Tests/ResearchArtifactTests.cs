@@ -226,7 +226,8 @@ public sealed class ResearchArtifactTests
         var turn2 = new ResearchTurn
         {
             SessionId = session.Id, TurnIndex = 1, UserPrompt = "update plan",
-            Status = ResearchTurnStatus.Queued, ContinuationMode = ResearchContinuationMode.ContinueSession,
+            Status = ResearchTurnStatus.Queued, ContinuationMode = ResearchContinuationMode.PartialRerun,
+            RerunScope = "3",
             RequestedAt = DateTime.UtcNow
         };
         db.ResearchTurns.Add(turn2);

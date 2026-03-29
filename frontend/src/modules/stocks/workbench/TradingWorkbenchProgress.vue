@@ -16,6 +16,36 @@ const roleStatusIcon = status => {
     default: return '⏳'
   }
 }
+
+const MCP_TOOL_ZH = {
+  StockKlineMcp: 'K线数据', StockMinuteMcp: '分时数据', StockNewsMcp: '个股新闻',
+  StockSearchMcp: '股票搜索', StockDetailMcp: '股票详情', StockProductMcp: '产品分析',
+  CompanyOverviewMcp: '公司概况', MarketContextMcp: '市场背景', TechnicalMcp: '技术分析',
+  StockFundamentalsMcp: '基本面', FundamentalsMcp: '基本面',
+  NewsMcp: '新闻', SocialMcp: '社交舆情',
+  SocialSentimentMcp: '社交情绪',
+  StockShareholderMcp: '股东分析', ShareholderMcp: '股东分析',
+  StockAnnouncementMcp: '公告分析', AnnouncementMcp: '公告分析',
+  StockStrategyMcp: '策略分析', SectorRotationMcp: '板块轮动'
+}
+const FLAG_PREFIX_ZH = {
+  tool_error: '工具异常',
+  insufficient_evidence: '证据不足',
+  timeout: '超时',
+  rate_limited: '限流',
+  no_data: '无数据',
+  partial_data: '部分数据'
+}
+const translateFlag = flag => {
+  if (!flag) return flag
+  const idx = flag.indexOf(':')
+  if (idx < 0) return FLAG_PREFIX_ZH[flag] || flag
+  const prefix = flag.substring(0, idx)
+  const suffix = flag.substring(idx + 1)
+  const zh = FLAG_PREFIX_ZH[prefix] || prefix
+  const detail = MCP_TOOL_ZH[suffix] || suffix
+  return `${zh}: ${detail}`
+}
 </script>
 
 <template>
@@ -33,7 +63,8 @@ const roleStatusIcon = status => {
              stage.status === 'Completed' ? '完成' :
              stage.status === 'Failed' ? '失败' :
              stage.status === 'Pending' ? '待执行' :
-             stage.status === 'Skipped' ? '已复用' : stage.status }}
+             stage.status === 'Skipped' ? '已复用' :
+             stage.status === 'Degraded' ? '降级完成' : stage.status }}
         </span>
         <button
           v-if="!props.isRunning && (stage.status === 'Completed' || stage.status === 'Failed' || stage.status === 'Degraded')"
@@ -62,7 +93,7 @@ const roleStatusIcon = status => {
       <!-- Degraded flags -->
       <div v-if="stage.degradedFlags.length > 0" class="wb-degraded-flags">
         <span v-for="(flag, i) in stage.degradedFlags" :key="i" class="wb-degraded-flag">
-          ⚠️ {{ flag }}
+          ⚠️ {{ translateFlag(flag) }}
         </span>
       </div>
     </div>
@@ -106,9 +137,9 @@ const roleStatusIcon = status => {
   align-items: center;
   gap: 6px;
   padding: 6px 10px;
-  font-size: 12px;
+  font-size: 14px;
 }
-.wb-stage-icon { font-size: 13px; }
+.wb-stage-icon { font-size: 15px; }
 .wb-stage-label {
   flex: 1;
   font-weight: 500;
@@ -116,7 +147,7 @@ const roleStatusIcon = status => {
 }
 
 .wb-stage-status {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
   padding: 1px 6px;
   border-radius: 3px;
@@ -138,15 +169,15 @@ const roleStatusIcon = status => {
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: 11px;
+  font-size: 13px;
   color: var(--wb-text-muted, #8b8fa3);
 }
 .wb-role.role-completed { color: #66bb6a; }
 .wb-role.role-running { color: #4fc3f7; }
 .wb-role.role-failed { color: #ef5350; }
-.wb-role-icon { font-size: 10px; width: 14px; text-align: center; }
+.wb-role-icon { font-size: 12px; width: 14px; text-align: center; }
 .wb-role-name { flex: 1; }
-.wb-role-reused { font-size: 10px; }
+.wb-role-reused { font-size: 12px; }
 
 /* ── Degraded ──────────────────────────────────── */
 .wb-degraded-flags {
@@ -156,7 +187,7 @@ const roleStatusIcon = status => {
   gap: 4px;
 }
 .wb-degraded-flag {
-  font-size: 10px;
+  font-size: 12px;
   color: #f0b429;
   background: rgba(240, 180, 41, 0.08);
   padding: 1px 6px;
@@ -169,7 +200,7 @@ const roleStatusIcon = status => {
   color: var(--wb-accent, #5b9cf6);
   border-radius: 4px;
   padding: 1px 6px;
-  font-size: 10px;
+  font-size: 12px;
   cursor: pointer;
   flex-shrink: 0;
   transition: background 0.15s;
@@ -187,6 +218,6 @@ const roleStatusIcon = status => {
   text-align: center;
   padding: 24px 12px;
   color: var(--wb-text-muted, #8b8fa3);
-  font-size: 12px;
+  font-size: 14px;
 }
 </style>

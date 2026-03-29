@@ -60,6 +60,12 @@ function handleNextAction(action) {
     emit('navigate-chart', action)
   } else if (action.actionType === 'DraftTradingPlan') {
     emit('navigate-plan', action)
+  } else if (action.actionType === 'RefreshNews') {
+    wb.submitFollowUp('请重新获取最新新闻，并基于新数据更新分析结论')
+  } else if (action.actionType === 'DeepAnalysis') {
+    wb.submitFollowUp('请对当前分析进行更深入的研究，补充更多数据和论据')
+  } else if (action.description) {
+    wb.submitFollowUp(action.description)
   }
 }
 </script>
@@ -75,6 +81,7 @@ function handleNextAction(action) {
       :is-running="wb.isRunning.value"
       :error="wb.error.value"
       :is-fullscreen="isFullscreen"
+      :symbol="symbol"
       @refresh="wb.loadActiveSession()"
       @toggle-fullscreen="toggleFullscreen"
     />
@@ -256,7 +263,7 @@ function handleNextAction(action) {
   z-index: 1;
   background: var(--wb-header-bg, #1e2128);
   padding: 6px 12px;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--wb-text-muted, #8b8fa3);
   border-bottom: 1px solid var(--wb-border, #2a2d35);
@@ -280,7 +287,7 @@ function handleNextAction(action) {
   background: transparent;
   color: var(--wb-text-muted, #8b8fa3);
   cursor: pointer;
-  font-size: 12px;
+  font-size: 14px;
   transition: color 0.15s, border-bottom 0.15s;
   border-bottom: 2px solid transparent;
 }
@@ -291,8 +298,8 @@ function handleNextAction(action) {
   color: var(--wb-accent, #5b9cf6);
   border-bottom-color: var(--wb-accent, #5b9cf6);
 }
-.tab-icon { font-size: 13px; }
-.tab-label { font-size: 11px; font-weight: 500; }
+.tab-icon { font-size: 15px; }
+.tab-label { font-size: 13px; font-weight: 500; }
 
 /* ── Replay banner ─────────────────────────────── */
 .wb-replay-banner {
@@ -300,12 +307,12 @@ function handleNextAction(action) {
   padding: 4px 12px;
   background: rgba(91, 156, 246, 0.08);
   border-bottom: 1px solid rgba(91, 156, 246, 0.2);
-  font-size: 11px; color: var(--wb-accent, #5b9cf6);
+  font-size: 13px; color: var(--wb-accent, #5b9cf6);
 }
 .wb-replay-back-btn {
   background: transparent; border: 1px solid var(--wb-accent, #5b9cf6);
   color: var(--wb-accent, #5b9cf6); border-radius: 4px;
-  padding: 1px 8px; font-size: 10px; cursor: pointer;
+  padding: 1px 8px; font-size: 12px; cursor: pointer;
 }
 .wb-replay-back-btn:hover { background: rgba(91, 156, 246, 0.12); }
 
@@ -324,12 +331,12 @@ function handleNextAction(action) {
 }
 .wb-empty-icon { font-size: 32px; margin-bottom: 8px; }
 .wb-empty h4 {
-  font-size: 14px;
+  font-size: 16px;
   color: var(--wb-text, #e1e4ea);
   margin: 0 0 8px;
 }
 .wb-empty p {
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.5;
   margin: 0;
 }

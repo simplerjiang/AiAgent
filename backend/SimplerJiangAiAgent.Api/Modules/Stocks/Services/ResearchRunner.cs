@@ -39,6 +39,7 @@ public sealed class ResearchRunner : IResearchRunner
     private readonly IResearchEventBus _eventBus;
     private readonly IResearchReportService _reportService;
     private readonly ILogger<ResearchRunner> _logger;
+    private string? _positionContext;
 
     public ResearchRunner(
         AppDbContext dbContext,
@@ -71,14 +72,44 @@ public sealed class ResearchRunner : IResearchRunner
 
         _eventBus.Publish(new ResearchEvent(
             ResearchEventType.TurnStarted, session.Id, turn.Id, null, null, null,
-            $"Turn {turn.TurnIndex} started for {session.Symbol}", null, DateTime.UtcNow));
+            $"第 {turn.TurnIndex} 轮分析开始", null, DateTime.UtcNow));
+
+        // Publish user follow-up message so it appears in the feed as a user bubble
+        if (turn.TurnIndex > 1 && !string.IsNullOrWhiteSpace(turn.UserPrompt))
+        {
+            _eventBus.Publish(new ResearchEvent(
+                ResearchEventType.SystemNotice, session.Id, turn.Id, null, null, null,
+                turn.UserPrompt,
+                JsonSerializer.Serialize(new { feedItemType = "UserFollowUp" }),
+                DateTime.UtcNow));
+        }
 
         var upstreamArtifacts = new List<string>();
         var turnDegraded = false;
         var fromStageIndex = 0;
 
-        // ── Partial rerun: reuse artifacts from previous turn for skipped stages ──
+        // Load user position context for prompt injection
+        var position = await _dbContext.StockPositions
+            .FirstOrDefaultAsync(p => p.Symbol == session.Symbol, CancellationToken.None);
+        _positionContext = position is not null && position.QuantityLots > 0
+            ? $"用户当前持仓：{position.QuantityLots} 手，均价 {position.AverageCostPrice:F2} 元"
+            : null;
+
+        // ── Determine effective start stage ──
+        var effectiveRerunFrom = 0;
         if (int.TryParse(turn.RerunScope, out var rerunFrom) && rerunFrom > 0 && rerunFrom < Pipeline.Count)
+        {
+            effectiveRerunFrom = rerunFrom;
+        }
+        else if (turn.ContinuationMode == ResearchContinuationMode.ContinueSession && turn.TurnIndex > 0)
+        {
+            // ContinueSession: reuse all upstream artifacts, only re-run PortfolioDecision
+            effectiveRerunFrom = Pipeline.Count - 1;
+            _logger.LogInformation("ContinueSession mode: skipping to PortfolioDecision (stage {Stage})", effectiveRerunFrom);
+        }
+
+        // ── Partial rerun / ContinueSession: reuse artifacts from previous turn for skipped stages ──
+        if (effectiveRerunFrom > 0)
         {
             var previousTurnId = await _dbContext.ResearchTurns
                 .Where(t => t.SessionId == session.Id && t.Id < turn.Id &&
@@ -89,7 +120,7 @@ public sealed class ResearchRunner : IResearchRunner
 
             if (previousTurnId.HasValue)
             {
-                fromStageIndex = rerunFrom;
+                fromStageIndex = effectiveRerunFrom;
 
                 // Load upstream artifacts from previous turn's completed stages
                 var previousOutputs = await _dbContext.ResearchRoleStates
@@ -162,7 +193,7 @@ public sealed class ResearchRunner : IResearchRunner
             }
             else
             {
-                _logger.LogWarning("Partial rerun requested but no previous completed turn found; running full pipeline");
+                _logger.LogWarning("Rerun/ContinueSession requested but no previous completed turn found; running full pipeline");
             }
         }
 
@@ -341,9 +372,12 @@ public sealed class ResearchRunner : IResearchRunner
 
             if (round > 0 && rr.Outputs.Count > 0)
             {
-                var last = rr.Outputs[^1];
-                if (last.Contains("CONVERGED", StringComparison.OrdinalIgnoreCase) ||
-                    last.Contains("收敛", StringComparison.Ordinal))
+                var converged = rr.Outputs.Any(o =>
+                    o.Contains("CONVERGED", StringComparison.OrdinalIgnoreCase) ||
+                    o.Contains("收敛", StringComparison.Ordinal) ||
+                    o.Contains("\"converged\":true", StringComparison.OrdinalIgnoreCase) ||
+                    o.Contains("\"converged\": true", StringComparison.OrdinalIgnoreCase));
+                if (converged)
                 {
                     _logger.LogInformation("Debate {StageType} converged at round {Round}", stageDef.StageType, round + 1);
                     break;
@@ -379,7 +413,7 @@ public sealed class ResearchRunner : IResearchRunner
 
             execContexts.Add(new RoleExecutionContext(
                 session.Id, turn.Id, stage.Id, session.Symbol, roleId,
-                turn.UserPrompt, upstreamArtifacts));
+                turn.UserPrompt, upstreamArtifacts, _positionContext));
         }
         await _dbContext.SaveChangesAsync(cancellationToken);
 
@@ -400,6 +434,7 @@ public sealed class ResearchRunner : IResearchRunner
 
             roleState.Status = r.Status;
             roleState.OutputContentJson = r.OutputContentJson;
+            roleState.OutputRefsJson = r.OutputRefsJson;
             roleState.LlmTraceId = r.LlmTraceId;
             roleState.DegradedFlagsJson = r.DegradedFlags.Count > 0 ? JsonSerializer.Serialize(r.DegradedFlags) : null;
             roleState.ErrorCode = r.ErrorCode;
@@ -433,12 +468,13 @@ public sealed class ResearchRunner : IResearchRunner
 
         var context = new RoleExecutionContext(
             session.Id, turn.Id, stage.Id, session.Symbol, roleId,
-            turn.UserPrompt, upstreamArtifacts);
+            turn.UserPrompt, upstreamArtifacts, _positionContext);
 
         var result = await _roleExecutor.ExecuteRoleAsync(context, cancellationToken);
 
         roleState.Status = result.Status;
         roleState.OutputContentJson = result.OutputContentJson;
+        roleState.OutputRefsJson = result.OutputRefsJson;
         roleState.LlmTraceId = result.LlmTraceId;
         roleState.DegradedFlagsJson = result.DegradedFlags.Count > 0 ? JsonSerializer.Serialize(result.DegradedFlags) : null;
         roleState.ErrorCode = result.ErrorCode;
@@ -852,12 +888,21 @@ public sealed class ResearchRunner : IResearchRunner
         var events = _eventBus.Drain(turnId);
         foreach (var evt in events)
         {
+            var feedType = MapEventToFeedType(evt.EventType);
+
+            // Override feed type when metadata signals a UserFollowUp
+            if (evt.DetailJson is not null &&
+                evt.DetailJson.Contains("\"feedItemType\":\"UserFollowUp\"", StringComparison.Ordinal))
+            {
+                feedType = ResearchFeedItemType.UserFollowUp;
+            }
+
             _dbContext.ResearchFeedItems.Add(new ResearchFeedItem
             {
                 TurnId = evt.TurnId,
                 StageId = evt.StageId,
                 RoleId = evt.RoleId,
-                ItemType = MapEventToFeedType(evt.EventType),
+                ItemType = feedType,
                 Content = evt.Summary,
                 MetadataJson = evt.DetailJson,
                 TraceId = evt.TraceId,

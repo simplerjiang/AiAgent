@@ -241,6 +241,7 @@ public sealed record StockCopilotCompanyOverviewDataDto(
     decimal ChangePercent,
     decimal? FloatMarketCap,
     decimal? PeRatio,
+    decimal? VolumeRatio,
     int? ShareholderCount,
     DateTime QuoteTimestamp,
     DateTime? FundamentalUpdatedAt,

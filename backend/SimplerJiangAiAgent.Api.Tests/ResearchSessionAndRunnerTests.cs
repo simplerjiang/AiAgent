@@ -34,7 +34,7 @@ internal sealed class StubMcpToolGateway : IMcpToolGateway
     }
 
     public Task<StockCopilotMcpEnvelopeDto<StockCopilotCompanyOverviewDataDto>> GetCompanyOverviewAsync(string symbol, string? taskId, StockCopilotMcpWindowOptions? window, CancellationToken ct)
-        => Wrap(StockMcpToolNames.CompanyOverview, new StockCopilotCompanyOverviewDataDto(symbol, "Test", null, 0m, 0m, null, null, null, DateTime.UtcNow, null, 0, null, null));
+        => Wrap(StockMcpToolNames.CompanyOverview, new StockCopilotCompanyOverviewDataDto(symbol, "Test", null, 0m, 0m, null, null, null, null, DateTime.UtcNow, null, 0, null, null));
 
     public Task<StockCopilotMcpEnvelopeDto<StockCopilotProductDataDto>> GetProductAsync(string symbol, string? taskId, StockCopilotMcpWindowOptions? window, CancellationToken ct)
         => Wrap(StockMcpToolNames.Product, new StockCopilotProductDataDto(symbol, null, null, null, null, null, null, 0, "stub", Array.Empty<StockCopilotProductFactDto>()));
@@ -128,6 +128,20 @@ internal sealed class StubRoleExecutor : IResearchRoleExecutor
     }
 }
 
+internal sealed class StubFollowUpRoutingService : IResearchFollowUpRoutingService
+{
+    public ResearchFollowUpRoutingDecision Result { get; set; } = new(
+        ResearchContinuationMode.ContinueSession,
+        null,
+        "reuse_existing_materials",
+        "default",
+        "default",
+        0.5m);
+
+    public Task<ResearchFollowUpRoutingDecision> DecideAsync(long sessionId, string userPrompt, CancellationToken cancellationToken = default)
+        => Task.FromResult(Result);
+}
+
 internal sealed class NullReportService : IResearchReportService
 {
     public Task GenerateBlocksFromStageAsync(long sessionId, long turnId, ResearchStageType stageType,
@@ -151,8 +165,8 @@ public sealed class ResearchSessionAndRunnerTests
         return new AppDbContext(options);
     }
 
-    private static ResearchSessionService CreateSessionService(AppDbContext db) =>
-        new(db, new ResearchEventBus(), NullLogger<ResearchSessionService>.Instance);
+    private static ResearchSessionService CreateSessionService(AppDbContext db, StubFollowUpRoutingService? routingService = null) =>
+        new(db, new ResearchEventBus(), routingService ?? new StubFollowUpRoutingService(), NullLogger<ResearchSessionService>.Instance);
 
     #region R1 ResearchSessionService
 
@@ -214,6 +228,33 @@ public sealed class ResearchSessionAndRunnerTests
 
         var turnCount = await db.ResearchTurns.CountAsync(t => t.SessionId == initial.SessionId);
         Assert.Equal(2, turnCount);
+    }
+
+    [Fact]
+    public async Task SubmitTurnAsync_ContinueSession_UsesRouterDecision()
+    {
+        using var db = CreateDb();
+        var routingService = new StubFollowUpRoutingService
+        {
+            Result = new ResearchFollowUpRoutingDecision(
+                ResearchContinuationMode.PartialRerun,
+                4,
+                "reuse_research_and_trade_plan",
+                "重跑风险链路",
+                "该追问聚焦风险。",
+                0.82m)
+        };
+        var svc = CreateSessionService(db, routingService);
+
+        var initial = await svc.SubmitTurnAsync(new ResearchTurnSubmitRequestDto("SH600000", "init", null, null));
+        var continued = await svc.SubmitTurnAsync(new ResearchTurnSubmitRequestDto("SH600000", "继续分析一下风险", initial.SessionKey, "ContinueSession"));
+        var turn = await db.ResearchTurns.FindAsync(continued.TurnId);
+
+        Assert.NotNull(turn);
+        Assert.Equal(ResearchContinuationMode.PartialRerun, turn!.ContinuationMode);
+        Assert.Equal("4", turn.RerunScope);
+        Assert.Equal("PartialRerun", turn.RoutingDecision);
+        Assert.Equal("该追问聚焦风险。", turn.RoutingReasoning);
     }
 
     [Fact]
@@ -395,6 +436,7 @@ public sealed class ResearchSessionAndRunnerTests
 
         Assert.Equal(ResearchRoleStatus.Completed, result.Status);
         Assert.NotNull(result.OutputContentJson);
+        Assert.NotNull(result.OutputRefsJson);
         Assert.NotNull(result.LlmTraceId);
         Assert.Equal(2, gateway.CallCount);
         Assert.Contains(StockMcpToolNames.CompanyOverview, gateway.CalledTools);
@@ -729,6 +771,126 @@ public sealed class ResearchSessionAndRunnerTests
 
             await db.Entry(session).ReloadAsync();
             Assert.Equal("Strong Buy", session.LatestRating);
+        }
+    }
+
+    [Fact]
+    public async Task Runner_ContinueSession_SkipsToPortfolioDecision()
+    {
+        var (db, session, turn) = SeedTurnForRunner();
+        using (db)
+        {
+            var executor = new StubRoleExecutor();
+            var bus = new ResearchEventBus();
+            var runner = new ResearchRunner(db, executor, bus, new NullReportService(), NullLogger<ResearchRunner>.Instance);
+
+            // Complete the first turn (full pipeline)
+            await runner.RunTurnAsync(turn.Id);
+            await db.Entry(turn).ReloadAsync();
+            Assert.Equal(ResearchTurnStatus.Completed, turn.Status);
+
+            // Create a second turn with ContinueSession mode
+            var turn2 = new ResearchTurn
+            {
+                SessionId = session.Id,
+                TurnIndex = 1,
+                UserPrompt = "explain the rationale",
+                Status = ResearchTurnStatus.Queued,
+                ContinuationMode = ResearchContinuationMode.ContinueSession,
+                RequestedAt = DateTime.UtcNow
+            };
+            db.ResearchTurns.Add(turn2);
+            await db.SaveChangesAsync();
+
+            executor.ExecutedRoleIds.Clear();
+
+            // Run the ContinueSession turn
+            await runner.RunTurnAsync(turn2.Id);
+
+            await db.Entry(turn2).ReloadAsync();
+            Assert.Equal(ResearchTurnStatus.Completed, turn2.Status);
+
+            // Only PortfolioManager should have been executed in the second turn
+            Assert.Contains(StockAgentRoleIds.PortfolioManager, executor.ExecutedRoleIds);
+            Assert.DoesNotContain(StockAgentRoleIds.CompanyOverviewAnalyst, executor.ExecutedRoleIds);
+            Assert.DoesNotContain(StockAgentRoleIds.MarketAnalyst, executor.ExecutedRoleIds);
+            Assert.DoesNotContain(StockAgentRoleIds.BullResearcher, executor.ExecutedRoleIds);
+            Assert.DoesNotContain(StockAgentRoleIds.Trader, executor.ExecutedRoleIds);
+
+            // Stages 0-4 should be Skipped, Stage 5 should be Completed
+            var stages = await db.ResearchStageSnapshots
+                .Where(s => s.TurnId == turn2.Id)
+                .OrderBy(s => s.StageRunIndex)
+                .ToListAsync();
+
+            Assert.Equal(6, stages.Count);
+            for (var i = 0; i < 5; i++)
+                Assert.Equal(ResearchStageStatus.Skipped, stages[i].Status);
+            Assert.Equal(ResearchStageStatus.Completed, stages[5].Status);
+        }
+    }
+
+    [Fact]
+    public async Task Runner_DebateConvergence_StopsWhenConverged()
+    {
+        var (db, session, turn) = SeedTurnForRunner();
+        using (db)
+        {
+            var executor = new StubRoleExecutor();
+            // Make ResearchManager output contain convergence signal
+            executor.ResultsByRoleId[StockAgentRoleIds.ResearchManager] = new RoleExecutionResult(
+                StockAgentRoleIds.ResearchManager,
+                ResearchRoleStatus.Completed,
+                "{\"decision\":\"看多\",\"converged\":true}",
+                "trace-mgr",
+                Array.Empty<string>(),
+                null, null);
+
+            var bus = new ResearchEventBus();
+            var runner = new ResearchRunner(db, executor, bus, new NullReportService(), NullLogger<ResearchRunner>.Instance);
+
+            await runner.RunTurnAsync(turn.Id);
+
+            // ResearchDebate should converge after round 1 (2 rounds × 3 roles = 6)
+            var debateStage = await db.ResearchStageSnapshots
+                .Include(s => s.RoleStates)
+                .FirstOrDefaultAsync(s => s.TurnId == turn.Id && s.StageType == ResearchStageType.ResearchDebate);
+
+            Assert.NotNull(debateStage);
+            var debateRoleStates = debateStage!.RoleStates.ToList();
+            Assert.Equal(6, debateRoleStates.Count); // 2 rounds, not 3
+        }
+    }
+
+    [Fact]
+    public async Task Runner_RiskDebateConvergence_StopsWhenConverged()
+    {
+        var (db, session, turn) = SeedTurnForRunner();
+        using (db)
+        {
+            var executor = new StubRoleExecutor();
+            // Make NeutralRiskAnalyst output contain convergence signal
+            executor.ResultsByRoleId[StockAgentRoleIds.NeutralRiskAnalyst] = new RoleExecutionResult(
+                StockAgentRoleIds.NeutralRiskAnalyst,
+                ResearchRoleStatus.Completed,
+                "{\"riskStance\":\"中性\",\"recommendation\":\"hold\",\"converged\":true}",
+                "trace-neutral",
+                Array.Empty<string>(),
+                null, null);
+
+            var bus = new ResearchEventBus();
+            var runner = new ResearchRunner(db, executor, bus, new NullReportService(), NullLogger<ResearchRunner>.Instance);
+
+            await runner.RunTurnAsync(turn.Id);
+
+            // RiskDebate should converge after round 1 (2 rounds × 3 roles = 6)
+            var riskStage = await db.ResearchStageSnapshots
+                .Include(s => s.RoleStates)
+                .FirstOrDefaultAsync(s => s.TurnId == turn.Id && s.StageType == ResearchStageType.RiskDebate);
+
+            Assert.NotNull(riskStage);
+            var riskRoleStates = riskStage!.RoleStates.ToList();
+            Assert.Equal(6, riskRoleStates.Count); // 2 rounds × 3 analysts, not 3 rounds × 3 = 9
         }
     }
 

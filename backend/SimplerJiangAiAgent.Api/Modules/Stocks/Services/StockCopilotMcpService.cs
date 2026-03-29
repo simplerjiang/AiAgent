@@ -147,6 +147,7 @@ public sealed class StockCopilotMcpService : IStockCopilotMcpService
                 quote.ChangePercent,
                 quote.FloatMarketCap > 0m ? quote.FloatMarketCap : null,
                 quote.PeRatio > 0m ? quote.PeRatio : null,
+                quote.VolumeRatio > 0m ? quote.VolumeRatio : null,
                 shareholderCount,
                 quote.Timestamp,
                 snapshotResolution.UpdatedAt,

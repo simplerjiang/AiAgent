@@ -33,10 +33,13 @@ public sealed class ResearchReportService : IResearchReportService
     private static readonly IReadOnlyDictionary<string, ReportBlockType> RoleToBlockType =
         new Dictionary<string, ReportBlockType>
         {
+            [StockAgentRoleIds.CompanyOverviewAnalyst] = ReportBlockType.CompanyOverview,
             [StockAgentRoleIds.MarketAnalyst] = ReportBlockType.Market,
             [StockAgentRoleIds.SocialSentimentAnalyst] = ReportBlockType.Social,
             [StockAgentRoleIds.NewsAnalyst] = ReportBlockType.News,
             [StockAgentRoleIds.FundamentalsAnalyst] = ReportBlockType.Fundamentals,
+            [StockAgentRoleIds.ShareholderAnalyst] = ReportBlockType.Shareholder,
+            [StockAgentRoleIds.ProductAnalyst] = ReportBlockType.Product,
         };
 
     // ── Block generation from stage outputs ──────────────────────────
@@ -53,6 +56,10 @@ public sealed class ResearchReportService : IResearchReportService
 
         switch (stageType)
         {
+            case ResearchStageType.CompanyOverviewPreflight:
+                await BuildCompanyOverviewBlockAsync(sessionId, turnId, outputs, hasDegradation, degradedJson, now, cancellationToken);
+                break;
+
             case ResearchStageType.AnalystTeam:
                 foreach (var output in outputs)
                 {
@@ -150,6 +157,100 @@ public sealed class ResearchReportService : IResearchReportService
     }
 
     // ── Block builders ───────────────────────────────────────────────
+
+    private async Task BuildCompanyOverviewBlockAsync(
+        long sessionId,
+        long turnId,
+        IReadOnlyList<string> outputs,
+        bool hasDegradation,
+        string? degradedJson,
+        DateTime now,
+        CancellationToken cancellationToken)
+    {
+        var parsedOutput = outputs.Count > 0
+            ? ParseAnalystBlock(SplitRoleOutput(outputs[0]).Content)
+            : new ParsedBlock(null, null, null, null, null, null, null);
+
+        var roleState = await _dbContext.ResearchRoleStates
+            .AsNoTracking()
+            .Where(rs => rs.Stage.TurnId == turnId
+                && rs.Stage.StageType == ResearchStageType.CompanyOverviewPreflight
+                && rs.RoleId == StockAgentRoleIds.CompanyOverviewAnalyst)
+            .OrderByDescending(rs => rs.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        var companyOverview = TryReadToolData(roleState?.OutputRefsJson, StockMcpToolNames.CompanyOverview);
+        var marketContext = TryReadToolData(roleState?.OutputRefsJson, StockMcpToolNames.MarketContext);
+
+        var companyName = ReadString(companyOverview, "name");
+        var sectorName = ReadString(companyOverview, "sectorName");
+        var mainBusiness = ReadString(companyOverview, "mainBusiness");
+        var businessScope = ReadString(companyOverview, "businessScope");
+        var quoteTimestamp = ReadString(companyOverview, "quoteTimestamp");
+        var marketSummary = BuildMarketContextSummary(marketContext);
+
+        var keyPoints = new List<string>();
+        var coverageItems = new (string Label, string? Value)[]
+        {
+            ("公司名称", companyName),
+            ("所属行业", sectorName),
+            ("主营业务", mainBusiness),
+            ("经营范围", businessScope),
+            ("最新价", ReadFormattedNumber(companyOverview, "price", "元")),
+            ("涨跌幅", ReadFormattedPercent(companyOverview, "changePercent")),
+            ("流通市值", ReadFormattedNumber(companyOverview, "floatMarketCap", null)),
+            ("市盈率", ReadFormattedNumber(companyOverview, "peRatio", null)),
+            ("量比", ReadFormattedNumber(companyOverview, "volumeRatio", null)),
+            ("股东户数", ReadFormattedInt(companyOverview, "shareholderCount")),
+            ("市场环境", marketSummary)
+        };
+
+        foreach (var item in coverageItems.Where(item => !string.IsNullOrWhiteSpace(item.Value)))
+        {
+            keyPoints.Add($"{item.Label}: {item.Value}");
+        }
+
+        var missingFields = coverageItems.Where(item => string.IsNullOrWhiteSpace(item.Value)).Select(item => item.Label).ToArray();
+        var summaryParts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(parsedOutput.Summary))
+        {
+            summaryParts.Add(parsedOutput.Summary!);
+        }
+        if (!string.IsNullOrWhiteSpace(mainBusiness))
+        {
+            summaryParts.Add($"主营业务：{mainBusiness}");
+        }
+        if (!string.IsNullOrWhiteSpace(businessScope))
+        {
+            summaryParts.Add($"经营范围：{businessScope}");
+        }
+        if (!string.IsNullOrWhiteSpace(marketSummary))
+        {
+            summaryParts.Add($"市场环境：{marketSummary}");
+        }
+        summaryParts.Add($"数据覆盖：已获取 {keyPoints.Count}/{coverageItems.Length} 项，并全部展示。{(missingFields.Length > 0 ? $"缺失字段：{string.Join('、', missingFields)}。" : string.Empty)}");
+        if (!string.IsNullOrWhiteSpace(quoteTimestamp))
+        {
+            summaryParts.Add($"行情时间：{quoteTimestamp}");
+        }
+
+        _dbContext.ResearchReportBlocks.Add(new ResearchReportBlock
+        {
+            SessionId = sessionId,
+            TurnId = turnId,
+            BlockType = ReportBlockType.CompanyOverview,
+            VersionIndex = 0,
+            Headline = !string.IsNullOrWhiteSpace(companyName) ? $"{companyName} 公司概览" : parsedOutput.Headline ?? "公司概览",
+            Summary = string.Join("\n\n", summaryParts.Where(part => !string.IsNullOrWhiteSpace(part))),
+            KeyPointsJson = keyPoints.Count > 0 ? JsonSerializer.Serialize(keyPoints) : parsedOutput.KeyPointsJson,
+            EvidenceRefsJson = JsonSerializer.Serialize(new[] { StockMcpToolNames.CompanyOverview, StockMcpToolNames.MarketContext }),
+            Status = hasDegradation ? ReportBlockStatus.Degraded : ReportBlockStatus.Complete,
+            DegradedFlagsJson = hasDegradation ? degradedJson : null,
+            SourceStageType = ResearchStageType.CompanyOverviewPreflight.ToString(),
+            CreatedAt = now,
+            UpdatedAt = now
+        });
+    }
 
     private void BuildDebateBlock(
         long sessionId, long turnId, IReadOnlyList<string> outputs,
@@ -451,10 +552,17 @@ public sealed class ResearchReportService : IResearchReportService
             return new(
                 root.TryGetProperty("headline", out var h) ? h.GetString() : null,
                 root.TryGetProperty("summary", out var s) ? s.GetString() :
-                    root.TryGetProperty("analysis", out var a2) ? a2.GetString() : content,
-                root.TryGetProperty("key_points", out var kp) ? kp.GetRawText() : null,
+                    root.TryGetProperty("analysis", out var a2) ? a2.GetString() :
+                    root.TryGetProperty("businessScope", out var businessScope) ? businessScope.GetString() :
+                    root.TryGetProperty("industryPosition", out var industryPosition) ? industryPosition.GetString() :
+                    root.TryGetProperty("institutionActivity", out var institutionActivity) ? institutionActivity.GetString() : content,
+                root.TryGetProperty("key_points", out var kp) ? kp.GetRawText() :
+                    root.TryGetProperty("highlights", out var highlights) ? highlights.GetRawText() :
+                    root.TryGetProperty("riskSignals", out var riskSignals) ? riskSignals.GetRawText() :
+                    root.TryGetProperty("topHolderChanges", out var holderChanges) ? holderChanges.GetRawText() : null,
                 root.TryGetProperty("evidence_refs", out var er) ? er.GetRawText() :
-                    root.TryGetProperty("supporting_evidence_refs", out var ser) ? ser.GetRawText() : null,
+                    root.TryGetProperty("supporting_evidence_refs", out var ser) ? ser.GetRawText() :
+                    root.TryGetProperty("evidenceTable", out var evidenceTable) ? evidenceTable.GetRawText() : null,
                 root.TryGetProperty("counter_evidence", out var ce) ? ce.GetRawText() : null,
                 root.TryGetProperty("risk_limits", out var rl) ? rl.GetRawText() : null,
                 root.TryGetProperty("invalidations", out var inv) ? inv.GetRawText() : null
@@ -552,5 +660,126 @@ public sealed class ResearchReportService : IResearchReportService
         }
         catch { /* ignore */ }
         return content;
+    }
+
+    private static JsonElement TryReadToolData(string? outputRefsJson, string toolName)
+    {
+        if (string.IsNullOrWhiteSpace(outputRefsJson))
+        {
+            return default;
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(outputRefsJson);
+            if (doc.RootElement.ValueKind != JsonValueKind.Array)
+            {
+                return default;
+            }
+
+            foreach (var item in doc.RootElement.EnumerateArray())
+            {
+                if (!item.TryGetProperty("toolName", out var toolNameNode) || !string.Equals(toolNameNode.GetString(), toolName, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (!item.TryGetProperty("resultJson", out var resultNode) || resultNode.ValueKind != JsonValueKind.String)
+                {
+                    continue;
+                }
+
+                using var resultDoc = JsonDocument.Parse(resultNode.GetString()!);
+                if (resultDoc.RootElement.TryGetProperty("data", out var dataNode))
+                {
+                    return JsonDocument.Parse(dataNode.GetRawText()).RootElement.Clone();
+                }
+            }
+        }
+        catch
+        {
+        }
+
+        return default;
+    }
+
+    private static string? BuildMarketContextSummary(JsonElement marketContext)
+    {
+        if (marketContext.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        var parts = new List<string>();
+        if (marketContext.TryGetProperty("mainlineSectorName", out var mainlineSectorName) && mainlineSectorName.ValueKind == JsonValueKind.String)
+        {
+            parts.Add($"主线板块={mainlineSectorName.GetString()}");
+        }
+        if (marketContext.TryGetProperty("stockSectorName", out var stockSectorName) && stockSectorName.ValueKind == JsonValueKind.String)
+        {
+            parts.Add($"个股板块={stockSectorName.GetString()}");
+        }
+        if (marketContext.TryGetProperty("stageConfidence", out var stageConfidence) && stageConfidence.ValueKind == JsonValueKind.Number)
+        {
+            parts.Add($"阶段置信度={stageConfidence}");
+        }
+
+        return parts.Count > 0 ? string.Join("，", parts) : null;
+    }
+
+    private static string? ReadString(JsonElement node, string propertyName)
+    {
+        if (node.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        return node.TryGetProperty(propertyName, out var property) ? property.ToString() : null;
+    }
+
+    private static string? ReadFormattedNumber(JsonElement node, string propertyName, string? unit)
+    {
+        if (node.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        if (!node.TryGetProperty(propertyName, out var property) || property.ValueKind != JsonValueKind.Number)
+        {
+            return null;
+        }
+
+        var text = property.ToString();
+        return string.IsNullOrWhiteSpace(unit) ? text : $"{text}{unit}";
+    }
+
+    private static string? ReadFormattedPercent(JsonElement node, string propertyName)
+    {
+        if (node.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        if (!node.TryGetProperty(propertyName, out var property) || property.ValueKind != JsonValueKind.Number)
+        {
+            return null;
+        }
+
+        return $"{property}%";
+    }
+
+    private static string? ReadFormattedInt(JsonElement node, string propertyName)
+    {
+        if (node.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        if (!node.TryGetProperty(propertyName, out var property) || property.ValueKind != JsonValueKind.Number)
+        {
+            return null;
+        }
+
+        return property.ToString();
     }
 }

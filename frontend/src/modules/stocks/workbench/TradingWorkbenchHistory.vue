@@ -95,15 +95,15 @@ const truncate = (s, n = 40) => s && s.length > n ? s.slice(0, n) + '…' : (s |
   padding: 6px 12px; margin: 4px 8px 8px;
   background: rgba(91, 156, 246, 0.1);
   border: 1px solid rgba(91, 156, 246, 0.25);
-  border-radius: 6px; font-size: 11px;
+  border-radius: 6px; font-size: 13px;
   color: var(--wb-accent, #5b9cf6);
 }
-.replay-icon { font-size: 13px; }
+.replay-icon { font-size: 15px; }
 .replay-text { flex: 1; }
 .replay-back {
   background: transparent; border: 1px solid var(--wb-accent, #5b9cf6);
   color: var(--wb-accent, #5b9cf6); border-radius: 4px;
-  padding: 2px 8px; font-size: 10px; cursor: pointer;
+  padding: 2px 8px; font-size: 12px; cursor: pointer;
   transition: background 0.15s;
 }
 .replay-back:hover { background: rgba(91, 156, 246, 0.15); }
@@ -111,7 +111,7 @@ const truncate = (s, n = 40) => s && s.length > n ? s.slice(0, n) + '…' : (s |
 /* ── Empty ─────────────────────────────────────── */
 .history-empty {
   text-align: center; padding: 24px 12px;
-  color: var(--wb-text-muted, #8b8fa3); font-size: 12px;
+  color: var(--wb-text-muted, #8b8fa3); font-size: 14px;
 }
 .history-empty-icon { font-size: 28px; margin-bottom: 6px; }
 
@@ -131,29 +131,31 @@ const truncate = (s, n = 40) => s && s.length > n ? s.slice(0, n) + '…' : (s |
 }
 .history-session-row:hover { background: rgba(255, 255, 255, 0.03); }
 
-.sess-rating { font-size: 14px; flex-shrink: 0; margin-top: 1px; }
+.sess-rating { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
 .sess-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .sess-name {
-  font-size: 12px; font-weight: 500;
+  font-size: 14px; font-weight: 500;
   color: var(--wb-text, #e1e4ea);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.sess-meta { display: flex; align-items: center; gap: 6px; font-size: 10px; }
+.sess-meta { display: flex; align-items: center; gap: 6px; font-size: 12px; }
 .sess-date { color: var(--wb-text-muted, #8b8fa3); }
 .sess-status { font-weight: 600; }
 .st-running { color: #4fc3f7; }
 .st-completed { color: #66bb6a; }
 .st-failed { color: #ef5350; }
-.st-idle { color: #8b8fa3; }
-.st-closed { color: #757575; }
+.st-idle { color: #9ea3b5; }
+.st-closed { color: #a0a4b8; }
 .st-queued { color: #f0b429; }
+.st-degraded { color: #ffb74d; }
+.st-blocked { color: #ff8a80; }
 
 .sess-headline {
-  font-size: 10px; color: var(--wb-text-muted, #8b8fa3);
+  font-size: 12px; color: var(--wb-text-muted, #8b8fa3);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .sess-arrow {
-  font-size: 10px; color: var(--wb-text-muted, #8b8fa3);
+  font-size: 12px; color: var(--wb-text-muted, #8b8fa3);
   flex-shrink: 0; margin-top: 2px;
 }
 
@@ -166,7 +168,7 @@ const truncate = (s, n = 40) => s && s.length > n ? s.slice(0, n) + '…' : (s |
   display: flex; align-items: center; gap: 6px;
   padding: 4px 8px; border-radius: 4px;
   cursor: pointer; transition: background 0.15s;
-  font-size: 11px;
+  font-size: 13px;
 }
 .history-turn:hover { background: rgba(255, 255, 255, 0.04); }
 .history-turn.is-replay {
@@ -174,22 +176,22 @@ const truncate = (s, n = 40) => s && s.length > n ? s.slice(0, n) + '…' : (s |
   border-left: 2px solid var(--wb-accent, #5b9cf6);
 }
 .turn-idx {
-  font-size: 9px; font-weight: 700; font-family: 'Consolas', monospace;
+  font-size: 11px; font-weight: 700; font-family: 'Consolas', monospace;
   color: var(--wb-accent, #5b9cf6); flex-shrink: 0; min-width: 20px;
 }
 .turn-prompt {
   flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
   white-space: nowrap; color: var(--wb-text, #e1e4ea);
 }
-.turn-status { font-size: 9px; font-weight: 600; flex-shrink: 0; }
+.turn-status { font-size: 11px; font-weight: 600; flex-shrink: 0; }
 
 .history-turns-empty {
-  padding: 8px 10px 8px 32px; font-size: 10px;
+  padding: 8px 10px 8px 32px; font-size: 12px;
   color: var(--wb-text-muted, #8b8fa3);
 }
 
 .history-loading {
   text-align: center; padding: 12px;
-  font-size: 11px; color: var(--wb-text-muted, #8b8fa3);
+  font-size: 13px; color: var(--wb-text-muted, #8b8fa3);
 }
 </style>

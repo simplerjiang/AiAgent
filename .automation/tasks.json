@@ -9,7 +9,7 @@
         "dev": "todo",
         "test": "todo"
       },
-      "notes": "2026-03-28 已接受“非 Agent 功能”的 UI 全面重构规划请求。规划范围覆盖 App 壳层导航、股票信息页、情绪轮动、全量资讯库、股票推荐与管理页的视觉与布局重构，允许调整显示位置、宽度、高度与模块折叠/聚焦能力；明确排除 Agent 工作台与多 Agent 交互链路。详细计划书：`.automation/reports/GOAL-UI-NEW-001-PLAN-20260328.md`。"
+      "notes": "2026-03-28 已接受“非 Agent 功能”的 UI 全面重构规划请求，并完成 UI Designer/Test/User Representative 三方联合评审。范围覆盖 App 壳层导航、股票信息页、情绪轮动、全量资讯库、股票推荐与管理页的视觉与布局重构，允许调整显示位置、宽度、高度与模块折叠/聚焦能力；明确排除 Agent 工作台与多 Agent 交互链路。硬约束已冻结：分时图/日K图/月K图与策略逻辑完全不改。交易计划模块确认为高优先级“完全重构”，以手动新增/编辑/复制/提醒为 MVP。详细计划书：`.automation/reports/GOAL-UI-NEW-001-PLAN-20260328.md`。"
     },
     {
       "id": "MANUAL-20260324-BUGLIST-CLOSEOUT",
@@ -575,13 +575,24 @@
     {
       "id": "GOAL-AGENT-NEW-003",
       "title": "Dynamic workbench transparency and follow-up orchestration",
-      "status": "todo",
+      "status": "done",
       "stages": {
         "plan": "done",
-        "dev": "todo",
-        "test": "todo"
+        "dev": "done",
+        "test": "done"
       },
-      "notes": "2026-03-28 已完成规划，重点修复动态页面的可解释性与会话追问编排。范围包括：1) `company_overview_analyst` 必须完整展示已获取基础面数据（如市盈率、量比、股东户数、流通市值等），禁止只露出主营业务；2) MCP 在 UI 中除状态外必须提供可点击折叠面板，按可读 Markdown 摘要展示获取结果（不直接暴露 JSON 原文）；3) `社交情绪` 等所有板块禁止直接输出 JSON，统一走 Markdown 渲染与可读排版；4) 一轮分析完成后的会话追问先由 `组合经理` 进行意图判定与编排（复用现有结果 / 仅调部分 Agent / 新开 turn），选择权交给 LLM；5) `研究报告` 区块中残留 JSON 统一结构化转 Markdown，标题支持 key 中文化映射。规划报告：`.automation/reports/GOAL-AGENT-NEW-003-PLAN-20260328.md`。"
+      "notes": "2026-03-28 已完成 GOAL-AGENT-NEW-003。交付包括：1) `company_overview_analyst` 改为基于真实 MCP payload 生成独立公司概览块，完整展示市盈率、量比、股东户数、流通市值、市场环境与覆盖度；2) 团队进度页新增角色产出与 MCP 折叠面板，展示可读摘要而非 raw JSON；3) 统一 JSON->Markdown 服务支持递归拆解二层 JSON，修复研究报告/社交情绪/角色产出中的嵌套 JSON 外泄；4) 新增 `ResearchFollowUpRoutingService`，由 LLM 先判定追问应延续、局部重跑还是整轮重跑，并把理由/置信度/起始阶段写入 turn；5) 前后端 DTO、schema、测试与 Browser MCP 验收已同步完成。开发/测试报告：`.automation/reports/GOAL-AGENT-NEW-003-DEV-20260328.md`。遗留：R1 Feed 用户消息未显示 + R6 Feed 区 tool 事件不可展开 → 合并进 GOAL-AGENT-NEW-004。"
+    },
+    {
+      "id": "GOAL-AGENT-NEW-004",
+      "title": "Workbench UX fixes: feed display, next-action wiring, font size, key translation, position tracking, MCP feed panel",
+      "status": "done",
+      "stages": {
+        "plan": "done",
+        "dev": "done",
+        "test": "done"
+      },
+      "notes": "2026-03-28 规划完成。6 项需求：R1 Feed 区应展示用户追问消息而非 Turn started 系统文本；R2 报告页下一步操作按钮 emit 未被父组件监听导致无效；R3 全工作台字体从 9-11px 统一提升 2px；R4 JSON→Markdown KEY_LABELS 从 42 项扩充到 100+ 项覆盖常见 MCP/Agent 字段；R5 新增 StockPosition 实体支持持仓手数+成本价录入并注入 4 个关键 Agent prompt；R6 Feed 区 MCP tool 事件存储请求/响应 MetadataJson 并支持前端可点击展开面板。含 GOAL-003 遗留 G3-1/G3-2 两项补全。计划书：`.automation/reports/GOAL-AGENT-NEW-004-PLAN-20260328.md`。2026-03-28 开发完成。Phase A 后端：R1 UserFollowUp 事件、R5 StockPosition 实体/API/prompt 注入、R6 MetadataJson 存储、R4-B GTranslate 翻译服务（100+ 预种词条）。Phase B 前端：R2 navigate-chart/plan 事件修复+focusedView 绑定、R3 字体 +2px（Node.js UTF-8 安全替换）、R4-A loadTranslations 联动、R5 持仓 UI、R6 可展开 tool 事件。Phase C 验证：Darbot Browser MCP 确认 R2-R5 全通过；后端测试 350/351（1 pre-existing）、前端测试 124 pass/2 skipped；桌面打包通过（修复 publish-windows-package.ps1 stderr 问题）。开发报告：`.automation/reports/GOAL-AGENT-NEW-004-DEV-20260328.md`。"
     },
     {
       "id": "GOAL-015",
