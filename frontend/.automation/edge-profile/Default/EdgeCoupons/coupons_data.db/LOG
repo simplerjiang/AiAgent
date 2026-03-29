@@ -1,0 +1,5 @@
+2026/03/29-13:18:43.183 251c Creating DB C:\Users\kong\AiAgent\frontend\.automation\edge-profile\Default\EdgeCoupons/coupons_data.db since it was missing.
+2026/03/29-13:18:43.225 251c Reusing MANIFEST C:\Users\kong\AiAgent\frontend\.automation\edge-profile\Default\EdgeCoupons/coupons_data.db/MANIFEST-000001
+2026/03/29-13:18:43.533 48b4 Level-0 table #5: started
+2026/03/29-13:18:43.544 48b4 Level-0 table #5: 681961 bytes OK
+2026/03/29-13:18:43.545 48b4 Delete type=0 #3

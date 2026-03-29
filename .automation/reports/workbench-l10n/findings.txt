@@ -1,0 +1,65 @@
+[STEP 1] Loaded homepage
+[STEP 2] Clicked query, waiting for stock load...
+[STEP 2] Stock loaded: true
+[STEP 3] Clicked history tab
+[STEP 3] History sessions found: 9
+[STEP 3] Loaded session
+[TAB] Report
+
+--- BUG-1: Block Titles ---
+  "公司概览": FOUND
+  "技术分析": not found
+  "市场背景": FOUND
+  "新闻分析": not found
+  "看多研究": not found
+  "看空研究": not found
+  "最终决策": not found
+  English block names: NONE
+
+--- BUG-2: Evidence Sources ---
+  "CompanyOverviewMcp": OK
+  "TechnicalAnalysisMcp": OK
+  "MarketContextMcp": OK
+  "NewsAnalysisMcp": OK
+
+[TAB] Progress
+
+--- BUG-3: Role Names ---
+  "company_overview_analyst": OK
+  "technical_analyst": OK
+  "news_analyst": OK
+  "bull_researcher": OK
+  "bear_researcher": OK
+  "market_context_analyst": OK
+  "research_manager": OK
+  zh "公司概览": FOUND
+  zh "技术分析": not found
+  zh "新闻分析": not found
+  zh "看多研究": FOUND
+  zh "看空研究": FOUND
+  zh "市场背景": not found
+  zh "研究管理": not found
+
+--- BUG-4: Degraded Status ---
+  "Degraded" in UI: 0 OK
+  "降级" present: FOUND
+  "降级完成" present: FOUND
+
+[TAB] Feed
+
+--- BUG-5: Feed Tool/Role Names ---
+  "CompanyOverviewMcp": OK
+  "TechnicalAnalysisMcp": OK
+  "MarketContextMcp": OK
+  "NewsAnalysisMcp": OK
+  "company_overview_analyst": OK
+  "technical_analyst": OK
+  "news_analyst": OK
+  "bull_researcher": OK
+  "bear_researcher": OK
+  zh "公司概况": FOUND
+  zh "技术分析": not found
+  zh "市场背景": FOUND
+  zh "新闻分析": FOUND
+
+=== ERRORS: 0 ===

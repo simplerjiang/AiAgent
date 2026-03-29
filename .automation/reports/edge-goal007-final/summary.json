@@ -1,15 +1,15 @@
 {
-  "baseUrl": "http://127.0.0.1:5119",
+  "baseUrl": "http://localhost:5119",
   "hasStockName": true,
-  "hasAgentCard": true,
-  "hasRawJson": true,
+  "hasAgentCard": false,
+  "hasRawJson": false,
   "confidenceBadgeCount": 0,
   "hasRecommendationBlock": false,
   "evidenceSectionCount": 0,
   "triggerSectionCount": 0,
   "invalidSectionCount": 0,
   "limitSectionCount": 0,
-  "chatInteractive": true,
+  "chatInteractive": false,
   "consoleErrors": [],
-  "success": true
+  "success": false
 }

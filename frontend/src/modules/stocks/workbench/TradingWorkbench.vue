@@ -105,6 +105,7 @@ function handleNextAction(action) {
               :active-turn="wb.activeTurn.value"
               :is-running="wb.isRunning.value"
               :current-stage="wb.currentStageName.value"
+              :session-name="wb.sessionDetail.value?.name || wb.session.value?.name || ''"
             />
           </div>
           <div class="wb-fs-report">
@@ -169,6 +170,7 @@ function handleNextAction(action) {
           :active-turn="wb.activeTurn.value"
           :is-running="wb.isRunning.value"
           :current-stage="wb.currentStageName.value"
+          :session-name="wb.sessionDetail.value?.name || wb.session.value?.name || ''"
         />
         <TradingWorkbenchHistory
           v-show="wb.activeTab.value === 'history'"

@@ -8,7 +8,8 @@ const props = defineProps({
   items: { type: Array, default: () => [] },
   activeTurn: { type: Object, default: null },
   isRunning: { type: Boolean, default: false },
-  currentStage: { type: String, default: null }
+  currentStage: { type: String, default: null },
+  sessionName: { type: String, default: '' }
 })
 
 const feedEnd = ref(null)
@@ -101,13 +102,18 @@ const roleConfig = roleId => {
 /** Classify item for rendering. */
 const itemKind = item => {
   const t = (item.type || item.feedType || item.itemType || '').toLowerCase()
+  const rawContent = item.summary || item.message || item.content || ''
+
+  // Hide meaningless round markers: "第 X 轮分析开始" → user query bubble, "Turn X completed" → hidden
+  if (/^第\s*\d+\s*轮分析开始$/.test(rawContent)) return 'user-query'
+  if (/^Turn\s+\d+\s+completed$/i.test(rawContent)) return 'hidden'
+
   if (t.includes('stagetransition') || t.includes('stagestarted') || t.includes('stagecompleted') || t.includes('stagefailed')) return 'divider'
   if (t.includes('tooldispatched') || t.includes('toolcompleted') || t.includes('toolprogress') || t.includes('toolevent')) return 'tool'
   if (t.includes('userfollowup') || t.includes('turnstarted')) return 'user'
   if (t.includes('system') || t.includes('degraded') || t.includes('retryattempt')) return 'system'
 
   // Demote lifecycle status messages (Started/Completed) to compact style
-  const rawContent = item.summary || item.message || item.content || ''
   if (/^Role \S+ (started|Completed|Degraded|Running|LLM ready)$/i.test(rawContent)) return 'lifecycle'
 
   return 'role'
@@ -246,12 +252,19 @@ watch(() => props.items.length, () => {
         :key="group.turnId"
         class="feed-turn-group"
       >
-        <!-- Turn header card -->
-        <div class="feed-turn-header">
-          <span class="turn-badge">Turn {{ group.turnId }}</span>
-        </div>
-
         <template v-for="(item, idx) in group.items" :key="idx">
+          <!-- User query bubble (replaces meaningless "第 X 轮分析开始") -->
+          <div v-if="itemKind(item) === 'user-query'" class="feed-msg feed-msg-user">
+            <div class="feed-bubble feed-bubble-user">
+              <div class="feed-bubble-content">{{ sessionName || '开始分析' }}</div>
+              <div class="feed-bubble-time">{{ formatTime(item.timestamp || item.createdAt) }}</div>
+            </div>
+            <div class="feed-avatar feed-avatar-user">👤</div>
+          </div>
+
+          <!-- Hidden items (Turn completed notices) -->
+          <template v-else-if="itemKind(item) === 'hidden'" />
+
           <!-- Stage divider -->
           <div v-if="itemKind(item) === 'divider'" class="feed-divider">
             <span class="feed-divider-line" />

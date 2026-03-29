@@ -1,0 +1,38 @@
+[STEP 1] Loaded homepage OK
+[STEP 2] Searched for 深科技
+[STEP 3] Tabs found: []
+[STEP 4] WARNING: No 研究报告 tab found, checking visible content
+[BUG-1] 公司概览 block title present: false
+[BUG-1] Block "公司概览": not found
+[BUG-1] Block "技术分析": not found
+[BUG-1] Block "市场背景": not found
+[BUG-1] Block "新闻分析": not found
+[BUG-1] Block "看多研究": not found
+[BUG-1] Block "看空研究": not found
+[BUG-2] English MCP "CompanyOverviewMcp" in text: OK - translated
+[BUG-2] English MCP "TechnicalAnalysisMcp" in text: OK - translated
+[BUG-2] English MCP "MarketContextMcp" in text: OK - translated
+[BUG-2] English MCP "NewsAnalysisMcp" in text: OK - translated
+[STEP 5] WARNING: No 团队进度 tab found
+[BUG-3] snake_case "company_overview_analyst": OK - translated
+[BUG-3] snake_case "technical_analyst": OK - translated
+[BUG-3] snake_case "news_analyst": OK - translated
+[BUG-3] snake_case "bull_researcher": OK - translated
+[BUG-3] snake_case "bear_researcher": OK - translated
+[BUG-3] snake_case "market_context_analyst": OK - translated
+[BUG-4] "Degraded" as UI label: OK - translated
+[BUG-4] 降级完成/降级 present: false
+[STEP 6] WARNING: No 讨论动态 tab found
+[BUG-5] English term "CompanyOverviewMcp" in feed: OK - translated
+[BUG-5] English term "TechnicalAnalysisMcp" in feed: OK - translated
+[BUG-5] English term "MarketContextMcp" in feed: OK - translated
+[BUG-5] English term "NewsAnalysisMcp" in feed: OK - translated
+[BUG-5] English term "company_overview_analyst" in feed: OK - translated
+[BUG-5] English term "technical_analyst" in feed: OK - translated
+[BUG-5] Chinese tool "公司概况" in feed: not found
+[BUG-5] Chinese tool "技术分析" in feed: not found
+[BUG-5] Chinese tool "市场背景" in feed: not found
+[BUG-5] Chinese tool "新闻分析" in feed: not found
+
+=== SUMMARY ===
+Console errors: 0
