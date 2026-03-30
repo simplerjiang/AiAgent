@@ -238,22 +238,23 @@ onMounted(() => {
 <style scoped>
 .archive-shell {
   display: grid;
-  gap: 18px;
-  padding: 24px;
-  color: #1f2937;
+  gap: var(--space-4);
+  padding: var(--space-6);
+  color: var(--color-text-body);
 }
 
 .archive-hero {
   display: flex;
   justify-content: space-between;
-  gap: 20px;
-  padding: 24px;
-  border-radius: 24px;
+  gap: var(--space-5);
+  padding: var(--space-6);
+  border-radius: var(--radius-xl);
   background:
-    radial-gradient(circle at top left, rgba(245, 158, 11, 0.18), transparent 35%),
-    linear-gradient(135deg, #fff8ef 0%, #fff 60%, #f7fbff 100%);
-  border: 1px solid rgba(148, 163, 184, 0.22);
-  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.08);
+    radial-gradient(circle at top left, color-mix(in srgb, var(--color-accent) 14%, transparent), transparent 35%),
+    radial-gradient(circle at bottom right, color-mix(in srgb, var(--color-warning) 10%, transparent), transparent 40%),
+    var(--color-bg-surface-alt);
+  border: 1px solid var(--color-border-light);
+  box-shadow: var(--shadow-md);
 }
 
 .archive-kicker {
@@ -261,7 +262,7 @@ onMounted(() => {
   font-size: 12px;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: #b45309;
+  color: var(--color-accent);
 }
 
 .archive-hero h2 {
@@ -273,7 +274,7 @@ onMounted(() => {
 .archive-subtitle {
   margin: 12px 0 0;
   max-width: 720px;
-  color: #475569;
+  color: var(--color-text-secondary);
   line-height: 1.6;
 }
 
@@ -282,10 +283,11 @@ onMounted(() => {
   align-content: start;
   gap: 6px;
   min-width: 140px;
-  padding: 16px 18px;
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.72);
-  color: #0f172a;
+  padding: var(--space-4) var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-surface-alt);
+  border: 1px solid var(--color-border-light);
+  color: var(--color-text-heading);
 }
 
 .archive-stats strong {
@@ -293,19 +295,19 @@ onMounted(() => {
 }
 
 .archive-stats span {
-  color: #64748b;
+  color: var(--color-text-secondary);
 }
 
 .archive-toolbar {
   display: grid;
   grid-template-columns: minmax(0, 2.1fr) repeat(2, minmax(140px, 0.8fr)) auto;
-  gap: 14px;
+  gap: var(--space-3);
   align-items: end;
-  padding: 18px;
-  border-radius: 20px;
-  background: #ffffff;
-  border: 1px solid rgba(226, 232, 240, 0.9);
-  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.06);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-light);
+  box-shadow: var(--shadow-sm);
 }
 
 .archive-field {
@@ -317,17 +319,17 @@ onMounted(() => {
   font-size: 12px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: #64748b;
+  color: var(--color-text-secondary);
 }
 
 .archive-field input,
 .archive-field select {
-  height: 44px;
-  padding: 0 14px;
-  border-radius: 14px;
-  border: 1px solid #dbe2ea;
-  background: #f8fafc;
-  color: #0f172a;
+  height: 34px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-light);
+  background: var(--color-bg-surface-alt);
+  color: var(--color-text-heading);
 }
 
 .archive-actions {
@@ -338,18 +340,18 @@ onMounted(() => {
 .primary-button,
 .archive-pagination button,
 .link-button {
-  height: 44px;
+  height: 34px;
   border: 0;
-  border-radius: 14px;
-  padding: 0 16px;
+  border-radius: var(--radius-full);
+  padding: 0 var(--space-4);
   font-weight: 600;
   cursor: pointer;
 }
 
 .primary-button {
-  background: linear-gradient(135deg, #d97706 0%, #ea580c 100%);
+  background: var(--color-accent);
   color: #fff;
-  box-shadow: 0 10px 22px rgba(217, 119, 6, 0.28);
+  box-shadow: none;
 }
 
 .primary-button:disabled,
@@ -361,17 +363,17 @@ onMounted(() => {
 }
 
 .archive-feedback {
-  padding: 20px 22px;
-  border-radius: 18px;
-  background: #ffffff;
-  border: 1px solid rgba(226, 232, 240, 0.9);
-  color: #475569;
+  padding: var(--space-5) var(--space-5);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-light);
+  color: var(--color-text-secondary);
 }
 
 .archive-feedback.error {
-  border-color: rgba(248, 113, 113, 0.28);
-  background: #fff7f7;
-  color: #b91c1c;
+  border-color: var(--color-danger-border);
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
 }
 
 .archive-list {
@@ -382,11 +384,16 @@ onMounted(() => {
 .archive-card {
   display: grid;
   gap: 12px;
-  padding: 20px;
-  border-radius: 20px;
-  background: #ffffff;
-  border: 1px solid rgba(226, 232, 240, 0.94);
-  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.05);
+  padding: var(--space-5);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-light);
+  box-shadow: var(--shadow-sm);
+  transition: border-color 0.15s ease;
+}
+
+.archive-card:hover {
+  border-color: var(--color-accent-border);
 }
 
 .archive-card-top {
@@ -413,8 +420,8 @@ onMounted(() => {
 }
 
 .level-badge.is-market {
-  background: #dbeafe;
-  color: #1d4ed8;
+  background: var(--color-info-bg);
+  color: var(--color-info);
 }
 
 .level-badge.is-sector {
@@ -423,38 +430,38 @@ onMounted(() => {
 }
 
 .level-badge.is-stock {
-  background: #dcfce7;
-  color: #15803d;
+  background: var(--color-success-bg);
+  color: var(--color-success);
 }
 
 .sentiment-badge.is-positive {
-  background: #fee2e2;
-  color: #b91c1c;
+  background: var(--color-market-rise-bg);
+  color: var(--color-market-rise);
 }
 
 .sentiment-badge.is-neutral {
-  background: #e2e8f0;
-  color: #475569;
+  background: var(--color-bg-surface-alt);
+  color: var(--color-text-secondary);
 }
 
 .sentiment-badge.is-negative {
-  background: #dbeafe;
-  color: #1d4ed8;
+  background: var(--color-market-fall-bg);
+  color: var(--color-market-fall);
 }
 
 .target-badge {
-  background: #fff1f2;
-  color: #be123c;
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
 }
 
 .tag-badge {
-  background: #fef3c7;
-  color: #b45309;
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
 }
 
 .link-button {
-  background: #eff6ff;
-  color: #1d4ed8;
+  background: var(--color-accent-subtle);
+  color: var(--color-accent);
   white-space: nowrap;
 }
 
@@ -486,14 +493,14 @@ onMounted(() => {
 }
 
 .archive-pagination button {
-  background: #ffffff;
-  color: #0f172a;
-  border: 1px solid #dbe2ea;
+  background: var(--color-bg-surface);
+  color: var(--color-text-heading);
+  border: 1px solid var(--color-border-light);
 }
 
 @media (max-width: 960px) {
   .archive-shell {
-    padding: 16px;
+    padding: var(--space-4);
   }
 
   .archive-hero,

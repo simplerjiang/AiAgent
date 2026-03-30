@@ -209,9 +209,9 @@ function handleNextAction(action) {
   display: flex;
   flex-direction: column;
   gap: 0;
-  background: var(--wb-bg, #1a1d23);
+  background: var(--color-bg-surface);
   border-radius: 8px;
-  border: 1px solid var(--wb-border, #2a2d35);
+  border: 1px solid var(--color-border-light);
   overflow: hidden;
   min-height: 420px;
   max-height: calc(100vh - 260px);
@@ -236,7 +236,7 @@ function handleNextAction(action) {
 .wb-fs-sidebar {
   width: 280px;
   min-width: 220px;
-  border-right: 1px solid var(--wb-border, #2a2d35);
+  border-right: 1px solid var(--color-border-light);
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -251,7 +251,7 @@ function handleNextAction(action) {
 .wb-fs-feed {
   flex: 1;
   overflow-y: auto;
-  border-bottom: 1px solid var(--wb-border, #2a2d35);
+  border-bottom: 1px solid var(--color-border-light);
   min-height: 0;
 }
 .wb-fs-report {
@@ -263,19 +263,19 @@ function handleNextAction(action) {
   position: sticky;
   top: 0;
   z-index: 1;
-  background: var(--wb-header-bg, #1e2128);
+  background: var(--color-bg-surface-alt);
   padding: 6px 12px;
   font-size: 14px;
   font-weight: 600;
-  color: var(--wb-text-muted, #8b8fa3);
-  border-bottom: 1px solid var(--wb-border, #2a2d35);
+  color: var(--color-text-secondary);
+  border-bottom: 1px solid var(--color-border-light);
 }
 
 /* ── Tabs ──────────────────────────────────────── */
 .wb-tabs {
   display: flex;
-  border-bottom: 1px solid var(--wb-border, #2a2d35);
-  background: var(--wb-header-bg, #1e2128);
+  border-bottom: 1px solid var(--color-border-light);
+  background: var(--color-bg-surface-alt);
   padding: 0;
 }
 .wb-tab {
@@ -287,18 +287,18 @@ function handleNextAction(action) {
   padding: 8px 4px;
   border: none;
   background: transparent;
-  color: var(--wb-text-muted, #8b8fa3);
+  color: var(--color-text-secondary);
   cursor: pointer;
   font-size: 14px;
   transition: color 0.15s, border-bottom 0.15s;
   border-bottom: 2px solid transparent;
 }
 .wb-tab:hover {
-  color: var(--wb-text, #e1e4ea);
+  color: var(--color-text-body);
 }
 .wb-tab.active {
-  color: var(--wb-accent, #5b9cf6);
-  border-bottom-color: var(--wb-accent, #5b9cf6);
+  color: var(--color-accent);
+  border-bottom-color: var(--color-accent);
 }
 .tab-icon { font-size: 15px; }
 .tab-label { font-size: 13px; font-weight: 500; }
@@ -307,16 +307,16 @@ function handleNextAction(action) {
 .wb-replay-banner {
   display: flex; align-items: center; justify-content: space-between;
   padding: 4px 12px;
-  background: rgba(91, 156, 246, 0.08);
+  background: color-mix(in srgb, var(--color-accent) 8%, transparent);
   border-bottom: 1px solid rgba(91, 156, 246, 0.2);
-  font-size: 13px; color: var(--wb-accent, #5b9cf6);
+  font-size: 13px; color: var(--color-accent);
 }
 .wb-replay-back-btn {
-  background: transparent; border: 1px solid var(--wb-accent, #5b9cf6);
-  color: var(--wb-accent, #5b9cf6); border-radius: 4px;
+  background: transparent; border: 1px solid var(--color-accent);
+  color: var(--color-accent); border-radius: 4px;
   padding: 1px 8px; font-size: 12px; cursor: pointer;
 }
-.wb-replay-back-btn:hover { background: rgba(91, 156, 246, 0.12); }
+.wb-replay-back-btn:hover { background: color-mix(in srgb, var(--color-accent) 12%, transparent); }
 
 /* ── Content area ──────────────────────────────── */
 .wb-content {
@@ -329,12 +329,12 @@ function handleNextAction(action) {
 .wb-empty {
   text-align: center;
   padding: 32px 20px;
-  color: var(--wb-text-muted, #8b8fa3);
+  color: var(--color-text-secondary);
 }
 .wb-empty-icon { font-size: 32px; margin-bottom: 8px; }
 .wb-empty h4 {
   font-size: 16px;
-  color: var(--wb-text, #e1e4ea);
+  color: var(--color-text-body);
   margin: 0 0 8px;
 }
 .wb-empty p {

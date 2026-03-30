@@ -38,6 +38,7 @@ public sealed class ResearchRunner : IResearchRunner
     private readonly IResearchRoleExecutor _roleExecutor;
     private readonly IResearchEventBus _eventBus;
     private readonly IResearchReportService _reportService;
+    private readonly IResearchFollowUpRoutingService _followUpRoutingService;
     private readonly ILogger<ResearchRunner> _logger;
     private string? _positionContext;
 
@@ -46,12 +47,14 @@ public sealed class ResearchRunner : IResearchRunner
         IResearchRoleExecutor roleExecutor,
         IResearchEventBus eventBus,
         IResearchReportService reportService,
+        IResearchFollowUpRoutingService followUpRoutingService,
         ILogger<ResearchRunner> logger)
     {
         _dbContext = dbContext;
         _roleExecutor = roleExecutor;
         _eventBus = eventBus;
         _reportService = reportService;
+        _followUpRoutingService = followUpRoutingService;
         _logger = logger;
     }
 
@@ -82,6 +85,35 @@ public sealed class ResearchRunner : IResearchRunner
         var upstreamArtifacts = new List<string>();
         var turnDegraded = false;
         var fromStageIndex = 0;
+
+        // ── Async LLM routing refinement for follow-up turns ──
+        // The HTTP handler used an instant heuristic; now refine with full LLM routing
+        if (turn.TurnIndex > 0 && turn.ContinuationMode == ResearchContinuationMode.ContinueSession
+            && turn.RoutingConfidence is null or < 0.8m)
+        {
+            try
+            {
+                var llmRouting = await _followUpRoutingService.DecideAsync(session.Id, turn.UserPrompt ?? "", cancellationToken);
+                if (llmRouting.ContinuationMode != turn.ContinuationMode || llmRouting.FromStageIndex != turn.RoutingStageIndex)
+                {
+                    _logger.LogInformation("LLM routing refined follow-up: {From} -> {To} (stage {Stage}, confidence {Conf})",
+                        turn.ContinuationMode, llmRouting.ContinuationMode, llmRouting.FromStageIndex, llmRouting.Confidence);
+                    turn.ContinuationMode = llmRouting.ContinuationMode;
+                    turn.RerunScope = llmRouting.FromStageIndex?.ToString();
+                    turn.ReuseScope = llmRouting.ReuseScope;
+                    turn.ChangeSummary = llmRouting.ChangeSummary;
+                    turn.RoutingDecision = llmRouting.ContinuationMode.ToString();
+                    turn.RoutingReasoning = llmRouting.Reasoning;
+                    turn.RoutingConfidence = llmRouting.Confidence;
+                    turn.RoutingStageIndex = llmRouting.FromStageIndex;
+                    await _dbContext.SaveChangesAsync(CancellationToken.None);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Background LLM routing refinement failed for turn {TurnId}; using heuristic result", turnId);
+            }
+        }
 
         // Load user position context for prompt injection
         var position = await _dbContext.StockPositions
@@ -259,9 +291,11 @@ public sealed class ResearchRunner : IResearchRunner
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Turn {TurnId} failed", turnId);
+            var innerMsg = ex.InnerException?.Message;
+            var fullMsg = innerMsg is not null ? $"{ex.Message} -> {innerMsg}" : ex.Message;
+            _logger.LogError(ex, "Turn {TurnId} failed: {Detail}", turnId, fullMsg);
             turn.Status = ResearchTurnStatus.Failed;
-            turn.StopReason = ex.Message;
+            turn.StopReason = fullMsg.Length > 2000 ? fullMsg[..2000] : fullMsg;
             turn.CompletedAt = DateTime.UtcNow;
             session.Status = ResearchSessionStatus.Failed;
             session.UpdatedAt = DateTime.UtcNow;
@@ -269,7 +303,7 @@ public sealed class ResearchRunner : IResearchRunner
 
             _eventBus.Publish(new ResearchEvent(
                 ResearchEventType.TurnFailed, session.Id, turn.Id, null, null, null,
-                $"Turn failed: {ex.Message}", null, DateTime.UtcNow));
+                $"Turn failed: {fullMsg}", null, DateTime.UtcNow));
         }
         finally
         {
@@ -508,7 +542,9 @@ public sealed class ResearchRunner : IResearchRunner
             var decision = new ResearchDecisionSnapshot
             {
                 SessionId = session.Id, TurnId = turn.Id,
-                Rating = rating, Action = action, ExecutiveSummary = summary,
+                Rating = rating?.Length > 32 ? rating[..32] : rating,
+                Action = action?.Length > 64 ? action[..64] : action,
+                ExecutiveSummary = summary,
                 InvestmentThesis = dec.TryGetProperty("investment_thesis", out var it) ? it.GetString() : null,
                 FinalDecisionJson = outputContent, Confidence = confidence,
                 ConfidenceExplanation = dec.TryGetProperty("confidence_explanation", out var cex) ? cex.GetString() : null,
@@ -521,8 +557,8 @@ public sealed class ResearchRunner : IResearchRunner
                 CreatedAt = DateTime.UtcNow
             };
             _dbContext.ResearchDecisionSnapshots.Add(decision);
-            session.LatestRating = rating;
-            session.LatestDecisionHeadline = summary?.Length > 200 ? summary[..200] : summary;
+            session.LatestRating = rating?.Length > 32 ? rating[..32] : rating;
+            session.LatestDecisionHeadline = summary?.Length > 512 ? summary[..512] : summary;
             session.UpdatedAt = DateTime.UtcNow;
             await _dbContext.SaveChangesAsync(cancellationToken);
         }
@@ -572,6 +608,16 @@ public sealed class ResearchRunner : IResearchRunner
         }
         catch (Exception ex)
         {
+            // Detach dirty R5 entities so they don't poison subsequent SaveChangesAsync calls
+            foreach (var entry in _dbContext.ChangeTracker.Entries().ToList())
+                if (entry.State == Microsoft.EntityFrameworkCore.EntityState.Added
+                    || entry.State == Microsoft.EntityFrameworkCore.EntityState.Deleted
+                    || entry.State == Microsoft.EntityFrameworkCore.EntityState.Modified)
+                {
+                    var typeName = entry.Entity.GetType().Name;
+                    if (typeName is "ResearchDebateMessage" or "ResearchTraderProposal" or "ResearchRiskAssessment")
+                        entry.State = Microsoft.EntityFrameworkCore.EntityState.Detached;
+                }
             _logger.LogError(ex, "Failed to persist R5 artifacts for stage {StageType}", stageDef.StageType);
         }
     }
@@ -592,6 +638,11 @@ public sealed class ResearchRunner : IResearchRunner
         }
         catch (Exception ex)
         {
+            // Detach dirty report-block entities so they don't poison subsequent SaveChangesAsync calls
+            foreach (var entry in _dbContext.ChangeTracker.Entries<Data.Entities.ResearchReportBlock>().ToList())
+                if (entry.State != Microsoft.EntityFrameworkCore.EntityState.Unchanged)
+                    entry.State = Microsoft.EntityFrameworkCore.EntityState.Detached;
+
             _logger.LogError(ex, "Failed to generate R6 report blocks for stage {StageType}", stageDef.StageType);
             // Surface degradation without breaking the pipeline
             _eventBus.Publish(new ResearchEvent(

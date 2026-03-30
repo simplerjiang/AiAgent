@@ -407,30 +407,66 @@ public sealed class StockCopilotLiveGateService : IStockCopilotLiveGateService
         IReadOnlyList<ApprovedToolCall> approvedCalls,
         CancellationToken cancellationToken)
     {
+        var stepStatuses = approvedCalls.ToDictionary(item => item.ToolCall.StepId, _ => "approved", StringComparer.OrdinalIgnoreCase);
+
+        // Split into local (parallelizable) and external_gated (must run after locals)
+        var localCalls = new List<ApprovedToolCall>();
+        var externalCalls = new List<ApprovedToolCall>();
+        foreach (var call in approvedCalls)
+        {
+            if (string.Equals(call.Registration.PolicyClass, "external_gated", StringComparison.OrdinalIgnoreCase))
+                externalCalls.Add(call);
+            else
+                localCalls.Add(call);
+        }
+
         var toolResults = new List<StockCopilotToolResultDto>();
         var toolExecutions = new List<StockCopilotToolExecutionMetricDto>();
-        var stepStatuses = approvedCalls.ToDictionary(item => item.ToolCall.StepId, _ => "approved", StringComparer.OrdinalIgnoreCase);
         var totalLatencyMs = 0L;
         string? stopReason = null;
         var forcedClose = false;
 
-        foreach (var approvedCall in approvedCalls)
+        // Phase 1: Execute all local tools in parallel
+        if (localCalls.Count > 0)
         {
-            stepStatuses[approvedCall.ToolCall.StepId] = "calling_tools";
-            var outcome = await ExecuteApprovedToolAsync(symbol, question, taskId, approvedCall, cancellationToken);
-            toolResults.Add(outcome.ToolResult);
-            toolExecutions.Add(outcome.ExecutionMetric);
-            stepStatuses[approvedCall.ToolCall.StepId] = string.Equals(outcome.ToolResult.Status, "completed", StringComparison.OrdinalIgnoreCase)
-                ? "completed"
-                : "failed";
-            totalLatencyMs += Math.Max(0, outcome.ExecutionMetric.LatencyMs);
+            foreach (var call in localCalls)
+                stepStatuses[call.ToolCall.StepId] = "calling_tools";
 
+            var localTasks = localCalls.Select(call =>
+                ExecuteApprovedToolAsync(symbol, question, taskId, call, cancellationToken));
+            var localOutcomes = await Task.WhenAll(localTasks);
+
+            foreach (var (outcome, call) in localOutcomes.Zip(localCalls))
+            {
+                toolResults.Add(outcome.ToolResult);
+                toolExecutions.Add(outcome.ExecutionMetric);
+                stepStatuses[call.ToolCall.StepId] = string.Equals(outcome.ToolResult.Status, "completed", StringComparison.OrdinalIgnoreCase)
+                    ? "completed"
+                    : "failed";
+            }
+
+            // For parallel execution, wall-clock time is the max, not the sum
+            totalLatencyMs = localOutcomes.Max(o => Math.Max(0, o.ExecutionMetric.LatencyMs));
+        }
+
+        // Phase 2: Execute external_gated tools sequentially (need local results first)
+        foreach (var call in externalCalls)
+        {
             if (totalLatencyMs >= MaxTotalLatencyMs)
             {
                 stopReason = "time_budget_reached";
                 forcedClose = true;
                 break;
             }
+
+            stepStatuses[call.ToolCall.StepId] = "calling_tools";
+            var outcome = await ExecuteApprovedToolAsync(symbol, question, taskId, call, cancellationToken);
+            toolResults.Add(outcome.ToolResult);
+            toolExecutions.Add(outcome.ExecutionMetric);
+            stepStatuses[call.ToolCall.StepId] = string.Equals(outcome.ToolResult.Status, "completed", StringComparison.OrdinalIgnoreCase)
+                ? "completed"
+                : "failed";
+            totalLatencyMs += Math.Max(0, outcome.ExecutionMetric.LatencyMs);
         }
 
         return new ExecutionResult(toolResults, toolExecutions, stepStatuses, totalLatencyMs, stopReason, forcedClose);

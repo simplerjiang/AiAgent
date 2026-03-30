@@ -115,21 +115,21 @@ const translateFlag = flag => {
 
 .wb-stage {
   border-radius: 6px;
-  border: 1px solid var(--wb-border, #2a2d35);
+  border: 1px solid var(--color-border-light);
   overflow: hidden;
   transition: border-color 0.2s;
 }
 .wb-stage.stage-running {
-  border-color: var(--wb-accent, #5b9cf6);
-  background: rgba(91, 156, 246, 0.05);
+  border-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 5%, transparent);
 }
 .wb-stage.stage-completed {
-  border-color: #388e3c;
-  background: rgba(56, 142, 60, 0.04);
+  border-color: var(--color-success);
+  background: color-mix(in srgb, var(--color-success) 6%, transparent);
 }
 .wb-stage.stage-failed {
-  border-color: #d32f2f;
-  background: rgba(211, 47, 47, 0.04);
+  border-color: var(--color-danger);
+  background: color-mix(in srgb, var(--color-danger) 6%, transparent);
 }
 
 .wb-stage-header {
@@ -143,7 +143,7 @@ const translateFlag = flag => {
 .wb-stage-label {
   flex: 1;
   font-weight: 500;
-  color: var(--wb-text, #e1e4ea);
+  color: var(--color-text-body);
 }
 
 .wb-stage-status {
@@ -152,11 +152,11 @@ const translateFlag = flag => {
   padding: 1px 6px;
   border-radius: 3px;
 }
-.status-running { color: #4fc3f7; background: rgba(79, 195, 247, 0.12); }
-.status-completed { color: #66bb6a; background: rgba(102, 187, 106, 0.12); }
-.status-failed { color: #ef5350; background: rgba(239, 83, 80, 0.12); }
-.status-pending { color: #8b8fa3; }
-.status-skipped { color: #9e9e9e; background: rgba(158, 158, 158, 0.12); }
+.status-running { color: var(--color-info); background: var(--color-info-bg); }
+.status-completed { color: var(--color-success); background: var(--color-success-bg); }
+.status-failed { color: var(--color-danger); background: var(--color-danger-bg); }
+.status-pending { color: var(--color-text-secondary); }
+.status-skipped { color: var(--color-text-tertiary); background: var(--color-bg-surface-alt); }
 
 /* ── Role list ─────────────────────────────────── */
 .wb-role-list {
@@ -170,11 +170,11 @@ const translateFlag = flag => {
   align-items: center;
   gap: 4px;
   font-size: 13px;
-  color: var(--wb-text-muted, #8b8fa3);
+  color: var(--color-text-secondary);
 }
-.wb-role.role-completed { color: #66bb6a; }
-.wb-role.role-running { color: #4fc3f7; }
-.wb-role.role-failed { color: #ef5350; }
+.wb-role.role-completed { color: var(--color-success); }
+.wb-role.role-running { color: var(--color-info); }
+.wb-role.role-failed { color: var(--color-danger); }
 .wb-role-icon { font-size: 12px; width: 14px; text-align: center; }
 .wb-role-name { flex: 1; }
 .wb-role-reused { font-size: 12px; }
@@ -188,16 +188,16 @@ const translateFlag = flag => {
 }
 .wb-degraded-flag {
   font-size: 12px;
-  color: #f0b429;
-  background: rgba(240, 180, 41, 0.08);
+  color: var(--color-warning);
+  background: var(--color-warning-bg);
   padding: 1px 6px;
   border-radius: 3px;
 }
 
 .wb-stage-rerun {
   background: transparent;
-  border: 1px solid var(--wb-accent, #5b9cf6);
-  color: var(--wb-accent, #5b9cf6);
+  border: 1px solid var(--color-accent);
+  color: var(--color-accent);
   border-radius: 4px;
   padding: 1px 6px;
   font-size: 12px;
@@ -206,18 +206,18 @@ const translateFlag = flag => {
   transition: background 0.15s;
 }
 .wb-stage-rerun:hover {
-  background: rgba(91, 156, 246, 0.12);
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
 }
 
 .wb-stage.stage-skipped {
-  border-color: #616161;
+  border-color: var(--color-border-light);
   opacity: 0.6;
 }
 
 .wb-progress-empty {
   text-align: center;
   padding: 24px 12px;
-  color: var(--wb-text-muted, #8b8fa3);
+  color: var(--color-text-secondary);
   font-size: 14px;
 }
 </style>

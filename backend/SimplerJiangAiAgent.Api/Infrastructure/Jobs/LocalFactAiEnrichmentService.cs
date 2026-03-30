@@ -106,36 +106,83 @@ public sealed class LocalFactAiEnrichmentService : ILocalFactAiEnrichmentService
         }
 
         var batchSize = Math.Clamp(_options.AiBatchSize, 5, 20);
+
+        // Build all batches upfront
+        var batches = new List<PendingNewsEnvelope[]>();
         for (var index = 0; index < pending.Count; index += batchSize)
+            batches.Add(pending.Skip(index).Take(batchSize).ToArray());
+
+        // Fire LLM calls in parallel with concurrency limit; cancel remaining on rate limit
+        const int maxConcurrency = 3;
+        using var semaphore = new SemaphoreSlim(maxConcurrency);
+        using var rateLimitCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var tasks = batches.Select(async batch =>
         {
-            var batch = pending.Skip(index).Take(batchSize).ToArray();
+            await semaphore.WaitAsync(rateLimitCts.Token);
             try
             {
                 var prompt = BuildPrompt(batch);
                 var result = await _llmService.ChatAsync(
                     _options.AiProvider,
                     new LlmChatRequest(prompt, _options.AiModel, 0.1, false),
-                    cancellationToken);
+                    rateLimitCts.Token);
+                return (batch, content: result.Content, error: (Exception?)null);
+            }
+            catch (OperationCanceledException) when (rateLimitCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+            {
+                // Aborted due to rate limit in a sibling task — not an error
+                return (batch, content: (string?)null, error: (Exception?)null);
+            }
+            catch (Exception ex)
+            {
+                if (IsRateLimit(ex))
+                {
+                    // Signal other tasks to stop
+                    try { rateLimitCts.Cancel(); } catch (ObjectDisposedException) { }
+                }
+                return (batch, content: (string?)null, error: (Exception?)ex);
+            }
+            finally
+            {
+                semaphore.Release();
+            }
+        }).ToList();
 
-                var parsed = ParseBatchResult(result.Content);
+        var results = await Task.WhenAll(tasks);
+
+        // Apply results and save sequentially (DbContext is not thread-safe)
+        var anyApplied = false;
+        foreach (var (batch, content, error) in results)
+        {
+            if (error != null)
+            {
+                _logger.LogWarning(error, "本地事实 AI 清洗失败，保留未处理状态以便下轮重试");
+                continue;
+            }
+
+            if (content is null) continue;
+
+            try
+            {
+                var parsed = ParseBatchResult(content);
                 foreach (var item in batch)
                 {
                     if (parsed.TryGetValue(item.Id, out var enrichment))
                     {
                         item.Apply(enrichment);
+                        anyApplied = true;
                     }
                 }
-
-                await _dbContext.SaveChangesAsync(cancellationToken);
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "本地事实 AI 清洗失败，保留未处理状态以便下轮重试");
-                if (IsRateLimit(ex))
-                {
-                    return;
-                }
+                _logger.LogWarning(ex, "本地事实 AI 清洗结果解析失败，跳过该批次");
             }
+        }
+
+        if (anyApplied)
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken);
         }
     }
 

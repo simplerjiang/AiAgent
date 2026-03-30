@@ -50,13 +50,10 @@ const getChangeClass = value => {
   display: grid;
   grid-template-rows: auto 1fr;
   gap: 1rem;
-  height: max-content;
   min-height: calc(100vh - 238px);
   padding: 1.25rem;
   border-radius: 22px;
   border: 1px solid rgba(148, 163, 184, 0.18);
-  position: sticky;
-  top: 1.5rem;
   z-index: 10;
   background:
     radial-gradient(circle at top left, rgba(14, 165, 233, 0.12), transparent 32%),
@@ -119,14 +116,17 @@ const getChangeClass = value => {
   background: rgba(15, 23, 42, 0.38);
   padding: 1rem;
   min-width: 0;
-  min-height: 0;
+}
+
+.terminal-view-chart {
+  min-height: 400px;
 }
 
 .is-rise {
-  color: #f87171;
+  color: var(--color-market-rise);
 }
 
 .is-fall {
-  color: #4ade80;
+  color: var(--color-market-fall);
 }
 </style>

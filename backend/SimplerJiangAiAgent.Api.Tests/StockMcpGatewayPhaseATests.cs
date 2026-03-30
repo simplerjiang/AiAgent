@@ -86,7 +86,7 @@ public sealed class StockMcpGatewayPhaseATests
     [Fact]
     public async Task Gateway_ShouldDelegateToUnderlyingCopilotService()
     {
-        var gateway = new McpToolGateway(new RecordingStockCopilotMcpService(), new McpServiceRegistry(), CreatePolicy());
+        var gateway = new McpToolGateway(new RecordingStockCopilotMcpService(), new McpServiceRegistry(), CreatePolicy(), Microsoft.Extensions.Logging.Abstractions.NullLogger<McpToolGateway>.Instance);
 
         var result = await gateway.GetNewsAsync("sh600000", "stock", "task-gateway");
 
@@ -98,7 +98,7 @@ public sealed class StockMcpGatewayPhaseATests
     public async Task Gateway_ShouldDelegateToProductTool()
     {
         var service = new RecordingStockCopilotMcpService();
-        var gateway = new McpToolGateway(service, new McpServiceRegistry(), CreatePolicy());
+        var gateway = new McpToolGateway(service, new McpServiceRegistry(), CreatePolicy(), Microsoft.Extensions.Logging.Abstractions.NullLogger<McpToolGateway>.Instance);
 
         var result = await gateway.GetProductAsync("sz002594", "task-product", new StockCopilotMcpWindowOptions(1, 5));
 
@@ -111,7 +111,7 @@ public sealed class StockMcpGatewayPhaseATests
     [Fact]
     public async Task Gateway_ShouldDelegateToPhaseDTools()
     {
-        var gateway = new McpToolGateway(new RecordingStockCopilotMcpService(), new McpServiceRegistry(), CreatePolicy());
+        var gateway = new McpToolGateway(new RecordingStockCopilotMcpService(), new McpServiceRegistry(), CreatePolicy(), Microsoft.Extensions.Logging.Abstractions.NullLogger<McpToolGateway>.Instance);
 
         var marketContext = await gateway.GetMarketContextAsync("sh600000", "task-market-context");
         var socialSentiment = await gateway.GetSocialSentimentAsync("sh600000", "task-social-sentiment");

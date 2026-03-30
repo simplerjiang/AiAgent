@@ -164,6 +164,75 @@ public sealed class ResearchReportTests
         Assert.NotNull(marketBlock.EvidenceRefsJson);
     }
 
+    // ── Fundamentals summary synthesis from qualityView/valuationView ──
+
+    [Fact]
+    public async Task GenerateBlocks_FundamentalsWithOnlyValuationView_ShouldNotCrash()
+    {
+        await using var db = CreateDbContext();
+        var (session, turn) = await SeedSessionAndTurn(db);
+
+        var service = new ResearchReportService(db);
+
+        // Simulate fundamentals analyst returning only valuationView (no qualityView)
+        var outputs = new List<string>
+        {
+            $"[{StockAgentRoleIds.FundamentalsAnalyst}]\n" + JsonSerializer.Serialize(new
+            {
+                headline = "估值偏低",
+                valuationView = "当前PE低于历史中位数",
+                highlights = new[] { "ROE持续改善", "毛利率稳定" },
+                risks = new[] { "行业竞争加剧" },
+                evidenceTable = new[] { new { metric = "PE", value = "8.5" } }
+            })
+        };
+
+        await service.GenerateBlocksFromStageAsync(
+            session.Id, turn.Id, ResearchStageType.AnalystTeam,
+            outputs, Array.Empty<string>());
+
+        var block = await db.ResearchReportBlocks.FirstOrDefaultAsync(b => b.TurnId == turn.Id && b.BlockType == ReportBlockType.Fundamentals);
+
+        Assert.NotNull(block);
+        Assert.Contains("估值判断", block!.Summary);
+        Assert.DoesNotContain("{\"content\"", block.Summary ?? "");
+        Assert.NotNull(block.KeyPointsJson);
+        Assert.NotNull(block.CounterEvidenceRefsJson);
+        Assert.NotNull(block.EvidenceRefsJson);
+    }
+
+    [Fact]
+    public async Task GenerateBlocks_FundamentalsWithBothViews_SynthesizesSummary()
+    {
+        await using var db = CreateDbContext();
+        var (session, turn) = await SeedSessionAndTurn(db);
+
+        var service = new ResearchReportService(db);
+
+        var outputs = new List<string>
+        {
+            $"[{StockAgentRoleIds.FundamentalsAnalyst}]\n" + JsonSerializer.Serialize(new
+            {
+                headline = "基本面良好",
+                qualityView = "财务质量优秀，盈利能力强",
+                valuationView = "估值合理偏低",
+                metrics = new { PE = "8.5", PB = "1.2" },
+                highlights = new[] { "ROE持续改善" },
+                risks = new[] { "行业竞争加剧" }
+            })
+        };
+
+        await service.GenerateBlocksFromStageAsync(
+            session.Id, turn.Id, ResearchStageType.AnalystTeam,
+            outputs, Array.Empty<string>());
+
+        var block = await db.ResearchReportBlocks.FirstOrDefaultAsync(b => b.TurnId == turn.Id && b.BlockType == ReportBlockType.Fundamentals);
+
+        Assert.NotNull(block);
+        Assert.Contains("财务质量", block!.Summary);
+        Assert.Contains("估值判断", block.Summary);
+    }
+
     // ── Report block for degraded stage ──────────────────────────────
 
     [Fact]
@@ -481,7 +550,7 @@ public sealed class ResearchReportTests
 
         var eventBus = new ResearchEventBus();
         var reportService = new ResearchReportService(db);
-        var runner = new ResearchRunner(db, executor, eventBus, reportService, NullLogger<ResearchRunner>.Instance);
+        var runner = new ResearchRunner(db, executor, eventBus, reportService, new StubFollowUpRoutingService(), NullLogger<ResearchRunner>.Instance);
 
         await runner.RunTurnAsync(turn.Id);
 
@@ -541,7 +610,7 @@ public sealed class ResearchReportTests
 
         var eventBus = new ResearchEventBus();
         var reportService = new ResearchReportService(db);
-        var runner = new ResearchRunner(db, executor, eventBus, reportService, NullLogger<ResearchRunner>.Instance);
+        var runner = new ResearchRunner(db, executor, eventBus, reportService, new StubFollowUpRoutingService(), NullLogger<ResearchRunner>.Instance);
 
         await runner.RunTurnAsync(turn.Id);
 
@@ -590,6 +659,49 @@ public sealed class ResearchReportTests
         Assert.Single(decision.NextActions);
         Assert.Equal("DraftTradingPlan", decision.NextActions[0].ActionType);
         Assert.Equal("起草交易计划", decision.NextActions[0].Label);
+    }
+
+    // ── Fundamentals qualityView/valuationView parsing ─────────────
+
+    [Fact]
+    public async Task GenerateBlocks_FundamentalsWithQualityAndValuationView_ShouldSynthesizeSummary()
+    {
+        await using var db = CreateDbContext();
+        var (session, turn) = await SeedSessionAndTurn(db);
+
+        var service = new ResearchReportService(db);
+
+        var fundamentalsJson = JsonSerializer.Serialize(new
+        {
+            headline = "基本面承压",
+            qualityView = "承压",
+            valuationView = "偏贵",
+            metrics = new { revenue = "100亿", revenueYoY = "-5%", netProfit = "8亿", roe = "6%" },
+            highlights = new[] { "毛利率回升", "研发投入增长" },
+            risks = new[] { "负债率偏高", "现金流紧张" },
+            evidenceTable = new[] { new { metric = "ROE", value = "6%", period = "2025Q3", source = "东方财富", assessment = "偏低" } }
+        });
+        var outputs = new List<string>
+        {
+            $"[{StockAgentRoleIds.FundamentalsAnalyst}]\n{fundamentalsJson}"
+        };
+
+        await service.GenerateBlocksFromStageAsync(
+            session.Id, turn.Id, ResearchStageType.AnalystTeam,
+            outputs, Array.Empty<string>());
+
+        var block = await db.ResearchReportBlocks
+            .FirstOrDefaultAsync(b => b.TurnId == turn.Id && b.BlockType == ReportBlockType.Fundamentals);
+
+        Assert.NotNull(block);
+        Assert.Equal("基本面承压", block!.Headline);
+        Assert.NotNull(block.Summary);
+        Assert.Contains("财务质量: 承压", block.Summary);
+        Assert.Contains("估值判断: 偏贵", block.Summary);
+        Assert.Contains("revenue: 100亿", block.Summary);
+        Assert.NotNull(block.KeyPointsJson);
+        Assert.NotNull(block.EvidenceRefsJson);
+        Assert.NotNull(block.CounterEvidenceRefsJson);
     }
 
     // ── Error scenario tests ─────────────────────────────────────────
@@ -700,5 +812,60 @@ public sealed class ResearchReportTests
                 context.RoleId, ResearchRoleStatus.Completed, output,
                 $"trace-{context.RoleId}", Array.Empty<string>(), null, null));
         }
+    }
+
+    // ── Headline truncation ─────────────────────────────────────────
+
+    [Fact]
+    public async Task GenerateBlocks_LongHeadline_TruncatedTo500()
+    {
+        await using var db = CreateDbContext();
+        var (session, turn) = await SeedSessionAndTurn(db);
+
+        var longHeadline = new string('X', 600);
+        var json = JsonSerializer.Serialize(new { headline = longHeadline, summary = "ok" });
+        var outputs = new List<string> { $"[{StockAgentRoleIds.MarketAnalyst}]\n{json}" };
+
+        var service = new ResearchReportService(db);
+        await service.GenerateBlocksFromStageAsync(
+            session.Id, turn.Id, ResearchStageType.AnalystTeam,
+            outputs, Array.Empty<string>());
+
+        var block = await db.ResearchReportBlocks
+            .FirstOrDefaultAsync(b => b.TurnId == turn.Id && b.BlockType == ReportBlockType.Market);
+
+        Assert.NotNull(block);
+        Assert.Equal(500, block!.Headline!.Length);
+    }
+
+    // ── Block deduplication on rerun ─────────────────────────────────
+
+    [Fact]
+    public async Task GenerateBlocks_SecondCall_ReplacesExistingBlocks()
+    {
+        await using var db = CreateDbContext();
+        var (session, turn) = await SeedSessionAndTurn(db);
+
+        var service = new ResearchReportService(db);
+
+        var json1 = JsonSerializer.Serialize(new { headline = "Initial", summary = "v1" });
+        var outputs1 = new List<string> { $"[{StockAgentRoleIds.MarketAnalyst}]\n{json1}" };
+        await service.GenerateBlocksFromStageAsync(
+            session.Id, turn.Id, ResearchStageType.AnalystTeam,
+            outputs1, Array.Empty<string>());
+
+        // Call again with updated content — should replace, not duplicate
+        var json2 = JsonSerializer.Serialize(new { headline = "Updated", summary = "v2" });
+        var outputs2 = new List<string> { $"[{StockAgentRoleIds.MarketAnalyst}]\n{json2}" };
+        await service.GenerateBlocksFromStageAsync(
+            session.Id, turn.Id, ResearchStageType.AnalystTeam,
+            outputs2, Array.Empty<string>());
+
+        var blocks = await db.ResearchReportBlocks
+            .Where(b => b.TurnId == turn.Id && b.BlockType == ReportBlockType.Market)
+            .ToListAsync();
+
+        Assert.Single(blocks);
+        Assert.Equal("Updated", blocks[0].Headline);
     }
 }

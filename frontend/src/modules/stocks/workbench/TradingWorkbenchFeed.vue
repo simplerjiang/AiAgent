@@ -81,22 +81,22 @@ const safeHtml = md => {
 /** Role visual config: avatar icon, bubble color, alignment. */
 const roleConfig = roleId => {
   const id = (roleId || '').toLowerCase().replace(/_/g, '')
-  if (id.includes('market')) return { avatar: '📈', color: '#2b4a7a', name: '市场分析师' }
-  if (id.includes('social') || id.includes('sentiment')) return { avatar: '💬', color: '#2b4a6a', name: '情绪分析师' }
-  if (id.includes('news')) return { avatar: '📰', color: '#2b4a5a', name: '新闻分析师' }
-  if (id.includes('fundamental')) return { avatar: '📊', color: '#2b3a6a', name: '基本面分析师' }
-  if (id.includes('shareholder')) return { avatar: '👥', color: '#2b3a5a', name: '股东分析师' }
-  if (id.includes('product')) return { avatar: '🏭', color: '#2b4a4a', name: '产品分析师' }
-  if (id.includes('companyoverview')) return { avatar: '🏢', color: '#2b3a4a', name: '公司概览' }
-  if (id.includes('bull')) return { avatar: '🐂', color: '#1a4a2a', name: '多方研究员' }
-  if (id.includes('bear')) return { avatar: '🐻', color: '#5a1a1a', name: '空方研究员' }
-  if (id.includes('researchmanager')) return { avatar: '👔', color: '#4a3a1a', name: '研究经理' }
-  if (id.includes('trader')) return { avatar: '💹', color: '#3a1a4a', name: '交易员' }
-  if (id.includes('aggressive')) return { avatar: '🔥', color: '#4a2a1a', name: '激进风控' }
-  if (id.includes('neutral')) return { avatar: '⚖️', color: '#2a3a4a', name: '中性风控' }
-  if (id.includes('conservative')) return { avatar: '🛡️', color: '#1a2a4a', name: '保守风控' }
-  if (id.includes('portfolio')) return { avatar: '🎯', color: '#4a3a0a', name: '组合经理' }
-  return { avatar: '🤖', color: '#2a2d35', name: roleId || '系统' }
+  if (id.includes('market')) return { avatar: '📈', color: '#dbeafe', name: '市场分析师' }
+  if (id.includes('social') || id.includes('sentiment')) return { avatar: '💬', color: '#e0e7ff', name: '情绪分析师' }
+  if (id.includes('news')) return { avatar: '📰', color: '#fef3c7', name: '新闻分析师' }
+  if (id.includes('fundamental')) return { avatar: '📊', color: '#dbeafe', name: '基本面分析师' }
+  if (id.includes('shareholder')) return { avatar: '👥', color: '#ede9fe', name: '股东分析师' }
+  if (id.includes('product')) return { avatar: '🏭', color: '#d1fae5', name: '产品分析师' }
+  if (id.includes('companyoverview')) return { avatar: '🏢', color: '#e0f2fe', name: '公司概览' }
+  if (id.includes('bull')) return { avatar: '🐂', color: '#dcfce7', name: '多方研究员' }
+  if (id.includes('bear')) return { avatar: '🐻', color: '#fee2e2', name: '空方研究员' }
+  if (id.includes('researchmanager')) return { avatar: '👔', color: '#fef3c7', name: '研究经理' }
+  if (id.includes('trader')) return { avatar: '💹', color: '#ede9fe', name: '交易员' }
+  if (id.includes('aggressive')) return { avatar: '🔥', color: '#fecaca', name: '激进风控' }
+  if (id.includes('neutral')) return { avatar: '⚖️', color: '#e2e8f0', name: '中性风控' }
+  if (id.includes('conservative')) return { avatar: '🛡️', color: '#dbeafe', name: '保守风控' }
+  if (id.includes('portfolio')) return { avatar: '🎯', color: '#fef3c7', name: '组合经理' }
+  return { avatar: '🤖', color: '#e2e8f0', name: roleId || '系统' }
 }
 
 /** Classify item for rendering. */
@@ -108,7 +108,7 @@ const itemKind = item => {
   if (/^第\s*\d+\s*轮分析开始$/.test(rawContent)) return 'user-query'
   if (/^Turn\s+\d+\s+completed$/i.test(rawContent) || rawContent === '分析完成') return 'hidden'
 
-  if (t.includes('stagetransition') || t.includes('stagestarted') || t.includes('stagecompleted') || t.includes('stagefailed')) return 'divider'
+  if (t.includes('stagetransition') || t.includes('stagestarted') || t.includes('stagecompleted') || t.includes('stagefailed')) return 'hidden'
   if (t.includes('tooldispatched') || t.includes('toolcompleted') || t.includes('toolprogress') || t.includes('toolevent')) return 'tool'
   if (t.includes('userfollowup') || t.includes('turnstarted')) return 'user'
   if (t.includes('system') || t.includes('degraded') || t.includes('retryattempt')) return 'system'
@@ -386,17 +386,17 @@ watch(() => props.items.length, () => {
 .feed-turn-group { display: flex; flex-direction: column; gap: 4px; }
 .feed-turn-header { text-align: center; margin: 8px 0 4px; }
 .turn-badge {
-  font-size: 12px; font-weight: 600; color: #b09cf6;
-  background: rgba(176,156,246,0.1); padding: 2px 10px;
+  font-size: 12px; font-weight: 600; color: #6d28d9;
+  background: #ede9fe; padding: 2px 10px;
   border-radius: 10px; font-family: 'Consolas', monospace;
 }
 
 /* ── Stage divider ────────────────────────────── */
 .feed-divider {
   display: flex; align-items: center; gap: 8px;
-  margin: 8px 0 4px; font-size: 13px; color: var(--wb-text-muted, #8b8fa3);
+  margin: 8px 0 4px; font-size: 13px; color: var(--color-text-secondary);
 }
-.feed-divider-line { flex: 1; height: 1px; background: var(--wb-border, #2a2d35); }
+.feed-divider-line { flex: 1; height: 1px; background: var(--color-border-light); }
 .feed-divider-text { white-space: nowrap; font-weight: 500; }
 
 /* ── Tool event (compact) ─────────────────────── */
@@ -404,10 +404,10 @@ watch(() => props.items.length, () => {
 .feed-tool, .feed-system {
   display: flex; align-items: center; gap: 4px;
   padding: 2px 12px; font-size: 13px;
-  color: var(--wb-text-muted, #8b8fa3);
+  color: var(--color-text-secondary);
 }
 .feed-tool-expandable { cursor: pointer; }
-.feed-tool-expandable:hover { color: var(--wb-text, #e1e4ea); }
+.feed-tool-expandable:hover { color: var(--color-text-body); }
 .feed-tool-icon, .feed-system-icon { font-size: 12px; flex-shrink: 0; }
 .feed-tool-text, .feed-system-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .feed-tool-chevron { font-size: 10px; opacity: 0.6; flex-shrink: 0; }
@@ -415,23 +415,23 @@ watch(() => props.items.length, () => {
 .feed-tool-detail {
   margin: 2px 24px 4px;
   padding: 4px 8px;
-  background: rgba(255,255,255,0.03);
-  border-left: 2px solid var(--wb-accent, #5b9cf6);
+  background: var(--color-bg-surface-alt);
+  border-left: 2px solid var(--color-accent);
   border-radius: 0 4px 4px 0;
   font-size: 12px;
-  color: var(--wb-text-muted, #8b8fa3);
+  color: var(--color-text-secondary);
 }
 .feed-tool-detail-row { display: flex; gap: 6px; line-height: 1.5; }
-.feed-tool-detail-key { color: var(--wb-accent, #5b9cf6); font-weight: 500; white-space: nowrap; }
+.feed-tool-detail-key { color: var(--color-accent); font-weight: 500; white-space: nowrap; }
 .feed-tool-detail-val { word-break: break-all; }
 .feed-tool-detail-large { margin-top: 4px; }
 .feed-tool-detail-pre {
   margin: 4px 0 0;
   padding: 6px 8px;
-  background: rgba(0,0,0,0.2);
+  background: var(--color-bg-surface-alt);
   border-radius: 4px;
   font-size: 11px;
-  color: var(--wb-text, #e1e4ea);
+  color: var(--color-text-body);
   white-space: pre-wrap;
   word-break: break-all;
   max-height: 300px;
@@ -440,9 +440,9 @@ watch(() => props.items.length, () => {
 }
 .feed-tool-detail-rendered {
   font-size: 12px;
-  color: #c8ccd4;
+  color: var(--color-text-body);
   padding: 6px 8px;
-  background: rgba(0,0,0,0.15);
+  background: var(--color-bg-surface-alt);
   border-radius: 4px;
   max-height: 300px;
   overflow-y: auto;
@@ -450,13 +450,13 @@ watch(() => props.items.length, () => {
 }
 .feed-tool-detail-rendered :deep(ul) { padding-left: 16px; margin: 4px 0; }
 .feed-tool-detail-rendered :deep(li) { margin: 2px 0; }
-.feed-tool-detail-rendered :deep(strong) { color: #82aaff; }
+.feed-tool-detail-rendered :deep(strong) { color: var(--color-accent); }
 
 /* ── Lifecycle (dimmed compact) ───────────────── */
 .feed-lifecycle {
   display: flex; align-items: center; gap: 4px;
   padding: 1px 12px; font-size: 12px;
-  color: var(--wb-text-muted, #8b8fa3);
+  color: var(--color-text-secondary);
   opacity: 0.5;
 }
 .feed-lifecycle-dot { font-size: 10px; flex-shrink: 0; }
@@ -473,15 +473,15 @@ watch(() => props.items.length, () => {
   width: 30px; height: 30px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
   font-size: 15px; flex-shrink: 0;
-  background: var(--wb-card-bg, #2a2d35);
+  background: var(--color-bg-surface-alt);
 }
-.feed-avatar-user { background: #3a4a5a; }
+.feed-avatar-user { background: var(--color-bg-surface-alt); }
 
 /* ── Bubble ───────────────────────────────────── */
 .feed-bubble-wrap { flex: 1; min-width: 0; max-width: 85%; }
 .feed-bubble-name {
   font-size: 13px; font-weight: 600; margin-bottom: 2px;
-  color: var(--wb-text-muted, #8b8fa3);
+  color: var(--color-text-secondary);
 }
 .feed-bubble-time-inline { font-weight: 400; font-size: 12px; opacity: 0.6; margin-left: 6px; }
 
@@ -490,13 +490,13 @@ watch(() => props.items.length, () => {
   font-size: 15px; line-height: 1.6; word-break: break-word;
 }
 .feed-bubble-role {
-  background: var(--bubble-bg, #2a2d35);
-  color: var(--wb-text, #e1e4ea);
+  background: var(--color-bg-surface-alt);
+  color: var(--color-text-body);
   border-top-left-radius: 4px;
 }
 .feed-bubble-user {
-  background: #2a4a6a;
-  color: #fff;
+  background: var(--color-accent-subtle);
+  color: #1a1a1a;
   border-top-right-radius: 4px;
   margin-left: auto; max-width: 85%;
 }
@@ -507,40 +507,40 @@ watch(() => props.items.length, () => {
 .feed-bubble-content :deep(ul), .feed-bubble-content :deep(ol) { margin: 4px 0; padding-left: 16px; }
 .feed-bubble-content :deep(li) { margin: 2px 0; }
 .feed-bubble-content :deep(strong) { color: #fff; }
-.feed-bubble-content :deep(code) { background: rgba(0,0,0,0.3); padding: 1px 4px; border-radius: 3px; font-size: 14px; }
+.feed-bubble-content :deep(code) { background: var(--color-bg-surface-alt); padding: 1px 4px; border-radius: 3px; font-size: 14px; }
 
-.feed-bubble-time { font-size: 12px; color: rgba(255,255,255,0.4); margin-top: 4px; text-align: right; }
+.feed-bubble-time { font-size: 12px; color: var(--color-text-tertiary); margin-top: 4px; text-align: right; }
 
 .feed-collapse-btn {
-  background: none; border: none; color: var(--wb-accent, #5b9cf6);
+  background: none; border: none; color: var(--color-accent);
   font-size: 13px; cursor: pointer; padding: 2px 0; margin-top: 4px;
 }
 .feed-collapse-btn:hover { text-decoration: underline; }
 
 .feed-placeholder-notice {
-  color: #9ea3b5;
+  color: var(--color-text-secondary);
   font-size: 13px;
   padding: 4px 0;
 }
-.feed-report-expand { margin-top: 6px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 4px; }
+.feed-report-expand { margin-top: 6px; border-top: 1px solid var(--color-border-light); padding-top: 4px; }
 .feed-report-toggle {
-  background: transparent; border: none; color: var(--wb-accent, #5b9cf6);
+  background: transparent; border: none; color: var(--color-accent);
   font-size: 12px; cursor: pointer; padding: 2px 0;
   transition: opacity 0.15s;
 }
 .feed-report-toggle:hover { opacity: 0.8; }
 .feed-report-content {
   margin-top: 4px; padding: 8px;
-  background: rgba(0,0,0,0.15);
+  background: var(--color-bg-surface-alt);
   border-radius: 6px;
   font-size: 12px;
   line-height: 1.6;
   max-height: 400px;
   overflow-y: auto;
-  color: var(--wb-text, #e1e4ea);
+  color: var(--color-text-body);
 }
 .feed-report-content :deep(pre) {
-  background: rgba(0,0,0,0.2);
+  background: var(--color-bg-surface-alt);
   padding: 8px;
   border-radius: 4px;
   overflow-x: auto;
@@ -551,12 +551,12 @@ watch(() => props.items.length, () => {
 .feed-typing {
   display: flex; align-items: center; gap: 8px;
   padding: 6px 12px; font-size: 13px;
-  color: var(--wb-text-muted, #8b8fa3);
+  color: var(--color-text-secondary);
 }
 .feed-typing-dots { display: flex; gap: 3px; }
 .feed-typing-dots span {
   width: 5px; height: 5px; border-radius: 50%;
-  background: var(--wb-accent, #5b9cf6);
+  background: var(--color-accent);
   animation: typing-bounce 1.4s infinite ease-in-out;
 }
 .feed-typing-dots span:nth-child(2) { animation-delay: 0.2s; }
@@ -569,6 +569,6 @@ watch(() => props.items.length, () => {
 /* ── Empty state ──────────────────────────────── */
 .feed-empty {
   text-align: center; padding: 24px 12px;
-  color: var(--wb-text-muted, #8b8fa3); font-size: 14px;
+  color: var(--color-text-secondary); font-size: 14px;
 }
 </style>

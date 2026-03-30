@@ -569,10 +569,10 @@ onMounted(async () => {
 
 <style scoped>
 .panel {
-  background: #fff;
-  border-radius: 16px;
+  background: var(--color-bg-surface);
+  border-radius: var(--radius-xl);
   padding: 1.5rem;
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+  box-shadow: var(--shadow-md);
 }
 
 .field {
@@ -585,23 +585,23 @@ onMounted(async () => {
 .field input,
 .trace-box input {
   padding: 0.6rem 0.75rem;
-  border-radius: 10px;
-  border: 1px solid #e2e8f0;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-light);
   font-size: 0.95rem;
 }
 
 button {
   padding: 0.6rem 1rem;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   border: none;
-  background: #2563eb;
+  background: var(--color-accent);
   color: #fff;
   cursor: pointer;
 }
 
 button.secondary {
-  background: #e2e8f0;
-  color: #1f2937;
+  background: var(--color-bg-surface-alt);
+  color: var(--color-text-body);
 }
 
 button:disabled {
@@ -616,7 +616,7 @@ button:disabled {
 }
 
 .muted {
-  color: #64748b;
+  color: var(--color-text-secondary);
 }
 
 .panel-actions {
@@ -634,15 +634,15 @@ button:disabled {
 }
 
 .card {
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-lg);
   padding: 0.75rem;
 }
 
 .card h4 {
   margin: 0;
   font-size: 0.85rem;
-  color: #64748b;
+  color: var(--color-text-secondary);
 }
 
 .card p {
@@ -664,16 +664,16 @@ button:disabled {
 .trace-lines {
   max-height: 180px;
   overflow: auto;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
   padding: 0.75rem;
-  background: #f8fafc;
+  background: var(--color-bg-surface-alt);
 }
 
 .timeline {
   margin: 0.6rem 0 1rem;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
   padding: 0.7rem;
 }
 
@@ -684,10 +684,10 @@ button:disabled {
 .help-panel,
 .llm-log-panel {
   margin: 0.8rem 0 1rem;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
   padding: 0.8rem;
-  background: #fcfdff;
+  background: var(--color-bg-surface);
 }
 
 .help-panel h3,
@@ -712,8 +712,8 @@ button:disabled {
 }
 
 .llm-log-item {
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
   padding: 0.55rem;
   margin-bottom: 0.45rem;
   cursor: pointer;
@@ -726,15 +726,15 @@ button:disabled {
   align-items: center;
   margin-bottom: 0.4rem;
   font-size: 0.85rem;
-  color: #334155;
+  color: var(--color-text-body);
 }
 
 .llm-log-raw {
   margin: 0;
   max-height: 140px;
   overflow: auto;
-  background: #f8fafc;
-  border-radius: 6px;
+  background: var(--color-bg-surface-alt);
+  border-radius: var(--radius-sm);
   padding: 0.45rem;
   font-size: 0.8rem;
   white-space: pre-wrap;
@@ -744,7 +744,7 @@ button:disabled {
 .log-viewer-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.68);
+  background: rgba(15, 23, 42, 0.5);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -756,10 +756,10 @@ button:disabled {
   width: min(1280px, 100%);
   max-height: calc(100vh - 2rem);
   overflow: auto;
-  background: #ffffff;
-  border-radius: 14px;
+  background: var(--color-bg-surface);
+  border-radius: var(--radius-lg);
   padding: 1rem;
-  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.35);
+  box-shadow: var(--shadow-lg);
 }
 
 .log-viewer-header {
@@ -780,7 +780,7 @@ button:disabled {
   flex-wrap: wrap;
   gap: 0.75rem;
   font-size: 0.9rem;
-  color: #475569;
+  color: var(--color-text-secondary);
   margin-bottom: 0.8rem;
 }
 
@@ -794,9 +794,9 @@ button:disabled {
   max-height: none;
   min-height: 220px;
   overflow: auto;
-  background: #0f172a;
-  color: #e2e8f0;
-  border-radius: 8px;
+  background: var(--color-text-heading);
+  color: var(--color-bg-surface-alt);
+  border-radius: var(--radius-md);
   padding: 0.85rem;
   font-size: 0.85rem;
   line-height: 1.5;
@@ -826,8 +826,8 @@ button:disabled {
 
 .detail-panel {
   margin-top: 0.8rem;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
   padding: 0.7rem;
 }
 

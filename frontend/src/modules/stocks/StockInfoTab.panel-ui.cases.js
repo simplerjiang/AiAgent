@@ -54,7 +54,7 @@ export const stockInfoTabPanelUiCases = ({
     await flushPromises()
 
     expect(wrapper.find('.market-news-panel').text()).toContain('全球宏观信号仍在左侧显示')
-    expect(wrapper.find('.sidebar-workspace').exists()).toBe(true)
+    expect(wrapper.find('.sc-workspace__right').exists()).toBe(true)
     expect(wrapper.text()).not.toContain('股票助手')
   }
   },

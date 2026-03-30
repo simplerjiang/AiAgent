@@ -110,3 +110,5 @@ export const getPlanReviewHeadline = alert => {
 export const canEditTradingPlan = item => ['Pending', 'ReviewRequired'].includes(normalizeTradingPlanStatus(item?.status))
 
 export const canResumeTradingPlan = item => normalizeTradingPlanStatus(item?.status) === 'ReviewRequired'
+
+export const canCancelTradingPlan = item => ['Pending', 'ReviewRequired', 'Draft'].includes(normalizeTradingPlanStatus(item?.status))

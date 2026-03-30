@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Globalization;
 using System.Net.Http.Json;
@@ -64,6 +65,8 @@ public sealed class StockCopilotMcpService : IStockCopilotMcpService
         ["资产负债率"] = 11
     };
     private const string LatestFinanceFactSource = "东方财富最新财报";
+    private static readonly TimeSpan RefreshSkipWindow = TimeSpan.FromMinutes(5);
+    private static readonly ConcurrentDictionary<string, DateTime> RecentRefreshTimestamps = new(StringComparer.OrdinalIgnoreCase);
     private readonly IStockDataService _dataService;
     private readonly IQueryLocalFactDatabaseTool _queryLocalFactDatabaseTool;
     private readonly IStockMarketContextService _marketContextService;
@@ -492,23 +495,19 @@ public sealed class StockCopilotMcpService : IStockCopilotMcpService
 
         await EnsureSymbolFactsRefreshedAsync(normalizedSymbol, cancellationToken);
 
-        var quote = await _dataService.GetQuoteAsync(normalizedSymbol, source, cancellationToken);
-        var kLines = await _dataService.GetKLineAsync(normalizedSymbol, safeInterval, safeCount, source, cancellationToken);
-        var messages = await _dataService.GetIntradayMessagesAsync(normalizedSymbol, source, cancellationToken);
-        var minuteLines = await _dataService.GetMinuteLineAsync(normalizedSymbol, source, cancellationToken);
-        var localFacts = await _queryLocalFactDatabaseTool.QueryAsync(normalizedSymbol, cancellationToken);
-        var newsPolicy = StockAgentNewsContextPolicy.Apply(messages, DateTime.Now).Policy;
-        var prepared = _featureEngineeringService.Prepare(normalizedSymbol, quote, kLines, minuteLines, messages, newsPolicy, StockAgentLocalFactProjection.Create(localFacts), DateTime.Now);
+        var bundle = await FetchSymbolDataBundleAsync(normalizedSymbol, safeInterval, safeCount, source, cancellationToken);
+        var newsPolicy = StockAgentNewsContextPolicy.Apply(bundle.Messages, DateTime.Now).Policy;
+        var prepared = _featureEngineeringService.Prepare(normalizedSymbol, bundle.Quote, bundle.KLines, bundle.MinuteLines, bundle.Messages, newsPolicy, StockAgentLocalFactProjection.Create(bundle.LocalFacts), DateTime.Now);
 
-        var latestClose = kLines.LastOrDefault()?.Close ?? quote.Price;
-        var support = kLines.TakeLast(20).DefaultIfEmpty().Min(item => item?.Low ?? latestClose);
-        var resistance = kLines.TakeLast(20).DefaultIfEmpty().Max(item => item?.High ?? latestClose);
+        var latestClose = bundle.KLines.LastOrDefault()?.Close ?? bundle.Quote.Price;
+        var support = bundle.KLines.TakeLast(20).DefaultIfEmpty().Min(item => item?.Low ?? latestClose);
+        var resistance = bundle.KLines.TakeLast(20).DefaultIfEmpty().Max(item => item?.High ?? latestClose);
         var trend = prepared.Features.Trend;
         var data = new StockCopilotKlineDataDto(
             normalizedSymbol,
             safeInterval,
-            kLines.Count,
-            kLines,
+            bundle.KLines.Count,
+            bundle.KLines,
             new StockCopilotKeyLevelsDto(
                 support,
                 resistance,
@@ -534,7 +533,7 @@ public sealed class StockCopilotMcpService : IStockCopilotMcpService
             symbol: normalizedSymbol,
             interval: safeInterval,
             query: null,
-            marketContext: await ResolveMcpMarketContextAsync(normalizedSymbol, cancellationToken),
+            marketContext: await ResolveMcpMarketContextAsync(normalizedSymbol, bundle.Quote.SectorName, cancellationToken),
             degradedFlags: prepared.Features.DegradedFlags,
             warnings: Array.Empty<string>());
     }
@@ -547,26 +546,22 @@ public sealed class StockCopilotMcpService : IStockCopilotMcpService
 
         await EnsureSymbolFactsRefreshedAsync(normalizedSymbol, cancellationToken);
 
-        var quote = await _dataService.GetQuoteAsync(normalizedSymbol, source, cancellationToken);
-        var kLines = await _dataService.GetKLineAsync(normalizedSymbol, "day", 60, source, cancellationToken);
-        var minuteLines = await _dataService.GetMinuteLineAsync(normalizedSymbol, source, cancellationToken);
-        var messages = await _dataService.GetIntradayMessagesAsync(normalizedSymbol, source, cancellationToken);
-        var localFacts = await _queryLocalFactDatabaseTool.QueryAsync(normalizedSymbol, cancellationToken);
+        var bundle = await FetchSymbolDataBundleAsync(normalizedSymbol, "day", 60, source, cancellationToken);
         var prepared = _featureEngineeringService.Prepare(
             normalizedSymbol,
-            quote,
-            kLines,
-            minuteLines,
-            messages,
-            StockAgentNewsContextPolicy.Apply(messages, DateTime.Now).Policy,
-            StockAgentLocalFactProjection.Create(localFacts),
+            bundle.Quote,
+            bundle.KLines,
+            bundle.MinuteLines,
+            bundle.Messages,
+            StockAgentNewsContextPolicy.Apply(bundle.Messages, DateTime.Now).Policy,
+            StockAgentLocalFactProjection.Create(bundle.LocalFacts),
             DateTime.Now);
 
-        var opening = minuteLines.FirstOrDefault()?.Price;
-        var middayAnchor = minuteLines.LastOrDefault(item => item.Time <= new TimeSpan(11, 30, 0))?.Price;
-        var close = minuteLines.LastOrDefault()?.Price;
-        var high = minuteLines.Count == 0 ? (decimal?)null : minuteLines.Max(item => item.Price);
-        var low = minuteLines.Count == 0 ? (decimal?)null : minuteLines.Min(item => item.Price);
+        var opening = bundle.MinuteLines.FirstOrDefault()?.Price;
+        var middayAnchor = bundle.MinuteLines.LastOrDefault(item => item.Time <= new TimeSpan(11, 30, 0))?.Price;
+        var close = bundle.MinuteLines.LastOrDefault()?.Price;
+        var high = bundle.MinuteLines.Count == 0 ? (decimal?)null : bundle.MinuteLines.Max(item => item.Price);
+        var low = bundle.MinuteLines.Count == 0 ? (decimal?)null : bundle.MinuteLines.Min(item => item.Price);
         var openingDrive = opening is > 0m && high.HasValue
             ? decimal.Round((high.Value - opening.Value) / opening.Value * 100m, 2)
             : (decimal?)null;
@@ -580,8 +575,8 @@ public sealed class StockCopilotMcpService : IStockCopilotMcpService
         var data = new StockCopilotMinuteDataDto(
             normalizedSymbol,
             prepared.Features.Trend.SessionPhase,
-            minuteLines.Count,
-            minuteLines,
+            bundle.MinuteLines.Count,
+            bundle.MinuteLines,
             prepared.Features.Trend.Vwap > 0m ? prepared.Features.Trend.Vwap : (decimal?)null,
             openingDrive,
             afternoonDrift,
@@ -599,7 +594,7 @@ public sealed class StockCopilotMcpService : IStockCopilotMcpService
             symbol: normalizedSymbol,
             interval: "minute",
             query: null,
-            marketContext: await ResolveMcpMarketContextAsync(normalizedSymbol, cancellationToken),
+            marketContext: await ResolveMcpMarketContextAsync(normalizedSymbol, bundle.Quote.SectorName, cancellationToken),
             degradedFlags: prepared.Features.DegradedFlags,
             warnings: Array.Empty<string>());
     }
@@ -614,23 +609,19 @@ public sealed class StockCopilotMcpService : IStockCopilotMcpService
 
         await EnsureSymbolFactsRefreshedAsync(normalizedSymbol, cancellationToken);
 
-        var quote = await _dataService.GetQuoteAsync(normalizedSymbol, source, cancellationToken);
-        var kLines = await _dataService.GetKLineAsync(normalizedSymbol, safeInterval, safeCount, source, cancellationToken);
-        var minuteLines = await _dataService.GetMinuteLineAsync(normalizedSymbol, source, cancellationToken);
-        var messages = await _dataService.GetIntradayMessagesAsync(normalizedSymbol, source, cancellationToken);
-        var localFacts = await _queryLocalFactDatabaseTool.QueryAsync(normalizedSymbol, cancellationToken);
+        var bundle = await FetchSymbolDataBundleAsync(normalizedSymbol, safeInterval, safeCount, source, cancellationToken);
         var prepared = _featureEngineeringService.Prepare(
             normalizedSymbol,
-            quote,
-            kLines,
-            minuteLines,
-            messages,
-            StockAgentNewsContextPolicy.Apply(messages, DateTime.Now).Policy,
-            StockAgentLocalFactProjection.Create(localFacts),
+            bundle.Quote,
+            bundle.KLines,
+            bundle.MinuteLines,
+            bundle.Messages,
+            StockAgentNewsContextPolicy.Apply(bundle.Messages, DateTime.Now).Policy,
+            StockAgentLocalFactProjection.Create(bundle.LocalFacts),
             DateTime.Now);
 
         var requested = NormalizeStrategies(strategies);
-        var signals = BuildStrategySignals(kLines, minuteLines, requested, safeInterval);
+        var signals = BuildStrategySignals(bundle.KLines, bundle.MinuteLines, requested, safeInterval);
 
         stopwatch.Stop();
         return BuildEnvelope(
@@ -644,7 +635,7 @@ public sealed class StockCopilotMcpService : IStockCopilotMcpService
             symbol: normalizedSymbol,
             interval: safeInterval,
             query: null,
-            marketContext: await ResolveMcpMarketContextAsync(normalizedSymbol, cancellationToken),
+            marketContext: await ResolveMcpMarketContextAsync(normalizedSymbol, bundle.Quote.SectorName, cancellationToken),
             degradedFlags: prepared.Features.DegradedFlags,
             warnings: Array.Empty<string>());
     }
@@ -2209,6 +2200,40 @@ public sealed class StockCopilotMcpService : IStockCopilotMcpService
         };
     }
 
+    /// <summary>
+    /// Bundle of commonly fetched symbol data, used by KlineMcp/MinuteMcp/StrategyMcp.
+    /// Extensible: add new data fields here when new data types are introduced.
+    /// </summary>
+    private sealed record SymbolDataBundle(
+        StockQuoteDto Quote,
+        IReadOnlyList<KLinePointDto> KLines,
+        IReadOnlyList<MinuteLinePointDto> MinuteLines,
+        IReadOnlyList<IntradayMessageDto> Messages,
+        LocalFactPackageDto LocalFacts);
+
+    /// <summary>
+    /// Fetches all common symbol data in parallel. To add new data types,
+    /// add a new task and field to SymbolDataBundle.
+    /// </summary>
+    private async Task<SymbolDataBundle> FetchSymbolDataBundleAsync(
+        string symbol, string interval, int count, string? source, CancellationToken ct)
+    {
+        var quoteTask = _dataService.GetQuoteAsync(symbol, source, ct);
+        var kLineTask = _dataService.GetKLineAsync(symbol, interval, count, source, ct);
+        var minuteTask = _dataService.GetMinuteLineAsync(symbol, source, ct);
+        var messagesTask = _dataService.GetIntradayMessagesAsync(symbol, source, ct);
+        var localFactsTask = _queryLocalFactDatabaseTool.QueryAsync(symbol, ct);
+
+        await Task.WhenAll(quoteTask, kLineTask, minuteTask, messagesTask, localFactsTask);
+
+        return new SymbolDataBundle(
+            await quoteTask,
+            await kLineTask,
+            await minuteTask,
+            await messagesTask,
+            await localFactsTask);
+    }
+
     private async Task EnsureSymbolFactsRefreshedAsync(string symbol, CancellationToken cancellationToken)
     {
         if (_localFactIngestionService is null || string.IsNullOrWhiteSpace(symbol))
@@ -2216,7 +2241,16 @@ public sealed class StockCopilotMcpService : IStockCopilotMcpService
             return;
         }
 
+        // Skip if this symbol was refreshed recently (avoids redundant crawls
+        // when multiple parallel analysts call MCP for the same symbol).
+        if (RecentRefreshTimestamps.TryGetValue(symbol, out var lastRefresh)
+            && DateTime.UtcNow - lastRefresh < RefreshSkipWindow)
+        {
+            return;
+        }
+
         await _localFactIngestionService.EnsureFreshAsync(symbol, cancellationToken);
+        RecentRefreshTimestamps[symbol] = DateTime.UtcNow;
     }
 
     private async Task EnsureMarketFactsRefreshedAsync(CancellationToken cancellationToken)
@@ -2242,6 +2276,16 @@ public sealed class StockCopilotMcpService : IStockCopilotMcpService
             // Quote fetch may fail; proceed without hint
         }
 
+        var marketContext = await _marketContextService.GetLatestAsync(symbol, sectorNameHint, cancellationToken);
+        return ToCopilotMarketContext(marketContext);
+    }
+
+    /// <summary>
+    /// Resolves market context using an already-known sector name hint,
+    /// avoiding a redundant quote fetch when the caller already has the quote.
+    /// </summary>
+    private async Task<StockCopilotMcpMarketContextDto?> ResolveMcpMarketContextAsync(string symbol, string? sectorNameHint, CancellationToken cancellationToken)
+    {
         var marketContext = await _marketContextService.GetLatestAsync(symbol, sectorNameHint, cancellationToken);
         return ToCopilotMarketContext(marketContext);
     }

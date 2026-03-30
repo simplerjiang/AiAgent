@@ -482,7 +482,12 @@ public sealed class OpenAiProvider : ILlmProvider
             || merged.Contains("输出json")
             || merged.Contains("json结构")
             || merged.Contains("json对象")
-            || merged.Contains("json数组");
+            || merged.Contains("json数组")
+            || merged.Contains("return json")
+            || merged.Contains("json array only")
+            || merged.Contains("json object only")
+            || merged.Contains("respond with json")
+            || merged.Contains("output json");
     }
 
     private static object[] BuildGeminiTools(string model)

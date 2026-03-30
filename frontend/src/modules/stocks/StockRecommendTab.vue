@@ -265,12 +265,11 @@ watch(realtimeContextEnabled, value => {
 
 <style scoped>
 .panel {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.75), rgba(248, 250, 252, 0.85));
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
-  border-radius: 16px;
-  padding: 1.5rem;
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-light);
+  box-shadow: var(--shadow-md);
+  border-radius: var(--radius-xl);
+  padding: var(--space-6);
 }
 
 .panel-header {
@@ -288,18 +287,18 @@ watch(realtimeContextEnabled, value => {
 }
 
 .session-selector select {
-  border-radius: 8px;
-  border: 1px solid rgba(148, 163, 184, 0.4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-light);
   padding: 0.35rem 0.6rem;
-  background: #ffffff;
+  background: var(--color-bg-surface);
 }
 
 .session-new {
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   border: none;
   padding: 0.35rem 0.8rem;
-  background: #e2e8f0;
-  color: #0f172a;
+  background: var(--color-bg-surface-alt);
+  color: var(--color-text-heading);
   cursor: pointer;
 }
 
@@ -307,10 +306,10 @@ watch(realtimeContextEnabled, value => {
   display: grid;
   gap: 0.9rem;
   margin-bottom: 1rem;
-  padding: 1rem;
-  border-radius: 18px;
-  background: linear-gradient(135deg, rgba(255, 248, 237, 0.96), rgba(238, 248, 255, 0.92));
-  border: 1px solid rgba(148, 163, 184, 0.18);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-surface-alt);
+  border: 1px solid var(--color-border-light);
 }
 
 .recommend-market-head {
@@ -325,7 +324,7 @@ watch(realtimeContextEnabled, value => {
   font-size: 12px;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: #c2410c;
+  color: var(--color-accent);
 }
 
 .recommend-market-head h3 {
@@ -333,7 +332,7 @@ watch(realtimeContextEnabled, value => {
 }
 
 .market-toggle.secondary {
-  background: #fff;
+  background: var(--color-bg-surface);
 }
 
 .recommend-index-grid {
@@ -347,9 +346,9 @@ watch(realtimeContextEnabled, value => {
   display: grid;
   gap: 0.25rem;
   padding: 0.75rem;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.88);
-  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-light);
 }
 
 .recommend-market-pills {
@@ -360,11 +359,11 @@ watch(realtimeContextEnabled, value => {
 
 .market-pill {
   padding: 0.35rem 0.7rem;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.9);
-  color: #334155;
+  border-radius: var(--radius-full);
+  background: var(--color-bg-surface);
+  color: var(--color-text-secondary);
   font-size: 0.85rem;
-  border: 1px solid rgba(148, 163, 184, 0.16);
+  border: 1px solid var(--color-border-light);
 }
 
 .recommend-sector-list {
@@ -374,11 +373,11 @@ watch(realtimeContextEnabled, value => {
 }
 
 .positive {
-  color: #15803d;
+  color: var(--color-market-rise);
 }
 
 .negative {
-  color: #b91c1c;
+  color: var(--color-market-fall);
 }
 
 </style>

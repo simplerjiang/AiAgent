@@ -61,8 +61,12 @@ public sealed class ResearchRoleExecutor : IResearchRoleExecutor
     }
 
     private const int MaxLlmRetries = 2;
-    private const int MaxToolRetries = 1;
+    private const int MaxToolRetries = 2;
+    private static readonly TimeSpan PerToolTimeout = TimeSpan.FromSeconds(45);
     private static readonly int[] LlmRetryDelaysMs = [2000, 5000];
+    private static readonly int[] ToolRetryDelaysMs = [2000, 5000, 15000];
+    // Limit concurrent MCP tool calls across all parallel roles to avoid external API throttling
+    private static readonly SemaphoreSlim McpConcurrencyGate = new(4);
     private static readonly JsonSerializerOptions RelaxedJsonOptions = new(JsonSerializerDefaults.Web)
     {
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
@@ -81,11 +85,13 @@ public sealed class ResearchRoleExecutor : IResearchRoleExecutor
             context.RoleId, null,
             $"Role {context.RoleId} started", null, DateTime.UtcNow));
 
-        // Phase 1: Dispatch MCP tools if the role has direct query tools
+        // Phase 1: Dispatch MCP tools in parallel if the role has direct query tools
         if (contract.AllowsDirectQueryTools && contract.PreferredMcpSequence.Count > 0)
         {
             var isLocalRequired = string.Equals(contract.ToolAccessMode, "local_required", StringComparison.OrdinalIgnoreCase);
 
+            // Pre-authorize all tools; fail fast if any required tool is blocked
+            var authorizedTools = new List<string>();
             foreach (var toolName in contract.PreferredMcpSequence)
             {
                 var auth = _policyService.AuthorizeRole(context.RoleId, toolName);
@@ -115,79 +121,64 @@ public sealed class ResearchRoleExecutor : IResearchRoleExecutor
                         new[] { $"tool_unavailable:{toolName}" }));
                     continue;
                 }
+                authorizedTools.Add(toolName);
+            }
 
-                _eventBus.Publish(new ResearchEvent(
-                    ResearchEventType.ToolDispatched,
-                    context.SessionId, context.TurnId, context.StageId,
-                    context.RoleId, null,
-                    $"正在调用 {toolName}",
-                    JsonSerializer.Serialize(new { toolName, symbol = context.Symbol, requestedAt = DateTime.UtcNow }),
-                    DateTime.UtcNow));
-
-                var toolSuccess = false;
-                for (var attempt = 0; attempt <= MaxToolRetries; attempt++)
+            // Dispatch all authorized tools in parallel, each with its own retry loop
+            if (authorizedTools.Count > 0)
+            {
+                foreach (var toolName in authorizedTools)
                 {
-                    try
-                    {
-                        if (attempt > 0)
-                        {
-                            _eventBus.Publish(new ResearchEvent(
-                                ResearchEventType.RetryAttempt,
-                                context.SessionId, context.TurnId, context.StageId,
-                                context.RoleId, null,
-                                $"Retrying {toolName} (attempt {attempt + 1})", null, DateTime.UtcNow));
-                            await Task.Delay(2000, cancellationToken);
-                        }
+                    _eventBus.Publish(new ResearchEvent(
+                        ResearchEventType.ToolDispatched,
+                        context.SessionId, context.TurnId, context.StageId,
+                        context.RoleId, null,
+                        $"正在调用 {toolName}",
+                        JsonSerializer.Serialize(new { toolName, symbol = context.Symbol, requestedAt = DateTime.UtcNow }),
+                        DateTime.UtcNow));
+                }
 
-                        var toolResult = await DispatchToolAsync(toolName, context.Symbol, cancellationToken);
-                        toolResults.Add($"[{toolName}]\n{toolResult}");
+                var parallelTasks = authorizedTools.Select(toolName => ExecuteToolWithRetryAsync(context, toolName, cancellationToken)).ToList();
+                var outcomes = await Task.WhenAll(parallelTasks);
+
+                foreach (var (toolName, outcome) in authorizedTools.Zip(outcomes))
+                {
+                    if (outcome.Success)
+                    {
+                        toolResults.Add($"[{toolName}]\n{outcome.ResultJson}");
                         toolOutputRefs.Add(new ResearchToolOutputRef(
                             toolName,
                             "Completed",
-                            BuildToolSummary(toolName, toolResult),
-                            toolResult,
+                            BuildToolSummary(toolName, outcome.ResultJson!),
+                            outcome.ResultJson,
                             null,
                             Array.Empty<string>()));
 
-                        var toolSummary = BuildToolSummary(toolName, toolResult);
+                        var toolSummary = BuildToolSummary(toolName, outcome.ResultJson!);
                         _eventBus.Publish(new ResearchEvent(
                             ResearchEventType.ToolCompleted,
                             context.SessionId, context.TurnId, context.StageId,
                             context.RoleId, null,
                             $"{toolName} 完成",
-                            JsonSerializer.Serialize(new { toolName, status = "Completed", summary = toolSummary, resultPreview = toolResult.Length > 4000 ? toolResult[..4000] + "…(truncated)" : toolResult }),
+                            JsonSerializer.Serialize(new { toolName, status = "Completed", summary = toolSummary, resultPreview = outcome.ResultJson!.Length > 4000 ? outcome.ResultJson[..4000] + "…(truncated)" : outcome.ResultJson }),
                             DateTime.UtcNow));
-                        toolSuccess = true;
-                        break;
                     }
-                    catch (OperationCanceledException) { throw; }
-                    catch (Exception ex) when (attempt < MaxToolRetries)
+                    else
                     {
-                        _logger.LogWarning(ex, "Role {RoleId}: tool {Tool} failed (attempt {Attempt}), will retry",
-                            context.RoleId, toolName, attempt + 1);
+                        degradedFlags.Add($"tool_error:{toolName}");
+                        toolOutputRefs.Add(new ResearchToolOutputRef(
+                            toolName,
+                            "Failed",
+                            $"{toolName} 获取失败，已按降级路径继续。",
+                            null,
+                            "tool execution failed after retries",
+                            new[] { $"tool_error:{toolName}" }));
+                        _eventBus.Publish(new ResearchEvent(
+                            ResearchEventType.ToolCompleted,
+                            context.SessionId, context.TurnId, context.StageId,
+                            context.RoleId, null,
+                            $"{toolName} failed after retries", null, DateTime.UtcNow));
                     }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex, "Role {RoleId}: tool {Tool} failed after {MaxAttempts} attempts",
-                            context.RoleId, toolName, MaxToolRetries + 1);
-                    }
-                }
-
-                if (!toolSuccess)
-                {
-                    degradedFlags.Add($"tool_error:{toolName}");
-                    toolOutputRefs.Add(new ResearchToolOutputRef(
-                        toolName,
-                        "Failed",
-                        $"{toolName} 获取失败，已按降级路径继续。",
-                        null,
-                        "tool execution failed after retries",
-                        new[] { $"tool_error:{toolName}" }));
-                    _eventBus.Publish(new ResearchEvent(
-                        ResearchEventType.ToolCompleted,
-                        context.SessionId, context.TurnId, context.StageId,
-                        context.RoleId, null,
-                        $"{toolName} failed after retries", null, DateTime.UtcNow));
                 }
             }
         }
@@ -275,6 +266,58 @@ public sealed class ResearchRoleExecutor : IResearchRoleExecutor
         return new RoleExecutionResult(context.RoleId, ResearchRoleStatus.Failed,
             null, null, degradedFlags, "LLM_FAILED", lastLlmException?.Message,
             JsonSerializer.Serialize(toolOutputRefs, RelaxedJsonOptions));
+    }
+
+    private sealed record ToolOutcome(bool Success, string? ResultJson);
+
+    private async Task<ToolOutcome> ExecuteToolWithRetryAsync(RoleExecutionContext context, string toolName, CancellationToken cancellationToken)
+    {
+        for (var attempt = 0; attempt <= MaxToolRetries; attempt++)
+        {
+            try
+            {
+                if (attempt > 0)
+                {
+                    var delayMs = ToolRetryDelaysMs[Math.Min(attempt - 1, ToolRetryDelaysMs.Length - 1)];
+                    _eventBus.Publish(new ResearchEvent(
+                        ResearchEventType.RetryAttempt,
+                        context.SessionId, context.TurnId, context.StageId,
+                        context.RoleId, null,
+                        $"Retrying {toolName} (attempt {attempt + 1}, backoff {delayMs}ms)", null, DateTime.UtcNow));
+                    await Task.Delay(delayMs, cancellationToken);
+                }
+
+                await McpConcurrencyGate.WaitAsync(cancellationToken);
+                try
+                {
+                    using var toolCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                    toolCts.CancelAfter(PerToolTimeout);
+                    var toolResult = await DispatchToolAsync(toolName, context.Symbol, toolCts.Token);
+                    return new ToolOutcome(true, toolResult);
+                }
+                finally
+                {
+                    McpConcurrencyGate.Release();
+                }
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+            catch (OperationCanceledException ex) when (attempt >= MaxToolRetries)
+            {
+                _logger.LogWarning(ex, "Role {RoleId}: tool {Tool} timed out after {Timeout}s (attempt {Attempt})",
+                    context.RoleId, toolName, PerToolTimeout.TotalSeconds, attempt + 1);
+            }
+            catch (Exception ex) when (attempt < MaxToolRetries)
+            {
+                _logger.LogWarning(ex, "Role {RoleId}: tool {Tool} failed (attempt {Attempt}), will retry",
+                    context.RoleId, toolName, attempt + 1);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Role {RoleId}: tool {Tool} failed after {MaxAttempts} attempts",
+                    context.RoleId, toolName, MaxToolRetries + 1);
+            }
+        }
+        return new ToolOutcome(false, null);
     }
 
     private async Task<string> DispatchToolAsync(string toolName, string symbol, CancellationToken ct)

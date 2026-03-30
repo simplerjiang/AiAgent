@@ -22,3 +22,25 @@ noupload
 backend/SimplerJiangAiAgent.Api/App_Data/logs/llm-requests.txt
 artifacts/
 .copilotbrowser-mcp/
+
+# Browser profiles (Edge/Playwright test artifacts)
+**/.automation/edge-profile/
+.automation/edge-profile/
+frontend/.automation/edge-profile/
+.automation/screenshots/
+.automation/chart-popup-*.png
+.automation/market-*.png
+
+# Temp build/test outputs
+_llm_log_tail.txt
+_march26_logs.txt
+build_out.txt
+test_build_out.txt
+frontend_test_out.txt
+.vite/
+frontend/_ui-validate.cjs
+frontend/test-market-bar*.cjs
+frontend/ua-review*.cjs
+frontend/edge-check-*.mjs
+
+backend/SimplerJiangAiAgent.Api/wwwroot/

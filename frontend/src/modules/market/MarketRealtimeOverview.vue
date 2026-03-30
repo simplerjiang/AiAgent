@@ -110,12 +110,10 @@ const formatBucketWidth = count => {
   display: grid;
   gap: 14px;
   padding: 18px;
-  border-radius: 22px;
-  border: 1px solid rgba(226, 232, 240, 0.92);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.98)),
-    linear-gradient(135deg, rgba(194, 65, 12, 0.04), rgba(14, 165, 233, 0.05));
-  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.05);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--color-border-light);
+  background: var(--color-bg-surface);
+  box-shadow: var(--shadow-sm);
 }
 
 .realtime-card-head {
@@ -149,9 +147,9 @@ const formatBucketWidth = count => {
   display: grid;
   gap: 6px;
   padding: 14px;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.88);
-  border: 1px solid rgba(226, 232, 240, 0.85);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-surface-alt);
+  border: 1px solid var(--color-border-light);
 }
 
 .ticker-card strong,
@@ -169,7 +167,7 @@ const formatBucketWidth = count => {
 .breadth-bar-track {
   height: 10px;
   border-radius: 999px;
-  background: rgba(226, 232, 240, 0.92);
+  background: var(--color-bg-surface-alt);
   overflow: hidden;
 }
 
@@ -181,11 +179,11 @@ const formatBucketWidth = count => {
 }
 
 .positive {
-  color: #b91c1c;
+  color: var(--color-market-rise);
 }
 
 .negative {
-  color: #166534;
+  color: var(--color-market-fall);
 }
 
 .feedback.compact {

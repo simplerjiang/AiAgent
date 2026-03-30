@@ -18,6 +18,8 @@ public sealed record ResearchFollowUpRoutingDecision(
 public interface IResearchFollowUpRoutingService
 {
     Task<ResearchFollowUpRoutingDecision> DecideAsync(long sessionId, string userPrompt, CancellationToken cancellationToken = default);
+    /// <summary>Instant keyword-based heuristic, no LLM call.</summary>
+    ResearchFollowUpRoutingDecision DecideHeuristic(string userPrompt);
 }
 
 public sealed class ResearchFollowUpRoutingService : IResearchFollowUpRoutingService
@@ -188,6 +190,8 @@ public sealed class ResearchFollowUpRoutingService : IResearchFollowUpRoutingSer
             return null;
         }
     }
+
+    public ResearchFollowUpRoutingDecision DecideHeuristic(string userPrompt) => BuildFallback(userPrompt);
 
     private static ResearchFollowUpRoutingDecision BuildFallback(string userPrompt)
     {

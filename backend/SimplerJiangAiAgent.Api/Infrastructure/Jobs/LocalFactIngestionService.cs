@@ -22,6 +22,9 @@ public sealed class LocalFactIngestionService : ILocalFactIngestionService
     private const int MarketNewsMaxAcceptedAgeDays = 30;
     private static readonly SemaphoreSlim MarketRefreshGate = new(1, 1);
     private static readonly ConcurrentDictionary<string, SemaphoreSlim> SymbolRefreshGates = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly ConcurrentDictionary<string, DateTime> SymbolCrawlTimestamps = new(StringComparer.OrdinalIgnoreCase);
+    private static long _lastMarketCrawlTicks = DateTime.MinValue.Ticks;
+    private static readonly TimeSpan CrawlSkipWindow = TimeSpan.FromMinutes(2);
     private static readonly (string Url, string Source, string SourceTag)[] MarketRssFeeds =
     {
         ("https://www.cnbc.com/id/10000664/device/rss/rss.html", "CNBC Finance", "cnbc-finance-rss"),
@@ -113,19 +116,28 @@ public sealed class LocalFactIngestionService : ILocalFactIngestionService
         await symbolGate.WaitAsync(cancellationToken);
         try
         {
-            try
+            // Skip the network crawl if we synced this symbol recently,
+            // but always process pending AI enrichment rows below.
+            var skipCrawl = SymbolCrawlTimestamps.TryGetValue(normalized, out var lastCrawl)
+                && DateTime.UtcNow - lastCrawl < CrawlSkipWindow;
+
+            if (!skipCrawl)
             {
-                var crawledAt = DateTime.UtcNow;
-                await SyncSymbolAsync(normalized, crawledAt, cancellationToken);
-                await _dbContext.SaveChangesAsync(cancellationToken);
-            }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                throw;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "按需刷新本地事实失败，回退到现有缓存数据: {Symbol}", normalized);
+                try
+                {
+                    var crawledAt = DateTime.UtcNow;
+                    await SyncSymbolAsync(normalized, crawledAt, cancellationToken);
+                    await _dbContext.SaveChangesAsync(cancellationToken);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "按需刷新本地事实失败，回退到现有缓存数据: {Symbol}", normalized);
+                }
+                SymbolCrawlTimestamps[normalized] = DateTime.UtcNow;
             }
 
             await _aiEnrichmentService.ProcessSymbolPendingAsync(normalized, cancellationToken);
@@ -141,11 +153,20 @@ public sealed class LocalFactIngestionService : ILocalFactIngestionService
         await MarketRefreshGate.WaitAsync(cancellationToken);
         try
         {
+            var lastCrawl = new DateTime(Interlocked.Read(ref _lastMarketCrawlTicks), DateTimeKind.Utc);
+            if (DateTime.UtcNow - lastCrawl < CrawlSkipWindow)
+            {
+                // Skip crawl but still process pending AI enrichment
+                await _aiEnrichmentService.ProcessMarketPendingAsync(cancellationToken);
+                return;
+            }
+
             var crawledAt = DateTime.UtcNow;
             var marketReports = await FetchMarketReportsAsync(crawledAt, cancellationToken);
             await UpsertMarketReportsAsync(marketReports, cancellationToken);
             await _dbContext.SaveChangesAsync(cancellationToken);
             await _aiEnrichmentService.ProcessMarketPendingAsync(cancellationToken);
+            Interlocked.Exchange(ref _lastMarketCrawlTicks, DateTime.UtcNow.Ticks);
         }
         finally
         {

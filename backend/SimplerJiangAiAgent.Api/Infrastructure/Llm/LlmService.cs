@@ -59,13 +59,15 @@ public sealed class LlmService : ILlmService
             $"traceId={traceId} stage=request provider={resolvedProvider} providerType={providerType} model={finalRequest.Model ?? settings.Model ?? string.Empty} " +
             $"temp={(finalRequest.Temperature?.ToString("0.###") ?? "default")} useInternet={finalRequest.UseInternet} prompt={EscapeForLog(finalRequest.Prompt)}");
 
+        var resolvedModel = finalRequest.Model ?? settings.Model ?? string.Empty;
+
         try
         {
             var result = await target.ChatAsync(settings, finalRequest, cancellationToken);
             stopwatch.Stop();
 
             WriteAudit(
-                $"traceId={traceId} stage=response provider={resolvedProvider} providerType={providerType} elapsedMs={stopwatch.ElapsedMilliseconds} " +
+                $"traceId={traceId} stage=response provider={resolvedProvider} providerType={providerType} model={resolvedModel} elapsedMs={stopwatch.ElapsedMilliseconds} " +
                 $"content={EscapeForLog(result.Content)}");
 
             return result with { TraceId = traceId };
@@ -74,7 +76,7 @@ public sealed class LlmService : ILlmService
         {
             stopwatch.Stop();
             WriteAudit(
-                $"traceId={traceId} stage=error provider={resolvedProvider} providerType={providerType} elapsedMs={stopwatch.ElapsedMilliseconds} " +
+                $"traceId={traceId} stage=error provider={resolvedProvider} providerType={providerType} model={resolvedModel} elapsedMs={stopwatch.ElapsedMilliseconds} " +
                 $"type={ex.GetType().Name} message={EscapeForLog(ex.Message)}");
             throw;
         }

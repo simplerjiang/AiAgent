@@ -1,15 +1,26 @@
 {
   "tasks": [
     {
-      "id": "GOAL-UI-NEW-001",
-      "title": "Non-agent full UI redesign roadmap",
-      "status": "todo",
+      "id": "GOAL-AGENT-NEW-001-R8",
+      "title": "MCP reliability optimization and data source redundancy",
+      "status": "in-progress",
       "stages": {
         "plan": "done",
-        "dev": "todo",
-        "test": "todo"
+        "dev": "in-progress",
+        "test": "in-progress"
       },
-      "notes": "2026-03-28 已接受“非 Agent 功能”的 UI 全面重构规划请求，并完成 UI Designer/Test/User Representative 三方联合评审。范围覆盖 App 壳层导航、股票信息页、情绪轮动、全量资讯库、股票推荐与管理页的视觉与布局重构，允许调整显示位置、宽度、高度与模块折叠/聚焦能力；明确排除 Agent 工作台与多 Agent 交互链路。硬约束已冻结：分时图/日K图/月K图与策略逻辑完全不改。交易计划模块确认为高优先级“完全重构”，以手动新增/编辑/复制/提醒为 MVP。详细计划书：`.automation/reports/GOAL-UI-NEW-001-PLAN-20260328.md`。"
+      "notes": "2026-03-30 P0 tasks (A1+A2) completed. Remaining: P1+ (B1 multi-source fallback, C2 concurrency control, B2, C1, C3, B3)."
+    },
+    {
+      "id": "GOAL-UI-NEW-001",
+      "title": "Non-agent full UI redesign roadmap",
+      "status": "in-progress",
+      "stages": {
+        "plan": "done",
+        "dev": "in-progress",
+        "test": "in-progress"
+      },
+      "notes": "2026-03-28 已接受“非 Agent 功能”的 UI 全面重构规划请求，并完成 UI Designer/Test/User Representative 三方联合评审。范围覆盖 App 壳层导航、股票信息页、情绪轮动、全量资讯库、股票推荐与管理页的视觉与布局重构，允许调整显示位置、宽度、高度与模块折叠/聚焦能力；明确排除 Agent 工作台与多 Agent 交互链路。硬约束已冻结：分时图/日K图/月K图与策略逻辑完全不改。交易计划模块确认为高优先级“完全重构”，以手动新增/编辑/复制/提醒为 MVP。详细计划书：`.automation/reports/GOAL-UI-NEW-001-PLAN-20260328.md`。2026-03-30 Phase 0-4 CSS 设计令牌迁移全部完成（15+ Vue 组件），包括 MarketSentimentTab、NewsArchiveTab、StockRecommendTab、AdminLlmSettings、SourceGovernanceDeveloperMode、TradingWorkbench(7文件)、MarketRealtimeOverview、TerminalView；同时修复图表终端高度不足问题：移除 sticky/max-content 约束、改 overflow:hidden->visible、chartHeight 默认 520->620px(min420/max900)、terminal-view-chart min-height:400px。124/124 前端测试通过，K线图和分时图均完整显示无截断。User Representative 验收通过。"
     },
     {
       "id": "MANUAL-20260324-BUGLIST-CLOSEOUT",

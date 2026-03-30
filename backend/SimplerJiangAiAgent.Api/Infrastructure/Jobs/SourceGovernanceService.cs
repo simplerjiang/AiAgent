@@ -103,6 +103,11 @@ public sealed class SourceGovernanceService : ISourceGovernanceService
                 cancellationToken);
 
             var parsed = ParseLlmCandidates(result.Content);
+            if (parsed.Count == 0 && !string.IsNullOrWhiteSpace(result.Content))
+            {
+                _fileLogWriter.Write("SOURCE-GOV",
+                    $"stage=discover warning=empty_parse contentPrefix={result.Content[..Math.Min(200, result.Content.Length)]}");
+            }
             foreach (var item in parsed)
             {
                 if (string.IsNullOrWhiteSpace(item.Domain) || string.IsNullOrWhiteSpace(item.HomepageUrl))
@@ -752,29 +757,99 @@ public sealed class SourceGovernanceService : ISourceGovernanceService
 
     private static List<LlmCandidateItem> ParseLlmCandidates(string content)
     {
-        using var doc = JsonDocument.Parse(content);
-        if (doc.RootElement.ValueKind != JsonValueKind.Array)
+        // Strip markdown/thinking prefixes that LLMs may prepend (e.g. "**My Thought Process:...```json")
+        var json = ExtractJsonArray(content);
+        if (json is null) return new List<LlmCandidateItem>();
+
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.ValueKind != JsonValueKind.Array)
+            {
+                return new List<LlmCandidateItem>();
+            }
+
+            var list = new List<LlmCandidateItem>();
+            foreach (var element in doc.RootElement.EnumerateArray())
+            {
+                list.Add(new LlmCandidateItem(
+                    GetString(element, "domain"),
+                    GetString(element, "homepageUrl"),
+                    GetString(element, "proposedTier"),
+                    GetString(element, "fetchStrategy"),
+                    GetString(element, "reason")));
+            }
+
+            return list;
+        }
+        catch (JsonException)
         {
             return new List<LlmCandidateItem>();
         }
+    }
 
-        var list = new List<LlmCandidateItem>();
-        foreach (var element in doc.RootElement.EnumerateArray())
+    /// <summary>Extracts JSON array content from LLM output that may contain markdown fences or thinking text.</summary>
+    private static string? ExtractJsonArray(string content)
+    {
+        if (string.IsNullOrWhiteSpace(content)) return null;
+
+        // Try raw parse first
+        var trimmed = content.Trim();
+        if (trimmed.StartsWith('[')) return trimmed;
+
+        // Strip ```json ... ``` fence
+        var fenceStart = content.IndexOf("```json", StringComparison.OrdinalIgnoreCase);
+        if (fenceStart >= 0)
         {
-            list.Add(new LlmCandidateItem(
-                GetString(element, "domain"),
-                GetString(element, "homepageUrl"),
-                GetString(element, "proposedTier"),
-                GetString(element, "fetchStrategy"),
-                GetString(element, "reason")));
+            var bodyStart = content.IndexOf('\n', fenceStart);
+            if (bodyStart >= 0)
+            {
+                var fenceEnd = content.IndexOf("```", bodyStart, StringComparison.Ordinal);
+                if (fenceEnd > bodyStart)
+                    return content[(bodyStart + 1)..fenceEnd].Trim();
+            }
         }
 
-        return list;
+        // Fallback: find first '[' and last ']'
+        var first = content.IndexOf('[');
+        var last = content.LastIndexOf(']');
+        if (first >= 0 && last > first)
+            return content[first..(last + 1)];
+
+        return null;
     }
 
     private static LlmPatchProposal ParsePatchProposal(string content)
     {
-        using var doc = JsonDocument.Parse(content);
+        // Strip markdown/thinking prefixes before parsing
+        var json = content.Trim();
+        var fenceStart = json.IndexOf("```json", StringComparison.OrdinalIgnoreCase);
+        if (fenceStart >= 0)
+        {
+            var bodyStart = json.IndexOf('\n', fenceStart);
+            if (bodyStart >= 0)
+            {
+                var fenceEnd = json.IndexOf("```", bodyStart, StringComparison.Ordinal);
+                if (fenceEnd > bodyStart) json = json[(bodyStart + 1)..fenceEnd].Trim();
+            }
+        }
+        else if (!json.StartsWith('{'))
+        {
+            var first = json.IndexOf('{');
+            var last = json.LastIndexOf('}');
+            if (first >= 0 && last > first) json = json[first..(last + 1)];
+        }
+
+        JsonDocument doc;
+        try
+        {
+            doc = JsonDocument.Parse(json);
+        }
+        catch (JsonException)
+        {
+            return new LlmPatchProposal(new List<string>(), new List<FilePatch>(), "parse_failed", null, null);
+        }
+        using var _ = doc;
         var root = doc.RootElement;
         var files = new List<string>();
 

@@ -6,6 +6,7 @@ import StockNewsImpactPanel from './StockNewsImpactPanel.vue'
 import StockSearchToolbar from './StockSearchToolbar.vue'
 import StockTerminalSummary from './StockTerminalSummary.vue'
 import StockTopMarketOverview from './StockTopMarketOverview.vue'
+import MarketIndexChartPopup from './MarketIndexChartPopup.vue'
 import StockTradingPlanBoard from './StockTradingPlanBoard.vue'
 import StockTradingPlanModal from './StockTradingPlanModal.vue'
 import StockTradingPlanSection from './StockTradingPlanSection.vue'
@@ -46,6 +47,7 @@ import {
 } from './stockInfoTabRequestUtils'
 import {
   buildRealtimeContextSymbols,
+  canCancelTradingPlan,
   canEditTradingPlan,
   canResumeTradingPlan,
   createTradingPlanForm,
@@ -73,6 +75,10 @@ import {
   formatTradingPlanStatus,
   getTradingPlanStatusClass,
 } from './tradingPlanReview'
+import SidebarTabs from './SidebarTabs.vue'
+import ResizeSplitter from './ResizeSplitter.vue'
+import { useResizable } from './useResizable'
+import { useCollapsible } from './useCollapsible'
 
 const symbol = ref('')
 const interval = ref(localStorage.getItem('stock_interval') || 'day')
@@ -109,6 +115,25 @@ const stockRealtimeSymbol = ref('')
 let stockRealtimeAbortController = null
 const chartActiveView = ref('day')
 const minuteTdSequentialEnabled = ref(false)
+const marketChartPopupVisible = ref(false)
+const marketChartPopupIndex = ref(null)
+
+const workspaceRef = ref(null)
+const { size: splitterRatio, isDragging: splitterDragging, startResize: startSplitterResize, resetSize: resetSplitter } = useResizable({
+  direction: 'horizontal',
+  min: 0.55,
+  max: 0.75,
+  defaultValue: 0.65,
+  storageKey: 'splitter_ratio',
+  containerRef: workspaceRef
+})
+const { size: chartHeight, isDragging: chartDragging, startResize: startChartResize, resetSize: resetChartHeight } = useResizable({
+  direction: 'vertical',
+  min: 420,
+  max: 900,
+  defaultValue: 620,
+  storageKey: 'chart_height'
+})
 
 const stockWorkspaces = reactive({})
 const rootWorkspace = createStockWorkspace('__root__')
@@ -188,6 +213,7 @@ const marketNewsLoading = computed(() => rootWorkspace.localNewsLoading)
 const marketNewsError = computed(() => rootWorkspace.localNewsError)
 const deletingPlanId = ref('')
 const resumingPlanId = ref('')
+const cancellingPlanId = ref('')
 const stockRealtimeQuotes = computed(() => stockRealtimeOverview.value?.indices ?? [])
 const currentStockRealtimeQuote = computed(() => {
   const currentSymbol = normalizeStockSymbol(detail.value?.quote?.symbol)
@@ -471,7 +497,7 @@ const saveTradingPlan = async (symbolKey = currentStockKey.value) => {
             invalidConditions: normalizeOptionalText(form.invalidConditions),
             riskLimits: normalizeOptionalText(form.riskLimits),
             analysisSummary: normalizeOptionalText(form.analysisSummary),
-            analysisHistoryId: Number(form.analysisHistoryId),
+            analysisHistoryId: form.analysisHistoryId ? Number(form.analysisHistoryId) : null,
             sourceAgent: form.sourceAgent || 'commander',
             userNote: normalizeOptionalText(form.userNote)
           })
@@ -551,6 +577,43 @@ const resumeTradingPlan = async (symbolKey, item) => {
   } finally {
     resumingPlanId.value = ''
   }
+}
+
+const cancelTradingPlan = async (symbolKey, item) => {
+  const workspace = getWorkspace(symbolKey)
+  if (!workspace || !item?.id) {
+    return
+  }
+
+  cancellingPlanId.value = String(item.id)
+  workspace.planError = ''
+  try {
+    const response = await fetch(`/api/stocks/plans/${item.id}/cancel`, { method: 'POST' })
+    if (!response.ok) {
+      throw new Error(await parseResponseMessage(response, '交易计划取消失败'))
+    }
+
+    const saved = normalizeTradingPlan(await response.json())
+    workspace.planList = workspace.planList.map(plan => (String(plan.id) === String(saved.id) ? saved : plan))
+    await refreshTradingPlanSection(symbolKey, true)
+    await refreshTradingPlanBoard(true)
+  } catch (err) {
+    workspace.planError = err.message || '交易计划取消失败'
+  } finally {
+    cancellingPlanId.value = ''
+  }
+}
+
+const openCreatePlan = symbolKey => {
+  const workspace = getWorkspace(symbolKey)
+  if (!workspace) return
+  workspace.planError = ''
+  workspace.planForm = createTradingPlanForm({
+    symbol: workspace.detail?.quote?.symbol ?? '',
+    name: workspace.detail?.quote?.name ?? '',
+    sourceAgent: 'manual'
+  })
+  workspace.planModalOpen = true
 }
 
 const jumpToPlanSymbol = symbolKey => {
@@ -1041,56 +1104,48 @@ watch(currentStockKey, () => {
 
 <template>
   <section class="panel" :class="{ monochrome: monochromeMode }">
-    <div class="panel-header">
-      <div>
-        <p class="panel-kicker">GOAL-012</p>
-        <h2>股票信息终端</h2>
-        <p class="muted panel-subtitle">左侧聚焦行情与图表，右侧预留后续扩展区域。</p>
-      </div>
-      <div class="panel-actions">
-        <button class="mode-toggle" @click="monochromeMode = !monochromeMode">
-          {{ monochromeMode ? '彩色模式' : '黑白模式' }}
-        </button>
-      </div>
-    </div>
+    <button class="panel-mode-btn btn btn-sm btn-ghost" @click="monochromeMode = !monochromeMode">
+      {{ monochromeMode ? '彩色模式' : '黑白模式' }}
+    </button>
+
     <StockSearchToolbar
-      :symbol="symbol"
-      :selected-source="selectedSource"
-      :refresh-seconds="refreshSeconds"
-      :auto-refresh="autoRefresh"
-      :sources="sources"
-      :search-open="searchOpen"
-      :search-results="searchResults"
-      :search-loading="searchLoading"
-      :search-error="searchError"
-      :is-blocking-quote-load="isBlockingQuoteLoad"
-      :is-background-quote-refresh="isBackgroundQuoteRefresh"
-      :error="error"
-      :history-auto-refresh="historyAutoRefresh"
-      :history-refresh-seconds="historyRefreshSeconds"
-      :history-loading="historyLoading"
-      :history-error="historyError"
-      :history-list="historyList"
-      :sorted-history-list="sortedHistoryList"
-      :context-menu="contextMenu"
-      :get-change-class="getChangeClass"
-      :format-percent="formatPercent"
-      @update:symbol="symbol = $event"
-      @update:selected-source="selectedSource = $event"
-      @update:refresh-seconds="refreshSeconds = $event"
-      @update:auto-refresh="autoRefresh = $event"
-      @update:history-refresh-seconds="historyRefreshSeconds = $event"
-      @update:history-auto-refresh="historyAutoRefresh = $event"
-      @symbol-input="onSymbolInput"
-      @symbol-enter="onSymbolEnter"
-      @fetch-quote="fetchQuote"
-      @close-search="closeSearch"
-      @select-search-result="selectSearchResult($event)"
-      @refresh-history="refreshHistory"
-      @apply-history-symbol="applyHistorySymbol($event)"
-      @open-context-menu="openContextMenu"
-      @delete-history-item="deleteHistoryItem"
-    />
+        :symbol="symbol"
+        :selected-source="selectedSource"
+        :refresh-seconds="refreshSeconds"
+        :auto-refresh="autoRefresh"
+        :sources="sources"
+        :search-open="searchOpen"
+        :search-results="searchResults"
+        :search-loading="searchLoading"
+        :search-error="searchError"
+        :is-blocking-quote-load="isBlockingQuoteLoad"
+        :is-background-quote-refresh="isBackgroundQuoteRefresh"
+        :error="error"
+        :history-auto-refresh="historyAutoRefresh"
+        :history-refresh-seconds="historyRefreshSeconds"
+        :history-loading="historyLoading"
+        :history-error="historyError"
+        :history-list="historyList"
+        :sorted-history-list="sortedHistoryList"
+        :context-menu="contextMenu"
+        :get-change-class="getChangeClass"
+        :format-percent="formatPercent"
+        @update:symbol="symbol = $event"
+        @update:selected-source="selectedSource = $event"
+        @update:refresh-seconds="refreshSeconds = $event"
+        @update:auto-refresh="autoRefresh = $event"
+        @update:history-refresh-seconds="historyRefreshSeconds = $event"
+        @update:history-auto-refresh="historyAutoRefresh = $event"
+        @symbol-input="onSymbolInput"
+        @symbol-enter="onSymbolEnter"
+        @fetch-quote="fetchQuote"
+        @close-search="closeSearch"
+        @select-search-result="selectSearchResult($event)"
+        @refresh-history="refreshHistory"
+        @apply-history-symbol="applyHistorySymbol($event)"
+        @open-context-menu="openContextMenu"
+        @delete-history-item="deleteHistoryItem"
+      />
 
     <StockTopMarketOverview
       :enabled="stockRealtimeOverviewEnabled"
@@ -1111,98 +1166,149 @@ watch(currentStockKey, () => {
       :format-realtime-money="formatRealtimeMoney"
       @refresh="fetchStockRealtimeOverview(currentStockKey || '', { force: true })"
       @toggle="stockRealtimeOverviewEnabled = !stockRealtimeOverviewEnabled"
+      @open-chart="marketChartPopupIndex = $event; marketChartPopupVisible = true"
     />
 
-    <StockMarketNewsPanel
-      :detail="detail"
-      :loading="marketNewsLoading"
-      :error="marketNewsError"
-      :items="marketNewsItems"
-      :preview-items="marketNewsPreviewItems"
-      :modal-open="marketNewsModalOpen"
-      :get-impact-class="getImpactClass"
-      :get-local-news-headline="getLocalNewsHeadline"
-      :format-date="formatDate"
-      @refresh="fetchMarketNews({ force: true })"
-      @open-modal="openMarketNewsModal"
-      @close-modal="closeMarketNewsModal"
+    <MarketIndexChartPopup
+      :visible="marketChartPopupVisible"
+      :index-item="marketChartPopupIndex"
+      @close="marketChartPopupVisible = false"
     />
 
-    <div class="workspace-grid">
-      <TerminalView :quote="detail?.quote ?? null" :monochrome="monochromeMode">
-        <template #summary>
-          <StockTerminalSummary
-            :detail="detail"
-            :show-source-load-progress="showSourceLoadProgress"
-            :source-load-progress-title="sourceLoadProgressTitle"
-            :source-load-progress-percent="sourceLoadProgressPercent"
-            :visible-source-load-stages="visibleSourceLoadStages"
-            :format-date="formatDate"
-            @open-external="openExternal($event)"
-          />
-        </template>
-
-        <template #chart>
-          <div class="stock-chart-section">
-            <StockCharts
-              v-if="detail"
-              :k-lines="detail.kLines"
-              :minute-lines="detail.minuteLines"
-              :base-price="Number(detail.quote.price) - Number(detail.quote.change)"
-              :interval="interval"
-              :focused-view="chartActiveView"
-              @update:interval="interval = $event"
-              @view-change="handleChartViewChange"
-              @strategy-visibility-change="handleChartStrategyVisibilityChange"
+    <div ref="workspaceRef" class="sc-workspace" :style="{ '--sc-left-ratio': (splitterRatio * 100) + '%' }">
+      <div class="sc-workspace__left">
+        <TerminalView :quote="detail?.quote ?? null" :monochrome="monochromeMode">
+          <template #summary>
+            <StockTerminalSummary
+              :detail="detail"
+              :show-source-load-progress="showSourceLoadProgress"
+              :source-load-progress-title="sourceLoadProgressTitle"
+              :source-load-progress-percent="sourceLoadProgressPercent"
+              :visible-source-load-stages="visibleSourceLoadStages"
+              :format-date="formatDate"
+              @open-external="openExternal($event)"
             />
-            <div v-else class="chart-placeholder">
-              <p>查询股票后，这里会以终端视图显示 K 线、分时、成交量和均线。</p>
+          </template>
+
+          <template #chart>
+            <div class="sc-chart-wrapper">
+              <ResizeSplitter
+                direction="vertical"
+                :is-dragging="chartDragging"
+                @pointerdown="startChartResize"
+                @dblclick="resetChartHeight"
+              />
+              <div class="stock-chart-section" :style="{ minHeight: chartHeight + 'px' }">
+                <StockCharts
+                  v-if="detail"
+                  :k-lines="detail.kLines"
+                  :minute-lines="detail.minuteLines"
+                  :base-price="Number(detail.quote.price) - Number(detail.quote.change)"
+                  :interval="interval"
+                  :focused-view="chartActiveView"
+                  @update:interval="interval = $event"
+                  @view-change="handleChartViewChange"
+                  @strategy-visibility-change="handleChartStrategyVisibilityChange"
+                />
+                <div v-else class="chart-placeholder">
+                  <p>选择标的以加载图表</p>
+                </div>
+              </div>
             </div>
-          </div>
-        </template>
-      </TerminalView>
+          </template>
+        </TerminalView>
+      </div>
 
-      <div class="sidebar-workspace">
-        <StockTradingPlanBoard
-          :workspace="rootWorkspace"
-          :format-trading-plan-status="formatTradingPlanStatus"
-          :get-trading-plan-status-class="getTradingPlanStatusClass"
-          :format-plan-scale="formatPlanScale"
-          :format-plan-price="formatPlanPrice"
-          :get-latest-plan-alert="getLatestPlanAlert"
-          :get-plan-alert-class="getPlanAlertClass"
-          :format-plan-alert-summary="formatPlanAlertSummary"
-          :get-plan-review-headline="getPlanReviewHeadline"
-          :get-plan-review-text="getPlanReviewText"
-          @refresh="refreshTradingPlanBoard(true)"
-          @jump="jumpToPlanSymbol($event)"
-        />
+      <ResizeSplitter
+        :is-dragging="splitterDragging"
+        @pointerdown="startSplitterResize"
+        @dblclick="resetSplitter"
+      />
 
-        <template v-if="sidebarWorkspaces.length">
-          <div
-            v-for="workspace in sidebarWorkspaces"
-            :key="`sidebar-${workspace.symbolKey}`"
-            v-show="workspace.symbolKey === currentStockKey"
-            class="sidebar-workspace"
-          >
-            <StockNewsImpactPanel
-              :workspace="workspace"
-              :sidebar-news-sections="sidebarNewsSections"
+      <div class="sc-workspace__right">
+        <SidebarTabs>
+          <template #plans>
+            <template v-if="sidebarWorkspaces.length">
+              <div
+                v-for="workspace in sidebarWorkspaces"
+                :key="`plan-${workspace.symbolKey}`"
+                v-show="workspace.symbolKey === currentStockKey"
+              >
+                <StockTradingPlanSection
+                  :workspace="workspace"
+                  :deleting-plan-id="cancellingPlanId"
+                  :resuming-plan-id="resumingPlanId"
+                  :format-trading-plan-status="formatTradingPlanStatus"
+                  :format-date="formatDate"
+                  :get-trading-plan-status-class="getTradingPlanStatusClass"
+                  :format-plan-scale="formatPlanScale"
+                  :format-plan-price="formatPlanPrice"
+                  :get-latest-plan-alert="getLatestPlanAlert"
+                  :get-plan-alert-class="getPlanAlertClass"
+                  :format-plan-alert-summary="formatPlanAlertSummary"
+                  :get-plan-review-headline="getPlanReviewHeadline"
+                  :get-plan-review-text="getPlanReviewText"
+                  :can-edit-trading-plan="canEditTradingPlan"
+                  :can-resume-trading-plan="canResumeTradingPlan"
+                  :can-cancel-trading-plan="canCancelTradingPlan"
+                  @refresh="refreshTradingPlanSection(workspace.symbolKey, true)"
+                  @edit="editTradingPlan(workspace.symbolKey, $event)"
+                  @resume="resumeTradingPlan(workspace.symbolKey, $event)"
+                  @cancel="cancelTradingPlan(workspace.symbolKey, $event)"
+                  @create="openCreatePlan(workspace.symbolKey)"
+                />
+              </div>
+            </template>
+          </template>
+
+          <template #news>
+            <StockMarketNewsPanel
+              :detail="detail"
+              :loading="marketNewsLoading"
+              :error="marketNewsError"
+              :items="marketNewsItems"
+              :preview-items="marketNewsPreviewItems"
+              :modal-open="marketNewsModalOpen"
               :get-impact-class="getImpactClass"
               :get-local-news-headline="getLocalNewsHeadline"
               :format-date="formatDate"
-              :get-headline-news-impact-events="getHeadlineNewsImpactEvents"
-              :get-impact-category-value="getImpactCategoryValue"
-              :format-impact-score="formatImpactScore"
-              @refresh="fetchNewsImpact(workspace.symbolKey, { force: true })"
+              @refresh="fetchMarketNews({ force: true })"
+              @open-modal="openMarketNewsModal"
+              @close-modal="closeMarketNewsModal"
             />
+            <template v-if="sidebarWorkspaces.length">
+              <div
+                v-for="workspace in sidebarWorkspaces"
+                :key="`news-${workspace.symbolKey}`"
+                v-show="workspace.symbolKey === currentStockKey"
+              >
+                <StockNewsImpactPanel
+                  :workspace="workspace"
+                  :sidebar-news-sections="sidebarNewsSections"
+                  :get-impact-class="getImpactClass"
+                  :get-local-news-headline="getLocalNewsHeadline"
+                  :format-date="formatDate"
+                  :get-headline-news-impact-events="getHeadlineNewsImpactEvents"
+                  :get-impact-category-value="getImpactCategoryValue"
+                  :format-impact-score="formatImpactScore"
+                  @refresh="fetchNewsImpact(workspace.symbolKey, { force: true })"
+                />
+              </div>
+            </template>
+          </template>
 
-            <StockTradingPlanSection
-              :workspace="workspace"
-              :deleting-plan-id="deletingPlanId"
-              :resuming-plan-id="resumingPlanId"
+          <template #ai>
+            <TradingWorkbench
+              :symbol="detail?.quote?.symbol ?? ''"
+              @navigate-chart="handleWorkbenchNavigateChart"
+              @navigate-plan="handleWorkbenchNavigatePlan"
+            />
+          </template>
+
+          <template #board>
+            <StockTradingPlanBoard
+              :workspace="rootWorkspace"
               :format-trading-plan-status="formatTradingPlanStatus"
-              :format-date="formatDate"
               :get-trading-plan-status-class="getTradingPlanStatusClass"
               :format-plan-scale="formatPlanScale"
               :format-plan-price="formatPlanPrice"
@@ -1211,21 +1317,11 @@ watch(currentStockKey, () => {
               :format-plan-alert-summary="formatPlanAlertSummary"
               :get-plan-review-headline="getPlanReviewHeadline"
               :get-plan-review-text="getPlanReviewText"
-              :can-edit-trading-plan="canEditTradingPlan"
-              :can-resume-trading-plan="canResumeTradingPlan"
-              @refresh="refreshTradingPlanSection(workspace.symbolKey, true)"
-              @edit="editTradingPlan(workspace.symbolKey, $event)"
-              @resume="resumeTradingPlan(workspace.symbolKey, $event)"
-              @delete="deleteTradingPlan(workspace.symbolKey, $event)"
+              @refresh="refreshTradingPlanBoard(true)"
+              @jump="jumpToPlanSymbol($event)"
             />
-          </div>
-        </template>
-
-        <TradingWorkbench
-          :symbol="detail?.quote?.symbol ?? ''"
-          @navigate-chart="handleWorkbenchNavigateChart"
-          @navigate-plan="handleWorkbenchNavigatePlan"
-        />
+          </template>
+        </SidebarTabs>
 
         <StockTradingPlanModal
           :workspace="activePlanModalWorkspace"
@@ -1240,170 +1336,103 @@ watch(currentStockKey, () => {
 
 <style scoped>
 .panel {
+  position: relative;
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.75), rgba(248, 250, 252, 0.85));
   backdrop-filter: blur(10px);
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
-  border-radius: 16px;
-  padding: 1.5rem;
+  border: 1px solid var(--color-border-light);
+  box-shadow: var(--shadow-md);
+  border-radius: var(--radius-xl);
+  padding: var(--space-4);
   display: grid;
-  gap: 1rem;
+  gap: var(--space-3);
+}
+
+.panel-mode-btn {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  z-index: 2;
 }
 
 .stock-chart-section {
-  border-radius: 18px;
+  border-radius: var(--radius-xl);
 }
 
-.panel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-}
-
-.panel h2 {
-  margin-bottom: 0;
-  color: #0f172a;
-}
-
-.panel-kicker {
-  margin: 0 0 0.3rem;
-  font-size: 0.72rem;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: #2563eb;
-}
-
-.panel-subtitle {
-  margin: 0.3rem 0 0;
-}
-
-.panel-actions {
-  display: flex;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
-.sidebar-workspace {
+/* ── workspace grid: left + splitter + right ── */
+.sc-workspace {
   display: grid;
-  gap: 1rem;
-}
-
-.mode-toggle {
-  border-radius: 999px;
-  border: none;
-  padding: 0.45rem 0.9rem;
-  background: #e2e8f0;
-  color: #0f172a;
-  cursor: pointer;
-}
-
-.error-text {
-  color: #b91c1c;
-}
-
-.workspace-grid {
-  display: grid;
-  gap: 1rem;
-  grid-template-columns: minmax(0, 1.75fr) minmax(320px, 0.95fr);
+  grid-template-columns: var(--sc-left-ratio, 65%) auto 1fr;
+  gap: 0;
+  min-height: calc(100vh - 200px);
   align-items: start;
-  min-height: calc(100vh - 238px);
 }
 
-.terminal-empty p {
-  margin: 0.2rem 0;
+.sc-workspace__left {
+  min-width: 0;
+  min-height: 0;
+  overflow: visible;
 }
 
-.terminal-empty {
-  display: grid;
-  gap: 0.35rem;
-  min-height: 140px;
-  align-content: center;
+.sc-workspace__right {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 320px;
+  min-height: 0;
+  max-height: calc(100vh - 180px);
+  overflow-y: auto;
+  position: sticky;
+  top: var(--space-4);
 }
 
-.terminal-empty h4 {
-  margin: 0;
-  color: #f8fafc;
-}
-
-.compact-empty h4 {
-  color: #0f172a;
+.sc-chart-wrapper {
+  display: flex;
+  flex-direction: column;
 }
 
 .chart-placeholder {
   display: grid;
   place-items: center;
-  min-height: 100%;
-  border-radius: 18px;
-  border: 1px dashed rgba(148, 163, 184, 0.35);
-  color: #cbd5e1;
+  min-height: 320px;
+  border-radius: var(--radius-xl);
+  border: 1px dashed var(--color-border-medium);
+  color: var(--color-text-disabled);
 }
 
-.copilot-card {
-  padding: 1rem;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.72);
-  border: 1px solid rgba(148, 163, 184, 0.16);
-}
-
-.ai-placeholder-card {
-  min-height: 180px;
+.error-text {
+  color: var(--color-danger);
 }
 
 .text-rise {
-  color: #ef4444;
+  color: var(--color-market-rise);
   font-weight: 600;
 }
 
 .text-fall {
-  color: #22c55e;
-  font-weight: 600;
-}
-
-.panel.monochrome {
-  background: #ffffff;
-  color: #000000;
-  box-shadow: none;
-}
-
-.panel.monochrome .mode-toggle,
-.panel.monochrome .context-menu button {
-  background: #6b7280;
-  color: #ffffff;
-}
-
-.panel.monochrome .history,
-.panel.monochrome .history-table {
-  background: #ffffff;
-  color: #000000;
-}
-.panel.monochrome .text-rise,
-.panel.monochrome .text-fall {
-  color: #000000;
+  color: var(--color-market-fall);
   font-weight: 600;
 }
 
 .impact-tag {
-  padding: 0.2rem 0.45rem;
-  border-radius: 999px;
-  font-size: 0.78rem;
+  padding: var(--space-0-5) var(--space-2);
+  border-radius: var(--radius-full);
+  font-size: var(--text-sm);
   font-weight: 600;
 }
 
 .impact-positive {
-  background: rgba(239, 68, 68, 0.12);
-  color: #b91c1c;
+  background: var(--color-market-rise-bg);
+  color: var(--color-danger);
 }
 
 .impact-negative {
-  background: rgba(34, 197, 94, 0.14);
-  color: #166534;
+  background: var(--color-market-fall-bg);
+  color: var(--color-market-fall);
 }
 
 .impact-neutral {
-  background: rgba(148, 163, 184, 0.18);
-  color: #475569;
+  background: var(--color-neutral-bg);
+  color: var(--color-text-secondary);
 }
 
 .impact-score {
@@ -1414,7 +1443,7 @@ watch(currentStockKey, () => {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--space-3);
 }
 
 .chat-session p {
@@ -1424,18 +1453,18 @@ watch(currentStockKey, () => {
 .history-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.9rem;
+  font-size: var(--text-base);
 }
 
 .history-table th,
 .history-table td {
-  padding: 0.6rem 0.55rem;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.9);
+  padding: var(--space-2) var(--space-2);
+  border-bottom: 1px solid var(--color-border-light);
   text-align: left;
 }
 
 .history-table th {
-  color: #475569;
+  color: var(--color-text-secondary);
   cursor: pointer;
   white-space: nowrap;
 }
@@ -1445,32 +1474,73 @@ watch(currentStockKey, () => {
 }
 
 .history-table tbody tr:hover {
-  background: rgba(241, 245, 249, 0.9);
+  background: var(--color-bg-surface-alt);
 }
 
-.text-rise {
-  color: #dc2626;
+.copilot-card {
+  padding: var(--space-4);
+  border-radius: var(--radius-xl);
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--color-border-light);
 }
 
-.text-fall {
-  color: #16a34a;
+.ai-placeholder-card {
+  min-height: 180px;
 }
 
-@media (max-width: 1180px) {
-  .workspace-grid {
+/* ── hide dev-facing kicker labels ── */
+.panel :deep(.terminal-view-label),
+.panel :deep(.market-news-kicker) {
+  display: none;
+}
+
+/* ── hide search toolbar description ── */
+.panel :deep(.toolbar-title .muted) {
+  display: none;
+}
+
+/* ── hide terminal empty-state dev descriptions ── */
+.panel :deep(.stock-terminal-empty p) {
+  display: none;
+}
+
+.sc-workspace :deep(.sc-splitter) {
+  align-self: stretch;
+}
+
+/* ── monochrome overrides ── */
+.panel.monochrome {
+  background: #ffffff;
+  color: #000000;
+  box-shadow: none;
+}
+
+.panel.monochrome .text-rise,
+.panel.monochrome .text-fall {
+  color: #000000;
+  font-weight: 600;
+}
+
+/* ── responsive ── */
+@media (max-width: 1179px) {
+  .sc-workspace {
     grid-template-columns: 1fr;
   }
+  .sc-workspace__right {
+    position: static;
+    max-height: none;
+    min-width: 0;
+  }
 }
 
-@media (max-width: 720px) {
-  .panel-header,
-  .deck-card-header {
+@media (max-width: 719px) {
+  .panel-topbar {
     flex-direction: column;
   }
-
-  .panel-actions {
+  .panel-topbar-actions {
     width: 100%;
-    justify-content: flex-start;
+    display: flex;
+    justify-content: flex-end;
   }
 }
 </style>

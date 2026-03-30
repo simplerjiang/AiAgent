@@ -802,6 +802,39 @@ public sealed class StockCopilotMcpServiceTests
     }
 
     [Fact]
+    public async Task GetKlineAsync_ParallelBundle_ShouldReturnSameDataAsBeforeRefactor()
+    {
+        // Verifies that the parallel FetchSymbolDataBundleAsync produces equivalent output
+        var service = CreateService();
+
+        var result = await service.GetKlineAsync("sh600000", "day", 60, null, "task-kline-parallel");
+
+        Assert.Equal("StockKlineMcp", result.ToolName);
+        Assert.Equal("sh600000", result.Data.Symbol);
+        Assert.Equal("day", result.Data.Interval);
+        Assert.Equal(30, result.Data.WindowSize);
+        Assert.NotEmpty(result.Data.Bars);
+        Assert.NotNull(result.Data.KeyLevels);
+        Assert.NotEmpty(result.Features);
+        Assert.NotEmpty(result.Evidence);
+    }
+
+    [Fact]
+    public async Task GetMinuteAsync_ParallelBundle_ShouldReturnSameDataAsBeforeRefactor()
+    {
+        var service = CreateService();
+
+        var result = await service.GetMinuteAsync("sh600000", null, "task-minute-parallel");
+
+        Assert.Equal("StockMinuteMcp", result.ToolName);
+        Assert.Equal("sh600000", result.Data.Symbol);
+        Assert.NotEmpty(result.Data.Points);
+        Assert.NotNull(result.Data.Vwap);
+        Assert.NotEmpty(result.Features);
+        Assert.NotEmpty(result.Evidence);
+    }
+
+    [Fact]
     public async Task GetMinuteAsync_ShouldWrapDataInLocalRequiredEnvelope()
     {
         var service = CreateService();

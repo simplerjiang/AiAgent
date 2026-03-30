@@ -372,10 +372,10 @@ if (token.value) {
 
 <style scoped>
 .panel {
-  background: #fff;
-  border-radius: 16px;
-  padding: 1.5rem;
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+  background: var(--color-bg-surface);
+  border-radius: var(--radius-xl);
+  padding: var(--space-6);
+  box-shadow: var(--shadow-md);
 }
 
 .field {
@@ -400,8 +400,8 @@ if (token.value) {
 .field select,
 .field textarea {
   padding: 0.6rem 0.75rem;
-  border-radius: 10px;
-  border: 1px solid #e2e8f0;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-light);
   font-size: 0.95rem;
 }
 
@@ -417,16 +417,16 @@ if (token.value) {
 
 button {
   padding: 0.6rem 1.2rem;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   border: none;
-  background: #2563eb;
+  background: var(--color-accent);
   color: #fff;
   cursor: pointer;
 }
 
 button.secondary {
-  background: #e2e8f0;
-  color: #1f2937;
+  background: var(--color-bg-surface-alt);
+  color: var(--color-text-body);
 }
 
 .compact-action {
@@ -439,7 +439,7 @@ button:disabled {
 }
 
 .muted {
-  color: #94a3b8;
+  color: var(--color-text-secondary);
   margin-top: 0.4rem;
 }
 

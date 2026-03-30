@@ -54,6 +54,14 @@ public sealed class ResearchReportService : IResearchReportService
         var hasDegradation = degradedFlags.Count > 0;
         var degradedJson = hasDegradation ? JsonSerializer.Serialize(degradedFlags) : null;
 
+        // Remove any existing blocks for this turn+stage to avoid unique-index violations on reruns
+        var stageTypeStr = stageType.ToString();
+        var existing = await _dbContext.ResearchReportBlocks
+            .Where(b => b.TurnId == turnId && b.SourceStageType == stageTypeStr)
+            .ToListAsync(cancellationToken);
+        if (existing.Count > 0)
+            _dbContext.ResearchReportBlocks.RemoveRange(existing);
+
         switch (stageType)
         {
             case ResearchStageType.CompanyOverviewPreflight:
@@ -74,7 +82,7 @@ public sealed class ResearchReportService : IResearchReportService
                     {
                         SessionId = sessionId, TurnId = turnId,
                         BlockType = blockType, VersionIndex = 0,
-                        Headline = parsed.Headline,
+                        Headline = Truncate(parsed.Headline, 500),
                         Summary = parsed.Summary,
                         KeyPointsJson = parsed.KeyPointsJson,
                         EvidenceRefsJson = parsed.EvidenceRefsJson,
@@ -240,7 +248,7 @@ public sealed class ResearchReportService : IResearchReportService
             TurnId = turnId,
             BlockType = ReportBlockType.CompanyOverview,
             VersionIndex = 0,
-            Headline = !string.IsNullOrWhiteSpace(companyName) ? $"{companyName} 公司概览" : parsedOutput.Headline ?? "公司概览",
+            Headline = Truncate(!string.IsNullOrWhiteSpace(companyName) ? $"{companyName} 公司概览" : parsedOutput.Headline ?? "公司概览", 500),
             Summary = string.Join("\n\n", summaryParts.Where(part => !string.IsNullOrWhiteSpace(part))),
             KeyPointsJson = keyPoints.Count > 0 ? JsonSerializer.Serialize(keyPoints) : parsedOutput.KeyPointsJson,
             EvidenceRefsJson = JsonSerializer.Serialize(new[] { StockMcpToolNames.CompanyOverview, StockMcpToolNames.MarketContext }),
@@ -289,7 +297,7 @@ public sealed class ResearchReportService : IResearchReportService
         {
             SessionId = sessionId, TurnId = turnId,
             BlockType = ReportBlockType.ResearchDebate, VersionIndex = 0,
-            Headline = headline ?? "研究辩论",
+            Headline = Truncate(headline ?? "研究辩论", 500),
             Summary = summary,
             KeyPointsJson = FlattenJsonFragments(keyPoints),
             DisagreementsJson = disagreements.Count > 0 ? JsonSerializer.Serialize(disagreements) : null,
@@ -321,7 +329,7 @@ public sealed class ResearchReportService : IResearchReportService
         {
             SessionId = sessionId, TurnId = turnId,
             BlockType = ReportBlockType.TraderProposal, VersionIndex = 0,
-            Headline = headline ?? "交易提案",
+            Headline = Truncate(headline ?? "交易提案", 500),
             Summary = summary, RiskLimitsJson = riskLimits,
             Status = hasDegradation ? ReportBlockStatus.Degraded : ReportBlockStatus.Complete,
             DegradedFlagsJson = hasDegradation ? degradedJson : null,
@@ -370,7 +378,7 @@ public sealed class ResearchReportService : IResearchReportService
         {
             SessionId = sessionId, TurnId = turnId,
             BlockType = ReportBlockType.RiskReview, VersionIndex = 0,
-            Headline = headline ?? "风险审查",
+            Headline = Truncate(headline ?? "风险审查", 500),
             Summary = summary,
             RiskLimitsJson = FlattenJsonFragments(riskLimits),
             InvalidationsJson = FlattenJsonFragments(invalidations),
@@ -406,7 +414,7 @@ public sealed class ResearchReportService : IResearchReportService
         {
             SessionId = sessionId, TurnId = turnId,
             BlockType = ReportBlockType.PortfolioDecision, VersionIndex = 0,
-            Headline = headline ?? "投资组合决策",
+            Headline = Truncate(headline ?? "投资组合决策", 500),
             Summary = summary,
             EvidenceRefsJson = evidenceRefs,
             CounterEvidenceRefsJson = counterEvidence,
@@ -549,13 +557,38 @@ public sealed class ResearchReportService : IResearchReportService
             using var doc = JsonDocument.Parse(jsonText);
             var root = doc.RootElement;
 
+            // Build summary: try explicit fields first, then synthesize from fundamentals schema
+            string? summary = null;
+            if (root.TryGetProperty("summary", out var s))
+                summary = s.GetString();
+            else if (root.TryGetProperty("analysis", out var a2))
+                summary = a2.GetString();
+            else if (root.TryGetProperty("qualityView", out var qv) || root.TryGetProperty("valuationView", out _))
+            {
+                // Fundamentals analyst output: synthesize summary from qualityView + valuationView
+                var quality = root.TryGetProperty("qualityView", out var qv2) ? qv2.GetString() : null;
+                var valuation = root.TryGetProperty("valuationView", out var vv) ? vv.GetString() : null;
+                var parts = new List<string>();
+                if (!string.IsNullOrWhiteSpace(quality)) parts.Add($"财务质量: {quality}");
+                if (!string.IsNullOrWhiteSpace(valuation)) parts.Add($"估值判断: {valuation}");
+                if (root.TryGetProperty("metrics", out var metrics) && metrics.ValueKind == JsonValueKind.Object)
+                {
+                    foreach (var prop in metrics.EnumerateObject())
+                    {
+                        var val = prop.Value.ValueKind == JsonValueKind.String ? prop.Value.GetString() : prop.Value.GetRawText();
+                        if (!string.IsNullOrWhiteSpace(val)) parts.Add($"{prop.Name}: {val}");
+                    }
+                }
+                summary = parts.Count > 0 ? string.Join("; ", parts) : null;
+            }
+
+            summary ??= root.TryGetProperty("businessScope", out var businessScope) ? businessScope.GetString() :
+                root.TryGetProperty("industryPosition", out var industryPosition) ? industryPosition.GetString() :
+                root.TryGetProperty("institutionActivity", out var institutionActivity) ? institutionActivity.GetString() : content;
+
             return new(
                 root.TryGetProperty("headline", out var h) ? h.GetString() : null,
-                root.TryGetProperty("summary", out var s) ? s.GetString() :
-                    root.TryGetProperty("analysis", out var a2) ? a2.GetString() :
-                    root.TryGetProperty("businessScope", out var businessScope) ? businessScope.GetString() :
-                    root.TryGetProperty("industryPosition", out var industryPosition) ? industryPosition.GetString() :
-                    root.TryGetProperty("institutionActivity", out var institutionActivity) ? institutionActivity.GetString() : content,
+                summary,
                 root.TryGetProperty("key_points", out var kp) ? kp.GetRawText() :
                     root.TryGetProperty("highlights", out var highlights) ? highlights.GetRawText() :
                     root.TryGetProperty("riskSignals", out var riskSignals) ? riskSignals.GetRawText() :
@@ -563,7 +596,8 @@ public sealed class ResearchReportService : IResearchReportService
                 root.TryGetProperty("evidence_refs", out var er) ? er.GetRawText() :
                     root.TryGetProperty("supporting_evidence_refs", out var ser) ? ser.GetRawText() :
                     root.TryGetProperty("evidenceTable", out var evidenceTable) ? evidenceTable.GetRawText() : null,
-                root.TryGetProperty("counter_evidence", out var ce) ? ce.GetRawText() : null,
+                root.TryGetProperty("counter_evidence", out var ce) ? ce.GetRawText() :
+                    root.TryGetProperty("risks", out var risks) ? risks.GetRawText() : null,
                 root.TryGetProperty("risk_limits", out var rl) ? rl.GetRawText() : null,
                 root.TryGetProperty("invalidations", out var inv) ? inv.GetRawText() : null
             );
@@ -782,4 +816,8 @@ public sealed class ResearchReportService : IResearchReportService
 
         return property.ToString();
     }
+
+    /// <summary>Truncate a string to fit a DB column width, avoiding DbUpdateException on overflow.</summary>
+    private static string? Truncate(string? value, int maxLength)
+        => value is not null && value.Length > maxLength ? value[..maxLength] : value;
 }

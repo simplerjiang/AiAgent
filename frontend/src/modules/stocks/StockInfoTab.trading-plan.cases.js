@@ -14,12 +14,11 @@ export const stockInfoTabTradingPlanCases = ({
   vi,
 }) => [
   {
-    title: "supports editing and deleting pending trading plans",
+    title: "supports editing and cancelling pending trading plans",
     run: async () => {
     let stockPlanListCalls = 0
     let boardPlanListCalls = 0
-    let planDeleted = false
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    let planCancelled = false
     const { fetchMock } = createChatFetchMock({
       handle: async (url, options = {}) => {
         if (url === '/api/stocks/plans/7' && options.method === 'PUT') {
@@ -50,9 +49,33 @@ export const stockInfoTabTradingPlanCases = ({
           })
         }
 
-        if (url === '/api/stocks/plans/7' && options.method === 'DELETE') {
-          planDeleted = true
-          return makeResponse({ ok: true, status: 204, json: async () => ({}) })
+        if (url === '/api/stocks/plans/7/cancel' && options.method === 'POST') {
+          planCancelled = true
+          return makeResponse({
+            ok: true,
+            status: 200,
+            json: async () => ({
+              id: 7,
+              symbol: 'sz000021',
+              name: '深科技',
+              direction: 'Long',
+              status: 'Cancelled',
+              triggerPrice: 12.6,
+              invalidPrice: 11.9,
+              stopLossPrice: 11.3,
+              takeProfitPrice: 13.9,
+              targetPrice: 14.8,
+              expectedCatalyst: '突破前高',
+              invalidConditions: '跳破支撑',
+              riskLimits: '单笔亏损不超过 2%',
+              analysisSummary: '等待突破确认',
+              analysisHistoryId: 42,
+              sourceAgent: 'commander',
+              userNote: '上调目标',
+              updatedAt: '2026-03-14T09:00:00Z',
+              createdAt: '2026-03-14T08:30:00Z'
+            })
+          })
         }
 
         if (url.startsWith('/api/stocks/plans?symbol=sz000021')) {
@@ -61,7 +84,7 @@ export const stockInfoTabTradingPlanCases = ({
             ok: true,
             status: 200,
             json: async () => {
-              if (planDeleted) {
+              if (planCancelled) {
                 return []
               }
 
@@ -96,8 +119,15 @@ export const stockInfoTabTradingPlanCases = ({
             ok: true,
             status: 200,
             json: async () => {
-              if (planDeleted) {
-                return []
+              if (planCancelled) {
+                return [{
+                  id: 7, symbol: 'sz000021', name: '深科技', direction: 'Long', status: 'Cancelled',
+                  triggerPrice: 12.6, invalidPrice: 11.9, stopLossPrice: 11.3, takeProfitPrice: 13.9,
+                  targetPrice: 14.8, expectedCatalyst: '突破前高', invalidConditions: '跌破支撑',
+                  riskLimits: '单笔亏损不超过 2%', analysisSummary: '等待突破确认',
+                  analysisHistoryId: 42, sourceAgent: 'commander', userNote: '上调目标',
+                  updatedAt: '2026-03-14T09:00:00Z', createdAt: '2026-03-14T08:30:00Z'
+                }]
               }
 
               return [{
@@ -171,13 +201,12 @@ export const stockInfoTabTradingPlanCases = ({
     expect(wrapper.text()).toContain('止盈 13.90')
     expect(wrapper.text()).toContain('目标 14.80')
 
-    await wrapper.find('.plan-item-actions .plan-danger-button').trigger('click')
+    await wrapper.find('[data-testid="cancel-plan-btn"]').trigger('click')
     await flushPromises()
     await flushPromises()
 
-    expect(confirmSpy).toHaveBeenCalled()
-    expect(fetchMock.mock.calls.some(args => args[0] === '/api/stocks/plans/7' && args[1]?.method === 'DELETE')).toBe(true)
-    expect(wrapper.text()).toContain('暂无交易计划，可从 commander 分析一键起草。')
+    expect(fetchMock.mock.calls.some(args => args[0] === '/api/stocks/plans/7/cancel' && args[1]?.method === 'POST')).toBe(true)
+    expect(wrapper.text()).toContain('已取消')
   }
   },
   {

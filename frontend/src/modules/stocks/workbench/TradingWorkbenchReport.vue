@@ -62,11 +62,11 @@ const parseJsonArray = json => {
 }
 
 const confidenceColor = conf => {
-  if (!conf && conf !== 0) return '#8b8fa3'
+  if (!conf && conf !== 0) return 'var(--color-text-secondary)'
   const n = typeof conf === 'number' ? conf : parseFloat(conf)
-  if (n >= 0.7) return '#66bb6a'
-  if (n >= 0.4) return '#f0b429'
-  return '#ef5350'
+  if (n >= 0.7) return 'var(--color-success)'
+  if (n >= 0.4) return 'var(--color-warning)'
+  return 'var(--color-danger)'
 }
 
 const ratingLabel = computed(() => {
@@ -268,8 +268,8 @@ const evidenceLabel = ev => {
 
 /* ── Decision ──────────────────────────────────── */
 .wb-decision {
-  background: var(--wb-card-bg, rgba(255,255,255,0.03));
-  border: 1px solid var(--wb-border, #2a2d35);
+  background: var(--color-bg-surface-alt);
+  border: 1px solid var(--color-border-light);
   border-radius: 6px;
   padding: 10px 12px;
 }
@@ -280,7 +280,7 @@ const evidenceLabel = ev => {
   margin-bottom: 6px;
 }
 .wb-decision-icon { font-size: 16px; }
-.wb-decision-title { font-size: 15px; font-weight: 600; color: var(--wb-text, #e1e4ea); }
+.wb-decision-title { font-size: 15px; font-weight: 600; color: var(--color-text-body); }
 .wb-rating {
   font-size: 13px;
   font-weight: 700;
@@ -288,15 +288,15 @@ const evidenceLabel = ev => {
   border-radius: 3px;
   margin-left: auto;
 }
-.rating-strong-buy { color: #fff; background: #2e7d32; }
-.rating-buy { color: #66bb6a; background: rgba(102,187,106,0.15); }
-.rating-hold { color: #f0b429; background: rgba(240,180,41,0.12); }
-.rating-sell { color: #ef5350; background: rgba(239,83,80,0.12); }
-.rating-strong-sell { color: #fff; background: #c62828; }
+.rating-strong-buy { color: #fff; background: var(--color-success); }
+.rating-buy { color: var(--color-success); background: var(--color-success-bg); }
+.rating-hold { color: var(--color-warning); background: var(--color-warning-bg); }
+.rating-sell { color: var(--color-danger); background: var(--color-danger-bg); }
+.rating-strong-sell { color: #fff; background: var(--color-danger); }
 
 .wb-decision-summary {
   font-size: 14px;
-  color: var(--wb-text, #e1e4ea);
+  color: var(--color-text-body);
   line-height: 1.6;
   margin-bottom: 6px;
 }
@@ -308,11 +308,11 @@ const evidenceLabel = ev => {
   gap: 8px;
   margin: 6px 0;
 }
-.wb-conf-label { font-size: 13px; color: var(--wb-text-muted, #8b8fa3); }
+.wb-conf-label { font-size: 13px; color: var(--color-text-secondary); }
 .wb-conf-bar {
   flex: 1;
   height: 4px;
-  background: rgba(255,255,255,0.06);
+  background: var(--color-bg-surface-alt);
   border-radius: 2px;
   overflow: hidden;
 }
@@ -325,7 +325,7 @@ const evidenceLabel = ev => {
 
 .wb-decision-explain {
   font-size: 13px;
-  color: var(--wb-text-muted, #8b8fa3);
+  color: var(--color-text-secondary);
   line-height: 1.4;
   font-style: italic;
 }
@@ -337,7 +337,7 @@ const evidenceLabel = ev => {
 .wb-actions-title {
   font-size: 13px;
   font-weight: 600;
-  color: var(--wb-text-muted, #8b8fa3);
+  color: var(--color-text-secondary);
   margin-bottom: 6px;
 }
 .wb-actions-list {
@@ -350,29 +350,29 @@ const evidenceLabel = ev => {
   align-items: center;
   gap: 4px;
   padding: 5px 10px;
-  border: 1px solid var(--wb-border, #2a2d35);
+  border: 1px solid var(--color-border-light);
   border-radius: 5px;
-  background: var(--wb-card-bg, rgba(255,255,255,0.03));
-  color: var(--wb-text, #e1e4ea);
+  background: var(--color-bg-surface-alt);
+  color: var(--color-text-body);
   font-size: 13px;
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s;
 }
 .wb-action-btn:hover {
-  background: rgba(91, 156, 246, 0.08);
-  border-color: var(--wb-accent, #5b9cf6);
+  background: color-mix(in srgb, var(--color-accent) 8%, transparent);
+  border-color: var(--color-accent);
 }
 .wb-action-icon { font-size: 14px; }
 
 /* ── Report blocks ─────────────────────────────── */
 .wb-block {
-  background: var(--wb-card-bg, rgba(255,255,255,0.02));
-  border: 1px solid var(--wb-border, #2a2d35);
+  background: var(--color-bg-surface-alt);
+  border: 1px solid var(--color-border-light);
   border-radius: 6px;
   padding: 8px 10px;
 }
-.wb-block.block-degraded { border-left: 3px solid #f0b429; }
-.wb-block.block-failed { border-left: 3px solid #ef5350; }
+.wb-block.block-degraded { border-left: 3px solid var(--color-warning); }
+.wb-block.block-failed { border-left: 3px solid var(--color-danger); }
 
 .wb-block-header {
   display: flex;
@@ -384,7 +384,7 @@ const evidenceLabel = ev => {
 .wb-block-type {
   font-size: 12px;
   font-weight: 600;
-  color: var(--wb-text-muted, #8b8fa3);
+  color: var(--color-text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -395,18 +395,18 @@ const evidenceLabel = ev => {
   font-weight: 700;
   margin-left: auto;
 }
-.wb-block-badge.degraded { color: #f0b429; background: rgba(240,180,41,0.12); }
-.wb-block-badge.failed { color: #ef5350; background: rgba(239,83,80,0.12); }
+.wb-block-badge.degraded { color: var(--color-warning); background: var(--color-warning-bg); }
+.wb-block-badge.failed { color: var(--color-danger); background: var(--color-danger-bg); }
 
 .wb-block-headline {
   font-size: 15px;
   font-weight: 600;
-  color: var(--wb-text, #e1e4ea);
+  color: var(--color-text-body);
   margin-bottom: 4px;
 }
 .wb-block-summary {
   font-size: 14px;
-  color: var(--wb-text, #e1e4ea);
+  color: var(--color-text-body);
   line-height: 1.5;
   word-wrap: break-word;
   overflow-wrap: break-word;
@@ -421,18 +421,18 @@ const evidenceLabel = ev => {
 .wb-section-label {
   font-size: 12px;
   font-weight: 600;
-  color: var(--wb-text-muted, #8b8fa3);
+  color: var(--color-text-secondary);
   margin-bottom: 3px;
 }
 .wb-point-list {
   margin: 0;
   padding-left: 16px;
   font-size: 13px;
-  color: var(--wb-text, #e1e4ea);
+  color: var(--color-text-body);
   line-height: 1.5;
 }
-.wb-point-list.risk { color: #f0b429; }
-.wb-point-list.warn { color: #ef5350; }
+.wb-point-list.risk { color: var(--color-warning); }
+.wb-point-list.warn { color: var(--color-danger); }
 
 .wb-evidence-tags {
   display: flex;
@@ -444,8 +444,8 @@ const evidenceLabel = ev => {
   padding: 1px 6px;
   border-radius: 3px;
 }
-.wb-evidence-tag.positive { background: rgba(102,187,106,0.1); color: #66bb6a; }
-.wb-evidence-tag.negative { background: rgba(239,83,80,0.1); color: #ef5350; }
+.wb-evidence-tag.positive { background: var(--color-success-bg); color: var(--color-success); }
+.wb-evidence-tag.negative { background: var(--color-danger-bg); color: var(--color-danger); }
 
 /* ── States ────────────────────────────────────── */
 .wb-report-loading {
@@ -454,14 +454,14 @@ const evidenceLabel = ev => {
   justify-content: center;
   gap: 8px;
   padding: 32px 12px;
-  color: var(--wb-text-muted, #8b8fa3);
+  color: var(--color-text-secondary);
   font-size: 14px;
 }
 .pulse-dot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--wb-accent, #5b9cf6);
+  background: var(--color-accent);
   animation: pulse 1.4s infinite ease-in-out;
 }
 @keyframes pulse {
@@ -472,7 +472,7 @@ const evidenceLabel = ev => {
 .wb-report-empty {
   text-align: center;
   padding: 24px 12px;
-  color: var(--wb-text-muted, #8b8fa3);
+  color: var(--color-text-secondary);
 }
 .wb-report-empty p { font-size: 14px; margin: 0 0 4px; }
 .wb-report-empty-hint { font-size: 13px; }

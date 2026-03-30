@@ -59,10 +59,14 @@ const props = defineProps({
   canResumeTradingPlan: {
     type: Function,
     required: true
+  },
+  canCancelTradingPlan: {
+    type: Function,
+    required: true
   }
 })
 
-defineEmits(['refresh', 'edit', 'resume', 'delete'])
+defineEmits(['refresh', 'edit', 'resume', 'cancel', 'create'])
 </script>
 
 <template>
@@ -72,9 +76,12 @@ defineEmits(['refresh', 'edit', 'resume', 'delete'])
         <h3>当前交易计划</h3>
         <p class="muted">当前股票的全部交易计划都可在这里编辑或删除。</p>
       </div>
-      <button class="market-news-button plan-refresh-button" @click="$emit('refresh')" :disabled="workspace.planListLoading || workspace.planAlertsLoading || !workspace.detail">
-        刷新
-      </button>
+      <div class="plan-header-actions">
+        <button class="market-news-button" @click="$emit('create')" :disabled="!workspace.detail">新建计划</button>
+        <button class="market-news-button plan-refresh-button" @click="$emit('refresh')" :disabled="workspace.planListLoading || workspace.planAlertsLoading || !workspace.detail">
+          刷新
+        </button>
+      </div>
     </div>
 
     <p v-if="workspace.planError" class="muted error">{{ workspace.planError }}</p>
@@ -96,8 +103,14 @@ defineEmits(['refresh', 'edit', 'resume', 'delete'])
             >
               {{ resumingPlanId === String(item.id) ? '恢复中...' : '恢复观察' }}
             </button>
-            <button class="plan-danger-button" @click="$emit('delete', item)" :disabled="deletingPlanId === String(item.id)">
-              {{ deletingPlanId === String(item.id) ? '删除中...' : '删除' }}
+            <button
+              v-if="canCancelTradingPlan(item)"
+              class="plan-danger-button"
+              data-testid="cancel-plan-btn"
+              @click="$emit('cancel', item)"
+              :disabled="deletingPlanId === String(item.id)"
+            >
+              {{ deletingPlanId === String(item.id) ? '取消中...' : '取消' }}
             </button>
           </div>
         </div>
@@ -132,7 +145,7 @@ defineEmits(['refresh', 'edit', 'resume', 'delete'])
         <small>{{ item.riskLimits || '风险摘要待补充' }}</small>
       </li>
     </ul>
-    <p v-else class="muted">暂无交易计划，可从 commander 分析一键起草。</p>
+    <p v-else class="muted">暂无交易计划，可点击「新建计划」手动录入，或从 commander 分析一键起草。</p>
   </section>
 </template>
 
@@ -148,6 +161,13 @@ defineEmits(['refresh', 'edit', 'resume', 'delete'])
   align-items: flex-start;
   justify-content: space-between;
   gap: 0.75rem;
+}
+
+.plan-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
 }
 
 .market-news-button,

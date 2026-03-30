@@ -187,7 +187,8 @@ public sealed class ResearchSessionService : IResearchSessionService
 
             if (!request.FromStageIndex.HasValue && mode == ResearchContinuationMode.ContinueSession)
             {
-                routingDecision = await _followUpRoutingService.DecideAsync(session.Id, request.UserPrompt, cancellationToken);
+                // Use instant heuristic for HTTP response speed; full LLM routing runs in background pipeline
+                routingDecision = _followUpRoutingService.DecideHeuristic(request.UserPrompt);
             }
         }
 

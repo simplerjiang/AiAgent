@@ -68,20 +68,24 @@ public sealed class TradingPlanService : ITradingPlanService
             throw new ArgumentException("symbol 不能为空", nameof(request.Symbol));
         }
 
-        var history = await _dbContext.StockAgentAnalysisHistories
-            .FirstOrDefaultAsync(item => item.Id == request.AnalysisHistoryId, cancellationToken);
-        if (history is null)
+        StockAgentAnalysisHistory? history = null;
+        if (request.AnalysisHistoryId.HasValue && request.AnalysisHistoryId.Value > 0)
         {
-            throw new InvalidOperationException("分析历史不存在");
-        }
+            history = await _dbContext.StockAgentAnalysisHistories
+                .FirstOrDefaultAsync(item => item.Id == request.AnalysisHistoryId.Value, cancellationToken);
+            if (history is null)
+            {
+                throw new InvalidOperationException("分析历史不存在");
+            }
 
-        if (!string.Equals(history.Symbol, normalized, StringComparison.OrdinalIgnoreCase))
-        {
-            throw new InvalidOperationException("分析历史与当前股票不匹配");
+            if (!string.Equals(history.Symbol, normalized, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException("分析历史与当前股票不匹配");
+            }
         }
 
         var now = DateTime.UtcNow;
-        var name = NormalizeRequiredName(request.Name, history.Name);
+        var name = NormalizeRequiredName(request.Name, history?.Name ?? string.Empty);
         var marketContext = await _marketContextService.GetLatestAsync(normalized, cancellationToken);
         var plan = new TradingPlan
         {
@@ -100,8 +104,8 @@ public sealed class TradingPlanService : ITradingPlanService
             InvalidConditions = NormalizeOptional(request.InvalidConditions),
             RiskLimits = NormalizeOptional(request.RiskLimits),
             AnalysisSummary = NormalizeOptional(request.AnalysisSummary),
-            AnalysisHistoryId = request.AnalysisHistoryId,
-            SourceAgent = NormalizeOptional(request.SourceAgent) ?? "commander",
+            AnalysisHistoryId = request.AnalysisHistoryId ?? 0,
+            SourceAgent = NormalizeOptional(request.SourceAgent) ?? (history is null ? "manual" : "commander"),
             UserNote = NormalizeOptional(request.UserNote),
             MarketStageLabelAtCreation = marketContext?.StageLabel,
             StageConfidenceAtCreation = marketContext?.StageConfidence,
@@ -284,8 +288,7 @@ public sealed class TradingPlanService : ITradingPlanService
 
     private static System.Linq.Expressions.Expression<Func<TradingPlan, bool>> IsRenderablePlan()
     {
-        return item => item.AnalysisHistoryId > 0
-            && !string.IsNullOrWhiteSpace(item.Symbol)
+        return item => !string.IsNullOrWhiteSpace(item.Symbol)
             && !string.IsNullOrWhiteSpace(item.Name);
     }
 }

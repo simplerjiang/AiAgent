@@ -787,11 +787,6 @@ public sealed class StocksModule : IModule
                 return Results.BadRequest(new { message = "symbol 不能为空" });
             }
 
-            if (request.AnalysisHistoryId <= 0)
-            {
-                return Results.BadRequest(new { message = "analysisHistoryId 无效" });
-            }
-
             try
             {
                 var result = await tradingPlanService.CreateAsync(request);

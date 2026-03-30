@@ -121,8 +121,8 @@ watch(() => props.symbol, () => {
 <style scoped>
 .wb-header {
   padding: 10px 12px 8px;
-  background: var(--wb-header-bg, #1e2128);
-  border-bottom: 1px solid var(--wb-border, #2a2d35);
+  background: var(--color-bg-surface-alt);
+  border-bottom: 1px solid var(--color-border-light);
 }
 .wb-header-top {
   display: flex;
@@ -145,12 +145,12 @@ watch(() => props.symbol, () => {
   font-family: 'Consolas', monospace;
 }
 .wb-session-badge {
-  background: var(--wb-badge-session, #2a3a5a);
-  color: var(--wb-accent, #5b9cf6);
+  background: var(--color-accent-subtle);
+  color: var(--color-accent);
 }
 .wb-turn-badge {
-  background: var(--wb-badge-turn, #3a2a5a);
-  color: #b09cf6;
+  background: #ede9fe;
+  color: #6d28d9;
 }
 
 .wb-status {
@@ -160,12 +160,12 @@ watch(() => props.symbol, () => {
   align-items: center;
   gap: 4px;
 }
-.status-idle { color: #8b8fa3; }
-.status-queued { color: #f0b429; }
-.status-running { color: #4fc3f7; }
-.status-completed { color: #66bb6a; }
-.status-failed { color: #ef5350; }
-.status-cancelled { color: #bdbdbd; }
+.status-idle { color: var(--color-text-secondary); }
+.status-queued { color: var(--color-warning); }
+.status-running { color: var(--color-info); }
+.status-completed { color: var(--color-success); }
+.status-failed { color: var(--color-danger); }
+.status-cancelled { color: var(--color-text-tertiary); }
 
 .pulse-dot {
   width: 6px;
@@ -182,35 +182,35 @@ watch(() => props.symbol, () => {
 .wb-stage-indicator {
   margin-top: 6px;
   font-size: 13px;
-  color: var(--wb-text-muted, #8b8fa3);
+  color: var(--color-text-secondary);
 }
 .wb-stage-label { margin-right: 4px; }
 .wb-stage-name {
-  color: var(--wb-accent, #5b9cf6);
+  color: var(--color-accent);
   font-weight: 500;
 }
 
 .wb-refresh-btn {
   background: transparent;
-  border: 1px solid var(--wb-border, #2a2d35);
-  color: var(--wb-text-muted, #8b8fa3);
+  border: 1px solid var(--color-border-light);
+  color: var(--color-text-secondary);
   border-radius: 4px;
   padding: 2px 8px;
   cursor: pointer;
   font-size: 16px;
 }
-.wb-refresh-btn:hover { color: var(--wb-text, #e1e4ea); }
+.wb-refresh-btn:hover { color: var(--color-text-body); }
 
 .wb-fullscreen-btn {
   background: transparent;
-  border: 1px solid var(--wb-border, #2a2d35);
-  color: var(--wb-text-muted, #8b8fa3);
+  border: 1px solid var(--color-border-light);
+  color: var(--color-text-secondary);
   border-radius: 4px;
   padding: 2px 8px;
   cursor: pointer;
   font-size: 16px;
 }
-.wb-fullscreen-btn:hover { color: var(--wb-text, #e1e4ea); background: rgba(255,255,255,0.05); }
+.wb-fullscreen-btn:hover { color: var(--color-text-body); background: var(--color-bg-surface-alt); }
 
 .wb-error {
   margin-top: 6px;
@@ -218,7 +218,7 @@ watch(() => props.symbol, () => {
   align-items: center;
   gap: 4px;
   font-size: 13px;
-  color: #ef5350;
+  color: var(--color-danger);
   background: rgba(239, 83, 80, 0.1);
   padding: 4px 8px;
   border-radius: 4px;
@@ -230,13 +230,13 @@ watch(() => props.symbol, () => {
 .wb-position-row {
   margin-top: 8px;
   font-size: 14px;
-  color: var(--wb-text-muted, #8b8fa3);
+  color: var(--color-text-secondary);
 }
 .wb-pos-label {
   cursor: pointer;
   transition: color 0.15s;
 }
-.wb-pos-label:hover { color: var(--wb-text, #e1e4ea); }
+.wb-pos-label:hover { color: var(--color-text-body); }
 .wb-pos-notes { opacity: 0.7; }
 .wb-pos-form {
   display: flex;
@@ -250,15 +250,15 @@ watch(() => props.symbol, () => {
   align-items: center;
   gap: 5px;
   font-size: 14px;
-  color: var(--wb-text-muted, #8b8fa3);
+  color: var(--color-text-secondary);
 }
 .wb-pos-field input {
   width: 100px;
   padding: 5px 8px;
   font-size: 14px;
-  background: var(--wb-input-bg, #14161a);
-  border: 1px solid var(--wb-border, #2a2d35);
-  color: var(--wb-text, #e1e4ea);
+  background: var(--color-bg-surface-alt);
+  border: 1px solid var(--color-border-light);
+  color: var(--color-text-body);
   border-radius: 4px;
 }
 .wb-pos-field input[type=text] { width: 120px; }
@@ -267,16 +267,16 @@ watch(() => props.symbol, () => {
   font-size: 14px;
   border-radius: 4px;
   cursor: pointer;
-  border: 1px solid var(--wb-border, #2a2d35);
+  border: 1px solid var(--color-border-light);
 }
 .wb-pos-save {
-  background: var(--wb-accent, #5b9cf6);
+  background: var(--color-accent);
   color: #fff;
   border-color: transparent;
 }
 .wb-pos-save:disabled { opacity: 0.5; cursor: default; }
 .wb-pos-cancel {
   background: transparent;
-  color: var(--wb-text-muted, #8b8fa3);
+  color: var(--color-text-secondary);
 }
 </style>

@@ -69,8 +69,8 @@ function handleKeydown(e) {
 
 <style scoped>
 .wb-composer {
-  border-top: 1px solid var(--wb-border, #2a2d35);
-  background: var(--wb-header-bg, #1e2128);
+  border-top: 1px solid var(--color-border-light);
+  background: var(--color-bg-surface-alt);
   padding: 8px 10px;
 }
 
@@ -83,15 +83,15 @@ function handleKeydown(e) {
 .wb-mode-select {
   font-size: 13px;
   padding: 2px 6px;
-  border: 1px solid var(--wb-border, #2a2d35);
+  border: 1px solid var(--color-border-light);
   border-radius: 4px;
-  background: var(--wb-bg, #1a1d23);
-  color: var(--wb-text, #e1e4ea);
+  background: var(--color-bg-surface);
+  color: var(--color-text-body);
   outline: none;
 }
 .wb-mode-desc {
   font-size: 12px;
-  color: var(--wb-text-muted, #8b8fa3);
+  color: var(--color-text-secondary);
 }
 
 .wb-input-row {
@@ -102,10 +102,10 @@ function handleKeydown(e) {
 .wb-input {
   flex: 1;
   resize: none;
-  border: 1px solid var(--wb-border, #2a2d35);
+  border: 1px solid var(--color-border-light);
   border-radius: 6px;
-  background: var(--wb-bg, #1a1d23);
-  color: var(--wb-text, #e1e4ea);
+  background: var(--color-bg-surface);
+  color: var(--color-text-body);
   padding: 6px 10px;
   font-size: 14px;
   font-family: inherit;
@@ -115,10 +115,10 @@ function handleKeydown(e) {
   max-height: 80px;
 }
 .wb-input:focus {
-  border-color: var(--wb-accent, #5b9cf6);
+  border-color: var(--color-accent);
 }
 .wb-input::placeholder {
-  color: var(--wb-text-muted, #8b8fa3);
+  color: var(--color-text-secondary);
 }
 .wb-input:disabled {
   opacity: 0.5;
@@ -128,9 +128,9 @@ function handleKeydown(e) {
 .wb-send-btn {
   width: 32px;
   height: 32px;
-  border: 1px solid var(--wb-border, #2a2d35);
+  border: 1px solid var(--color-border-light);
   border-radius: 6px;
-  background: var(--wb-accent, #5b9cf6);
+  background: var(--color-accent);
   color: #fff;
   font-size: 16px;
   cursor: pointer;

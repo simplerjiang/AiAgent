@@ -209,6 +209,58 @@ public sealed class LocalFactIngestionServiceTests
         Assert.Equal(new DateTime(2026, 3, 17, 10, 0, 0, DateTimeKind.Utc), row.CrawledAt);
     }
 
+    [Fact]
+    public async Task EnsureFreshAsync_SecondCallWithinSkipWindow_ShouldSkipCrawl()
+    {
+        await using var dbContext = CreateDbContext();
+        var aiService = new StubAiEnrichmentService();
+        var httpHandler = new CountingHttpMessageHandler();
+        var service = new LocalFactIngestionService(
+            dbContext,
+            new HttpClient(httpHandler),
+            Options.Create(new StockSyncOptions()),
+            aiService,
+            NullLogger<LocalFactIngestionService>.Instance);
+
+        // First call — will attempt HTTP (and fail via stub), setting the crawl timestamp
+        await service.EnsureFreshAsync("sh600000");
+        var firstCallHttpCount = httpHandler.CallCount;
+
+        // Second call — should skip crawl due to skip window, but still process AI pending
+        await service.EnsureFreshAsync("sh600000");
+        var secondCallHttpCount = httpHandler.CallCount - firstCallHttpCount;
+
+        Assert.Equal(0, secondCallHttpCount);
+        // AI enrichment should still be called both times
+        Assert.Equal(2, aiService.SymbolCalls.Count(s => s == "sh600000"));
+    }
+
+    [Fact]
+    public async Task EnsureMarketFreshAsync_SecondCallWithinSkipWindow_ShouldSkipCrawl()
+    {
+        await using var dbContext = CreateDbContext();
+        var aiService = new StubAiEnrichmentService();
+        var httpHandler = new CountingHttpMessageHandler();
+        var service = new LocalFactIngestionService(
+            dbContext,
+            new HttpClient(httpHandler),
+            Options.Create(new StockSyncOptions()),
+            aiService,
+            NullLogger<LocalFactIngestionService>.Instance);
+
+        // First call — will attempt HTTP crawl
+        await service.EnsureMarketFreshAsync();
+        var firstCallHttpCount = httpHandler.CallCount;
+
+        // Second call — should skip crawl due to skip window, but still process AI pending
+        await service.EnsureMarketFreshAsync();
+        var secondCallHttpCount = httpHandler.CallCount - firstCallHttpCount;
+
+        Assert.Equal(0, secondCallHttpCount);
+        // AI enrichment should still be called both times
+        Assert.Equal(2, aiService.MarketCalls);
+    }
+
     private static LocalFactIngestionService CreateService(AppDbContext dbContext, StubAiEnrichmentService aiService)
     {
         return new LocalFactIngestionService(
@@ -251,6 +303,20 @@ public sealed class LocalFactIngestionServiceTests
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             throw new InvalidOperationException("HTTP should not be called in this test path.");
+        }
+    }
+
+    private sealed class CountingHttpMessageHandler : HttpMessageHandler
+    {
+        public int CallCount { get; private set; }
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            CallCount++;
+            return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            {
+                Content = new StringContent("{\"result\":{\"data\":[]}}")
+            });
         }
     }
 }

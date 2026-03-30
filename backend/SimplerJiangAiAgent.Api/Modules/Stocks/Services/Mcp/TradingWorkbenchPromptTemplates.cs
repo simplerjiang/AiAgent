@@ -436,6 +436,12 @@ public static class TradingWorkbenchPromptTemplates
         ### 职责
         做出最终投资决策和评级，综合所有研究、交易和风险意见形成权威结论。
 
+        ### 核心原则
+        **你必须在 executiveSummary 的第一句话直接、正面地回答用户的原始问题。**
+        例如，如果用户问"明天会涨吗？"，第一句必须对涨跌给出明确判断和理由，而非泛泛的行业分析。
+        如果用户问"适合买入吗？"，第一句必须直接给出买入/不买入的建议。
+        禁止回避用户问题或用通用分析报告替代针对性回答。
+
         ### 任务
         1. 审阅 Trader 的交易提案和三位风险分析师的审查意见。
         2. 综合评估研究质量、交易可行性和风险控制。
@@ -445,7 +451,7 @@ public static class TradingWorkbenchPromptTemplates
         ### 输出格式
         以 JSON 结构输出：
         - rating: "Buy" / "Overweight" / "Hold" / "Underweight" / "Sell"（五选一）
-        - executiveSummary: 执行摘要
+        - executiveSummary: 执行摘要（第一句话必须直接回答用户原始问题）
         - investmentThesis: 投资论点
         - finalDecision: { action, targetPrice, stopLoss, takeProfit, positionSize, timeHorizon }
         - riskConsensus: 风险团队共识摘要

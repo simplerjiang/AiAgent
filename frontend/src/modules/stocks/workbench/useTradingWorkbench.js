@@ -189,7 +189,18 @@ export function useTradingWorkbench(symbolRef) {
     try {
       const data = await apiGet(`/sessions/${sessionId}`, signal)
       sessionDetail.value = data
-      feedItems.value = data?.feedItems ?? []
+      const serverItems = data?.feedItems ?? []
+      // Preserve optimistic follow-up items whose text is not yet in server data
+      const optimistic = feedItems.value.filter(i => i._optimistic)
+      const kept = optimistic.filter(oi => {
+        const text = (oi.content || oi.summary || '').trim()
+        return !serverItems.some(si => {
+          const t = (si.type || si.feedType || si.itemType || '').toLowerCase()
+          return (t.includes('userfollowup') || t.includes('turnstarted')) &&
+            (si.content || si.summary || si.message || '').trim() === text
+        })
+      })
+      feedItems.value = [...serverItems, ...kept]
 
       // Sync session status from detail response so isRunning updates correctly
       if (data?.status && session.value) {
@@ -225,10 +236,23 @@ export function useTradingWorkbench(symbolRef) {
     const sym = symbolRef.value
     if (!sym || !prompt.trim()) return
     error.value = null
+    const trimmedPrompt = prompt.trim()
+    // Immediately show user's follow-up question in feed before backend responds
+    const optimisticItem = {
+      id: `optimistic-${Date.now()}`,
+      turnId: null,
+      type: 'UserFollowUp',
+      itemType: 'UserFollowUp',
+      content: trimmedPrompt,
+      summary: trimmedPrompt,
+      createdAt: new Date().toISOString(),
+      _optimistic: true
+    }
+    feedItems.value = [...feedItems.value, optimisticItem]
     try {
       const body = {
         symbol: sym,
-        userPrompt: prompt.trim(),
+        userPrompt: trimmedPrompt,
         continuationMode: options.continuationMode ?? 'ContinueSession',
         sessionKey: session.value?.sessionKey || undefined
       }
@@ -241,6 +265,8 @@ export function useTradingWorkbench(symbolRef) {
       }
       return result
     } catch (e) {
+      // Remove optimistic item on failure
+      feedItems.value = feedItems.value.filter(i => !i._optimistic)
       error.value = e.message
       throw e
     }

@@ -18,8 +18,8 @@ defineEmits(['close', 'save'])
     <section class="plan-modal" role="dialog" aria-modal="true" aria-label="交易计划草稿">
       <div class="search-modal-header">
         <div>
-          <strong>交易计划草稿</strong>
-          <p class="muted">后端基于 commander 历史生成，用户确认后才会入库。</p>
+          <strong>{{ workspace.planForm.id ? '编辑交易计划' : (workspace.planForm.sourceAgent === 'manual' ? '手动新建计划' : '交易计划草稿') }}</strong>
+          <p class="muted">{{ workspace.planForm.sourceAgent === 'manual' ? '手动录入，确认后保存为 Pending 状态。' : '后端基于 commander 历史生成，用户确认后才会入库。' }}</p>
         </div>
         <button class="market-news-button" @click="$emit('close')">关闭</button>
       </div>
@@ -100,7 +100,7 @@ defineEmits(['close', 'save'])
       </div>
 
       <div class="plan-modal-actions">
-        <span class="muted">{{ workspace.planForm.id ? `编辑计划 #${workspace.planForm.id}` : `AnalysisHistory #${workspace.planForm.analysisHistoryId}` }}</span>
+        <span class="muted">{{ workspace.planForm.id ? `编辑计划 #${workspace.planForm.id}` : (workspace.planForm.analysisHistoryId ? `AnalysisHistory #${workspace.planForm.analysisHistoryId}` : '手动新建') }}</span>
         <div class="plan-modal-buttons">
           <button class="market-news-button" @click="$emit('close')">取消</button>
           <button class="plan-save-button" @click="$emit('save')" :disabled="workspace.planSaving || workspace.planDraftLoading">

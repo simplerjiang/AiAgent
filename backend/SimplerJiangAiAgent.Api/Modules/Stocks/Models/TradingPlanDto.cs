@@ -40,7 +40,7 @@ public sealed record TradingPlanCreateDto(
     string? InvalidConditions,
     string? RiskLimits,
     string? AnalysisSummary,
-    long AnalysisHistoryId,
+    long? AnalysisHistoryId,
     string? SourceAgent,
     string? UserNote
 );
@@ -76,7 +76,7 @@ public sealed record TradingPlanItemDto(
     string? InvalidConditions,
     string? RiskLimits,
     string? AnalysisSummary,
-    long AnalysisHistoryId,
+    long? AnalysisHistoryId,
     string SourceAgent,
     string? UserNote,
     DateTime CreatedAt,

@@ -75,7 +75,8 @@ if (provider.Equals("MySql", StringComparison.OrdinalIgnoreCase))
 else if (provider.Equals("Sqlite", StringComparison.OrdinalIgnoreCase) || provider.Equals("SQLite", StringComparison.OrdinalIgnoreCase))
 {
     builder.Services.AddDbContext<AppDbContext>(options =>
-        options.UseSqlite(connectionString));
+        options.UseSqlite(connectionString)
+               .AddInterceptors(new SqliteBusyTimeoutInterceptor(5000)));
 }
 else
 {
@@ -97,6 +98,13 @@ using (var scope = app.Services.CreateScope())
 {
     var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     dbContext.Database.EnsureCreated();
+
+    // Enable WAL mode for SQLite to improve concurrent read/write performance
+    if (provider.Equals("Sqlite", StringComparison.OrdinalIgnoreCase) || provider.Equals("SQLite", StringComparison.OrdinalIgnoreCase))
+    {
+        await dbContext.Database.ExecuteSqlRawAsync("PRAGMA journal_mode=WAL;");
+    }
+
     await StockMarketDataSchemaInitializer.EnsureAsync(dbContext);
     await LocalFactSchemaInitializer.EnsureAsync(dbContext);
     await SourceGovernanceSchemaInitializer.EnsureAsync(dbContext);

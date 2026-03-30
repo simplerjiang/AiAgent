@@ -28,7 +28,7 @@ describe('App', () => {
 
   it('renders tab buttons', () => {
     const wrapper = shallowMount(App)
-    const buttons = wrapper.findAll('button.tab')
+    const buttons = wrapper.findAll('button.nav-tab')
     expect(buttons.length).toBeGreaterThan(0)
     expect(wrapper.text()).toContain('情绪轮动')
   })
@@ -43,12 +43,12 @@ describe('App', () => {
     const wrapper = shallowMount(App)
     await flushPromises()
 
-    expect(wrapper.text()).toContain('首次启动还没有 LLM Key')
+    expect(wrapper.text()).toContain('首次启动还未配置 LLM Key')
     expect(wrapper.text()).toContain('v0.0.1')
     expect(window.location.search).toContain('tab=admin-llm')
     expect(window.location.search).toContain('onboarding=1')
 
-    const activeButton = wrapper.find('button.tab.active')
+    const activeButton = wrapper.find('button.nav-tab.active')
     expect(activeButton.text()).toContain('LLM 设置')
   })
 
@@ -72,13 +72,13 @@ describe('App', () => {
     const wrapper = shallowMount(App)
     await flushPromises()
 
-    expect(wrapper.text()).toContain('首次启动还没有 LLM Key')
+    expect(wrapper.text()).toContain('首次启动还未配置 LLM Key')
 
     const adminSettingsStub = wrapper.findComponent({ name: 'AdminLlmSettings' })
     adminSettingsStub.vm.$emit('settings-saved')
     await flushPromises()
 
-    expect(wrapper.text()).not.toContain('首次启动还没有 LLM Key')
+    expect(wrapper.text()).not.toContain('首次启动还未配置 LLM Key')
     expect(window.location.search).not.toContain('onboarding=1')
     expect(fetchMock).toHaveBeenCalledTimes(3)
   })
