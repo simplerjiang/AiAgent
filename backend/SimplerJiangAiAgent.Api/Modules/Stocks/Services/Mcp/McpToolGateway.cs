@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using SimplerJiangAiAgent.Api.Modules.Stocks.Models;
+using SimplerJiangAiAgent.Api.Modules.Stocks.Services.Recommend.WebSearch;
 
 namespace SimplerJiangAiAgent.Api.Modules.Stocks.Services;
 
@@ -16,6 +17,9 @@ public interface IMcpToolGateway
     Task<StockCopilotMcpEnvelopeDto<StockCopilotStrategyDataDto>> GetStrategyAsync(string symbol, string interval, int count, string? source, IReadOnlyList<string>? strategies, string? taskId, StockCopilotMcpWindowOptions? window = null, CancellationToken cancellationToken = default);
     Task<StockCopilotMcpEnvelopeDto<StockCopilotNewsDataDto>> GetNewsAsync(string symbol, string level, string? taskId, StockCopilotMcpWindowOptions? window = null, CancellationToken cancellationToken = default);
     Task<StockCopilotMcpEnvelopeDto<StockCopilotSearchDataDto>> SearchAsync(string query, bool trustedOnly, string? taskId, CancellationToken cancellationToken = default);
+    Task<WebSearchResult> WebSearchAsync(string query, WebSearchOptions? options = null, CancellationToken cancellationToken = default);
+    Task<WebSearchResult> WebSearchNewsAsync(string query, WebSearchOptions? options = null, CancellationToken cancellationToken = default);
+    Task<WebReadResult> WebReadUrlAsync(string url, int maxChars = 8000, CancellationToken cancellationToken = default);
 }
 
 public sealed class McpToolGateway : IMcpToolGateway
@@ -23,17 +27,20 @@ public sealed class McpToolGateway : IMcpToolGateway
     private readonly IStockCopilotMcpService _stockCopilotMcpService;
     private readonly IMcpServiceRegistry _registry;
     private readonly IRoleToolPolicyService _roleToolPolicyService;
+    private readonly IWebSearchService _webSearchService;
     private readonly ILogger<McpToolGateway> _logger;
 
     public McpToolGateway(
         IStockCopilotMcpService stockCopilotMcpService,
         IMcpServiceRegistry registry,
         IRoleToolPolicyService roleToolPolicyService,
+        IWebSearchService webSearchService,
         ILogger<McpToolGateway> logger)
     {
         _stockCopilotMcpService = stockCopilotMcpService;
         _registry = registry;
         _roleToolPolicyService = roleToolPolicyService;
+        _webSearchService = webSearchService;
         _logger = logger;
     }
 
@@ -112,6 +119,27 @@ public sealed class McpToolGateway : IMcpToolGateway
         EnsureSystemToolAccess(StockMcpToolNames.Search);
         return ExecuteWithLoggingAsync(StockMcpToolNames.Search, query,
             () => _stockCopilotMcpService.SearchAsync(query, trustedOnly, taskId, cancellationToken));
+    }
+
+    public Task<WebSearchResult> WebSearchAsync(string query, WebSearchOptions? options = null, CancellationToken cancellationToken = default)
+    {
+        EnsureSystemToolAccess(StockMcpToolNames.WebSearch);
+        return ExecuteWithLoggingAsync(StockMcpToolNames.WebSearch, query,
+            () => _webSearchService.SearchAsync(query, SearchType.Web, options, cancellationToken));
+    }
+
+    public Task<WebSearchResult> WebSearchNewsAsync(string query, WebSearchOptions? options = null, CancellationToken cancellationToken = default)
+    {
+        EnsureSystemToolAccess(StockMcpToolNames.WebSearchNews);
+        return ExecuteWithLoggingAsync(StockMcpToolNames.WebSearchNews, query,
+            () => _webSearchService.SearchAsync(query, SearchType.News, options, cancellationToken));
+    }
+
+    public Task<WebReadResult> WebReadUrlAsync(string url, int maxChars = 8000, CancellationToken cancellationToken = default)
+    {
+        EnsureSystemToolAccess(StockMcpToolNames.WebReadUrl);
+        return ExecuteWithLoggingAsync(StockMcpToolNames.WebReadUrl, url,
+            () => _webSearchService.ReadUrlAsync(url, maxChars, cancellationToken));
     }
 
     private async Task<T> ExecuteWithLoggingAsync<T>(string toolName, string key, Func<Task<T>> action)

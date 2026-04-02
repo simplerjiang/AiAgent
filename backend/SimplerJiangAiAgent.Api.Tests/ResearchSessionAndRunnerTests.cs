@@ -6,6 +6,7 @@ using SimplerJiangAiAgent.Api.Data.Entities;
 using SimplerJiangAiAgent.Api.Infrastructure.Llm;
 using SimplerJiangAiAgent.Api.Modules.Stocks.Models;
 using SimplerJiangAiAgent.Api.Modules.Stocks.Services;
+using SimplerJiangAiAgent.Api.Modules.Stocks.Services.Recommend.WebSearch;
 using Xunit;
 
 namespace SimplerJiangAiAgent.Api.Tests;
@@ -68,6 +69,15 @@ internal sealed class StubMcpToolGateway : IMcpToolGateway
 
     public Task<StockCopilotMcpEnvelopeDto<StockCopilotSearchDataDto>> SearchAsync(string query, bool trustedOnly, string? taskId, CancellationToken ct)
         => Wrap(StockMcpToolNames.Search, new StockCopilotSearchDataDto(query, "stub", trustedOnly, 0, Array.Empty<StockCopilotSearchResultDto>()));
+
+    public Task<WebSearchResult> WebSearchAsync(string query, WebSearchOptions? options = null, CancellationToken ct = default)
+        => Task.FromResult(new WebSearchResult(Array.Empty<WebSearchItem>(), "stub", false));
+
+    public Task<WebSearchResult> WebSearchNewsAsync(string query, WebSearchOptions? options = null, CancellationToken ct = default)
+        => Task.FromResult(new WebSearchResult(Array.Empty<WebSearchItem>(), "stub", false));
+
+    public Task<WebReadResult> WebReadUrlAsync(string url, int maxChars = 8000, CancellationToken ct = default)
+        => Task.FromResult(new WebReadResult("", url, 0, false));
 }
 
 internal sealed class StubRoleToolPolicyService : IRoleToolPolicyService

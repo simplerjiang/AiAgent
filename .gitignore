@@ -51,3 +51,12 @@ _news_test_output.json
 ui-validation-*.png
 
 backend/SimplerJiangAiAgent.Api/wwwroot/
+
+# Frontend test screenshots
+frontend/screenshots/
+
+# Frontend debug test scripts
+frontend/scripts/edge-check-*.mjs
+
+# Frontend automation screenshots
+frontend/.automation/screenshots/

@@ -1,0 +1,338 @@
+using System.Text.Json;
+using System.Text.RegularExpressions;
+using SimplerJiangAiAgent.Api.Infrastructure.Llm;
+using Microsoft.Extensions.Logging;
+
+namespace SimplerJiangAiAgent.Api.Modules.Stocks.Services.Recommend;
+
+public sealed record RecommendRoleExecutionContext(
+    string RoleId,
+    string SystemPrompt,
+    string UserInput,
+    string? UpstreamArtifactsJson,
+    long SessionId,
+    long TurnId,
+    long StageId,
+    string? StageType = null);
+
+public sealed record RecommendRoleExecutionResult(
+    string RoleId,
+    bool Success,
+    string? OutputJson,
+    string? ErrorCode,
+    string? ErrorMessage,
+    string? LlmTraceId,
+    int ToolCallCount);
+
+public interface IRecommendationRoleExecutor
+{
+    Task<RecommendRoleExecutionResult> ExecuteAsync(RecommendRoleExecutionContext context, CancellationToken ct = default);
+}
+
+public sealed class RecommendationRoleExecutor : IRecommendationRoleExecutor
+{
+    private readonly ILlmService _llmService;
+    private readonly IRecommendEventBus _eventBus;
+    private readonly IRecommendRoleContractRegistry _contractRegistry;
+    private readonly IRecommendToolDispatcher _toolDispatcher;
+    private readonly ILogger<RecommendationRoleExecutor> _logger;
+
+    public RecommendationRoleExecutor(
+        ILlmService llmService,
+        IRecommendEventBus eventBus,
+        IRecommendRoleContractRegistry contractRegistry,
+        IRecommendToolDispatcher toolDispatcher,
+        ILogger<RecommendationRoleExecutor> logger)
+    {
+        _llmService = llmService;
+        _eventBus = eventBus;
+        _contractRegistry = contractRegistry;
+        _toolDispatcher = toolDispatcher;
+        _logger = logger;
+    }
+
+    public async Task<RecommendRoleExecutionResult> ExecuteAsync(RecommendRoleExecutionContext context, CancellationToken ct = default)
+    {
+        _eventBus.Publish(new RecommendEvent(
+            RecommendEventType.RoleStarted, context.SessionId, context.TurnId,
+            context.StageId, context.StageType, context.RoleId, null,
+            $"角色 {context.RoleId} 开始执行", null, DateTime.UtcNow));
+
+        try
+        {
+            var contract = _contractRegistry.GetContract(context.RoleId);
+            var prompt = BuildPrompt(contract, context);
+
+            string? lastTraceId = null;
+            int toolCallCount = 0;
+            int maxCalls = contract.MaxToolCalls;
+
+            while (true)
+            {
+                ct.ThrowIfCancellationRequested();
+
+                var request = new LlmChatRequest(prompt, null, 0.3);
+                var llmResult = await CallLlmWithRetryAsync(context, request, ct);
+                lastTraceId = llmResult.TraceId;
+                var content = llmResult.Content?.Trim() ?? "";
+
+                if (toolCallCount < maxCalls && TryParseToolCall(content, out var toolName, out var toolArgs))
+                {
+                    _eventBus.Publish(new RecommendEvent(
+                        RecommendEventType.ToolDispatched, context.SessionId, context.TurnId,
+                        context.StageId, context.StageType, context.RoleId, lastTraceId,
+                        $"角色 {context.RoleId} 调用工具: {toolName}",
+                        JsonSerializer.Serialize(new { toolName, args = toolArgs }),
+                        DateTime.UtcNow));
+
+                    var toolResult = await _toolDispatcher.DispatchAsync(toolName, toolArgs, ct);
+                    toolCallCount++;
+
+                    _eventBus.Publish(new RecommendEvent(
+                        RecommendEventType.ToolCompleted, context.SessionId, context.TurnId,
+                        context.StageId, context.StageType, context.RoleId, lastTraceId,
+                        $"工具 {toolName} 返回完成 (第 {toolCallCount} 次)",
+                        JsonSerializer.Serialize(new { toolName, status = "Completed", resultPreview = Truncate(toolResult, 2000) }),
+                        DateTime.UtcNow));
+
+                    // P0-4: Detect tool errors and provide explicit failure context to LLM
+                    if (IsToolError(toolResult))
+                    {
+                        prompt += $"\n\n## 工具调用 {toolCallCount}: {toolName}\n### ⚠️ 工具调用失败\n{toolResult}\n\n该工具暂时不可用。请基于已有信息继续分析，或换用其他工具补充数据。不要重复调用刚才失败的工具。";
+                    }
+                    else
+                    {
+                        prompt += $"\n\n## 工具调用 {toolCallCount}: {toolName}\n### 工具返回结果\n{toolResult}\n\n请继续分析，或输出最终结果 JSON。";
+                    }
+                    continue;
+                }
+
+                _eventBus.Publish(new RecommendEvent(
+                    RecommendEventType.RoleSummaryReady, context.SessionId, context.TurnId,
+                    context.StageId, context.StageType, context.RoleId, lastTraceId,
+                    content, null, DateTime.UtcNow));
+
+                _eventBus.Publish(new RecommendEvent(
+                    RecommendEventType.RoleCompleted, context.SessionId, context.TurnId,
+                    context.StageId, context.StageType, context.RoleId, lastTraceId,
+                    $"角色 {context.RoleId} 执行完成 (工具调用 {toolCallCount} 次)", null, DateTime.UtcNow));
+
+                // Clean up LLM output: extract JSON from markdown code blocks or surrounding text
+                var cleanedContent = TryCleanJsonOutput(content);
+
+                return new RecommendRoleExecutionResult(
+                    context.RoleId, Success: true, OutputJson: cleanedContent,
+                    ErrorCode: null, ErrorMessage: null, LlmTraceId: lastTraceId,
+                    ToolCallCount: toolCallCount);
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogError(ex, "Recommend role {RoleId} execution failed", context.RoleId);
+
+            _eventBus.Publish(new RecommendEvent(
+                RecommendEventType.RoleFailed, context.SessionId, context.TurnId,
+                context.StageId, context.StageType, context.RoleId, null,
+                $"角色 {context.RoleId} 执行失败: {ex.Message}", null, DateTime.UtcNow));
+
+            return new RecommendRoleExecutionResult(
+                context.RoleId, Success: false, OutputJson: null,
+                ErrorCode: "LLM_ERROR", ErrorMessage: ex.Message,
+                LlmTraceId: null, ToolCallCount: 0);
+        }
+    }
+
+    private async Task<LlmChatResult> CallLlmWithRetryAsync(
+        RecommendRoleExecutionContext context, LlmChatRequest request, CancellationToken ct)
+    {
+        const int maxRetries = 2;
+        int[] backoffMs = [2000, 6000];
+
+        for (int attempt = 0; ; attempt++)
+        {
+            try
+            {
+                return await _llmService.ChatAsync("default", request, ct);
+            }
+            catch (Exception ex) when (attempt < maxRetries && IsRetryableException(ex, ct))
+            {
+                _logger.LogWarning(ex, "LLM call attempt {Attempt} failed for role {RoleId}, retrying",
+                    attempt + 1, context.RoleId);
+
+                _eventBus.Publish(new RecommendEvent(
+                    RecommendEventType.SystemNotice, context.SessionId, context.TurnId,
+                    context.StageId, context.StageType, context.RoleId, null,
+                    $"角色 {context.RoleId} LLM 调用超时，正在重试 ({attempt + 2}/3)...", null, DateTime.UtcNow));
+
+                await Task.Delay(backoffMs[attempt], ct);
+            }
+        }
+    }
+
+    private static bool IsRetryableException(Exception ex, CancellationToken ct)
+    {
+        // Never retry if the user explicitly cancelled
+        if (ct.IsCancellationRequested)
+            return false;
+
+        return ex is TaskCanceledException
+            || (ex is OperationCanceledException && !ct.IsCancellationRequested)
+            || ex is HttpRequestException
+            || (ex is InvalidOperationException && ex.Message.Contains("超时"));
+    }
+
+    private static bool IsToolError(string toolResult)
+    {
+        if (string.IsNullOrWhiteSpace(toolResult))
+            return false;
+        try
+        {
+            using var doc = JsonDocument.Parse(toolResult);
+            var root = doc.RootElement;
+            if (root.TryGetProperty("tool_error", out var te) && te.ValueKind == JsonValueKind.True)
+                return true;
+            if (root.TryGetProperty("error", out _) && !root.TryGetProperty("data", out _))
+                return true;
+        }
+        catch (JsonException)
+        {
+            // Not JSON → not a tool error structure
+        }
+        return false;
+    }
+
+    private static string BuildPrompt(RecommendRoleContract contract, RecommendRoleExecutionContext context)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine(contract.SystemPrompt);
+        sb.AppendLine();
+        sb.AppendLine(RecommendPromptTemplates.BuildTimeContext());
+
+        if (contract.MaxToolCalls > 0)
+            sb.AppendLine(RecommendPromptTemplates.BuildToolRules(contract.MaxToolCalls));
+
+        sb.AppendLine(RecommendPromptTemplates.QualityConstraints);
+
+        if (!string.IsNullOrWhiteSpace(context.UpstreamArtifactsJson))
+        {
+            sb.AppendLine("## 上游阶段输出");
+            sb.AppendLine(context.UpstreamArtifactsJson);
+            sb.AppendLine();
+        }
+
+        sb.AppendLine("## 用户指令");
+        sb.AppendLine(context.UserInput);
+
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Parse tool_call JSON from LLM output. Tolerant of surrounding text.
+    /// Returns false on any parse failure — caller should treat content as final output.
+    /// </summary>
+    internal static bool TryParseToolCall(string content, out string toolName, out Dictionary<string, string> toolArgs)
+    {
+        toolName = "";
+        toolArgs = new Dictionary<string, string>();
+
+        var idx = content.IndexOf("{\"tool_call\"", StringComparison.Ordinal);
+        if (idx < 0)
+            return false;
+
+        try
+        {
+            // Find matching closing brace using a depth counter
+            var depth = 0;
+            var endIdx = -1;
+            for (var i = idx; i < content.Length; i++)
+            {
+                if (content[i] == '{') depth++;
+                else if (content[i] == '}') { depth--; if (depth == 0) { endIdx = i; break; } }
+            }
+            if (endIdx < 0) return false;
+
+            var jsonSlice = content[idx..(endIdx + 1)];
+            using var doc = JsonDocument.Parse(jsonSlice);
+            var root = doc.RootElement;
+
+            if (!root.TryGetProperty("tool_call", out var toolCallEl))
+                return false;
+
+            if (!toolCallEl.TryGetProperty("name", out var nameEl) || nameEl.ValueKind != JsonValueKind.String)
+                return false;
+
+            toolName = nameEl.GetString() ?? "";
+            if (string.IsNullOrWhiteSpace(toolName))
+                return false;
+
+            if (toolCallEl.TryGetProperty("args", out var argsEl) && argsEl.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var prop in argsEl.EnumerateObject())
+                {
+                    toolArgs[prop.Name] = prop.Value.ValueKind == JsonValueKind.String
+                        ? prop.Value.GetString() ?? ""
+                        : prop.Value.GetRawText();
+                }
+            }
+
+            return true;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    internal static string Truncate(string? value, int maxLength)
+    {
+        if (string.IsNullOrEmpty(value)) return "";
+        return value.Length <= maxLength ? value : value[..maxLength] + "...";
+    }
+
+    /// <summary>
+    /// Attempts to extract clean JSON from LLM output that may be wrapped in markdown code blocks
+    /// or surrounded by extra text. Returns original content if no JSON object is found.
+    /// </summary>
+    internal static string TryCleanJsonOutput(string content)
+    {
+        if (string.IsNullOrWhiteSpace(content))
+            return content;
+
+        var trimmed = content.Trim();
+
+        // Already valid JSON object or array
+        if ((trimmed.StartsWith('{') && trimmed.EndsWith('}')) ||
+            (trimmed.StartsWith('[') && trimmed.EndsWith(']')))
+        {
+            return trimmed;
+        }
+
+        // Try to extract from markdown code block: ```json ... ``` or ``` ... ```
+        var codeBlockPattern = @"```(?:json|JSON)?\s*\n?([\s\S]*?)\n?\s*```";
+        var match = Regex.Match(trimmed, codeBlockPattern);
+        if (match.Success)
+        {
+            var extracted = match.Groups[1].Value.Trim();
+            if ((extracted.StartsWith('{') && extracted.EndsWith('}')) ||
+                (extracted.StartsWith('[') && extracted.EndsWith(']')))
+            {
+                return extracted;
+            }
+        }
+
+        // Try to find first JSON object in the text
+        var braceStart = trimmed.IndexOf('{');
+        if (braceStart >= 0)
+        {
+            var depth = 0;
+            for (var i = braceStart; i < trimmed.Length; i++)
+            {
+                if (trimmed[i] == '{') depth++;
+                else if (trimmed[i] == '}') { depth--; if (depth == 0) return trimmed[braceStart..(i + 1)]; }
+            }
+        }
+
+        // No JSON found, return original
+        return trimmed;
+    }
+}

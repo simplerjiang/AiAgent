@@ -57,6 +57,11 @@ public sealed class AppDbContext : DbContext
     public DbSet<ResearchRiskAssessment> ResearchRiskAssessments => Set<ResearchRiskAssessment>();
     public DbSet<ResearchReportBlock> ResearchReportBlocks => Set<ResearchReportBlock>();
     public DbSet<StockPosition> StockPositions => Set<StockPosition>();
+    public DbSet<RecommendationSession> RecommendationSessions => Set<RecommendationSession>();
+    public DbSet<RecommendationTurn> RecommendationTurns => Set<RecommendationTurn>();
+    public DbSet<RecommendationStageSnapshot> RecommendationStageSnapshots => Set<RecommendationStageSnapshot>();
+    public DbSet<RecommendationRoleState> RecommendationRoleStates => Set<RecommendationRoleState>();
+    public DbSet<RecommendationFeedItem> RecommendationFeedItems => Set<RecommendationFeedItem>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -511,6 +516,50 @@ public sealed class AppDbContext : DbContext
         modelBuilder.Entity<ResearchReportBlock>()
             .HasOne(b => b.Turn).WithMany()
             .HasForeignKey(b => b.TurnId).OnDelete(DeleteBehavior.NoAction);
+
+        // ── Recommendation Session entities ──────────────────────────
+        modelBuilder.Entity<RecommendationSession>()
+            .HasIndex(x => x.SessionKey).IsUnique();
+        modelBuilder.Entity<RecommendationSession>()
+            .HasIndex(x => x.UpdatedAt);
+        modelBuilder.Entity<RecommendationSession>()
+            .Property(x => x.Status).HasConversion<string>().HasMaxLength(32);
+
+        modelBuilder.Entity<RecommendationTurn>()
+            .HasIndex(x => new { x.SessionId, x.TurnIndex }).IsUnique();
+        modelBuilder.Entity<RecommendationTurn>()
+            .Property(x => x.Status).HasConversion<string>().HasMaxLength(32);
+        modelBuilder.Entity<RecommendationTurn>()
+            .HasOne(x => x.Session).WithMany(x => x.Turns)
+            .HasForeignKey(x => x.SessionId).OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<RecommendationStageSnapshot>()
+            .HasIndex(x => new { x.TurnId, x.StageType, x.StageRunIndex });
+        modelBuilder.Entity<RecommendationStageSnapshot>()
+            .Property(x => x.StageType).HasConversion<string>().HasMaxLength(64);
+        modelBuilder.Entity<RecommendationStageSnapshot>()
+            .Property(x => x.Status).HasConversion<string>().HasMaxLength(32);
+        modelBuilder.Entity<RecommendationStageSnapshot>()
+            .Property(x => x.ExecutionMode).HasConversion<string>().HasMaxLength(32);
+        modelBuilder.Entity<RecommendationStageSnapshot>()
+            .HasOne(x => x.Turn).WithMany(x => x.StageSnapshots)
+            .HasForeignKey(x => x.TurnId).OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<RecommendationRoleState>()
+            .HasIndex(x => new { x.StageId, x.RoleId, x.RunIndex });
+        modelBuilder.Entity<RecommendationRoleState>()
+            .Property(x => x.Status).HasConversion<string>().HasMaxLength(32);
+        modelBuilder.Entity<RecommendationRoleState>()
+            .HasOne(x => x.Stage).WithMany(x => x.RoleStates)
+            .HasForeignKey(x => x.StageId).OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<RecommendationFeedItem>()
+            .HasIndex(x => new { x.TurnId, x.CreatedAt });
+        modelBuilder.Entity<RecommendationFeedItem>()
+            .Property(x => x.ItemType).HasConversion<string>().HasMaxLength(32);
+        modelBuilder.Entity<RecommendationFeedItem>()
+            .HasOne(x => x.Turn).WithMany(x => x.FeedItems)
+            .HasForeignKey(x => x.TurnId).OnDelete(DeleteBehavior.Cascade);
 
         foreach (var entityType in modelBuilder.Model.GetEntityTypes())
         {

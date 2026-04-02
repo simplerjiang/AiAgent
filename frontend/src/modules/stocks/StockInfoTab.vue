@@ -1026,6 +1026,19 @@ watch(minuteTdSequentialRefreshEligible, () => {
   setupMinuteTdSequentialRefresh()
 })
 
+const handleNavigateStock = (event) => {
+  const targetSymbol = event?.detail?.symbol
+  if (!targetSymbol) return
+  const normalized = normalizeStockSymbol(targetSymbol)
+  symbol.value = normalized || String(targetSymbol).trim()
+  selectedSymbol.value = normalized
+  searchOpen.value = false
+  searchResults.value = []
+  if (symbol.value.trim()) {
+    fetchQuote()
+  }
+}
+
 onMounted(() => {
   fetchSources()
   setupRefresh()
@@ -1036,6 +1049,21 @@ onMounted(() => {
   setupHistoryRefresh()
   setupPlanRefresh()
   window.addEventListener('click', closeContextMenu)
+  window.addEventListener('navigate-stock-load', handleNavigateStock)
+
+  // Consume pending navigation that arrived before this component mounted
+  if (window.__pendingNavigateStock) {
+    const pending = window.__pendingNavigateStock
+    delete window.__pendingNavigateStock
+    const normalized = normalizeStockSymbol(pending.symbol)
+    symbol.value = normalized || String(pending.symbol).trim()
+    selectedSymbol.value = normalized
+    searchOpen.value = false
+    searchResults.value = []
+    if (symbol.value.trim()) {
+      fetchQuote()
+    }
+  }
 })
 
 onUnmounted(() => {
@@ -1071,6 +1099,7 @@ onUnmounted(() => {
   rootWorkspace.planAlertsAbortController?.abort()
   stockRealtimeAbortController?.abort()
   window.removeEventListener('click', closeContextMenu)
+  window.removeEventListener('navigate-stock-load', handleNavigateStock)
 })
 
 watch(monochromeMode, value => {

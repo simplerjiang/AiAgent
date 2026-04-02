@@ -6,24 +6,55 @@
 
 ## 当前开放项
 
-### Bug 15: 顶部市场总览带卡片 UI 与 CSS 结构失衡
+（Bug 15 仍在跟踪中，详见归档文件。）
 
-- 严重级别：中
-- 影响范围：`frontend/src/modules/stocks/StockTopMarketOverview.vue`
-- 当前结论：已在代码层确认存在多处样式实现缺陷与状态样式缺失，属于可定位的前端结构问题，不只是主观“丑”。当前 VS Code 会话无法读取 live 页面 DOM，因此最终视觉验收仍需在运行态复核。
-- 已确认问题：
-	- CSS 选择器过度复用：`.market-overview-belt-header`、`.stock-realtime-actions`、`.market-overview-meta`、`.market-overview-tag-row` 等共用同一组 `display:flex + justify-content:space-between`，导致按钮组、元信息行、标签行都被按“左右拉满”处理，布局意图互相污染。
-	- 指数卡片样式不完整：`.market-overview-quote-card` 当前只有 `padding`，缺少独立的边框、背景、圆角层次和内部 `gap`，会让 `A 股主场 / 全球指数` 两块的信息边界发虚，局部像“裸文本”而不是卡片。
-	- 占位态样式缺失：模板里有 `.is-placeholder`，但样式中没有对应定义；未选股票、隐藏状态、加载态、错误态现在主要靠普通段落文案硬撑，缺少明确的视觉反馈。
-	- 信息节奏与数字排版较弱：标题、说明、meta、价格、标签、pulse 指标之间没有做更细的层级控制，且缺少数值对齐、固定宽度或 tabular 数字策略，中等宽度下容易显得挤、散、乱。
-	- 响应式断点过粗：当前基本只有 `1100px` 和 `720px` 两档，三列主网格与 `minmax(160px, 1fr)` 的指标块在 800-1200 宽度区间容易发生内容拥挤、名称换行和卡片高度参差。
-- 后续修复计划：
-	- 拆分顶部卡片样式职责，取消当前“一组选择器覆盖多种语义区域”的写法，为 header、action、meta、tag、quote card、pulse card 建立独立样式。
-	- 补齐 `.market-overview-quote-card`、`.market-overview-pulse-card`、`.is-placeholder`、loading/error/hidden 等状态样式，让所有块都有一致的卡片边界和占位语义。
-	- 重做信息层级与排版：压缩无效文案噪音，强化 hero 区价格与当前标的层级，给指数与脉冲指标加入更稳定的数字对齐和间距规则。
-	- 细化响应式：至少按 `3 列 -> 2 列 -> 1 列` 重排主区块，并单独处理按钮组、标签换行和全球指数列表的窄屏排布。
-	- 修复后验收：重点检查“未选股票 / 已选股票 / 隐藏态 / 加载态 / 错误态”五类状态，并在桌面宽屏与窄屏各做一次页面复核。
+## 本轮已修复项（2026-04-02）
 
+### Bug 16: [P0] 推荐系统追问(DirectAnswer)回复未渲染
+
+- 严重级别：高（P0）
+- 影响范围：`frontend/src/modules/stocks/StockRecommendTab.vue` handleFollowUp 函数
+- 发现时间：2026-04-02（Test Agent + User Representative Agent 验收确认）
+- 问题描述：当追问被路由为 DirectAnswer 策略时，后端 API 返回 `{ DirectAnswer: "回答文本" }`，但前端代码在 `strategy === 'DirectAnswer'` 分支中只执行了 `loadSessionDetail` + 切换到辩论页，完全没有渲染或展示 DirectAnswer 文本。追问结果也未持久化到 DB 的 FeedItem 中，因此切换到辩论页后无新内容出现。
+- 用户体验影响：用户追问后看到系统显示"已根据现有辩论生成直接回答"，但辩论页没有任何新内容，表现为"卡死"。
+- **已修复** ✅
+  - 修复时间：2026-04-02
+  - 修复内容：后端 DirectAnswer 分支持久化用户追问和直接回答为 FeedItem；前端 handleFollowUp 添加乐观注入 + 90秒超时保护；RecommendFeed.vue 添加 direct_answer 角色展示。
+  - 涉及文件：StocksModule.cs, StockRecommendTab.vue, RecommendFeed.vue
+
+### Bug 17: [P0] 团队进度面板缺少重跑/重试按钮
+
+- 严重级别：高（P0）
+- 影响范围：`frontend/src/modules/stocks/recommend/RecommendProgress.vue`
+- 发现时间：2026-04-02（Test Agent + User Representative Agent 验收确认）
+- 问题描述：RecommendProgress.vue 是纯展示组件，失败角色仅显示 ❌ 图标，没有任何重跑按钮、跳过按钮或"从此阶段重跑"按钮。后端 RunPartialTurnAsync 已实现部分重跑功能，但仅通过追问文本路由（FollowUpRouter）间接触发，没有专用 API endpoint。用户看到多处失败后只能"重新推荐"从头来过。
+- 用户体验影响：在角色失败率>70%的环境下，无恢复机制等于系统不可用。
+- **已修复** ✅
+  - 修复时间：2026-04-02
+  - 修复内容：新增 `POST /api/recommend/sessions/{id}/retry-from-stage` API；RecommendProgress.vue 添加失败阶段重试按钮、失败角色错误信息、全局"从失败处继续"按钮；StockRecommendTab.vue 增加 handleRetryFromStage 事件处理。
+  - 涉及文件：StocksModule.cs, RecommendDtos.cs, RecommendProgress.vue, StockRecommendTab.vue
+
+### Bug 18: [P1] Director角色输出无JSON校验导致Completed但报告为空
+
+- 严重级别：中（P1）
+- 影响范围：`frontend/src/modules/stocks/recommend/RecommendReportCard.vue` directorOutput computed + `backend/.../RecommendationRoleExecutor.cs`
+- 发现时间：2026-04-02
+- 问题描述：当 Director 角色 LLM 输出不是合规 JSON（混入 Markdown 代码块或前缀文字）时，前端 JSON.parse 失败被 try-catch 吞掉，Turn 已标 Completed 但前端报告为空。后端无 schema 校验强制 Director 返回结构化 JSON。此外，前端报告为空时只显示"推荐报告尚未生成，请等待分析完成"——在 Session 已 Completed 时这是误导。
+- **已修复** ✅
+  - 修复时间：2026-04-02
+  - 修复内容：后端 RoleExecutor 添加 TryCleanJsonOutput 方法清洗 LLM 输出的 markdown 代码块包裹；前端 RecommendReportCard.vue 区分 session 终态时的空报告提示。
+  - 涉及文件：RecommendationRoleExecutor.cs, RecommendReportCard.vue
+
+### Bug 19: [P1] 推荐流水线 fire-and-forget 无 fallback 事件
+
+- 严重级别：中（P1）
+- 影响范围：`backend/.../Modules/Stocks/StocksModule.cs` 推荐 API endpoints 的 Task.Run 块
+- 发现时间：2026-04-02
+- 问题描述：推荐流水线通过 Task.Run 做 fire-and-forget 执行。如果 runner 在 DI 解析或 DB 查询级别立刻抛异常（在 Runner 内部 try-catch 之前），外层 catch 只 log 不 publish TurnFailed 事件。前端 SSE 连接永远收不到终态事件，僵尸清理需等 10+ 分钟。
+- **已修复** ✅
+  - 修复时间：2026-04-02
+  - 修复内容：4处 Task.Run catch 块均添加 TurnFailed 事件发布和 MarkTurnTerminal 调用。
+  - 涉及文件：StocksModule.cs
 ## Bug 模板
 
 ### Bug X: 标题

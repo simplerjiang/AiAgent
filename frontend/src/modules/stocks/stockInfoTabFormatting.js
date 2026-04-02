@@ -10,7 +10,7 @@ const cnDateTimeFormatter = new Intl.DateTimeFormat('zh-CN', {
 })
 
 export const normalizeStockSymbol = value => {
-  const raw = String(value ?? '').trim().toLowerCase()
+  const raw = String(value ?? '').trim().toLowerCase().replace(/\.(sh|sz|bj)$/, '')
   if (!raw) return ''
   if (/^(sh|sz)\d{6}$/.test(raw)) return raw
   if (/^6\d{5}$/.test(raw)) return `sh${raw}`

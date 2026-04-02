@@ -12,6 +12,8 @@ using SimplerJiangAiAgent.Api.Infrastructure.Serialization;
 using SimplerJiangAiAgent.Api.Infrastructure.Storage;
 using SimplerJiangAiAgent.Api.Modules;
 using SimplerJiangAiAgent.Api.Modules.Stocks.Services;
+using SimplerJiangAiAgent.Api.Modules.Stocks.Services.Recommend;
+using SimplerJiangAiAgent.Api.Modules.Stocks.Services.Recommend.WebSearch;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -88,6 +90,7 @@ builder.Services.AddHostedService<StockSyncWorker>();
 builder.Services.AddHostedService<HighFrequencyQuoteService>();
 builder.Services.AddHostedService<LocalFactIngestionWorker>();
 builder.Services.AddHostedService<SourceGovernanceWorker>();
+builder.Services.AddHostedService<RecommendZombieCleanupWorker>();
 
 builder.Services.AddModules(builder.Configuration);
 
@@ -111,6 +114,7 @@ using (var scope = app.Services.CreateScope())
     await TradingPlanSchemaInitializer.EnsureAsync(dbContext);
     await MarketSentimentSchemaInitializer.EnsureAsync(dbContext);
     await ResearchSessionSchemaInitializer.EnsureAsync(dbContext);
+    await RecommendSessionSchemaInitializer.EnsureAsync(dbContext);
 }
 
 // 中间件管道
@@ -136,6 +140,14 @@ if (!string.IsNullOrWhiteSpace(distPath) && Directory.Exists(distPath))
 // 基础健康检查
 app.MapGet("/api/health", () => Results.Ok(new { status = "ok" }))
     .WithName("Health")
+    .WithOpenApi();
+
+app.MapGet("/api/health/websearch", (IWebSearchService webSearchService) =>
+{
+    var status = webSearchService.GetHealthStatus();
+    return Results.Ok(status);
+})
+    .WithName("WebSearchHealth")
     .WithOpenApi();
 
 app.MapGet("/api/app/version", () => Results.Ok(new

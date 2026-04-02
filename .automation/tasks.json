@@ -1074,6 +1074,55 @@
       "status": "todo",
       "type": "architecture",
       "priority": "future"
+    },
+    {
+      "id": "GOAL-REC-P0",
+      "title": "Recommend system: compile recovery and spec freeze",
+      "status": "not-started",
+      "stages": { "plan": "done", "dev": "not-started", "test": "not-started" },
+      "notes": "2026-04-01 规划完成。项目当前因缺失 5 个 Recommendation 实体文件和 SchemaInitializer 无法编译。需创建实体、枚举、Schema 初始化器和角色常量。详见 .automation/plan/GOAL-RECOMMEND/GOAL-REC-P0.md"
+    },
+    {
+      "id": "GOAL-REC-R1",
+      "title": "Recommend system: Web search infrastructure (Tavily→SearXNG→DDG)",
+      "status": "not-started",
+      "stages": { "plan": "done", "dev": "not-started", "test": "not-started" },
+      "notes": "2026-04-01 规划完成。WebSearchMcp 三链路：Tavily 主链路（已有集成）+ SearXNG Docker 一级降级 + DuckDuckGo 二级降级 + 健康检查 + 同步到 Trading Workbench。详见 .automation/plan/GOAL-RECOMMEND/GOAL-REC-R1.md"
+    },
+    {
+      "id": "GOAL-REC-R2",
+      "title": "Recommend system: backend orchestration engine (Runner + API)",
+      "status": "not-started",
+      "stages": { "plan": "done", "dev": "not-started", "test": "not-started" },
+      "notes": "2026-04-01 规划完成。RecommendationRunner 5 阶段编排器 + RoleExecutor + SessionService + 5 个 API 端点 + SSE 事件流。详见 .automation/plan/GOAL-RECOMMEND/GOAL-REC-R2.md"
+    },
+    {
+      "id": "GOAL-REC-R3",
+      "title": "Recommend system: 11 agent role prompts and tool dispatch",
+      "status": "not-started",
+      "stages": { "plan": "done", "dev": "not-started", "test": "not-started" },
+      "notes": "2026-04-01 规划完成。全部 11 角色 Prompt 模板 + 输出 JSON Schema + function calling 工具注册 + 合约注册表。详见 .automation/plan/GOAL-RECOMMEND/GOAL-REC-R3.md"
+    },
+    {
+      "id": "GOAL-REC-R4",
+      "title": "Recommend system: follow-up router (LLM dynamic dispatch)",
+      "status": "not-started",
+      "stages": { "plan": "done", "dev": "not-started", "test": "not-started" },
+      "notes": "2026-04-01 规划完成。FollowUpRouter LLM 驱动追问路由：partial_rerun / full_rerun / workbench_handoff / direct_answer。详见 .automation/plan/GOAL-RECOMMEND/GOAL-REC-R4.md"
+    },
+    {
+      "id": "GOAL-REC-R5",
+      "title": "Recommend system: frontend recommendation workbench UI",
+      "status": "done",
+      "stages": { "plan": "done", "dev": "done", "test": "done" },
+        "notes": "2026-04-01 开发完成。StockRecommendTab 从 ChatWindow 重构为多 Agent 推荐工作台：Tab 切换(报告/辩论/进度) + RecommendReportCard + RecommendFeed + RecommendProgress + SSE 事件流 + 追问快捷按钮 + 历史会话列表。8 个前端单测通过。2026-04-01 优化 follow-up batch 已完成：RecommendReportCard 改为向后搜索最近一次成功的 FinalDecision/recommend_director 输出，避免 follow-up 或 direct-answer turn 隐藏上一份报告；StockRecommendTab 对回放 SSE 事件按 event id 去重，并在重开会话时重置重连重试状态。定向前端单测 9/9 通过。"
+    },
+    {
+      "id": "GOAL-REC-R6",
+      "title": "Recommend system: full-chain integration and acceptance",
+      "status": "done",
+      "stages": { "plan": "done", "dev": "done", "test": "done" },
+        "notes": "2026-04-01 验收完成。后端 402/402 测试通过(含 41 推荐专项)；前端 142/142 测试通过(含 8 推荐专项)；桌面打包 EXE 产出确认。2026-04-01 优化 follow-up batch 已完成：Recommend SSE 端点补齐可恢复历史语义（SSE id 行、Last-Event-ID resume、TurnSwitched、keepalive heartbeat），RecommendEventBus 改为短暂保留 reconnect history 并延迟清理终态 turn，RecommendFollowUpRouter 加入确定性 guardrails，显式 rerun/workbench 意图不再被 DirectAnswer 覆盖。验证：RecommendationSessionServiceTests 5/5 通过，RecommendFollowUpRouterTests 32/32 通过；fresh restart 后 source-backend API probe 确认 重新推荐 -> FullRerun、换个方向看看消费板块 -> PartialRerun、板块再选几只股票 -> PartialRerun、详细分析600519 -> WorkbenchHandoff、为什么推荐这只股票？ -> DirectAnswer；SSE 抽查返回 id 行，样例 55:1。"
     }
   ]
 }

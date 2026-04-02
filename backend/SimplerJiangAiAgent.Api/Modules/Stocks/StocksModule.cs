@@ -7,10 +7,13 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using SimplerJiangAiAgent.Api.Data;
+using SimplerJiangAiAgent.Api.Data.Entities;
 using SimplerJiangAiAgent.Api.Infrastructure.Jobs;
 using SimplerJiangAiAgent.Api.Modules.Market.Models;
 using SimplerJiangAiAgent.Api.Modules.Stocks.Models;
 using SimplerJiangAiAgent.Api.Modules.Stocks.Services;
+using SimplerJiangAiAgent.Api.Modules.Stocks.Services.Recommend;
+using SimplerJiangAiAgent.Api.Modules.Stocks.Services.Recommend.WebSearch;
 using SimplerJiangAiAgent.Api.Modules.Market.Services;
 
 namespace SimplerJiangAiAgent.Api.Modules.Stocks;
@@ -75,7 +78,19 @@ public sealed class StocksModule : IModule
         services.AddSingleton<IResearchEventBus, ResearchEventBus>();
         services.AddScoped<IResearchArtifactService, ResearchArtifactService>();
         services.AddScoped<IResearchReportService, ResearchReportService>();
+        services.AddSingleton<IRecommendEventBus, RecommendEventBus>();
+        services.AddSingleton<IRecommendRoleContractRegistry, RecommendRoleContractRegistry>();
+        services.AddScoped<IRecommendToolDispatcher, RecommendToolDispatcher>();
+        services.AddScoped<IRecommendationRoleExecutor, RecommendationRoleExecutor>();
+        services.AddScoped<IRecommendationRunner, RecommendationRunner>();
+        services.AddScoped<IRecommendFollowUpRouter, RecommendFollowUpRouter>();
+        services.AddScoped<IRecommendationSessionService, RecommendationSessionService>();
         services.AddSingleton<IJsonKeyTranslationService, JsonKeyTranslationService>();
+        services.AddHttpClient("WebSearch");
+        services.AddSingleton<TavilySearchClient>();
+        services.AddSingleton<SearxngSearchClient>();
+        services.AddSingleton<DuckDuckGoSearchClient>();
+        services.AddSingleton<IWebSearchService, WebSearchService>();
         services.AddHostedService<TradingPlanTriggerWorker>();
         services.AddHostedService<TradingPlanReviewWorker>();
     }
@@ -1101,6 +1116,16 @@ public sealed class StocksModule : IModule
                 {
                     var logger = scope.ServiceProvider.GetService<ILogger<StocksModule>>();
                     logger?.LogError(ex, "Research turn {TurnId} pipeline failed", turnId);
+                    // Publish TurnFailed so SSE clients see a terminal event
+                    try
+                    {
+                        var eventBus = scope.ServiceProvider.GetService<IRecommendEventBus>();
+                        eventBus?.Publish(new RecommendEvent(
+                            RecommendEventType.TurnFailed, 0, turnId, null, null, null, null,
+                            $"研究流水线启动失败: {ex.Message}", null, DateTime.UtcNow));
+                        eventBus?.MarkTurnTerminal(turnId);
+                    }
+                    catch { /* best-effort */ }
                 }
             });
 
@@ -1150,6 +1175,432 @@ public sealed class StocksModule : IModule
             return decision is null ? Results.NotFound() : Results.Ok(decision);
         })
         .WithName("GetResearchFinalDecision")
+        .WithOpenApi();
+
+        // ── Recommendation Session endpoints ────────────────────────────────
+
+        var recGroup = app.MapGroup("/api/recommend");
+
+        recGroup.MapPost("/sessions", async (RecommendCreateSessionRequestDto request,
+            IRecommendationSessionService sessionService, IRecommendationRunner runner,
+            IServiceScopeFactory scopeFactory, CancellationToken ct) =>
+        {
+            if (string.IsNullOrWhiteSpace(request.UserPrompt))
+                return Results.BadRequest(new { message = "userPrompt 不能为空" });
+
+            if (request.UserPrompt.Length > 2000)
+                return Results.BadRequest(new { message = "userPrompt 长度不能超过 2000 字符" });
+
+            var session = await sessionService.CreateSessionAsync(request.UserPrompt.Trim(), ct);
+            var turnId = session.ActiveTurnId!.Value;
+            var sessionId = session.Id;
+
+            _ = Task.Run(async () =>
+            {
+                using var scope = scopeFactory.CreateScope();
+                var scopedRunner = scope.ServiceProvider.GetRequiredService<IRecommendationRunner>();
+                try { await scopedRunner.RunTurnAsync(turnId, CancellationToken.None); }
+                catch (Exception ex)
+                {
+                    var logger = scope.ServiceProvider.GetService<ILogger<StocksModule>>();
+                    logger?.LogError(ex, "Recommend turn {TurnId} pipeline failed", turnId);
+                    // Publish TurnFailed so SSE clients see a terminal event
+                    try
+                    {
+                        var eventBus = scope.ServiceProvider.GetService<IRecommendEventBus>();
+                        eventBus?.Publish(new RecommendEvent(
+                            RecommendEventType.TurnFailed, sessionId, turnId, null, null, null, null,
+                            $"流水线启动失败: {ex.Message}", null, DateTime.UtcNow));
+                        eventBus?.MarkTurnTerminal(turnId);
+                    }
+                    catch { /* best-effort */ }
+                }
+            });
+
+            return Results.Ok(new { session.Id, session.SessionKey, TurnId = turnId });
+        })
+        .WithName("CreateRecommendSession")
+        .WithOpenApi();
+
+        recGroup.MapGet("/sessions", async (int? page, int? pageSize,
+            IRecommendationSessionService sessionService, CancellationToken ct) =>
+        {
+            var list = await sessionService.ListSessionsAsync(page ?? 1, pageSize ?? 20, ct);
+            return Results.Ok(list);
+        })
+        .WithName("ListRecommendSessions")
+        .WithOpenApi();
+
+        recGroup.MapGet("/sessions/{id:long}", async (long id,
+            IRecommendationSessionService sessionService, CancellationToken ct) =>
+        {
+            var detail = await sessionService.GetSessionDetailAsync(id, ct);
+            return detail is null ? Results.NotFound() : Results.Ok(detail);
+        })
+        .WithName("GetRecommendSessionDetail")
+        .WithOpenApi();
+
+        recGroup.MapPost("/sessions/{id:long}/follow-up", async (long id,
+            RecommendFollowUpRequestDto request, IRecommendationSessionService sessionService,
+            IRecommendationRunner runner, IServiceScopeFactory scopeFactory, AppDbContext db, CancellationToken ct) =>
+        {
+            if (string.IsNullOrWhiteSpace(request.UserPrompt))
+                return Results.BadRequest(new { message = "userPrompt 不能为空" });
+
+            if (request.UserPrompt.Length > 2000)
+                return Results.BadRequest(new { message = "userPrompt 长度不能超过 2000 字符" });
+
+            var (turn, plan) = await sessionService.SubmitFollowUpAsync(id, request.UserPrompt.Trim(), ct);
+            var turnId = turn.Id;
+
+            switch (plan.Strategy)
+            {
+                case FollowUpStrategy.DirectAnswer:
+                {
+                    // No agent execution; generate answer from existing debate records
+                    var answer = await runner.GenerateDirectAnswerAsync(id, request.UserPrompt.Trim(), ct);
+                    // Mark turn as completed immediately
+                    turn.Status = RecommendTurnStatus.Completed;
+                    turn.StartedAt = DateTime.UtcNow;
+                    turn.CompletedAt = DateTime.UtcNow;
+                    var session = await db.RecommendationSessions.FirstOrDefaultAsync(s => s.Id == id, ct);
+                    if (session is not null)
+                    {
+                        session.Status = RecommendSessionStatus.Completed;
+                        session.UpdatedAt = DateTime.UtcNow;
+                    }
+                    // Persist user's follow-up question as a FeedItem
+                    db.RecommendationFeedItems.Add(new RecommendationFeedItem
+                    {
+                        TurnId = turnId,
+                        ItemType = RecommendFeedItemType.UserFollowUp,
+                        Content = request.UserPrompt.Trim(),
+                        CreatedAt = DateTime.UtcNow
+                    });
+
+                    // Persist DirectAnswer as a FeedItem so it appears in the debate feed
+                    db.RecommendationFeedItems.Add(new RecommendationFeedItem
+                    {
+                        TurnId = turnId,
+                        RoleId = "direct_answer",
+                        ItemType = RecommendFeedItemType.RoleMessage,
+                        Content = answer ?? "无法生成回答。",
+                        MetadataJson = System.Text.Json.JsonSerializer.Serialize(new { eventType = "DirectAnswer", directAnswer = true }),
+                        CreatedAt = DateTime.UtcNow
+                    });
+
+                    await db.SaveChangesAsync(ct);
+                    return Results.Ok(new { TurnId = turnId, turn.TurnIndex, Strategy = plan.Strategy.ToString(),
+                        plan.Reasoning, DirectAnswer = answer });
+                }
+                case FollowUpStrategy.WorkbenchHandoff:
+                {
+                    // Create a ResearchSession for workbench and return navigation info
+                    var targetStock = plan.Overrides?.TargetStocks?.FirstOrDefault();
+                    turn.Status = RecommendTurnStatus.Completed;
+                    turn.StartedAt = DateTime.UtcNow;
+                    turn.CompletedAt = DateTime.UtcNow;
+                    var session = await db.RecommendationSessions.FirstOrDefaultAsync(s => s.Id == id, ct);
+                    if (session is not null)
+                    {
+                        session.Status = RecommendSessionStatus.Completed;
+                        session.UpdatedAt = DateTime.UtcNow;
+                    }
+                    await db.SaveChangesAsync(ct);
+                    return Results.Ok(new { TurnId = turnId, turn.TurnIndex, Strategy = plan.Strategy.ToString(),
+                        plan.Reasoning, HandoffSymbol = targetStock, NavigateTo = "workbench" });
+                }
+                case FollowUpStrategy.PartialRerun:
+                {
+                    var fromStage = plan.FromStageIndex ?? 0;
+                    _ = Task.Run(async () =>
+                    {
+                        using var scope = scopeFactory.CreateScope();
+                        var scopedRunner = scope.ServiceProvider.GetRequiredService<IRecommendationRunner>();
+                        try { await scopedRunner.RunPartialTurnAsync(turnId, fromStage, CancellationToken.None); }
+                        catch (Exception ex)
+                        {
+                            var logger = scope.ServiceProvider.GetService<ILogger<StocksModule>>();
+                            logger?.LogError(ex, "Recommend partial rerun turn {TurnId} from stage {Stage} failed", turnId, fromStage);
+                            // Publish TurnFailed so SSE clients see a terminal event
+                            try
+                            {
+                                var eventBus = scope.ServiceProvider.GetService<IRecommendEventBus>();
+                                eventBus?.Publish(new RecommendEvent(
+                                    RecommendEventType.TurnFailed, id, turnId, null, null, null, null,
+                                    $"部分重跑流水线启动失败: {ex.Message}", null, DateTime.UtcNow));
+                                eventBus?.MarkTurnTerminal(turnId);
+                            }
+                            catch { /* best-effort */ }
+                        }
+                    });
+                    return Results.Ok(new { TurnId = turnId, turn.TurnIndex, Strategy = plan.Strategy.ToString(),
+                        plan.Reasoning, FromStageIndex = fromStage });
+                }
+                default: // FullRerun
+                {
+                    _ = Task.Run(async () =>
+                    {
+                        using var scope = scopeFactory.CreateScope();
+                        var scopedRunner = scope.ServiceProvider.GetRequiredService<IRecommendationRunner>();
+                        try { await scopedRunner.RunTurnAsync(turnId, CancellationToken.None); }
+                        catch (Exception ex)
+                        {
+                            var logger = scope.ServiceProvider.GetService<ILogger<StocksModule>>();
+                            logger?.LogError(ex, "Recommend follow-up turn {TurnId} pipeline failed", turnId);
+                            // Publish TurnFailed so SSE clients see a terminal event
+                            try
+                            {
+                                var eventBus = scope.ServiceProvider.GetService<IRecommendEventBus>();
+                                eventBus?.Publish(new RecommendEvent(
+                                    RecommendEventType.TurnFailed, id, turnId, null, null, null, null,
+                                    $"流水线启动失败: {ex.Message}", null, DateTime.UtcNow));
+                                eventBus?.MarkTurnTerminal(turnId);
+                            }
+                            catch { /* best-effort */ }
+                        }
+                    });
+                    return Results.Ok(new { TurnId = turnId, turn.TurnIndex, Strategy = plan.Strategy.ToString(),
+                        plan.Reasoning });
+                }
+            }
+        })
+        .WithName("SubmitRecommendFollowUp")
+        .WithOpenApi();
+
+        recGroup.MapPost("/sessions/{id:long}/retry-from-stage", async (long id,
+            RecommendRetryFromStageRequestDto request,
+            IRecommendationSessionService sessionService, IServiceScopeFactory scopeFactory,
+            AppDbContext db, CancellationToken ct) =>
+        {
+            var session = await db.RecommendationSessions
+                .Include(s => s.Turns)
+                .FirstOrDefaultAsync(s => s.Id == id, ct);
+            if (session is null)
+                return Results.NotFound(new { message = "Session not found" });
+
+            var latestTurn = session.Turns
+                .OrderByDescending(t => t.TurnIndex)
+                .FirstOrDefault();
+            if (latestTurn is null)
+                return Results.BadRequest(new { message = "No turns found in session" });
+
+            if (latestTurn.Status == RecommendTurnStatus.Running)
+                return Results.Conflict(new { message = "Turn is already running" });
+
+            var fromStage = request.FromStageIndex;
+            if (fromStage < 0 || fromStage > 4)
+                return Results.BadRequest(new { message = "fromStageIndex must be between 0 and 4" });
+
+            var turnId = latestTurn.Id;
+
+            _ = Task.Run(async () =>
+            {
+                using var scope = scopeFactory.CreateScope();
+                var scopedRunner = scope.ServiceProvider.GetRequiredService<IRecommendationRunner>();
+                try
+                {
+                    await scopedRunner.RunPartialTurnAsync(turnId, fromStage, CancellationToken.None);
+                }
+                catch (Exception ex)
+                {
+                    var logger = scope.ServiceProvider.GetService<ILogger<StocksModule>>();
+                    logger?.LogError(ex, "Retry-from-stage turn {TurnId} from stage {Stage} failed", turnId, fromStage);
+                    try
+                    {
+                        var eventBus = scope.ServiceProvider.GetService<IRecommendEventBus>();
+                        eventBus?.Publish(new RecommendEvent(
+                            RecommendEventType.TurnFailed, id, turnId, null, null, null, null,
+                            $"重试流水线启动失败: {ex.Message}", null, DateTime.UtcNow));
+                        eventBus?.MarkTurnTerminal(turnId);
+                    }
+                    catch { /* best-effort */ }
+                }
+            });
+
+            return Results.Ok(new { TurnId = turnId, FromStageIndex = fromStage });
+        })
+        .WithName("RetryFromStage")
+        .WithOpenApi();
+
+        recGroup.MapGet("/sessions/{id:long}/events", async (long id,
+            IRecommendationSessionService sessionService, IRecommendEventBus eventBus,
+            HttpContext httpContext, CancellationToken ct) =>
+        {
+            var session = await sessionService.GetSessionDetailAsync(id, ct);
+            if (session is null)
+            {
+                httpContext.Response.StatusCode = 404;
+                return;
+            }
+
+            var turnId = session.ActiveTurnId ?? 0;
+            var cursorSequence = 0L;
+            var lastEventId = httpContext.Request.Headers["Last-Event-ID"].ToString();
+            var announceTurnSwitch = false;
+            if (TryParseSseId(lastEventId, out var resumeTurnId, out var resumeSequence))
+            {
+                if (resumeTurnId == turnId)
+                {
+                    cursorSequence = resumeSequence;
+                }
+                else if (resumeTurnId != 0)
+                {
+                    announceTurnSwitch = true;
+                }
+            }
+
+            httpContext.Response.Headers.CacheControl = "no-cache";
+            httpContext.Response.Headers.Connection = "keep-alive";
+            httpContext.Response.Headers["X-Accel-Buffering"] = "no";
+            httpContext.Response.ContentType = "text/event-stream";
+            var emptyPollCount = 0;
+            var nextHeartbeatAt = DateTime.UtcNow.AddSeconds(15);
+
+            while (!ct.IsCancellationRequested)
+            {
+                if (announceTurnSwitch)
+                {
+                    announceTurnSwitch = false;
+                    await WriteJsonEventAsync(BuildSseId(turnId, cursorSequence), new
+                    {
+                        eventType = "TurnSwitched",
+                        turnId
+                    }, ct);
+                    nextHeartbeatAt = DateTime.UtcNow.AddSeconds(15);
+                }
+
+                var events = eventBus.SnapshotSince(turnId, cursorSequence)
+                    .OrderBy(item => item.Sequence)
+                    .ToArray();
+
+                if (events.Length == 0)
+                {
+                    emptyPollCount++;
+
+                    if (emptyPollCount % 5 == 0)
+                    {
+                        var refreshed = await sessionService.GetSessionDetailAsync(id, ct);
+                        if (refreshed is null)
+                        {
+                            return;
+                        }
+
+                        var newTurnId = refreshed?.ActiveTurnId ?? 0;
+                        if (newTurnId != 0 && newTurnId != turnId)
+                        {
+                            turnId = newTurnId;
+                            cursorSequence = 0;
+                            await WriteJsonEventAsync(BuildSseId(turnId, cursorSequence), new
+                            {
+                                eventType = "TurnSwitched",
+                                turnId
+                            }, ct);
+                            nextHeartbeatAt = DateTime.UtcNow.AddSeconds(15);
+                            continue;
+                        }
+
+                        var currentTurn = refreshed?.Turns?.FirstOrDefault(t => t.Id == turnId);
+                        if (currentTurn is not null &&
+                            currentTurn.Status is "Completed" or "Failed" or "Cancelled")
+                        {
+                            var hasTerminalEvent = eventBus.Snapshot(turnId)
+                                .Any(item => item.EventType is RecommendEventType.TurnCompleted or RecommendEventType.TurnFailed);
+
+                            if (!hasTerminalEvent)
+                            {
+                                var syntheticSequence = cursorSequence + 1;
+                                await WriteJsonEventAsync(BuildSseId(turnId, syntheticSequence), new
+                                {
+                                    eventType = currentTurn.Status == "Completed" ? "TurnCompleted" : "TurnFailed",
+                                    turnId,
+                                    summary = $"Turn {currentTurn.Status}"
+                                }, ct);
+                                cursorSequence = syntheticSequence;
+                            }
+
+                            await WriteDoneAsync(ct);
+                            return;
+                        }
+                    }
+                }
+                else
+                {
+                    emptyPollCount = 0;
+                    nextHeartbeatAt = DateTime.UtcNow.AddSeconds(15);
+                }
+
+                foreach (var envelope in events)
+                {
+                    cursorSequence = envelope.Sequence;
+                    var evt = envelope.Event;
+                    await WriteJsonEventAsync(BuildSseId(evt.TurnId, envelope.Sequence), new
+                    {
+                        eventType = evt.EventType.ToString(),
+                        sessionId = evt.SessionId,
+                        turnId = evt.TurnId,
+                        stageId = evt.StageId,
+                        stageType = evt.StageType,
+                        roleId = evt.RoleId,
+                        traceId = evt.TraceId,
+                        summary = evt.Summary,
+                        detailJson = evt.DetailJson,
+                        timestamp = evt.Timestamp
+                    }, ct);
+
+                    if (evt.EventType is RecommendEventType.TurnCompleted or RecommendEventType.TurnFailed)
+                    {
+                        await WriteDoneAsync(ct);
+                        return;
+                    }
+                }
+
+                if (DateTime.UtcNow >= nextHeartbeatAt)
+                {
+                    await httpContext.Response.WriteAsync($": keepalive {BuildSseId(turnId, cursorSequence)}\n\n", ct);
+                    await httpContext.Response.Body.FlushAsync(ct);
+                    nextHeartbeatAt = DateTime.UtcNow.AddSeconds(15);
+                }
+
+                await Task.Delay(500, ct);
+            }
+
+            async Task WriteJsonEventAsync(string eventId, object payload, CancellationToken cancellationToken)
+            {
+                var json = System.Text.Json.JsonSerializer.Serialize(payload);
+                await httpContext.Response.WriteAsync($"id: {eventId}\n", cancellationToken);
+                await httpContext.Response.WriteAsync($"data: {json}\n\n", cancellationToken);
+                await httpContext.Response.Body.FlushAsync(cancellationToken);
+            }
+
+            async Task WriteDoneAsync(CancellationToken cancellationToken)
+            {
+                await httpContext.Response.WriteAsync("data: [DONE]\n\n", cancellationToken);
+                await httpContext.Response.Body.FlushAsync(cancellationToken);
+            }
+
+            static string BuildSseId(long currentTurnId, long sequence) => $"{currentTurnId}:{sequence}";
+
+            static bool TryParseSseId(string? value, out long parsedTurnId, out long parsedSequence)
+            {
+                parsedTurnId = 0;
+                parsedSequence = 0;
+                if (string.IsNullOrWhiteSpace(value))
+                {
+                    return false;
+                }
+
+                var parts = value.Split(':', 2, StringSplitOptions.TrimEntries);
+                if (parts.Length != 2)
+                {
+                    return false;
+                }
+
+                return long.TryParse(parts[0], out parsedTurnId)
+                    && long.TryParse(parts[1], out parsedSequence);
+            }
+        })
+        .WithName("StreamRecommendEvents")
         .WithOpenApi();
     }
 

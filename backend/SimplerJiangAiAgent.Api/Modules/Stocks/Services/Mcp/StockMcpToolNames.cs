@@ -13,6 +13,9 @@ public static class StockMcpToolNames
     public const string Strategy = "StockStrategyMcp";
     public const string News = "StockNewsMcp";
     public const string Search = "StockSearchMcp";
+    public const string WebSearch = "WebSearchMcp";
+    public const string WebSearchNews = "WebSearchNewsMcp";
+    public const string WebReadUrl = "WebReadUrlMcp";
 
     public static readonly IReadOnlyList<string> All =
     [
@@ -26,6 +29,9 @@ public static class StockMcpToolNames
         Minute,
         Strategy,
         News,
-        Search
+        Search,
+        WebSearch,
+        WebSearchNews,
+        WebReadUrl
     ];
 }

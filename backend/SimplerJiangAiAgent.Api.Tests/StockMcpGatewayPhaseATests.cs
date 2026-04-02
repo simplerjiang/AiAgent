@@ -3,11 +3,13 @@ using Microsoft.Extensions.DependencyInjection;
 using SimplerJiangAiAgent.Api.Modules.Stocks;
 using SimplerJiangAiAgent.Api.Modules.Stocks.Models;
 using SimplerJiangAiAgent.Api.Modules.Stocks.Services;
+using SimplerJiangAiAgent.Api.Modules.Stocks.Services.Recommend.WebSearch;
 
 namespace SimplerJiangAiAgent.Api.Tests;
 
 public sealed class StockMcpGatewayPhaseATests
 {
+    private static readonly IWebSearchService StubWebSearch = new StubWebSearchService();
     private static RoleToolPolicyService CreatePolicy()
     {
         return new RoleToolPolicyService(new McpServiceRegistry(), new StockAgentRoleContractRegistry());
@@ -32,7 +34,10 @@ public sealed class StockMcpGatewayPhaseATests
             item => Assert.Equal((StockMcpToolNames.Minute, "local_required"), (item.ToolName, item.PolicyClass)),
             item => Assert.Equal((StockMcpToolNames.Strategy, "local_required"), (item.ToolName, item.PolicyClass)),
             item => Assert.Equal((StockMcpToolNames.News, "local_required"), (item.ToolName, item.PolicyClass)),
-            item => Assert.Equal((StockMcpToolNames.Search, "external_gated"), (item.ToolName, item.PolicyClass)));
+            item => Assert.Equal((StockMcpToolNames.Search, "external_gated"), (item.ToolName, item.PolicyClass)),
+            item => Assert.Equal((StockMcpToolNames.WebSearch, "external_gated"), (item.ToolName, item.PolicyClass)),
+            item => Assert.Equal((StockMcpToolNames.WebSearchNews, "external_gated"), (item.ToolName, item.PolicyClass)),
+            item => Assert.Equal((StockMcpToolNames.WebReadUrl, "external_gated"), (item.ToolName, item.PolicyClass)));
     }
 
     [Fact]
@@ -86,7 +91,7 @@ public sealed class StockMcpGatewayPhaseATests
     [Fact]
     public async Task Gateway_ShouldDelegateToUnderlyingCopilotService()
     {
-        var gateway = new McpToolGateway(new RecordingStockCopilotMcpService(), new McpServiceRegistry(), CreatePolicy(), Microsoft.Extensions.Logging.Abstractions.NullLogger<McpToolGateway>.Instance);
+        var gateway = new McpToolGateway(new RecordingStockCopilotMcpService(), new McpServiceRegistry(), CreatePolicy(), StubWebSearch, Microsoft.Extensions.Logging.Abstractions.NullLogger<McpToolGateway>.Instance);
 
         var result = await gateway.GetNewsAsync("sh600000", "stock", "task-gateway");
 
@@ -98,7 +103,7 @@ public sealed class StockMcpGatewayPhaseATests
     public async Task Gateway_ShouldDelegateToProductTool()
     {
         var service = new RecordingStockCopilotMcpService();
-        var gateway = new McpToolGateway(service, new McpServiceRegistry(), CreatePolicy(), Microsoft.Extensions.Logging.Abstractions.NullLogger<McpToolGateway>.Instance);
+        var gateway = new McpToolGateway(service, new McpServiceRegistry(), CreatePolicy(), StubWebSearch, Microsoft.Extensions.Logging.Abstractions.NullLogger<McpToolGateway>.Instance);
 
         var result = await gateway.GetProductAsync("sz002594", "task-product", new StockCopilotMcpWindowOptions(1, 5));
 
@@ -111,7 +116,7 @@ public sealed class StockMcpGatewayPhaseATests
     [Fact]
     public async Task Gateway_ShouldDelegateToPhaseDTools()
     {
-        var gateway = new McpToolGateway(new RecordingStockCopilotMcpService(), new McpServiceRegistry(), CreatePolicy(), Microsoft.Extensions.Logging.Abstractions.NullLogger<McpToolGateway>.Instance);
+        var gateway = new McpToolGateway(new RecordingStockCopilotMcpService(), new McpServiceRegistry(), CreatePolicy(), StubWebSearch, Microsoft.Extensions.Logging.Abstractions.NullLogger<McpToolGateway>.Instance);
 
         var marketContext = await gateway.GetMarketContextAsync("sh600000", "task-market-context");
         var socialSentiment = await gateway.GetSocialSentimentAsync("sh600000", "task-social-sentiment");
@@ -266,5 +271,17 @@ public sealed class StockMcpGatewayPhaseATests
         {
             throw new NotSupportedException();
         }
+    }
+
+    private sealed class StubWebSearchService : IWebSearchService
+    {
+        public Task<WebSearchResult> SearchAsync(string query, SearchType type, WebSearchOptions? options = null, CancellationToken ct = default)
+            => Task.FromResult(new WebSearchResult(Array.Empty<WebSearchItem>(), "stub", false));
+
+        public Task<WebReadResult> ReadUrlAsync(string url, int maxChars = 8000, CancellationToken ct = default)
+            => Task.FromResult(new WebReadResult("", url, 0, false));
+
+        public WebSearchHealthStatus GetHealthStatus()
+            => new("stub", false, false, false);
     }
 }

@@ -153,12 +153,27 @@ const loadOnboardingStatus = async ({ allowAutoRedirect = false } = {}) => {
   syncLocation()
 }
 
+const handleNavigateStock = (e) => {
+  const detail = e?.detail
+  if (detail?.symbol) {
+    window.__pendingNavigateStock = { symbol: detail.symbol, name: detail.name, tab: detail.tab }
+  }
+  setActiveTab('stock-info')
+  nextTick(() => {
+    if (detail?.symbol) {
+      window.dispatchEvent(new CustomEvent('navigate-stock-load', { detail }))
+    }
+    delete window.__pendingNavigateStock
+  })
+}
+
 onMounted(async () => {
   updateClock()
   clockTimer = setInterval(updateClock, 1000)
   checkHealth()
   healthTimer = setInterval(checkHealth, 30000)
   document.addEventListener('click', closeSettings)
+  window.addEventListener('navigate-stock', handleNavigateStock)
 
   try {
     const versionResponse = await fetch('/api/app/version')
@@ -178,6 +193,7 @@ onBeforeUnmount(() => {
   if (clockTimer) clearInterval(clockTimer)
   if (healthTimer) clearInterval(healthTimer)
   document.removeEventListener('click', closeSettings)
+  window.removeEventListener('navigate-stock', handleNavigateStock)
 })
 </script>
 

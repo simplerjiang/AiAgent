@@ -3,6 +3,7 @@ using SimplerJiangAiAgent.Api.Infrastructure.Llm;
 using SimplerJiangAiAgent.Api.Modules.Market.Models;
 using SimplerJiangAiAgent.Api.Modules.Stocks.Models;
 using SimplerJiangAiAgent.Api.Modules.Stocks.Services;
+using SimplerJiangAiAgent.Api.Modules.Stocks.Services.Recommend.WebSearch;
 
 namespace SimplerJiangAiAgent.Api.Tests;
 
@@ -398,5 +399,14 @@ public sealed class StockCopilotLiveGateServiceTests
                 },
                 new StockCopilotMcpMetaDto("v1", "external_gated", StockMcpToolNames.Search, null, null, query, null)));
         }
+
+        public Task<WebSearchResult> WebSearchAsync(string query, WebSearchOptions? options = null, CancellationToken cancellationToken = default)
+            => Task.FromResult(new WebSearchResult(Array.Empty<WebSearchItem>(), "stub", false));
+
+        public Task<WebSearchResult> WebSearchNewsAsync(string query, WebSearchOptions? options = null, CancellationToken cancellationToken = default)
+            => Task.FromResult(new WebSearchResult(Array.Empty<WebSearchItem>(), "stub", false));
+
+        public Task<WebReadResult> WebReadUrlAsync(string url, int maxChars = 8000, CancellationToken cancellationToken = default)
+            => Task.FromResult(new WebReadResult("", url, 0, false));
     }
 }
