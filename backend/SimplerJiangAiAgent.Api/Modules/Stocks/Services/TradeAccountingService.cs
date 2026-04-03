@@ -14,6 +14,7 @@ public interface ITradeAccountingService
     Task<TradeSummaryDto> GetTradeSummaryAsync(string period, DateTime? from, DateTime? to);
     Task<TradeWinRateDto> GetWinRateAsync(DateTime? from, DateTime? to, string? symbol);
     Task RecalculatePositionAsync(string symbol);
+    Task<(int deletedTrades, int deletedPositions, int deletedReviews)> ResetAllTradesAsync();
 }
 
 public sealed class TradeAccountingService : ITradeAccountingService
@@ -229,7 +230,7 @@ public sealed class TradeAccountingService : ITradeAccountingService
         var avgPnL = totalTrades > 0 ? totalPnL / totalTrades : 0;
         var avgWin = winCount > 0 ? sells.Where(t => t.RealizedPnL > 0).Average(t => t.RealizedPnL ?? 0) : 0;
         var avgLoss = lossCount > 0 ? Math.Abs(sells.Where(t => t.RealizedPnL < 0).Average(t => t.RealizedPnL ?? 0)) : 0;
-        var plRatio = avgLoss != 0 ? avgWin / avgLoss : 0;
+        var plRatio = avgLoss != 0 ? avgWin / avgLoss : (winCount > 0 ? -1m : 0m);
         var dayTrades = sells.Where(t => t.TradeType == TradeType.DayTrade).ToList();
         var dayTradeCount = dayTrades.Count;
         var dayTradePnL = dayTrades.Sum(t => t.RealizedPnL ?? 0);
@@ -350,4 +351,22 @@ public sealed class TradeAccountingService : ITradeAccountingService
         t.CostBasis, t.RealizedPnL, t.ReturnRate,
         t.ComplianceTag.ToString(),
         t.AgentDirection, t.AgentConfidence, t.MarketStageAtTrade);
+
+    public async Task<(int deletedTrades, int deletedPositions, int deletedReviews)> ResetAllTradesAsync()
+    {
+        using var tx = await _db.Database.BeginTransactionAsync();
+        try
+        {
+            var deletedTrades = await _db.TradeExecutions.ExecuteDeleteAsync();
+            var deletedPositions = await _db.StockPositions.ExecuteDeleteAsync();
+            var deletedReviews = await _db.TradeReviews.ExecuteDeleteAsync();
+            await tx.CommitAsync();
+            return (deletedTrades, deletedPositions, deletedReviews);
+        }
+        catch
+        {
+            await tx.RollbackAsync();
+            throw;
+        }
+    }
 }

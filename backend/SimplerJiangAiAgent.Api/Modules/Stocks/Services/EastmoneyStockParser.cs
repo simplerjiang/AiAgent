@@ -16,7 +16,8 @@ internal static class EastmoneyStockParser
             return EmptyQuote(symbol);
         }
 
-        var name = dataNode.TryGetProperty("f58", out var nameNode) ? nameNode.GetString() ?? symbol : symbol;
+        var rawName = dataNode.TryGetProperty("f58", out var nameNode) ? nameNode.GetString() ?? symbol : symbol;
+        var name = rawName.Replace(" ", "").Trim();
         var price = ParseScaledDecimal(dataNode, "f43");
         var prevClose = ParseScaledDecimal(dataNode, "f60");
         var percent = ParseScaledDecimal(dataNode, "f170");

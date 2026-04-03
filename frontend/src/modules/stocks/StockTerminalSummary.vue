@@ -49,7 +49,6 @@ defineEmits(['open-external'])
     <div class="quote-card">
       <div class="quote-card-header">
         <h4>基本面快照</h4>
-        <span class="muted">Step 3</span>
       </div>
       <p>流通市值：{{ detail.quote.floatMarketCap ? `${(Number(detail.quote.floatMarketCap) / 100000000).toFixed(2)} 亿` : '-' }}</p>
       <p>市盈率：{{ detail.quote.peRatio ?? '-' }}</p>

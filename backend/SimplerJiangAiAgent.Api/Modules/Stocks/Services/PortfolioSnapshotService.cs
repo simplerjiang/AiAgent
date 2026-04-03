@@ -33,6 +33,8 @@ public sealed class PortfolioSnapshotService : IPortfolioSnapshotService
             .Where(p => p.QuantityLots > 0)
             .ToListAsync();
 
+        await EnrichMissingNamesAsync(positions);
+
         var totalCapital = settings.TotalCapital;
         var totalCost = positions.Sum(p => p.TotalCost);
         var totalMarketValue = positions.Sum(p => p.MarketValue ?? p.TotalCost);
@@ -70,6 +72,8 @@ public sealed class PortfolioSnapshotService : IPortfolioSnapshotService
             .Where(p => p.QuantityLots > 0)
             .ToListAsync();
 
+        await EnrichMissingNamesAsync(positions);
+
         return positions.Select(p => MapPositionToDto(p, settings.TotalCapital)).ToList();
     }
 
@@ -80,7 +84,9 @@ public sealed class PortfolioSnapshotService : IPortfolioSnapshotService
             .AsNoTracking()
             .FirstOrDefaultAsync(p => p.Symbol == symbol);
 
-        return position is null ? null : MapPositionToDto(position, settings.TotalCapital);
+        if (position is null) return null;
+        await EnrichMissingNamesAsync(new List<StockPosition> { position });
+        return MapPositionToDto(position, settings.TotalCapital);
     }
 
     private async Task<UserPortfolioSettings> GetOrCreateSettingsAsync()
@@ -105,6 +111,30 @@ public sealed class PortfolioSnapshotService : IPortfolioSnapshotService
             p.Id, p.Symbol, p.Name, p.QuantityLots, p.AverageCostPrice,
             p.TotalCost, p.LatestPrice, p.MarketValue,
             p.UnrealizedPnL, p.UnrealizedReturnRate, positionRatio);
+    }
+
+    /// <summary>B36: 补全缺失的名称（只读内存补全，不写库）</summary>
+    private async Task EnrichMissingNamesAsync(List<StockPosition> positions)
+    {
+        foreach (var p in positions)
+        {
+            if (!string.IsNullOrWhiteSpace(p.Name)) continue;
+
+            var snapshot = await _db.StockQuoteSnapshots
+                .AsNoTracking()
+                .FirstOrDefaultAsync(s => s.Symbol == p.Symbol);
+            if (snapshot is not null && !string.IsNullOrWhiteSpace(snapshot.Name))
+            {
+                p.Name = snapshot.Name;
+                continue;
+            }
+
+            var w = await _db.ActiveWatchlists
+                .AsNoTracking()
+                .FirstOrDefaultAsync(w => w.Symbol == p.Symbol);
+            if (w is not null && !string.IsNullOrWhiteSpace(w.Name))
+                p.Name = w.Name;
+        }
     }
 
     public async Task<PortfolioExposureDto> GetExposureAsync()

@@ -21,8 +21,12 @@ public sealed class CompositeStockCrawler : IStockCrawler
         var preferredQuote = await TryGetQuoteAsync(symbol, EastmoneySourceName, cancellationToken);
         if (preferredQuote is { } fastQuote && HasCompletePreferredQuote(fastQuote.Quote))
         {
+            var cleanName = !string.IsNullOrWhiteSpace(fastQuote.Quote.Name)
+                ? fastQuote.Quote.Name.Replace(" ", "").Trim()
+                : fastQuote.Quote.Name;
             return fastQuote.Quote with
             {
+                Name = cleanName,
                 News = BuildPlaceholderNews(fastQuote.Quote.Symbol),
                 Indicators = BuildPlaceholderIndicators()
             };
@@ -61,7 +65,7 @@ public sealed class CompositeStockCrawler : IStockCrawler
             ?? quotes.Select(item => item.Quote).FirstOrDefault()
             ?? new StockQuoteDto(
                 symbol,
-                $"{symbol} 示例名称",
+                string.Empty,
                 0m,
                 0m,
                 0m,
@@ -76,6 +80,13 @@ public sealed class CompositeStockCrawler : IStockCrawler
             );
 
         var mergedQuote = quotes.Select(item => item.Quote).Aggregate(baseQuote, MergeQuote);
+
+        // B34: 清理合并后名称中的多余空格
+        if (!string.IsNullOrWhiteSpace(mergedQuote.Name))
+        {
+            mergedQuote = mergedQuote with { Name = mergedQuote.Name.Replace(" ", "").Trim() };
+        }
+
         var preferredFundamentals = quotes
             .Where(item => HasFundamentalData(item.Quote))
             .OrderByDescending(item => string.Equals(item.SourceName, EastmoneySourceName, StringComparison.OrdinalIgnoreCase))

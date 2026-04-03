@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, onMounted, onUnmounted, reactive } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { fetchBackendGet, fetchBackendPost, fetchBackendPut, fetchBackendDelete, parseResponseMessage } from './stockInfoTabRequestUtils'
 import { markdownToSafeHtml } from '../../utils/jsonMarkdownService'
 
@@ -58,6 +58,46 @@ const state = reactive({
   reviewListLoading: false,
   showReviewPanel: false,
 })
+
+// ── Stock search state ──
+const searchResults = ref([])
+const searchOpen = ref(false)
+const searchLoading = ref(false)
+let searchTimer = null
+
+async function searchStocks(query) {
+  if (!query || query.length < 1) {
+    searchResults.value = []
+    searchOpen.value = false
+    return
+  }
+  searchLoading.value = true
+  try {
+    const res = await fetchBackendGet(`/api/stocks/search?q=${encodeURIComponent(query)}`)
+    if (res.ok) {
+      searchResults.value = await res.json()
+      searchOpen.value = searchResults.value.length > 0
+    }
+  } catch {
+    searchResults.value = []
+  } finally {
+    searchLoading.value = false
+  }
+}
+
+function onSymbolInput(e) {
+  const val = e.target.value
+  state.tradeForm.symbol = val
+  clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => searchStocks(val), 300)
+}
+
+function selectStock(item) {
+  state.tradeForm.symbol = item.Symbol || item.symbol
+  state.tradeForm.name = item.Name || item.name
+  searchOpen.value = false
+  searchResults.value = []
+}
 
 function formatPnL(v) { return v == null ? '-' : (v >= 0 ? '+' : '') + v.toFixed(2) }
 function formatMoney(v) { return v == null ? '-' : v.toFixed(2) }
@@ -216,7 +256,11 @@ async function loadTrades() {
     if (state.typeFilter) params.set('type', state.typeFilter)
     if (state.period === 'custom') {
       if (state.customFrom) params.set('from', new Date(state.customFrom).toISOString())
-      if (state.customTo) params.set('to', new Date(state.customTo).toISOString())
+      if (state.customTo) {
+        const d = new Date(state.customTo)
+        d.setHours(23, 59, 59, 999)
+        params.set('to', d.toISOString())
+      }
     } else {
       const { from, to } = getPeriodDates(state.period)
       if (from) params.set('from', from)
@@ -239,10 +283,14 @@ async function loadSummary() {
   state.summaryError = ''
   try {
     const params = new URLSearchParams()
-    if (state.period !== 'custom') params.set('period', state.period)
+    params.set('period', state.period)
     if (state.period === 'custom') {
       if (state.customFrom) params.set('from', new Date(state.customFrom).toISOString())
-      if (state.customTo) params.set('to', new Date(state.customTo).toISOString())
+      if (state.customTo) {
+        const d = new Date(state.customTo)
+        d.setHours(23, 59, 59, 999)
+        params.set('to', d.toISOString())
+      }
     } else {
       const { from, to } = getPeriodDates(state.period)
       if (from) params.set('from', from)
@@ -362,9 +410,16 @@ function resetTradeForm() {
   })
 }
 
+function nowLocalString() {
+  const now = new Date()
+  const pad = n => String(n).padStart(2, '0')
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`
+}
+
 function openQuickEntry() {
   state.editingTradeId = null
   resetTradeForm()
+  state.tradeForm.executedAt = nowLocalString()
   state.tradeModalOpen = true
 }
 
@@ -386,11 +441,15 @@ function handleNavigateTradeLog(e) {
     state.tradeForm.symbol = plan.symbol || ''
     state.tradeForm.name = plan.name || ''
     state.tradeForm.direction = plan.direction === 'Short' ? 'Sell' : 'Buy'
+    state.tradeForm.executedAt = nowLocalString()
     state.tradeModalOpen = true
   }
 }
 
-function handleGlobalClick() { state.reviewMenuOpen = false }
+function handleGlobalClick() {
+  state.reviewMenuOpen = false
+  searchOpen.value = false
+}
 
 // ── Review functions ──
 const reviewContentHtml = computed(() => {
@@ -457,6 +516,36 @@ function reviewTypeLabel(type) {
   return map[type] || type
 }
 
+async function handleResetAll() {
+  if (!confirm('⚠️ 确定重置所有交易记录和持仓吗？\n\n将删除：\n• 所有交易记录\n• 所有持仓数据\n• 所有复盘历史\n\n保留：\n• 本金设置\n• 交易计划\n\n此操作不可撤销！')) return
+  if (!confirm('最后确认：真的要删除所有交易记录和持仓？')) return
+
+  try {
+    const res = await fetchBackendPost('/api/trades/reset-all', {})
+    if (res.ok) {
+      const data = await res.json()
+      alert(`✅ 重置完成\n删除交易: ${data.deletedTradeCount} 条\n删除持仓: ${data.deletedPositionCount} 条\n删除复盘: ${data.deletedReviewCount} 条`)
+      loadTrades()
+      loadSummary()
+      loadPortfolioSnapshot()
+      loadExposure()
+      loadBehaviorStats()
+      loadReviewList()
+    } else {
+      const err = await res.text()
+      alert('重置失败: ' + err)
+    }
+  } catch (err) {
+    alert('重置失败: ' + (err?.message || '未知错误'))
+  }
+}
+
+function handleEscKey(e) {
+  if (e.key === 'Escape' && state.tradeModalOpen) {
+    state.tradeModalOpen = false
+  }
+}
+
 onMounted(() => {
   loadPortfolioSnapshot()
   loadExposure()
@@ -466,11 +555,13 @@ onMounted(() => {
   loadBehaviorStats()
   window.addEventListener('navigate-trade-log', handleNavigateTradeLog)
   document.addEventListener('click', handleGlobalClick)
+  document.addEventListener('keydown', handleEscKey)
 })
 
 onUnmounted(() => {
   window.removeEventListener('navigate-trade-log', handleNavigateTradeLog)
   document.removeEventListener('click', handleGlobalClick)
+  document.removeEventListener('keydown', handleEscKey)
 })
 </script>
 
@@ -509,7 +600,7 @@ onUnmounted(() => {
       </div>
       <div class="position-list" v-if="state.snapshot.positions?.length">
         <div class="position-item" v-for="p in state.snapshot.positions" :key="p.symbol">
-          <span class="position-symbol">{{ p.symbol }} {{ p.name }}</span>
+          <span class="position-symbol">{{ p.name || p.symbol }}</span>
           <span>{{ p.quantity }}股</span>
           <span>成本 {{ p.averageCost?.toFixed(2) }}</span>
           <span :class="pnlClass(p.unrealizedPnL)">{{ formatPnL(p.unrealizedPnL) }}</span>
@@ -630,6 +721,7 @@ onUnmounted(() => {
         </div>
         <button class="btn btn-sm btn-primary" @click="openQuickEntry">快速录入</button>
         <button class="btn btn-sm btn-secondary" @click="openSettings">设置本金</button>
+        <button class="btn btn-sm" style="color: var(--text-secondary); border-color: var(--border-color);" @click="handleResetAll">🔄 重置</button>
       </div>
     </div>
 
@@ -650,7 +742,7 @@ onUnmounted(() => {
         </div>
         <div class="summary-item">
           <span class="summary-label">盈亏比</span>
-          <span class="summary-value">{{ state.summary.profitLossRatio?.toFixed(2) ?? '-' }}</span>
+          <span class="summary-value">{{ state.summary.profitLossRatio === -1 ? '全胜' : (state.summary.profitLossRatio?.toFixed(2) ?? '-') }}</span>
         </div>
         <div class="summary-item">
           <span class="summary-label">做T盈亏</span>
@@ -747,11 +839,27 @@ onUnmounted(() => {
           <h3>{{ state.editingTradeId ? '编辑交易' : (state.tradeForm.planId ? '录入执行' : '快速录入') }}</h3>
           <button class="btn btn-ghost btn-sm" @click="state.tradeModalOpen = false">✕</button>
         </div>
-        <form @submit.prevent="saveTrade" class="trade-form">
+        <form @submit.prevent="saveTrade" @click="searchOpen = false" class="trade-form">
           <div class="form-grid">
-            <div class="form-group">
+            <div class="form-group" style="position: relative;">
               <label>股票代码</label>
-              <input class="input input-sm" v-model="state.tradeForm.symbol" required :disabled="!!state.tradeForm.planId || !!state.editingTradeId" />
+              <input class="input input-sm"
+                     :value="state.tradeForm.symbol"
+                     @input="onSymbolInput"
+                     @focus="state.tradeForm.symbol && searchStocks(state.tradeForm.symbol)"
+                     placeholder="输入代码/名称/拼音"
+                     required
+                     :disabled="!!state.tradeForm.planId || !!state.editingTradeId"
+                     autocomplete="off" />
+              <div v-if="searchOpen" class="search-dropdown">
+                <div v-if="searchLoading" class="search-dropdown-loading">搜索中...</div>
+                <div v-for="item in searchResults" :key="item.Symbol || item.symbol"
+                     @mousedown.prevent="selectStock(item)"
+                     class="search-result-item">
+                  <span>{{ item.Name || item.name }}</span>
+                  <span style="color: var(--color-text-secondary);">{{ item.Code || item.code }}</span>
+                </div>
+              </div>
             </div>
             <div class="form-group">
               <label>股票名称</label>
@@ -773,7 +881,7 @@ onUnmounted(() => {
             </div>
             <div class="form-group">
               <label>成交价</label>
-              <input class="input input-sm" type="number" step="0.01" v-model="state.tradeForm.executedPrice" required />
+              <input class="input input-sm" type="number" step="0.001" min="0.001" v-model="state.tradeForm.executedPrice" required />
             </div>
             <div class="form-group">
               <label>数量（股）</label>
@@ -1339,5 +1447,36 @@ onUnmounted(() => {
   .behavior-metrics {
     grid-template-columns: repeat(2, 1fr);
   }
+}
+
+/* ── Stock search dropdown ── */
+.search-dropdown {
+  position: absolute;
+  z-index: 100;
+  left: 0;
+  right: 0;
+  top: 100%;
+  background: var(--color-bg-elevated, #1e1e1e);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+  max-height: 200px;
+  overflow-y: auto;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+.search-dropdown-loading {
+  padding: 8px;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+.search-result-item {
+  padding: 6px 10px;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--color-text-body);
+}
+.search-result-item:hover {
+  background: var(--color-bg-hover, #2a2a2a);
 }
 </style>

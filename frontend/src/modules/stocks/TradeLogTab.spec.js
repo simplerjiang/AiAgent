@@ -238,6 +238,10 @@ describe('TradeLogTab', () => {
     await inputs[2].setValue('10.50')
     await inputs[3].setValue('1000')
 
+    // Clear the auto-filled time so the missing-time validation triggers
+    const timeInput = wrapper.find('.trade-modal input[type="datetime-local"]')
+    await timeInput.setValue('')
+
     await wrapper.find('form').trigger('submit')
     await flushPromises()
 

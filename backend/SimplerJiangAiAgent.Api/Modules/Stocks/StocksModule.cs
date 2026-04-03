@@ -1164,7 +1164,7 @@ public sealed class StocksModule : IModule
                 return Results.BadRequest(new { message = "symbol 不能为空" });
 
             var dto = await researchService.GetActiveSessionAsync(symbol.Trim(), ct);
-            return dto is null ? Results.NotFound() : Results.Ok(dto);
+            return Results.Ok(dto);
         })
         .WithName("GetActiveResearchSession")
         .WithOpenApi();
@@ -1705,6 +1705,14 @@ public sealed class StocksModule : IModule
         // ── Trade Execution endpoints ────────────────────────────────
 
         var tradeGroup = app.MapGroup("/api/trades");
+
+        tradeGroup.MapPost("/reset-all", async (ITradeAccountingService svc) =>
+        {
+            var (trades, positions, reviews) = await svc.ResetAllTradesAsync();
+            return Results.Ok(new { success = true, deletedTradeCount = trades, deletedPositionCount = positions, deletedReviewCount = reviews });
+        })
+        .WithName("ResetAllTrades")
+        .WithOpenApi();
 
         tradeGroup.MapPost("/", async (TradeExecutionCreateDto dto, ITradeAccountingService svc) =>
         {

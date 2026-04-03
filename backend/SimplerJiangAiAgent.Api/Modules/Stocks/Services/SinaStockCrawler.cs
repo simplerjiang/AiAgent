@@ -27,7 +27,7 @@ public sealed class SinaStockCrawler : IStockCrawlerSource
             return BuildEmptyQuote(normalized);
         }
 
-        var name = fields[0];
+        var name = fields[0].Replace(" ", "");  // 中文股票名不应有空格
         var open = ParseDecimal(fields.ElementAtOrDefault(1));
         var prevClose = ParseDecimal(fields.ElementAtOrDefault(2));
         var price = ParseDecimal(fields.ElementAtOrDefault(3));

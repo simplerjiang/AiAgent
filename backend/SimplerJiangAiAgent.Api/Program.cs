@@ -122,6 +122,9 @@ using (var scope = app.Services.CreateScope())
     await ResearchSessionSchemaInitializer.EnsureAsync(dbContext);
     await RecommendSessionSchemaInitializer.EnsureAsync(dbContext);
     await TradeExecutionSchemaInitializer.EnsureAsync(dbContext);
+
+    // B29/B34: Idempotent data cleanup – remove "示例名称" and extra spaces in short stock names
+    await DataCleanupHelper.CleanStockNamesAsync(dbContext);
 }
 
 // 中间件管道

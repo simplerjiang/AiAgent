@@ -11,7 +11,7 @@ public sealed class BaiduStockCrawler : IStockCrawlerSource
         // TODO: 接入公开接口并解析数据
         var quote = new StockQuoteDto(
             symbol,
-            $"{symbol} 示例名称",
+            string.Empty,
             0m,
             0m,
             0m,
