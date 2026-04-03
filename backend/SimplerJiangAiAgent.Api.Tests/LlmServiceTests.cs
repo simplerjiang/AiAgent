@@ -82,6 +82,9 @@ public sealed class LlmServiceTests
 
         public Task<LlmProviderSettings> UpsertAsync(LlmProviderSettings settings, CancellationToken cancellationToken = default)
             => Task.FromResult(settings);
+
+        public Task<string> GetGlobalTavilyKeyAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(string.Empty);
     }
 
     private sealed class FakeProvider : ILlmProvider

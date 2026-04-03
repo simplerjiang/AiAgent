@@ -31,6 +31,7 @@ let eventSource = null
 let sseRetryCount = 0
 let seenSseEventIds = new Map()
 const SSE_MAX_RETRIES = 3
+let componentAlive = true
 
 const startElapsedTimer = () => {
   submitStartTime.value = Date.now()
@@ -230,10 +231,12 @@ const handleNewRecommend = async (userPrompt) => {
       body: JSON.stringify({ userPrompt: prompt })
     })
     const sessionId = result.id ?? result.Id
+    if (!componentAlive) return
     statusPhase.value = 'connecting'
     statusMessage.value = '会话已创建，正在连接分析流...'
     await loadSessionDetail(sessionId)
     await loadSessionHistory()
+    if (!componentAlive) return
     connectSse(sessionId)
     activeTab.value = 'progress'
     followUpText.value = ''
@@ -560,6 +563,7 @@ const handleFollowUp = async (prompt) => {
       statusMessage.value = '追问已提交，正在连接新的分析流...'
       await loadSessionDetail(sessionId)
       await loadSessionHistory()
+      if (!componentAlive) return
       activeTab.value = 'progress'
       connectSse(sessionId)
     }
@@ -577,9 +581,22 @@ const handleFollowUp = async (prompt) => {
   }
 }
 
+const cancelAnalysis = () => {
+  closeSse()
+  stopElapsedTimer()
+  isRunning.value = false
+  statusPhase.value = 'idle'
+  statusMessage.value = '分析已手动停止'
+  followUpSending.value = false
+}
+
 const handleFollowUpSubmit = () => {
   const text = followUpText.value?.trim()
   if (!text) return
+  // If analysis is running, interrupt it first then submit new input
+  if (isRunning.value) {
+    cancelAnalysis()
+  }
   if (activeSession.value) {
     handleFollowUp(text)
   } else {
@@ -691,11 +708,18 @@ const handleDeepAnalyze = (symbol) => {
 
 // ---------- Lifecycle ----------
 onMounted(() => {
+  componentAlive = true
+  // Guard: reset stale running state on fresh mount
+  if (statusPhase.value !== 'completed' && statusPhase.value !== 'idle' && statusPhase.value !== 'failed') {
+    statusPhase.value = 'idle'
+    isRunning.value = false
+  }
   fetchMarketContext()
   loadSessionHistory()
 })
 
 onUnmounted(() => {
+  componentAlive = false
   closeSse()
   stopElapsedTimer()
 })
@@ -802,6 +826,7 @@ watch(realtimeContextEnabled, value => {
           <span class="status-indicator" :class="{ 'status-pulse': statusPhase === 'submitting' || statusPhase === 'connecting' || statusPhase === 'running' }"></span>
           <span class="status-text">{{ statusMessage }}</span>
           <span v-if="statusPhase === 'submitting' || statusPhase === 'connecting' || statusPhase === 'running'" class="status-elapsed">{{ elapsedSeconds }}s</span>
+          <button v-if="statusPhase === 'submitting' || statusPhase === 'connecting' || statusPhase === 'running'" class="status-cancel" @click="cancelAnalysis" title="停止分析">⏹ 停止</button>
           <button v-if="statusPhase === 'completed' || statusPhase === 'failed'" class="status-dismiss" @click="statusPhase = 'idle'; statusMessage = ''">✕</button>
         </div>
 
@@ -841,17 +866,17 @@ watch(realtimeContextEnabled, value => {
           <div class="quick-actions">
             <button v-for="action in quickActions" :key="action.label"
               class="quick-btn" @click="handleQuickAction(action.prompt)"
-              :disabled="!activeSession || isRunning || followUpSending">
+              :disabled="!activeSession || followUpSending">
               {{ action.label }}
             </button>
           </div>
           <div class="follow-up-input-row">
             <input v-model="followUpText" class="follow-up-input" type="text"
-              :placeholder="inputPlaceholder"
-              :disabled="isRunning || followUpSending"
+              :placeholder="isRunning ? '输入新问题可打断当前分析...' : inputPlaceholder"
+              :disabled="followUpSending"
               @keydown.enter="handleFollowUpSubmit" />
             <button class="follow-up-send" @click="handleFollowUpSubmit"
-              :disabled="!followUpText.trim() || isRunning || followUpSending">发送</button>
+              :disabled="!followUpText.trim() || followUpSending">{{ isRunning ? '打断并发送' : '发送' }}</button>
           </div>
           <p v-if="followUpError" class="follow-up-error">{{ followUpError }}</p>
         </div>
@@ -1114,6 +1139,20 @@ watch(realtimeContextEnabled, value => {
   line-height: 1;
 }
 .status-dismiss:hover { opacity: 1; }
+
+.status-cancel {
+  background: rgba(255,255,255,0.15);
+  border: 1px solid rgba(255,255,255,0.3);
+  border-radius: var(--radius-sm, 4px);
+  cursor: pointer;
+  color: inherit;
+  font-size: 0.8rem;
+  padding: 2px 8px;
+  margin-left: 8px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.status-cancel:hover { background: rgba(255,255,255,0.25); }
 
 /* Tab content */
 .tab-content {

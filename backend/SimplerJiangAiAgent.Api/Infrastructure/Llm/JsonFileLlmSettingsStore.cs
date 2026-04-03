@@ -39,6 +39,19 @@ public sealed class JsonFileLlmSettingsStore : ILlmSettingsStore
         return document.Providers.Values.ToArray();
     }
 
+    public async Task<string> GetGlobalTavilyKeyAsync(CancellationToken cancellationToken = default)
+    {
+        var document = await LoadMergedAsync(cancellationToken);
+        foreach (var provider in document.Providers.Values)
+        {
+            if (!string.IsNullOrWhiteSpace(provider.TavilyApiKey))
+                return provider.TavilyApiKey.Trim();
+        }
+
+        var envKey = Environment.GetEnvironmentVariable("TAVILY_API_KEY");
+        return !string.IsNullOrWhiteSpace(envKey) ? envKey.Trim() : string.Empty;
+    }
+
     public async Task<string> GetActiveProviderKeyAsync(CancellationToken cancellationToken = default)
     {
         var document = await LoadMergedAsync(cancellationToken);
@@ -126,6 +139,15 @@ public sealed class JsonFileLlmSettingsStore : ILlmSettingsStore
             if (!string.IsNullOrWhiteSpace(settings.TavilyApiKey))
             {
                 existingSecrets.TavilyApiKey = settings.TavilyApiKey.Trim();
+
+                // Sync TavilyApiKey to all other providers (global key)
+                foreach (var (otherKey, _) in localSecretsDocument.Providers)
+                {
+                    if (!string.Equals(otherKey, providerKey, StringComparison.OrdinalIgnoreCase))
+                    {
+                        localSecretsDocument.Providers[otherKey].TavilyApiKey = settings.TavilyApiKey.Trim();
+                    }
+                }
             }
 
             existingDefaults.Provider = providerKey;
@@ -173,7 +195,7 @@ public sealed class JsonFileLlmSettingsStore : ILlmSettingsStore
             await SaveDocumentAsync(_defaultsFilePath, defaultsDocument, cancellationToken);
             await SaveDocumentAsync(_localSecretsFilePath, localSecretsDocument, cancellationToken, deleteWhenEmpty: true);
 
-            return MergeSettings(existingDefaults, existingSecrets.ApiKey);
+            return MergeSettings(existingDefaults, existingSecrets.ApiKey, existingSecrets.TavilyApiKey);
         }
         finally
         {
@@ -299,13 +321,15 @@ public sealed class JsonFileLlmSettingsStore : ILlmSettingsStore
         return merged;
     }
 
-    private static LlmProviderSettings MergeSettings(LlmProviderSettings defaultsSettings, string apiKey)
+    private static LlmProviderSettings MergeSettings(LlmProviderSettings defaultsSettings, string apiKey, string? tavilyApiKey = null)
     {
         var merged = CloneWithoutSecret(defaultsSettings);
         merged.ApiKey = string.IsNullOrWhiteSpace(apiKey)
             ? ResolveApiKeyFromEnvironment(defaultsSettings.Provider)
             : apiKey;
-        merged.TavilyApiKey = ResolveTavilyApiKey(defaultsSettings.Provider, defaultsSettings.TavilyApiKey);
+        merged.TavilyApiKey = !string.IsNullOrWhiteSpace(tavilyApiKey)
+            ? tavilyApiKey.Trim()
+            : ResolveTavilyApiKey(defaultsSettings.Provider, defaultsSettings.TavilyApiKey);
         return merged;
     }
 

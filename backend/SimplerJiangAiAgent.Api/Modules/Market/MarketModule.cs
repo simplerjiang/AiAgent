@@ -142,6 +142,14 @@ public sealed class MarketModule : IModule
         })
         .WithName("GetRealtimeMarketOverview")
         .WithOpenApi();
+
+        group.MapPost("/sync", async (ISectorRotationIngestionService ingestionService, HttpContext httpContext) =>
+        {
+            await ingestionService.SyncAsync(httpContext.RequestAborted);
+            return Results.Ok(new { synced = true, timestamp = DateTimeOffset.UtcNow });
+        })
+        .WithName("TriggerMarketSync")
+        .WithOpenApi();
     }
 
     private static IReadOnlyList<string> ParseSymbols(string? symbols)

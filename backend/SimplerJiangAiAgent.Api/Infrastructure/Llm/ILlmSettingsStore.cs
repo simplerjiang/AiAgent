@@ -8,4 +8,5 @@ public interface ILlmSettingsStore
     Task<string> ResolveProviderKeyAsync(string? provider, CancellationToken cancellationToken = default);
     Task<LlmProviderSettings?> GetProviderAsync(string provider, CancellationToken cancellationToken = default);
     Task<LlmProviderSettings> UpsertAsync(LlmProviderSettings settings, CancellationToken cancellationToken = default);
+    Task<string> GetGlobalTavilyKeyAsync(CancellationToken cancellationToken = default);
 }

@@ -42,7 +42,9 @@ async function apiGet(path, signal) {
     if (res.status === 404) return null
     throw new Error(`API ${res.status}: ${res.statusText}`)
   }
-  return res.json()
+  const text = await res.text()
+  if (!text || !text.trim()) return null
+  try { return JSON.parse(text) } catch { return null }
 }
 
 async function apiPost(path, body) {
@@ -51,8 +53,13 @@ async function apiPost(path, body) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
   })
-  if (!res.ok) throw new Error(`API ${res.status}: ${res.statusText}`)
-  return res.json()
+  if (!res.ok) {
+    const errText = await res.text().catch(() => '')
+    throw new Error(`API ${res.status}: ${errText || res.statusText}`)
+  }
+  const text = await res.text()
+  if (!text || !text.trim()) return null
+  try { return JSON.parse(text) } catch { return null }
 }
 
 /** Research stage definitions in pipeline order. */

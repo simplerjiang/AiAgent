@@ -8,6 +8,7 @@ const compareWindow = ref('10d')
 const page = ref(1)
 const pageSize = ref(12)
 const loading = ref(false)
+const syncing = ref(false)
 const detailLoading = ref(false)
 const realtimeLoading = ref(false)
 const realtimeSectorBoardLoading = ref(false)
@@ -546,6 +547,31 @@ const fetchRealtimeOverview = async () => {
 
 const handleBoardChange = () => fetchDashboard({ resetPage: true })
 const handleSortChange = () => fetchDashboard({ resetPage: true })
+
+const dataStaleHours = computed(() => {
+  const t = summary.value?.snapshotTime
+  if (!t) return -1
+  const ms = Date.now() - new Date(t).getTime()
+  return Number.isFinite(ms) ? ms / 3600000 : -1
+})
+
+const forceSync = async () => {
+  syncing.value = true
+  error.value = ''
+  try {
+    const res = await fetch('/api/market/sync', { method: 'POST' })
+    if (!res.ok) {
+      const body = await res.json().catch(() => null)
+      throw new Error(body?.message || `同步失败 (${res.status})`)
+    }
+    await fetchDashboard()
+    await fetchRealtimeOverview()
+  } catch (err) {
+    error.value = err.message || '强制同步失败'
+  } finally {
+    syncing.value = false
+  }
+}
 const handleWindowChange = () => fetchDetail(selectedSectorCode.value || sectors.value[0]?.sectorCode || '')
 const goPrev = () => {
   if (page.value <= 1) return
@@ -603,7 +629,10 @@ onMounted(() => {
         <h2>情绪轮动</h2>
         <p class="hero-subtitle">把涨停高度、涨跌家数、炸板率与板块扩散度压成同一屏，快速判断今天是主升、分歧、混沌还是退潮。</p>
         <div class="hero-actions">
-          <button class="hero-button" type="button" @click="fetchRealtimeOverview" :disabled="realtimeLoading || !realtimeOverviewEnabled">刷新实时总览</button>
+          <button class="hero-button" type="button" @click="forceSync" :disabled="syncing || loading">
+            {{ syncing ? '正在同步...' : '同步最新数据' }}
+          </button>
+          <button class="hero-button secondary" type="button" @click="fetchRealtimeOverview" :disabled="realtimeLoading || !realtimeOverviewEnabled">刷新实时总览</button>
           <button class="hero-button secondary" type="button" @click="realtimeOverviewEnabled = !realtimeOverviewEnabled">
             {{ realtimeOverviewEnabled ? '隐藏实时总览' : '显示实时总览' }}
           </button>
@@ -616,6 +645,9 @@ onMounted(() => {
         <small>{{ formatDate(summary?.snapshotTime) }}</small>
       </div>
     </header>
+
+    <div v-if="syncing" class="feedback syncing">正在从东方财富同步最新板块数据，请稍候...</div>
+    <div v-if="dataStaleHours > 24" class="feedback stale-warning">数据快照距今已超过 {{ Math.floor(dataStaleHours) }} 小时，点击"同步最新数据"获取最新行情。</div>
 
     <section class="board-toolbar">
       <label class="toolbar-field">
@@ -1297,6 +1329,18 @@ onMounted(() => {
 
 .feedback.compact {
   padding: var(--space-3) var(--space-4);
+}
+
+.feedback.syncing {
+  color: var(--color-accent);
+  border-color: var(--color-accent-border);
+  background: var(--color-accent-subtle);
+}
+
+.feedback.stale-warning {
+  color: var(--color-warning);
+  border-color: var(--color-warning-border);
+  background: var(--color-warning-bg);
 }
 
 @media (max-width: 1100px) {

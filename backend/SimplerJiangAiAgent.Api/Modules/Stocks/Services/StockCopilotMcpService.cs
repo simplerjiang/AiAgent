@@ -2474,6 +2474,13 @@ public sealed class StockCopilotMcpService : IStockCopilotMcpService
             {
                 return settings.TavilyApiKey.Trim();
             }
+
+            // Tavily API Key is global: fall back to any provider
+            var globalKey = await _llmSettingsStore.GetGlobalTavilyKeyAsync(cancellationToken);
+            if (!string.IsNullOrWhiteSpace(globalKey))
+            {
+                return globalKey;
+            }
         }
 
         var envKey = Environment.GetEnvironmentVariable("TAVILY_API_KEY");

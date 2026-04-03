@@ -629,6 +629,14 @@ public sealed class StocksModule : IModule
         .WithName("GetLocalNewsArchive")
         .WithOpenApi();
 
+        app.MapPost("/api/news/archive/process-pending", async (ILocalFactAiEnrichmentService aiService) =>
+        {
+            await aiService.ProcessMarketPendingAsync();
+            return Results.Ok(new { success = true });
+        })
+        .WithName("ProcessPendingNews")
+        .WithOpenApi();
+
         // 事件驱动信号（含证据/反证与历史对齐）
         group.MapGet("/signals", async (string symbol, string? source, IStockDataService dataService, IStockNewsImpactService impactService, IStockSignalService signalService) =>
         {

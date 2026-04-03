@@ -45,6 +45,7 @@ import {
   parseResponseMessage,
   replaceAbortController
 } from './stockInfoTabRequestUtils'
+import { useConfirm } from '../../composables/useConfirm.js'
 import {
   buildRealtimeContextSymbols,
   canCancelTradingPlan,
@@ -79,6 +80,8 @@ import SidebarTabs from './SidebarTabs.vue'
 import ResizeSplitter from './ResizeSplitter.vue'
 import { useResizable } from './useResizable'
 import { useCollapsible } from './useCollapsible'
+
+const { confirm: showConfirm } = useConfirm()
 
 const symbol = ref('')
 const interval = ref(localStorage.getItem('stock_interval') || 'day')
@@ -552,7 +555,7 @@ const deleteTradingPlan = async (symbolKey, item) => {
     return
   }
 
-  if (typeof window !== 'undefined' && typeof window.confirm === 'function' && !window.confirm(`确认删除交易计划「${item.name}」？`)) {
+  if (!(await showConfirm({ message: `确认删除交易计划「${item.name}」？` }))) {
     return
   }
 
@@ -1265,6 +1268,10 @@ watch(currentStockKey, () => {
                   @view-change="handleChartViewChange"
                   @strategy-visibility-change="handleChartStrategyVisibilityChange"
                 />
+                <div v-else-if="isBlockingQuoteLoad" class="chart-placeholder chart-loading">
+                  <span class="chart-loading-spinner"></span>
+                  <p>正在加载股票数据...</p>
+                </div>
                 <div v-else class="chart-placeholder">
                   <p>选择标的以加载图表</p>
                 </div>
@@ -1453,6 +1460,25 @@ watch(currentStockKey, () => {
   border-radius: var(--radius-xl);
   border: 1px dashed var(--color-border-medium);
   color: var(--color-text-disabled);
+}
+
+.chart-loading {
+  gap: 0.75rem;
+  color: var(--color-text-secondary, #64748b);
+}
+
+.chart-loading-spinner {
+  display: inline-block;
+  width: 28px;
+  height: 28px;
+  border: 3px solid rgba(148, 163, 184, 0.3);
+  border-top-color: #2563eb;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 .error-text {

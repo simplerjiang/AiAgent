@@ -455,6 +455,9 @@ const handleSearchKeydown = event => {
   background: rgba(148, 163, 184, 0.45);
 }
 
+.text-rise { color: #ef4444; }
+.text-fall { color: #22c55e; }
+
 @media (max-width: 960px) {
   .toolbar-main-row,
   .toolbar-sub-row {

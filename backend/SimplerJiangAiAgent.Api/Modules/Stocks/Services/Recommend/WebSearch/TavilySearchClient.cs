@@ -104,6 +104,11 @@ public sealed class TavilySearchClient
             var settings = await _llmSettingsStore.GetProviderAsync(activeProvider, ct);
             if (!string.IsNullOrWhiteSpace(settings?.TavilyApiKey))
                 return settings.TavilyApiKey.Trim();
+
+            // Tavily API Key is global: fall back to any provider
+            var globalKey = await _llmSettingsStore.GetGlobalTavilyKeyAsync(ct);
+            if (!string.IsNullOrWhiteSpace(globalKey))
+                return globalKey;
         }
 
         var envKey = Environment.GetEnvironmentVariable("TAVILY_API_KEY");

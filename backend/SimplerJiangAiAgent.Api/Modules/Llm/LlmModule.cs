@@ -127,6 +127,16 @@ public sealed class LlmModule : IModule
                 return Results.NotFound();
             }
 
+            // Tavily API Key is global: fill from any provider if current is empty
+            if (string.IsNullOrWhiteSpace(settings.TavilyApiKey))
+            {
+                var globalTavily = await store.GetGlobalTavilyKeyAsync();
+                if (!string.IsNullOrWhiteSpace(globalTavily))
+                {
+                    settings.TavilyApiKey = globalTavily;
+                }
+            }
+
             return Results.Ok(ToResponse(settings));
         })
         .WithName("GetLlmProviderSettings")

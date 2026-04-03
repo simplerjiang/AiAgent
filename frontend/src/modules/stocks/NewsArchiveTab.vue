@@ -1,5 +1,8 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import { useToast } from '../../composables/useToast.js'
+
+const toast = useToast()
 
 const sourceTagDisplayNames = {
   'sina-roll-market': '新浪财经', 'cls-telegraph': '财联社',
@@ -166,6 +169,24 @@ const fetchArchive = async ({ resetPage = false } = {}) => {
   }
 }
 
+const processing = ref(false)
+async function processPending() {
+  processing.value = true
+  try {
+    const res = await fetch('/api/news/archive/process-pending', { method: 'POST' })
+    if (res.ok) {
+      toast.success('批量清洗完成')
+      fetchArchive()
+    } else {
+      toast.error('清洗失败: ' + await res.text())
+    }
+  } catch (e) {
+    toast.error('清洗失败: ' + e.message)
+  } finally {
+    processing.value = false
+  }
+}
+
 const submitSearch = () => fetchArchive({ resetPage: true })
 const goToPage = p => {
   if (p < 1 || p > totalPages.value || p === page.value) return
@@ -225,6 +246,7 @@ onMounted(() => {
 
       <div class="archive-actions">
         <button class="primary-button" @click="submitSearch" :disabled="loading">检索</button>
+        <button class="primary-button" style="margin-left:8px" @click="processPending" :disabled="processing">{{ processing ? '清洗中...' : '🧹 批量清洗待处理' }}</button>
       </div>
     </section>
 

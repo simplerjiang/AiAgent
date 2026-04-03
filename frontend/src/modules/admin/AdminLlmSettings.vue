@@ -176,11 +176,9 @@ const applyProviderPreset = selectedProvider => {
   organization.value = ''
   project.value = ''
   enabled.value = true
-  tavilyApiKey.value = ''
   apiKeyMasked.value = ''
   hasApiKey.value = false
-  tavilyApiKeyMasked.value = ''
-  hasTavilyApiKey.value = false
+  // Tavily API Key is global — do not clear on provider switch
 
   if (selectedProvider === 'antigravity') {
     project.value = 'rising-fact-p41fc'

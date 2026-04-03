@@ -2,6 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import TradeLogTab from './TradeLogTab.vue'
 
+const mockConfirm = vi.fn(() => Promise.resolve(true))
+vi.mock('../../composables/useConfirm.js', () => ({
+  useConfirm: () => ({ confirm: mockConfirm })
+}))
+
 const makeResponse = ({ ok = true, json, text } = {}) => ({
   ok,
   json: json || (async () => ({})),
@@ -66,7 +71,7 @@ function setupFetchMock(overrides = {}) {
 
 beforeEach(() => {
   vi.restoreAllMocks()
-  vi.stubGlobal('confirm', vi.fn(() => true))
+  mockConfirm.mockImplementation(() => Promise.resolve(true))
 })
 
 describe('TradeLogTab', () => {
@@ -263,7 +268,7 @@ describe('TradeLogTab', () => {
     await deleteBtn.trigger('click')
     await flushPromises()
 
-    expect(window.confirm).toHaveBeenCalledWith('确定删除此交易记录？')
+    expect(mockConfirm).toHaveBeenCalledWith({ message: '确定删除此交易记录？' })
     const deleteCalls = fetchMock.mock.calls.filter(c => c[1]?.method === 'DELETE')
     expect(deleteCalls.length).toBe(1)
     expect(String(deleteCalls[0][0])).toContain('/api/trades/1')

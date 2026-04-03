@@ -8,6 +8,7 @@ import MarketSentimentTab from './modules/market/MarketSentimentTab.vue'
 import AdminLlmSettings from './modules/admin/AdminLlmSettings.vue'
 import SourceGovernanceDeveloperMode from './modules/admin/SourceGovernanceDeveloperMode.vue'
 import AppToast from './components/AppToast.vue'
+import ConfirmDialog from './components/ConfirmDialog.vue'
 
 const mainTabs = [
   { key: 'stock-info', name: '股票信息', shortName: '股票', component: StockInfoTab },
@@ -269,6 +270,7 @@ onBeforeUnmount(() => {
       />
     </main>
     <AppToast />
+    <ConfirmDialog />
   </div>
 </template>
 

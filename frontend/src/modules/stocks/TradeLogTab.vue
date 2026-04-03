@@ -2,6 +2,11 @@
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { fetchBackendGet, fetchBackendPost, fetchBackendPut, fetchBackendDelete, parseResponseMessage } from './stockInfoTabRequestUtils'
 import { markdownToSafeHtml } from '../../utils/jsonMarkdownService'
+import { useToast } from '../../composables/useToast.js'
+import { useConfirm } from '../../composables/useConfirm.js'
+
+const toast = useToast()
+const { confirm: showConfirm } = useConfirm()
 
 const state = reactive({
   // Filter
@@ -358,7 +363,7 @@ async function saveTrade() {
 }
 
 async function deleteTrade(id) {
-  if (!confirm('确定删除此交易记录？')) return
+  if (!(await showConfirm({ message: '确定删除此交易记录？' }))) return
   try {
     const res = await fetchBackendDelete(`/api/trades/${id}`)
     if (res.ok) {
@@ -517,14 +522,14 @@ function reviewTypeLabel(type) {
 }
 
 async function handleResetAll() {
-  if (!confirm('⚠️ 确定重置所有交易记录和持仓吗？\n\n将删除：\n• 所有交易记录\n• 所有持仓数据\n• 所有复盘历史\n\n保留：\n• 本金设置\n• 交易计划\n\n此操作不可撤销！')) return
-  if (!confirm('最后确认：真的要删除所有交易记录和持仓？')) return
+  if (!(await showConfirm({ title: '重置确认', message: '⚠️ 确定重置所有交易记录和持仓吗？\n\n将删除：\n• 所有交易记录\n• 所有持仓数据\n• 所有复盘历史\n\n保留：\n• 本金设置\n• 交易计划\n\n此操作不可撤销！', type: 'danger', confirmText: '确定重置' }))) return
+  if (!(await showConfirm({ title: '最后确认', message: '真的要删除所有交易记录和持仓？', type: 'danger', confirmText: '删除' }))) return
 
   try {
     const res = await fetchBackendPost('/api/trades/reset-all', {})
     if (res.ok) {
       const data = await res.json()
-      alert(`✅ 重置完成\n删除交易: ${data.deletedTradeCount} 条\n删除持仓: ${data.deletedPositionCount} 条\n删除复盘: ${data.deletedReviewCount} 条`)
+      toast.success(`重置完成：删除交易 ${data.deletedTradeCount} 条、持仓 ${data.deletedPositionCount} 条、复盘 ${data.deletedReviewCount} 条`)
       loadTrades()
       loadSummary()
       loadPortfolioSnapshot()
@@ -533,10 +538,10 @@ async function handleResetAll() {
       loadReviewList()
     } else {
       const err = await res.text()
-      alert('重置失败: ' + err)
+      toast.error('重置失败: ' + err)
     }
   } catch (err) {
-    alert('重置失败: ' + (err?.message || '未知错误'))
+    toast.error('重置失败: ' + (err?.message || '未知错误'))
   }
 }
 
@@ -654,30 +659,30 @@ onUnmounted(() => {
     <div class="behavior-dashboard card" v-if="state.behaviorStats">
       <div class="behavior-header">
         <h4>🧘 交易健康度</h4>
-        <span class="discipline-score" :class="disciplineScoreClass">
+        <span class="discipline-score" :class="disciplineScoreClass" title="满分100分。计划执行率<50%扣20分；连亏≥3笔扣15分；过度交易扣15分；追涨率>50%扣20分">
           {{ state.behaviorStats.disciplineScore }} 分
         </span>
       </div>
       <div class="behavior-metrics">
         <div class="behavior-metric">
-          <span class="metric-label">7日交易</span>
+          <span class="metric-label" title="最近7天的交易总笔数">7日交易</span>
           <span class="metric-value">{{ state.behaviorStats.trades7Days }}笔</span>
         </div>
         <div class="behavior-metric">
-          <span class="metric-label">计划执行率</span>
+          <span class="metric-label" title="有关联计划的交易占总交易的比例，越高越好">计划执行率</span>
           <span class="metric-value" :class="planRateClass">
             {{ formatPercent(state.behaviorStats.planExecutionRate) }}
           </span>
         </div>
         <div class="behavior-metric">
-          <span class="metric-label">当前连亏</span>
+          <span class="metric-label" title="从最近的卖出交易向前计算连续亏损笔数">当前连亏</span>
           <span class="metric-value" :class="lossStreakClass">
             {{ state.behaviorStats.currentLossStreak }}笔
           </span>
         </div>
         <div class="behavior-metric">
-          <span class="metric-label">过度交易</span>
-          <span class="metric-value" :class="{ 'text-danger': state.behaviorStats.isOverTrading }">
+          <span class="metric-label" title="判定规则：7日日均交易量 > 30日日均交易量 × 1.5 时触发">过度交易</span>
+          <span class="metric-value" :class="{ 'text-danger': state.behaviorStats.isOverTrading }" title="判定规则：7日日均交易量 > 30日日均交易量 × 1.5 时触发">
             {{ state.behaviorStats.isOverTrading ? '⚠️ 是' : '✅ 否' }}
           </span>
         </div>
