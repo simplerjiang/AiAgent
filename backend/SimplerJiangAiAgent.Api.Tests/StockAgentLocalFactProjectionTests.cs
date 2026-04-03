@@ -32,7 +32,8 @@ public sealed class StockAgentLocalFactProjectionTests
                     "summary_only",
                     new DateTime(2026, 3, 13, 8, 6, 0),
                     "板块:银行",
-                    new[] { "政策红利", "资金面" })
+                    new[] { "政策红利", "资金面" },
+                    true)
             },
             Array.Empty<LocalNewsItemDto>(),
             Array.Empty<LocalNewsItemDto>(),

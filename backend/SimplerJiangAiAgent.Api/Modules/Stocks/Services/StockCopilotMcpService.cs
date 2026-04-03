@@ -80,6 +80,7 @@ public sealed class StockCopilotMcpService : IStockCopilotMcpService
     private readonly IRealtimeMarketOverviewService? _overviewService;
     private readonly ILocalFactIngestionService? _localFactIngestionService;
     private readonly ILlmSettingsStore? _llmSettingsStore;
+    private readonly IPortfolioSnapshotService? _portfolioSnapshotService;
     private readonly ILogger<StockCopilotMcpService> _logger;
 
     public StockCopilotMcpService(
@@ -96,6 +97,7 @@ public sealed class StockCopilotMcpService : IStockCopilotMcpService
         IRealtimeMarketOverviewService? overviewService = null,
         ILocalFactIngestionService? localFactIngestionService = null,
         ILlmSettingsStore? llmSettingsStore = null,
+        IPortfolioSnapshotService? portfolioSnapshotService = null,
         ILogger<StockCopilotMcpService>? logger = null)
     {
         _dataService = dataService;
@@ -111,6 +113,7 @@ public sealed class StockCopilotMcpService : IStockCopilotMcpService
         _overviewService = overviewService;
         _localFactIngestionService = localFactIngestionService;
         _llmSettingsStore = llmSettingsStore;
+        _portfolioSnapshotService = portfolioSnapshotService;
         _logger = logger ?? NullLogger<StockCopilotMcpService>.Instance;
     }
 
@@ -136,6 +139,26 @@ public sealed class StockCopilotMcpService : IStockCopilotMcpService
             windowOptions.EvidenceSkip,
             windowOptions.EvidenceTake);
 
+        // Fetch portfolio context for the symbol (graceful degradation)
+        PortfolioContextDto? portfolioContext = null;
+        if (_portfolioSnapshotService is not null)
+        {
+            try
+            {
+                portfolioContext = await _portfolioSnapshotService.GetPortfolioContextAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "CompanyOverviewMcp: GetPortfolioContextAsync failed, degrading portfolio features.");
+            }
+        }
+
+        var features = BuildCompanyOverviewFeatures(quote, localFacts, shareholderCount, overviewFacts.Count, snapshotResolution.UpdatedAt, mainBusiness, businessScope);
+        if (portfolioContext is not null)
+        {
+            features = AppendPortfolioFeatures(features, portfolioContext, normalizedSymbol);
+        }
+
         stopwatch.Stop();
         return BuildEnvelope(
             toolName: StockMcpToolNames.CompanyOverview,
@@ -158,7 +181,7 @@ public sealed class StockCopilotMcpService : IStockCopilotMcpService
                 mainBusiness,
                 businessScope),
             evidence: evidence,
-            features: BuildCompanyOverviewFeatures(quote, localFacts, shareholderCount, overviewFacts.Count, snapshotResolution.UpdatedAt, mainBusiness, businessScope),
+            features: features,
             symbol: normalizedSymbol,
             interval: null,
             query: null,
@@ -346,6 +369,18 @@ public sealed class StockCopilotMcpService : IStockCopilotMcpService
         var evidence = BuildMarketContextEvidence(normalizedSymbol, marketContext, overview);
         var features = BuildMarketContextFeatures(marketContext, overview);
 
+        // 追加近30天板块趋势摘要
+        string? trendSummary = null;
+        try
+        {
+            trendSummary = await _sectorRotationQueryService.GetMainlineTrendSummaryAsync(30, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "MarketContextMcp: GetMainlineTrendSummaryAsync failed, degrading trend summary to null.");
+            degradedFlags.Add("trend_summary_failed");
+        }
+
         stopwatch.Stop();
         return BuildEnvelope(
             toolName: StockMcpToolNames.MarketContext,
@@ -363,7 +398,8 @@ public sealed class StockCopilotMcpService : IStockCopilotMcpService
                 indices,
                 mainCapitalFlow,
                 northboundFlow,
-                breadth),
+                breadth,
+                trendSummary),
             evidence: ApplyWindow(evidence, windowOptions.EvidenceSkip, windowOptions.EvidenceTake),
             features: features,
             symbol: normalizedSymbol,
@@ -1859,6 +1895,27 @@ public sealed class StockCopilotMcpService : IStockCopilotMcpService
             new StockCopilotMcpFeatureDto("businessScope", "Business Scope", "text", null, businessScope, null, "Business scope description extracted from company profile facts."),
             new StockCopilotMcpFeatureDto("fundamentalUpdatedAt", "Fundamental Updated At", "text", null, ChinaTimeZone.ToChina(updatedAt)?.ToString("yyyy-MM-dd HH:mm:ss"), null, "Timestamp of the latest structured company-profile update.")
         };
+    }
+
+    private static IReadOnlyList<StockCopilotMcpFeatureDto> AppendPortfolioFeatures(
+        IReadOnlyList<StockCopilotMcpFeatureDto> baseFeatures,
+        PortfolioContextDto portfolioContext,
+        string symbol)
+    {
+        var list = new List<StockCopilotMcpFeatureDto>(baseFeatures);
+        list.Add(new StockCopilotMcpFeatureDto("portfolioTotalCapital", "Portfolio Total Capital", "number", portfolioContext.TotalCapital, null, "CNY", "User total capital from portfolio settings."));
+        list.Add(new StockCopilotMcpFeatureDto("portfolioTotalPositionRatio", "Portfolio Total Position Ratio", "number", portfolioContext.TotalPositionRatio, null, "%", "Total position ratio (total cost / total capital)."));
+        list.Add(new StockCopilotMcpFeatureDto("portfolioAvailableCash", "Portfolio Available Cash", "number", portfolioContext.AvailableCash, null, "CNY", "Available cash for new positions."));
+
+        var position = portfolioContext.Positions.FirstOrDefault(p => string.Equals(p.Symbol, symbol, StringComparison.OrdinalIgnoreCase));
+        if (position is not null)
+        {
+            list.Add(new StockCopilotMcpFeatureDto("currentPositionQuantity", "Current Position Quantity", "number", position.Quantity, null, "shares", "User's current holding quantity for this symbol."));
+            list.Add(new StockCopilotMcpFeatureDto("currentPositionRatio", "Current Position Ratio", "number", position.PositionRatio, null, "%", "User's position ratio for this symbol."));
+            list.Add(new StockCopilotMcpFeatureDto("currentPositionPnL", "Current Position PnL", "number", position.UnrealizedPnL, null, "CNY", "Unrealized P&L for this symbol."));
+        }
+
+        return list;
     }
 
     private static IReadOnlyList<StockCopilotProductFactDto> ConvertProductFacts(IReadOnlyList<StockFundamentalFactDto> facts)

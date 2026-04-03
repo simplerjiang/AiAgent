@@ -15,6 +15,18 @@ public sealed class AppDbContext : DbContext
     private static readonly ValueConverter<TradingPlanEventSeverity, string> TradingPlanEventSeverityConverter = new(
         value => value.ToString(),
         value => ParseTradingPlanEventSeverity(value));
+    private static readonly ValueConverter<TradeDirection, string> TradeDirectionConverter = new(
+        value => value.ToString(),
+        value => ParseTradeDirection(value));
+    private static readonly ValueConverter<TradeType, string> TradeTypeConverter = new(
+        value => value.ToString(),
+        value => ParseTradeType(value));
+    private static readonly ValueConverter<ComplianceTag, string> ComplianceTagConverter = new(
+        value => value.ToString(),
+        value => ParseComplianceTag(value));
+    private static readonly ValueConverter<ReviewType, string> ReviewTypeConverter = new(
+        value => value.ToString(),
+        value => ParseReviewType(value));
 
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options)
     {
@@ -62,6 +74,9 @@ public sealed class AppDbContext : DbContext
     public DbSet<RecommendationStageSnapshot> RecommendationStageSnapshots => Set<RecommendationStageSnapshot>();
     public DbSet<RecommendationRoleState> RecommendationRoleStates => Set<RecommendationRoleState>();
     public DbSet<RecommendationFeedItem> RecommendationFeedItems => Set<RecommendationFeedItem>();
+    public DbSet<TradeExecution> TradeExecutions => Set<TradeExecution>();
+    public DbSet<TradeReview> TradeReviews => Set<TradeReview>();
+    public DbSet<UserPortfolioSettings> UserPortfolioSettings => Set<UserPortfolioSettings>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -561,6 +576,52 @@ public sealed class AppDbContext : DbContext
             .HasOne(x => x.Turn).WithMany(x => x.FeedItems)
             .HasForeignKey(x => x.TurnId).OnDelete(DeleteBehavior.Cascade);
 
+        // ── TradeExecution ────────────────────────────────────────
+        modelBuilder.Entity<TradeExecution>()
+            .HasIndex(x => new { x.Symbol, x.ExecutedAt });
+        modelBuilder.Entity<TradeExecution>()
+            .HasIndex(x => x.PlanId);
+        modelBuilder.Entity<TradeExecution>()
+            .Property(x => x.Symbol).HasMaxLength(32);
+        modelBuilder.Entity<TradeExecution>()
+            .Property(x => x.Name).HasMaxLength(128);
+        modelBuilder.Entity<TradeExecution>()
+            .Property(x => x.Direction)
+            .HasConversion(TradeDirectionConverter)
+            .HasMaxLength(16);
+        modelBuilder.Entity<TradeExecution>()
+            .Property(x => x.TradeType)
+            .HasConversion(TradeTypeConverter)
+            .HasMaxLength(16);
+        modelBuilder.Entity<TradeExecution>()
+            .Property(x => x.ComplianceTag)
+            .HasConversion(ComplianceTagConverter)
+            .HasMaxLength(32);
+        modelBuilder.Entity<TradeExecution>()
+            .Property(x => x.AgentDirection).HasMaxLength(16);
+        modelBuilder.Entity<TradeExecution>()
+            .Property(x => x.MarketStageAtTrade).HasMaxLength(16);
+        modelBuilder.Entity<TradeExecution>()
+            .HasOne(x => x.Plan)
+            .WithMany()
+            .HasForeignKey(x => x.PlanId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        // ── TradeReview ──────────────────────────────────────────
+        modelBuilder.Entity<TradeReview>()
+            .Property(x => x.ReviewType)
+            .HasConversion(ReviewTypeConverter)
+            .HasMaxLength(16);
+        modelBuilder.Entity<TradeReview>()
+            .Property(x => x.WinRate).HasPrecision(18, 6);
+        modelBuilder.Entity<TradeReview>()
+            .Property(x => x.ComplianceRate).HasPrecision(18, 6);
+
+        // ── StockPosition extra config ───────────────────────────
+        modelBuilder.Entity<StockPosition>()
+            .Property(x => x.Name).HasMaxLength(128);
+
+        // Global decimal(18,2) default
         foreach (var entityType in modelBuilder.Model.GetEntityTypes())
         {
             foreach (var property in entityType.GetProperties())
@@ -572,6 +633,16 @@ public sealed class AppDbContext : DbContext
                 }
             }
         }
+
+        // Override precision for rate/ratio fields that need more decimals
+        modelBuilder.Entity<TradeExecution>()
+            .Property(x => x.ReturnRate).HasPrecision(18, 6);
+        modelBuilder.Entity<TradeExecution>()
+            .Property(x => x.AgentConfidence).HasPrecision(18, 6);
+        modelBuilder.Entity<StockPosition>()
+            .Property(x => x.UnrealizedReturnRate).HasPrecision(18, 6);
+        modelBuilder.Entity<StockPosition>()
+            .Property(x => x.PositionRatio).HasPrecision(18, 6);
     }
 
     internal static TradingPlanStatus ParseTradingPlanStatus(string? value)
@@ -607,5 +678,33 @@ public sealed class AppDbContext : DbContext
         return Enum.TryParse<TradingPlanEventSeverity>(value, true, out var parsed)
             ? parsed
             : TradingPlanEventSeverity.Warning;
+    }
+
+    internal static TradeDirection ParseTradeDirection(string? value)
+    {
+        return Enum.TryParse<TradeDirection>(value, true, out var parsed)
+            ? parsed
+            : TradeDirection.Buy;
+    }
+
+    internal static TradeType ParseTradeType(string? value)
+    {
+        return Enum.TryParse<TradeType>(value, true, out var parsed)
+            ? parsed
+            : TradeType.Normal;
+    }
+
+    internal static ComplianceTag ParseComplianceTag(string? value)
+    {
+        return Enum.TryParse<ComplianceTag>(value, true, out var parsed)
+            ? parsed
+            : ComplianceTag.Unplanned;
+    }
+
+    internal static ReviewType ParseReviewType(string? value)
+    {
+        return Enum.TryParse<ReviewType>(value, true, out var parsed)
+            ? parsed
+            : ReviewType.Custom;
     }
 }

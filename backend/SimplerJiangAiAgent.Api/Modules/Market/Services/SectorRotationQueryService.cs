@@ -1,3 +1,4 @@
+using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using SimplerJiangAiAgent.Api.Data;
@@ -414,6 +415,8 @@ public sealed class SectorRotationQueryService : ISectorRotationQueryService
         {
             "5d" => "5d",
             "20d" => "20d",
+            "30d" => "30d",
+            "60d" => "60d",
             _ => "10d"
         };
     }
@@ -424,7 +427,56 @@ public sealed class SectorRotationQueryService : ISectorRotationQueryService
         {
             "5d" => 5,
             "20d" => 20,
+            "30d" => 30,
+            "60d" => 60,
             _ => 10
         };
+    }
+
+    public async Task<string> GetMainlineTrendSummaryAsync(int days, CancellationToken cancellationToken = default)
+    {
+        var cutoff = DateTime.UtcNow.AddDays(-days);
+        var snapshots = await _dbContext.SectorRotationSnapshots
+            .AsNoTracking()
+            .Where(s => s.TradingDate >= cutoff && s.IsMainline)
+            .OrderByDescending(s => s.TradingDate)
+            .ToListAsync(cancellationToken);
+
+        if (snapshots.Count == 0) return "暂无板块趋势历史数据。";
+
+        var grouped = snapshots
+            .GroupBy(s => s.TradingDate.Date)
+            .OrderByDescending(g => g.Key)
+            .ToList();
+
+        var sb = new StringBuilder();
+        sb.AppendLine($"=== 近{days}天板块趋势摘要 ===");
+
+        // 每5天采样一个数据点
+        for (int i = 0; i < grouped.Count; i += 5)
+        {
+            var dayGroup = grouped[i];
+            var topSectors = dayGroup
+                .OrderByDescending(s => s.MainlineScore)
+                .Take(5)
+                .Select(s => $"{s.SectorName}({s.MainlineScore:F0})")
+                .ToList();
+            sb.AppendLine($"{dayGroup.Key:MM-dd}: 主线=[{string.Join(",", topSectors)}]");
+        }
+
+        // 板块强度变化方向
+        if (grouped.Count >= 2)
+        {
+            var latest = grouped.First().Average(s => s.MainlineScore);
+            var earliest = grouped.Last().Average(s => s.MainlineScore);
+            var direction = latest > earliest + 5 ? "上升" : latest < earliest - 5 ? "下降" : "震荡";
+            sb.AppendLine($"主线强度趋势: {direction} (最新均分{latest:F0}, 最早均分{earliest:F0})");
+        }
+
+        var result = sb.ToString();
+        if (result.Length > 2000)
+            result = result[..1997] + "...";
+
+        return result;
     }
 }

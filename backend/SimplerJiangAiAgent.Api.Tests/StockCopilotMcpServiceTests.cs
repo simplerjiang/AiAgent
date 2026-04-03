@@ -1333,6 +1333,11 @@ public sealed class StockCopilotMcpServiceTests
         {
             throw new NotSupportedException();
         }
+
+        public Task<string> GetMainlineTrendSummaryAsync(int days, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult("=== 近30天板块趋势摘要 ===\n03-26: 主线=[银行(90),保险(85),券商(80)]\n");
+        }
     }
 
     private sealed class NullSectorRotationQueryService : ISectorRotationQueryService
@@ -1370,6 +1375,11 @@ public sealed class StockCopilotMcpServiceTests
         public Task<IReadOnlyList<SectorRotationListItemDto>> GetMainlineAsync(string boardType, string window, int take, CancellationToken cancellationToken = default)
         {
             throw new NotSupportedException();
+        }
+
+        public Task<string> GetMainlineTrendSummaryAsync(int days, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult("暂无板块趋势历史数据。");
         }
     }
 
@@ -1538,7 +1548,8 @@ public sealed class StockCopilotMcpServiceTests
             "summary_only",
             ingestedAt,
             aiTarget ?? "个股:浦发银行",
-            aiTags ?? new[] { "公告" });
+            aiTags ?? new[] { "公告" },
+            true);
     }
 
     private sealed class FakeRealtimeMarketOverviewService : IRealtimeMarketOverviewService

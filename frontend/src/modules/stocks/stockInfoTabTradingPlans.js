@@ -73,7 +73,11 @@ export const createTradingPlanForm = item => ({
   analysisHistoryId: item?.analysisHistoryId ?? '',
   sourceAgent: item?.sourceAgent ?? 'commander',
   userNote: item?.userNote ?? '',
-  marketContext: normalizeMarketContext(item?.marketContext ?? item?.marketContextAtCreation ?? item?.currentMarketContext ?? null)
+  marketContext: normalizeMarketContext(item?.marketContext ?? item?.marketContextAtCreation ?? item?.currentMarketContext ?? null),
+  signalMetrics: item?.signalMetrics ?? null,
+  realTradeMetrics: item?.realTradeMetrics ?? null,
+  executionMode: item?.executionMode ?? null,
+  metricsLoading: false
 })
 
 export const buildRealtimeContextSymbols = (symbolKey, domesticSymbols, globalSymbols) => {

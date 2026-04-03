@@ -18,7 +18,8 @@ public sealed record LocalNewsItemDto(
     string ReadStatus,
     DateTime? IngestedAt,
     string? AiTarget,
-    IReadOnlyList<string> AiTags
+    IReadOnlyList<string> AiTags,
+    bool IsAiProcessed
 );
 
 public sealed record LocalFundamentalFactDto(
@@ -67,7 +68,8 @@ public sealed record LocalNewsArchiveItemDto(
     string ReadStatus,
     DateTime? IngestedAt,
     string? AiTarget,
-    IReadOnlyList<string> AiTags
+    IReadOnlyList<string> AiTags,
+    bool IsAiProcessed
 );
 
 public sealed record LocalNewsArchivePageDto(

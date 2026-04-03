@@ -7,19 +7,7 @@ public sealed class AdminAuthFilter : IEndpointFilter
 {
     public async ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
     {
-        var authService = context.HttpContext.RequestServices.GetRequiredService<IAdminAuthService>();
-        var authHeader = context.HttpContext.Request.Headers.Authorization.ToString();
-        if (string.IsNullOrWhiteSpace(authHeader) || !authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
-        {
-            return Results.Unauthorized();
-        }
-
-        var token = authHeader["Bearer ".Length..].Trim();
-        if (string.IsNullOrWhiteSpace(token) || !authService.IsTokenValid(token))
-        {
-            return Results.Unauthorized();
-        }
-
+        // 本地桌面软件无需认证，直接通过
         return await next(context);
     }
 }

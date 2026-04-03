@@ -443,6 +443,26 @@ const closeTradingPlanModal = symbolKey => {
   workspace.planModalOpen = false
 }
 
+const fetchDraftMetrics = async (workspace) => {
+  const form = workspace?.planForm
+  if (!form || !form.analysisHistoryId || !form.symbol) return
+  form.metricsLoading = true
+  try {
+    const response = await fetch('/api/stocks/plans/draft', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ symbol: form.symbol, analysisHistoryId: Number(form.analysisHistoryId) })
+    })
+    if (response.ok) {
+      const data = await response.json()
+      form.signalMetrics = data.signalMetrics ?? null
+      form.realTradeMetrics = data.realTradeMetrics ?? null
+      form.executionMode = data.executionMode ?? null
+    }
+  } catch { /* non-critical */ }
+  finally { form.metricsLoading = false }
+}
+
 const editTradingPlan = (symbolKey, item) => {
   const workspace = getWorkspace(symbolKey)
   if (!workspace || !item?.id) {
@@ -452,6 +472,7 @@ const editTradingPlan = (symbolKey, item) => {
   workspace.planError = ''
   workspace.planForm = createTradingPlanForm(item)
   workspace.planModalOpen = true
+  fetchDraftMetrics(workspace)
 }
 
 const saveTradingPlan = async (symbolKey = currentStockKey.value) => {
@@ -614,6 +635,10 @@ const openCreatePlan = symbolKey => {
     sourceAgent: 'manual'
   })
   workspace.planModalOpen = true
+}
+
+const handleRecordTrade = (plan) => {
+  window.dispatchEvent(new CustomEvent('navigate-trade-log', { detail: { plan } }))
 }
 
 const jumpToPlanSymbol = symbolKey => {
@@ -972,6 +997,7 @@ const handleWorkbenchNavigatePlan = () => {
     name: workspace.detail?.quote?.name ?? ''
   })
   workspace.planModalOpen = true
+  fetchDraftMetrics(workspace)
 }
 
 const handleChartStrategyVisibilityChange = payload => {
@@ -1285,6 +1311,7 @@ watch(currentStockKey, () => {
                   @resume="resumeTradingPlan(workspace.symbolKey, $event)"
                   @cancel="cancelTradingPlan(workspace.symbolKey, $event)"
                   @create="openCreatePlan(workspace.symbolKey)"
+                  @record-trade="handleRecordTrade"
                 />
               </div>
             </template>

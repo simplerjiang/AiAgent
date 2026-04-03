@@ -34,6 +34,13 @@ public sealed class LlmModule : IModule
             client.Timeout = TimeSpan.FromSeconds(timeoutSeconds);
         });
         services.AddSingleton<ILlmProvider, OpenAiProvider>();
+
+        services.AddSingleton<AntigravityOAuthService>();
+        services.AddHttpClient<AntigravityProvider>(client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(timeoutSeconds);
+        });
+        services.AddSingleton<ILlmProvider, AntigravityProvider>();
     }
 
     public void MapEndpoints(IEndpointRouteBuilder app)
@@ -131,7 +138,9 @@ public sealed class LlmModule : IModule
             var updated = await store.UpsertAsync(new LlmProviderSettings
             {
                 Provider = provider,
-                ProviderType = existing?.ProviderType ?? "openai",
+                ProviderType = !string.IsNullOrWhiteSpace(request.ProviderType)
+                    ? request.ProviderType
+                    : (existing?.ProviderType ?? "openai"),
                 ApiKey = request.ApiKey ?? string.Empty,
                 TavilyApiKey = request.TavilyApiKey ?? string.Empty,
                 BaseUrl = request.BaseUrl ?? string.Empty,
@@ -146,6 +155,59 @@ public sealed class LlmModule : IModule
             return Results.Ok(ToResponse(updated));
         })
         .WithName("UpsertLlmProviderSettings")
+        .WithOpenApi();
+
+        secureAdminGroup.MapPost("/antigravity/auth-start", async (AntigravityOAuthService oauthService) =>
+        {
+            var result = await oauthService.StartAuthFlowAsync();
+            return Results.Ok(new { authUrl = result.AuthUrl, port = result.Port });
+        })
+        .WithName("AntigravityAuthStart")
+        .WithOpenApi();
+
+        secureAdminGroup.MapGet("/antigravity/auth-status", (AntigravityOAuthService oauthService) =>
+        {
+            var status = oauthService.GetAuthStatus();
+            return Results.Ok(new { status = status.Status, error = status.Error });
+        })
+        .WithName("AntigravityAuthStatus")
+        .WithOpenApi();
+
+        secureAdminGroup.MapPost("/antigravity/auth-complete", async (AntigravityOAuthService oauthService, HttpContext httpContext) =>
+        {
+            var body = await httpContext.Request.ReadFromJsonAsync<AntigravityAuthCompleteRequest>();
+            if (body is null || body.Port <= 0)
+            {
+                return Results.BadRequest(new { message = "port is required" });
+            }
+
+            try
+            {
+                var result = await oauthService.WaitForAuthCompleteAsync(body.Port);
+                return Results.Ok(new
+                {
+                    refreshToken = result.RefreshToken,
+                    email = result.Email,
+                    projectId = result.ProjectId
+                });
+            }
+            catch (OperationCanceledException)
+            {
+                return Results.BadRequest(new { message = "OAuth 超时或已取消" });
+            }
+            catch (Exception ex)
+            {
+                return Results.BadRequest(new { message = ex.Message });
+            }
+        })
+        .WithName("AntigravityAuthComplete")
+        .WithOpenApi();
+
+        secureAdminGroup.MapGet("/antigravity/models", () =>
+        {
+            return Results.Ok(AntigravityConstants.AvailableModels);
+        })
+        .WithName("AntigravityModels")
         .WithOpenApi();
 
         secureAdminGroup.MapPost("/llm/test/{provider}", async (string provider, LlmChatRequestDto request, ILlmService llmService) =>
@@ -272,7 +334,7 @@ public sealed class LlmModule : IModule
         .WithName("ChatLlmProvider")
         .WithOpenApi();
 
-        app.MapPost("/api/llm/chat/stream/{provider}", async (string provider, LlmChatRequestDto request, ILlmSettingsStore store, OpenAiProvider providerImpl, IFileLogWriter fileLogWriter, HttpContext context) =>
+        app.MapPost("/api/llm/chat/stream/{provider}", async (string provider, LlmChatRequestDto request, ILlmSettingsStore store, OpenAiProvider openAiProvider, AntigravityProvider antigravityProvider, IFileLogWriter fileLogWriter, HttpContext context) =>
         {
             if (string.IsNullOrWhiteSpace(request.Prompt))
             {
@@ -295,8 +357,14 @@ public sealed class LlmModule : IModule
 
             try
             {
+                var providerType = (settings.ProviderType ?? string.Empty).Trim().ToLowerInvariant();
+                var chatRequest = new LlmChatRequest(request.Prompt, request.Model, request.Temperature, request.UseInternet, traceId);
+                var streamSource = providerType == "antigravity"
+                    ? antigravityProvider.StreamChatAsync(settings, chatRequest, context.RequestAborted)
+                    : openAiProvider.StreamChatAsync(settings, chatRequest, context.RequestAborted);
+
                 var fullContent = new StringBuilder();
-                await foreach (var chunk in providerImpl.StreamChatAsync(settings, new LlmChatRequest(request.Prompt, request.Model, request.Temperature, request.UseInternet, traceId), context.RequestAborted))
+                await foreach (var chunk in streamSource)
                 {
                     fullContent.Append(chunk);
                     await context.Response.WriteAsync($"data: {chunk}\n\n", context.RequestAborted);
@@ -383,3 +451,5 @@ public sealed class LlmModule : IModule
         return Math.Clamp(size, 1, 100);
     }
 }
+
+internal sealed record AntigravityAuthCompleteRequest(int Port);

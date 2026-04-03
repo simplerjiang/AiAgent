@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import StockInfoTab from './modules/stocks/StockInfoTab.vue'
 import NewsArchiveTab from './modules/stocks/NewsArchiveTab.vue'
 import StockRecommendTab from './modules/stocks/StockRecommendTab.vue'
+import TradeLogTab from './modules/stocks/TradeLogTab.vue'
 import MarketSentimentTab from './modules/market/MarketSentimentTab.vue'
 import AdminLlmSettings from './modules/admin/AdminLlmSettings.vue'
 import SourceGovernanceDeveloperMode from './modules/admin/SourceGovernanceDeveloperMode.vue'
@@ -12,6 +13,7 @@ const mainTabs = [
   { key: 'stock-info', name: '股票信息', shortName: '股票', component: StockInfoTab },
   { key: 'market-sentiment', name: '情绪轮动', shortName: '情绪', component: MarketSentimentTab },
   { key: 'news-archive', name: '全量资讯库', shortName: '资讯', component: NewsArchiveTab },
+  { key: 'trade-log', name: '交易日志', shortName: '交易', component: TradeLogTab },
   { key: 'stock-recommend', name: '股票推荐', shortName: '推荐', component: StockRecommendTab }
 ]
 
@@ -167,6 +169,10 @@ const handleNavigateStock = (e) => {
   })
 }
 
+const handleNavigateTradeLog = (e) => {
+  setActiveTab('trade-log')
+}
+
 onMounted(async () => {
   updateClock()
   clockTimer = setInterval(updateClock, 1000)
@@ -174,6 +180,7 @@ onMounted(async () => {
   healthTimer = setInterval(checkHealth, 30000)
   document.addEventListener('click', closeSettings)
   window.addEventListener('navigate-stock', handleNavigateStock)
+  window.addEventListener('navigate-trade-log', handleNavigateTradeLog)
 
   try {
     const versionResponse = await fetch('/api/app/version')
@@ -194,6 +201,7 @@ onBeforeUnmount(() => {
   if (healthTimer) clearInterval(healthTimer)
   document.removeEventListener('click', closeSettings)
   window.removeEventListener('navigate-stock', handleNavigateStock)
+  window.removeEventListener('navigate-trade-log', handleNavigateTradeLog)
 })
 </script>
 

@@ -68,7 +68,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['refresh', 'edit', 'resume', 'cancel', 'create'])
+const emit = defineEmits(['refresh', 'edit', 'resume', 'cancel', 'create', 'recordTrade'])
 
 const confirmingCancelId = ref(null)
 
@@ -112,6 +112,11 @@ const dismissCancel = () => {
           </div>
           <div class="plan-item-actions">
             <button v-if="canEditTradingPlan(item)" class="plan-link-button" @click="$emit('edit', item)">编辑</button>
+            <button
+              v-if="item.status === 'Pending' || item.status === 'Triggered'"
+              class="btn btn-sm btn-primary"
+              @click="$emit('recordTrade', item)"
+            >录入执行</button>
             <button
               v-if="canResumeTradingPlan(item)"
               class="plan-link-button"

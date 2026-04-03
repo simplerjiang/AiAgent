@@ -37,7 +37,8 @@ internal static class StockAgentLocalFactProjection
             item.ReadStatus,
             item.IngestedAt,
             item.AiTarget,
-            item.AiTags);
+            item.AiTags,
+            item.IsAiProcessed);
     }
 }
 
@@ -59,7 +60,8 @@ public sealed record StockAgentLocalNewsItemDto(
     string ReadStatus,
     DateTime? IngestedAt,
     string? AiTarget,
-    IReadOnlyList<string> AiTags
+    IReadOnlyList<string> AiTags,
+    bool IsAiProcessed
 );
 
 public sealed record StockAgentLocalFundamentalFactDto(

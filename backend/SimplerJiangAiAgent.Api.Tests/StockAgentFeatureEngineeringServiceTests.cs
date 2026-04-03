@@ -46,12 +46,12 @@ public sealed class StockAgentFeatureEngineeringServiceTests
             "银行",
             new[]
             {
-                new StockAgentLocalNewsItemDto(1, "stock_news:1", "浦发银行公告", null, "上交所公告", "announcement", "announcement", "利好", new DateTime(2026, 3, 21, 8, 30, 0), new DateTime(2026, 3, 21, 8, 31, 0), "https://example.com/a", "公告摘要", "公告摘要", "url_fetched", "full_text_read", new DateTime(2026, 3, 21, 8, 31, 0), "个股:浦发银行", new[] { "公告" })
+                new StockAgentLocalNewsItemDto(1, "stock_news:1", "浦发银行公告", null, "上交所公告", "announcement", "announcement", "利好", new DateTime(2026, 3, 21, 8, 30, 0), new DateTime(2026, 3, 21, 8, 31, 0), "https://example.com/a", "公告摘要", "公告摘要", "url_fetched", "full_text_read", new DateTime(2026, 3, 21, 8, 31, 0), "个股:浦发银行", new[] { "公告" }, true)
             },
             Array.Empty<StockAgentLocalNewsItemDto>(),
             new[]
             {
-                new StockAgentLocalNewsItemDto(2, "market:1", "美股 Tesla 大涨", null, "Seeking Alpha", "seeking-alpha", "market", "中性", new DateTime(2026, 3, 21, 7, 0, 0), new DateTime(2026, 3, 21, 7, 5, 0), "https://example.com/noise", null, null, "title_only", "title_only", new DateTime(2026, 3, 21, 7, 5, 0), null, new[] { "美股个股" })
+                new StockAgentLocalNewsItemDto(2, "market:1", "美股 Tesla 大涨", null, "Seeking Alpha", "seeking-alpha", "market", "中性", new DateTime(2026, 3, 21, 7, 0, 0), new DateTime(2026, 3, 21, 7, 5, 0), "https://example.com/noise", null, null, "title_only", "title_only", new DateTime(2026, 3, 21, 7, 5, 0), null, new[] { "美股个股" }, true)
             },
             new DateTime(2026, 3, 21, 7, 0, 0),
             new[] { new StockAgentLocalFundamentalFactDto("机构目标价", "11.50", "东方财富") });

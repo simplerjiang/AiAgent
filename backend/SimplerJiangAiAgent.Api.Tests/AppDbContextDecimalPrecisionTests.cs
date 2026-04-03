@@ -22,10 +22,20 @@ public sealed class AppDbContextDecimalPrecisionTests
 
         Assert.NotEmpty(decimalProperties);
 
+        // R1 introduced ratio/confidence fields that legitimately need scale=6
+        var scale6Properties = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "ReturnRate",
+            "AgentConfidence",
+            "UnrealizedReturnRate",
+            "PositionRatio",
+        };
+
         foreach (var property in decimalProperties)
         {
             Assert.Equal(18, property.GetPrecision());
-            Assert.Equal(2, property.GetScale());
+            var expectedScale = scale6Properties.Contains(property.Name) ? 6 : 2;
+            Assert.Equal(expectedScale, property.GetScale());
         }
     }
 }

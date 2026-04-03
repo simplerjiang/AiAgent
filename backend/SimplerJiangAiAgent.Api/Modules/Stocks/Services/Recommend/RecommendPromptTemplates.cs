@@ -50,7 +50,8 @@ public static class RecommendPromptTemplates
 ## 当前时间上下文
 - 日期: {now:yyyy-MM-dd} ({dayOfWeek})
 - A股交易状态: {tradingStatus}
-- 检索信息时请注意时效性，优先使用最近72小时内的数据
+- 对于实时信号（新闻、资金流向等），优先使用最近72小时内的数据
+- 对于市场趋势判断（板块轮动、主线变迁等），参考最近30天的历史数据
 """;
     }
 

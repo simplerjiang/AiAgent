@@ -100,3 +100,27 @@ public sealed record TradingPlanEventItemDto(
     string? MetadataJson,
     DateTime OccurredAt
 );
+
+public sealed record SignalHistoryMetricsDto(
+    string Direction,
+    int SampleCount,
+    decimal? HitRate5Day,
+    decimal? AverageReturn5Day,
+    string? Caveat
+);
+
+public sealed record RealTradeMetricsDto(
+    int TotalTrades,
+    int WinCount,
+    decimal WinRate,
+    decimal AveragePnL,
+    decimal AverageReturnRate,
+    string? Caveat
+);
+
+public sealed record TradingPlanDraftResponseDto(
+    TradingPlanDraftDto Draft,
+    SignalHistoryMetricsDto? SignalMetrics,
+    RealTradeMetricsDto? RealTradeMetrics,
+    MarketExecutionModeDto? ExecutionMode = null
+);

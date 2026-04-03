@@ -11,4 +11,5 @@ public interface ISectorRotationQueryService
     Task<SectorRotationTrendDto?> GetSectorTrendAsync(string sectorCode, string boardType, string window, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<SectorRotationLeaderDto>> GetLeadersAsync(string sectorCode, string boardType, int take, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<SectorRotationListItemDto>> GetMainlineAsync(string boardType, string window, int take, CancellationToken cancellationToken = default);
+    Task<string> GetMainlineTrendSummaryAsync(int days, CancellationToken cancellationToken = default);
 }

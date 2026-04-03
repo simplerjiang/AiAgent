@@ -6,12 +6,12 @@ const DEV_MODE_KEY = 'source_governance_dev_mode'
 
 const username = ref('')
 const password = ref('')
-const token = ref(localStorage.getItem('admin_token') || '')
+const token = ref('local-bypass')
 const loginError = ref('')
 const loginLoading = ref(false)
 
 const initialDeveloperModeEnabled =
-  localStorage.getItem(DEV_MODE_KEY) === '1' && Boolean(localStorage.getItem('admin_token'))
+  localStorage.getItem(DEV_MODE_KEY) === '1'
 const developerModeEnabled = ref(initialDeveloperModeEnabled)
 const loading = ref(false)
 const errorMessage = ref('')

@@ -79,7 +79,8 @@ public sealed class QueryLocalFactDatabaseTool : IQueryLocalFactDatabaseTool
                     NormalizeReadStatus(item.ReadStatus, item.Url, item.ArticleSummary, item.ArticleExcerpt),
                     item.IngestedAt,
                     item.AiTarget,
-                    ParseAiTags(item.AiTags))
+                    ParseAiTags(item.AiTags),
+                    item.IsAiProcessed)
             })
             .ToList();
 
@@ -113,7 +114,8 @@ public sealed class QueryLocalFactDatabaseTool : IQueryLocalFactDatabaseTool
                     NormalizeReadStatus(item.ReadStatus, item.Url, item.ArticleSummary, item.ArticleExcerpt),
                     item.IngestedAt,
                     item.AiTarget,
-                    ParseAiTags(item.AiTags))
+                    ParseAiTags(item.AiTags),
+                    item.IsAiProcessed)
             })
             .ToList();
 
@@ -165,7 +167,8 @@ public sealed class QueryLocalFactDatabaseTool : IQueryLocalFactDatabaseTool
                 NormalizeReadStatus(item.ReadStatus, item.Url, item.ArticleSummary, item.ArticleExcerpt),
                 item.IngestedAt,
                 item.AiTarget,
-                ParseAiTags(item.AiTags)))
+                ParseAiTags(item.AiTags),
+                item.IsAiProcessed))
             .ToList();
 
         var name = stockNews.Select(item => item.Name).FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))
@@ -261,7 +264,8 @@ public sealed class QueryLocalFactDatabaseTool : IQueryLocalFactDatabaseTool
                 "summary_only",
                 snapshot.CreatedAt,
                 $"板块:{snapshot.SectorName}",
-                BuildSectorFallbackTags(snapshot))
+                BuildSectorFallbackTags(snapshot),
+                false)
         };
 
         foreach (var leader in leaders)
@@ -286,7 +290,8 @@ public sealed class QueryLocalFactDatabaseTool : IQueryLocalFactDatabaseTool
                 "summary_only",
                 snapshot.CreatedAt,
                 $"个股:{leader.Name}",
-                new[] { "板块轮动", snapshot.BoardType, snapshot.SectorName }));
+                new[] { "板块轮动", snapshot.BoardType, snapshot.SectorName },
+                false));
         }
 
         return items;
@@ -318,7 +323,8 @@ public sealed class QueryLocalFactDatabaseTool : IQueryLocalFactDatabaseTool
                 item.ArticleSummary,
                 item.ReadMode,
                 item.ReadStatus,
-                item.IngestedAt
+                item.IngestedAt,
+                item.IsAiProcessed
             })
             .ToListAsync(cancellationToken);
 
@@ -347,7 +353,8 @@ public sealed class QueryLocalFactDatabaseTool : IQueryLocalFactDatabaseTool
                 "summary_only",
                 marketRows[0].CrawledAt,
                 $"板块:{sectorName}",
-                new[] { "板块上下文兜底", sectorName, "市场环境" })
+                new[] { "板块上下文兜底", sectorName, "市场环境" },
+                false)
         };
 
         items.AddRange(marketRows.Select(item => new LocalNewsItemDto(
@@ -368,7 +375,8 @@ public sealed class QueryLocalFactDatabaseTool : IQueryLocalFactDatabaseTool
             NormalizeReadStatus(item.ReadStatus, item.Url, item.ArticleSummary, item.ArticleExcerpt),
             item.IngestedAt,
             item.AiTarget ?? $"板块:{sectorName}",
-            ParseAiTags(item.AiTags).Concat(new[] { sectorName, "市场环境" }).Distinct(StringComparer.OrdinalIgnoreCase).ToArray())));
+            ParseAiTags(item.AiTags).Concat(new[] { sectorName, "市场环境" }).Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
+            item.IsAiProcessed)));
 
         return items;
     }
@@ -519,7 +527,8 @@ public sealed class QueryLocalFactDatabaseTool : IQueryLocalFactDatabaseTool
                 NormalizeReadStatus(item.ReadStatus, item.Url, item.ArticleSummary, item.ArticleExcerpt),
                 item.IngestedAt,
                 item.AiTarget,
-                ParseAiTags(item.AiTags)))
+                ParseAiTags(item.AiTags),
+                item.IsAiProcessed))
             .ToList();
 
         return new LocalNewsBucketDto(string.Empty, "market", "大盘环境", marketReportRows);
@@ -593,7 +602,8 @@ public sealed class QueryLocalFactDatabaseTool : IQueryLocalFactDatabaseTool
                     NormalizeReadStatus(item.ReadStatus, item.Url, item.ArticleSummary, item.ArticleExcerpt),
                     item.IngestedAt,
                     item.AiTarget,
-                    ParseAiTags(item.AiTags)))
+                    ParseAiTags(item.AiTags),
+                    item.IsAiProcessed))
                 .ToListAsync(cancellationToken));
         }
 
@@ -645,7 +655,8 @@ public sealed class QueryLocalFactDatabaseTool : IQueryLocalFactDatabaseTool
                     NormalizeReadStatus(item.ReadStatus, item.Url, item.ArticleSummary, item.ArticleExcerpt),
                     item.IngestedAt,
                     item.AiTarget,
-                    ParseAiTags(item.AiTags)))
+                    ParseAiTags(item.AiTags),
+                    item.IsAiProcessed))
                 .ToListAsync(cancellationToken));
         }
 

@@ -1,4 +1,7 @@
 <script setup>
+import { onMounted, ref } from 'vue'
+import { fetchBackendGet } from './stockInfoTabRequestUtils'
+
 defineProps({
   workspace: {
     type: Object,
@@ -43,6 +46,19 @@ defineProps({
 })
 
 defineEmits(['refresh', 'jump'])
+
+const exposure = ref(null)
+
+function formatPercent(v) {
+  return v == null ? '-' : (v * 100).toFixed(1) + '%'
+}
+
+onMounted(async () => {
+  try {
+    const res = await fetchBackendGet('/api/portfolio/exposure')
+    if (res.ok) exposure.value = await res.json()
+  } catch { /* non-critical */ }
+})
 </script>
 
 <template>
@@ -55,6 +71,20 @@ defineEmits(['refresh', 'jump'])
       <button class="board-refresh-button plan-refresh-button" @click="$emit('refresh')" :disabled="workspace.planListLoading || workspace.planAlertsLoading">
         刷新
       </button>
+    </div>
+
+    <!-- 简化暴露条 -->
+    <div v-if="exposure" class="board-exposure-bar">
+      <span class="board-exposure-label">风险敞口</span>
+      <div class="board-exposure-track">
+        <div class="board-exposure-fill"
+          :style="{ width: Math.min(100, (exposure.combinedExposure ?? 0) * 100) + '%' }"
+          :class="(exposure.combinedExposure ?? 0) > 0.8 ? 'fill-danger' : (exposure.combinedExposure ?? 0) > 0.5 ? 'fill-warning' : 'fill-safe'"></div>
+      </div>
+      <span class="board-exposure-value" :class="(exposure.combinedExposure ?? 0) > 0.8 ? 'text-danger' : ''">{{ formatPercent(exposure.combinedExposure) }}</span>
+      <span v-if="exposure.currentMode" class="board-mode-badge" :class="'board-mode-' + exposure.currentMode.confirmationLevel">
+        {{ exposure.currentMode.executionMode }}
+      </span>
     </div>
 
     <p v-if="workspace.planError" class="muted error">{{ workspace.planError }}</p>
@@ -94,6 +124,8 @@ defineEmits(['refresh', 'jump'])
           <span class="plan-pill">止损 {{ formatPlanPrice(item.stopLossPrice) }}</span>
           <span class="plan-pill">止盈 {{ formatPlanPrice(item.takeProfitPrice) }}</span>
           <span class="plan-pill">目标 {{ formatPlanPrice(item.targetPrice) }}</span>
+          <span v-if="item.signalHitRate != null" class="plan-pill" :class="item.signalHitRate > 0.6 ? 'pill-green' : item.signalHitRate >= 0.4 ? 'pill-yellow' : 'pill-red'">信号 {{ formatPercent(item.signalHitRate) }}</span>
+          <span v-if="item.realWinRate != null" class="plan-pill" :class="item.realWinRate > 0.6 ? 'pill-green' : item.realWinRate >= 0.4 ? 'pill-yellow' : 'pill-red'">实盘 {{ formatPercent(item.realWinRate) }}</span>
         </div>
       </li>
     </ul>
@@ -287,4 +319,62 @@ defineEmits(['refresh', 'jump'])
     flex-direction: column;
   }
 }
+
+/* ── 暴露条 ── */
+.board-exposure-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0;
+}
+.board-exposure-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #475569;
+  white-space: nowrap;
+}
+.board-exposure-track {
+  flex: 1;
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.18);
+  overflow: hidden;
+}
+.board-exposure-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+.fill-safe { background: #16a34a; }
+.fill-warning { background: #f59e0b; }
+.fill-danger { background: #ef4444; }
+.board-exposure-value {
+  font-size: 0.78rem;
+  font-weight: 700;
+  font-family: var(--font-family-mono, monospace);
+  color: #334155;
+  white-space: nowrap;
+}
+.text-danger {
+  color: #ef4444;
+}
+
+.pill-green { background: rgba(22, 163, 74, 0.12); color: #15803d; }
+.pill-yellow { background: rgba(245, 158, 11, 0.12); color: #a16207; }
+.pill-red { background: rgba(239, 68, 68, 0.12); color: #b91c1c; }
+
+.board-mode-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.board-mode-normal { background: rgba(22, 163, 74, 0.12); color: #15803d; }
+.board-mode-confirm { background: rgba(234, 179, 8, 0.15); color: #a16207; }
+.board-mode-strong-confirm { background: rgba(234, 179, 8, 0.25); color: #92400e; }
+.board-mode-discouraged { background: rgba(239, 68, 68, 0.15); color: #b91c1c; }
 </style>

@@ -61,6 +61,28 @@ export const fetchBackendGet = (url, options = {}) => fetchWithRetry(url, option
   retryDelayMs: attempt => attempt * 300
 })
 
+export async function fetchBackendPost(url, body, options = {}) {
+  return await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    ...options
+  })
+}
+
+export async function fetchBackendPut(url, body, options = {}) {
+  return await fetch(url, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    ...options
+  })
+}
+
+export async function fetchBackendDelete(url, options = {}) {
+  return await fetch(url, { method: 'DELETE', ...options })
+}
+
 export const replaceAbortController = currentController => {
   currentController?.abort()
   return new AbortController()

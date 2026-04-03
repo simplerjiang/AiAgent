@@ -28,6 +28,7 @@ public sealed class StockAgentOrchestrator : IStockAgentOrchestrator
     private readonly IStockAgentHistoryService _agentHistoryService;
     private readonly IQueryLocalFactDatabaseTool _queryLocalFactDatabaseTool;
     private readonly IStockAgentFeatureEngineeringService _featureEngineeringService;
+    private readonly IPortfolioSnapshotService _portfolioSnapshotService;
 
     public StockAgentOrchestrator(
         IStockDataService dataService,
@@ -35,7 +36,8 @@ public sealed class StockAgentOrchestrator : IStockAgentOrchestrator
         IFileLogWriter fileLogWriter,
         IStockAgentHistoryService agentHistoryService,
         IQueryLocalFactDatabaseTool queryLocalFactDatabaseTool,
-        IStockAgentFeatureEngineeringService featureEngineeringService)
+        IStockAgentFeatureEngineeringService featureEngineeringService,
+        IPortfolioSnapshotService portfolioSnapshotService)
     {
         _dataService = dataService;
         _llmService = llmService;
@@ -43,6 +45,7 @@ public sealed class StockAgentOrchestrator : IStockAgentOrchestrator
         _agentHistoryService = agentHistoryService;
         _queryLocalFactDatabaseTool = queryLocalFactDatabaseTool;
         _featureEngineeringService = featureEngineeringService;
+        _portfolioSnapshotService = portfolioSnapshotService;
     }
 
     public async Task<StockAgentResponseDto> RunAsync(StockAgentRequestDto request, CancellationToken cancellationToken = default)
@@ -138,6 +141,16 @@ public sealed class StockAgentOrchestrator : IStockAgentOrchestrator
         var queryPolicy = StockAgentInternetRoutingPolicy.Build(symbol, requestedUseInternet);
         var prepared = _featureEngineeringService.Prepare(symbol, quote, kLines, minuteLines, newsContext.Messages, newsContext.Policy, projectedLocalFacts, DateTime.Now);
 
+        PortfolioContextDto? portfolioContext = null;
+        try
+        {
+            portfolioContext = await _portfolioSnapshotService.GetPortfolioContextAsync();
+        }
+        catch
+        {
+            // Non-critical: if portfolio data unavailable, proceed without it
+        }
+
         return new StockAgentContextDto(
             quote,
             kLines.OrderBy(item => item.Date).TakeLast(60).ToArray(),
@@ -147,6 +160,7 @@ public sealed class StockAgentOrchestrator : IStockAgentOrchestrator
             prepared.LocalFacts,
             prepared.Features,
             queryPolicy,
+            portfolioContext,
             DateTime.Now);
     }
 
@@ -232,6 +246,7 @@ public sealed class StockAgentOrchestrator : IStockAgentOrchestrator
         StockAgentLocalFactPackageDto LocalFacts,
         StockAgentDeterministicFeaturesDto DeterministicFeatures,
         StockAgentQueryPolicyDto QueryPolicy,
+        PortfolioContextDto? PortfolioContext,
         DateTime RequestTime
     );
 
@@ -249,6 +264,7 @@ public sealed class StockAgentOrchestrator : IStockAgentOrchestrator
             context.LocalFacts,
             context.DeterministicFeatures,
             context.QueryPolicy,
+            context.PortfolioContext,
             context.RequestTime);
 
         return JsonSerializer.Serialize(slimContext, JsonOptions);
@@ -265,6 +281,7 @@ public sealed class StockAgentOrchestrator : IStockAgentOrchestrator
             context.QueryPolicy,
             commanderHistory,
             context.KLines.TakeLast(30).ToArray(),
+            context.PortfolioContext,
             context.RequestTime);
 
         return JsonSerializer.Serialize(commanderContext, JsonOptions);
@@ -277,6 +294,7 @@ public sealed class StockAgentOrchestrator : IStockAgentOrchestrator
         StockAgentLocalFactPackageDto LocalFacts,
         StockAgentDeterministicFeaturesDto DeterministicFeatures,
         StockAgentQueryPolicyDto QueryPolicy,
+        PortfolioContextDto? PortfolioContext,
         DateTime RequestTime
     );
 
@@ -289,6 +307,7 @@ public sealed class StockAgentOrchestrator : IStockAgentOrchestrator
         StockAgentQueryPolicyDto QueryPolicy,
         StockAgentCommanderHistoryPackageDto CommanderHistory,
         IReadOnlyList<KLinePointDto> KLines,
+        PortfolioContextDto? PortfolioContext,
         DateTime RequestTime
     );
 }
@@ -837,6 +856,7 @@ internal static class StockAgentPromptBuilder
             "10. evidence 中每条必须显式标注 readMode/readStatus；优先使用 full_text_read 或 summary_only 证据，metadata_only / unverified / fetch_failed 只能作为弱证据。\n\n" +
             "11. deterministicFeatures 是代码先算好的硬特征，必须优先引用，不要自行脑补数值。coverageScore/conflictScore/degradedFlags 是系统惩罚输入。\n" +
             "12. 只有 commander 可以输出方向、概率分布、触发条件、失效条件、仓位倾向；不得引入上游未引用的新证据。\n\n" +
+            "13. 上下文中的 portfolioContext 描述了用户当前持仓状态。如果该股已重仓（单票占比 > 20%），在建议加仓时额外强调风险集中度。如果总仓位 > 80%，在建议新建仓位时提示风险。\n\n" +
             "输出JSON结构：\n" +
             "{\n" +
             "  \"agent\": \"commander\",\n" +
@@ -1034,7 +1054,8 @@ internal static class StockAgentPromptBuilder
             "1. 必须输出严格JSON，不要Markdown，不要代码块，不要多余文字。\n" +
             "2. 所有字段必须存在；没有数据用null或空数组。\n" +
             "3. 百分比字段用数值，不带%符号。\n" +
-            "4. 你只负责财务质量、估值、预期差和慢变量，不负责最终方向、触发条件、失效条件、仓位建议。triggers/invalidations/riskLimits 默认留空数组。\n\n" +
+            "4. 你只负责财务质量、估值、预期差和慢变量，不负责最终方向、触发条件、失效条件、仓位建议。triggers/invalidations/riskLimits 默认留空数组。\n" +
+            "5. 上下文中的 portfolioContext 描述了用户可用资金。在给出建仓/加仓建议时，参考用户可用资金比例。\n\n" +
             "输出JSON结构：\n" +
             "{\n" +
             "  \"agent\": \"financial_analysis\",\n" +
@@ -1089,7 +1110,8 @@ internal static class StockAgentPromptBuilder
             "2. 所有字段必须存在；没有数据用null或空数组。\n" +
             "3. 百分比字段用数值，不带%符号。\n" +
             "4. 你只负责趋势状态、关键位、波动率、量价结构；不要输出最终仓位建议或新闻结论。triggers/invalidations/riskLimits 默认留空数组。\n" +
-            "5. deterministicFeatures 已经提供 MA/ATR/VWAP/coverage/degradedFlags，必须优先参考。\n\n" +
+            "5. deterministicFeatures 已经提供 MA/ATR/VWAP/coverage/degradedFlags，必须优先参考。\n" +
+            "6. 在判断突破信号时，参考 portfolioContext 中用户当前是否已持有该股及仓位大小。\n\n" +
             "输出JSON结构：\n" +
             "{\n" +
             "  \"agent\": \"trend_analysis\",\n" +

@@ -53,6 +53,7 @@ public sealed class StocksModule : IModule
         services.AddHttpClient<IStockSearchService, StockSearchService>(client => ConfigureStockHttpClient(client, stockHttpTimeout));
         services.AddScoped<IStockAgentHistoryService, StockAgentHistoryService>();
         services.AddScoped<IStockAgentFeatureEngineeringService, StockAgentFeatureEngineeringService>();
+        services.AddScoped<IStockAgentOrchestrator, StockAgentOrchestrator>();
         services.AddScoped<ITradingPlanDraftService, TradingPlanDraftService>();
         services.AddScoped<ITradingPlanService, TradingPlanService>();
         services.AddScoped<IStockMarketContextService, StockMarketContextService>();
@@ -770,7 +771,12 @@ public sealed class StocksModule : IModule
         .WithName("GetTradingPlanById")
         .WithOpenApi();
 
-        group.MapPost("/plans/draft", async (TradingPlanDraftRequestDto request, ITradingPlanDraftService draftService) =>
+        group.MapPost("/plans/draft", async (
+            TradingPlanDraftRequestDto request,
+            ITradingPlanDraftService draftService,
+            IStockAgentReplayCalibrationService calibrationService,
+            ITradeAccountingService accountingService,
+            AppDbContext db) =>
         {
             if (string.IsNullOrWhiteSpace(request.Symbol))
             {
@@ -785,7 +791,61 @@ public sealed class StocksModule : IModule
             try
             {
                 var draft = await draftService.BuildDraftAsync(request.Symbol, request.AnalysisHistoryId);
-                return Results.Ok(draft);
+
+                SignalHistoryMetricsDto? signalMetrics = null;
+                try
+                {
+                    var baseline = await calibrationService.BuildBaselineAsync(request.Symbol, 80);
+                    var horizon5 = baseline.Horizons.FirstOrDefault(h => h.HorizonDays == 5);
+                    if (horizon5 is not null && baseline.SampleCount > 0)
+                    {
+                        var directionText = draft.Direction;
+                        var isBull = string.Equals(directionText, "Long", StringComparison.OrdinalIgnoreCase);
+                        var hitRate = isBull ? horizon5.BullWinRate : horizon5.BearWinRate;
+                        var caveat = baseline.SampleCount < 5 ? "样本不足，仅供参考" : null;
+                        signalMetrics = new SignalHistoryMetricsDto(
+                            isBull ? "偏多" : "偏空",
+                            baseline.SampleCount,
+                            hitRate,
+                            horizon5.AverageReturnPercent,
+                            caveat);
+                    }
+                }
+                catch { /* non-critical */ }
+
+                RealTradeMetricsDto? realTradeMetrics = null;
+                try
+                {
+                    var winRate = await accountingService.GetWinRateAsync(null, null, request.Symbol);
+                    if (winRate.TotalTrades > 0)
+                    {
+                        var caveat = winRate.TotalTrades < 5 ? "交易次数不足，仅供参考" : null;
+                        realTradeMetrics = new RealTradeMetricsDto(
+                            winRate.TotalTrades,
+                            winRate.WinCount,
+                            winRate.WinRate,
+                            winRate.AveragePnL,
+                            winRate.AverageReturnRate,
+                            caveat);
+                    }
+                }
+                catch { /* non-critical */ }
+
+                MarketExecutionModeDto? executionMode = null;
+                try
+                {
+                    var latestSentiment = await db.MarketSentimentSnapshots
+                        .AsNoTracking()
+                        .OrderByDescending(s => s.SnapshotTime)
+                        .FirstOrDefaultAsync();
+                    if (latestSentiment is not null)
+                    {
+                        executionMode = MarketExecutionModeMapper.GetMode(latestSentiment.StageLabel);
+                    }
+                }
+                catch { /* non-critical */ }
+
+                return Results.Ok(new TradingPlanDraftResponseDto(draft, signalMetrics, realTradeMetrics, executionMode));
             }
             catch (Exception ex)
             {
@@ -793,6 +853,45 @@ public sealed class StocksModule : IModule
             }
         })
         .WithName("BuildTradingPlanDraft")
+        .WithOpenApi();
+
+        group.MapGet("/agents/signal-track-record", async (string symbol, string? direction, IStockAgentReplayCalibrationService calibrationService) =>
+        {
+            if (string.IsNullOrWhiteSpace(symbol))
+            {
+                return Results.BadRequest(new { message = "symbol 不能为空" });
+            }
+
+            try
+            {
+                var baseline = await calibrationService.BuildBaselineAsync(symbol, 80);
+                var isBull = string.IsNullOrWhiteSpace(direction)
+                    || string.Equals(direction, "Long", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(direction, "偏多", StringComparison.OrdinalIgnoreCase);
+
+                var horizonMetrics = baseline.Horizons.Select(h => new
+                {
+                    h.HorizonDays,
+                    h.SampleCount,
+                    HitRate = isBull ? h.BullWinRate : h.BearWinRate,
+                    h.AverageReturnPercent
+                }).ToArray();
+
+                return Results.Ok(new
+                {
+                    baseline.Scope,
+                    baseline.SampleCount,
+                    Direction = isBull ? "偏多" : "偏空",
+                    Horizons = horizonMetrics,
+                    Caveat = baseline.SampleCount < 5 ? "样本不足，仅供参考" : (string?)null
+                });
+            }
+            catch (Exception ex)
+            {
+                return Results.BadRequest(new { message = ex.Message });
+            }
+        })
+        .WithName("GetSignalTrackRecord")
         .WithOpenApi();
 
         group.MapPost("/plans", async (TradingPlanCreateDto request, ITradingPlanService tradingPlanService, IStockMarketContextService marketContextService) =>
@@ -1601,6 +1700,212 @@ public sealed class StocksModule : IModule
             }
         })
         .WithName("StreamRecommendEvents")
+        .WithOpenApi();
+
+        // ── Trade Execution endpoints ────────────────────────────────
+
+        var tradeGroup = app.MapGroup("/api/trades");
+
+        tradeGroup.MapPost("/", async (TradeExecutionCreateDto dto, ITradeAccountingService svc) =>
+        {
+            if (string.IsNullOrWhiteSpace(dto.Symbol))
+                return Results.BadRequest(new { message = "symbol 不能为空" });
+            if (dto.Quantity <= 0)
+                return Results.BadRequest(new { message = "quantity 必须大于0" });
+            if (dto.ExecutedPrice <= 0)
+                return Results.BadRequest(new { message = "executedPrice 必须大于0" });
+
+            try
+            {
+                var trade = await svc.RecordTradeAsync(dto);
+                var trades = await svc.GetTradesAsync(null, null, null, null);
+                var created = trades.FirstOrDefault(t => t.Id == trade.Id);
+                return Results.Ok(created ?? (object)new { trade.Id });
+            }
+            catch (ArgumentException ex)
+            {
+                return Results.BadRequest(new { message = ex.Message });
+            }
+        })
+        .WithName("RecordTradeExecution")
+        .WithOpenApi();
+
+        tradeGroup.MapPut("/{id:long}", async (long id, TradeExecutionUpdateDto dto, ITradeAccountingService svc) =>
+        {
+            try
+            {
+                var trade = await svc.UpdateTradeAsync(id, dto);
+                var trades = await svc.GetTradesAsync(null, null, null, null);
+                var updated = trades.FirstOrDefault(t => t.Id == trade.Id);
+                return Results.Ok(updated ?? (object)new { trade.Id });
+            }
+            catch (KeyNotFoundException)
+            {
+                return Results.NotFound();
+            }
+        })
+        .WithName("UpdateTradeExecution")
+        .WithOpenApi();
+
+        tradeGroup.MapDelete("/{id:long}", async (long id, ITradeAccountingService svc) =>
+        {
+            try
+            {
+                await svc.DeleteTradeAsync(id);
+                return Results.NoContent();
+            }
+            catch (KeyNotFoundException)
+            {
+                return Results.NotFound();
+            }
+        })
+        .WithName("DeleteTradeExecution")
+        .WithOpenApi();
+
+        tradeGroup.MapGet("/", async ([AsParameters] TradeQueryParams query, ITradeAccountingService svc) =>
+        {
+            var items = await svc.GetTradesAsync(query.Symbol, query.From, query.To, query.Type);
+            return Results.Ok(items);
+        })
+        .WithName("GetTradeExecutions")
+        .WithOpenApi();
+
+        tradeGroup.MapGet("/summary", async (string period, DateTime? from, DateTime? to, ITradeAccountingService svc) =>
+        {
+            var summary = await svc.GetTradeSummaryAsync(period, from, to);
+            return Results.Ok(summary);
+        })
+        .WithName("GetTradeSummary")
+        .WithOpenApi();
+
+        tradeGroup.MapGet("/win-rate", async (DateTime? from, DateTime? to, string? symbol, ITradeAccountingService svc) =>
+        {
+            var result = await svc.GetWinRateAsync(from, to, symbol);
+            return Results.Ok(result);
+        })
+        .WithName("GetTradeWinRate")
+        .WithOpenApi();
+
+        tradeGroup.MapGet("/plan-deviation", async (long planId, ITradeComplianceService svc) =>
+        {
+            var result = await svc.GetPlanDeviationAsync(planId);
+            return result is null ? Results.NotFound() : Results.Ok(result);
+        })
+        .WithName("GetTradePlanDeviation")
+        .WithOpenApi();
+
+        tradeGroup.MapGet("/compliance-stats", async (DateTime? from, DateTime? to, ITradeComplianceService svc) =>
+        {
+            var result = await svc.GetComplianceStatsAsync(from, to);
+            return Results.Ok(result);
+        })
+        .WithName("GetTradeComplianceStats")
+        .WithOpenApi();
+
+        tradeGroup.MapGet("/behavior-stats", async (ITradingBehaviorService svc) =>
+        {
+            var result = await svc.GetBehaviorStatsAsync();
+            return Results.Ok(result);
+        })
+        .WithName("GetTradeBehaviorStats")
+        .WithOpenApi();
+
+        // ── Trade Review endpoints ───────────────────────────────────
+
+        tradeGroup.MapPost("/reviews/generate", async (TradeReviewGenerateDto dto, ITradeReviewService svc, ILogger<StocksModule> logger, CancellationToken ct) =>
+        {
+            try
+            {
+                var result = await svc.GenerateReviewAsync(dto, ct);
+                return Results.Ok(result);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed to generate trade review");
+                return Results.Problem("生成复盘失败，请稍后重试", statusCode: 500);
+            }
+        })
+        .WithName("GenerateTradeReview")
+        .WithOpenApi();
+
+        tradeGroup.MapGet("/reviews", async (string? type, DateTime? from, DateTime? to, ITradeReviewService svc, CancellationToken ct) =>
+        {
+            var result = await svc.GetReviewsAsync(type, from, to, ct);
+            return Results.Ok(result);
+        })
+        .WithName("GetTradeReviews")
+        .WithOpenApi();
+
+        tradeGroup.MapGet("/reviews/{id:long}", async (long id, ITradeReviewService svc, CancellationToken ct) =>
+        {
+            var result = await svc.GetReviewByIdAsync(id, ct);
+            return result is null ? Results.NotFound() : Results.Ok(result);
+        })
+        .WithName("GetTradeReviewById")
+        .WithOpenApi();
+
+        // ── Portfolio endpoints ──────────────────────────────────────
+
+        var portfolioGroup = app.MapGroup("/api/portfolio");
+
+        portfolioGroup.MapGet("/settings", async (IPortfolioSnapshotService svc) =>
+        {
+            var result = await svc.GetSettingsAsync();
+            return Results.Ok(result);
+        })
+        .WithName("GetPortfolioSettings")
+        .WithOpenApi();
+
+        portfolioGroup.MapPut("/settings", async (PortfolioSettingsUpdateDto dto, IPortfolioSnapshotService svc) =>
+        {
+            if (dto.TotalCapital < 0)
+                return Results.BadRequest(new { message = "totalCapital 不能为负数" });
+            var result = await svc.UpdateSettingsAsync(dto);
+            return Results.Ok(result);
+        })
+        .WithName("UpdatePortfolioSettings")
+        .WithOpenApi();
+
+        portfolioGroup.MapGet("/positions", async (IPortfolioSnapshotService svc) =>
+        {
+            var result = await svc.GetPositionsAsync();
+            return Results.Ok(result);
+        })
+        .WithName("GetPortfolioPositions")
+        .WithOpenApi();
+
+        portfolioGroup.MapGet("/positions/{symbol}", async (string symbol, IPortfolioSnapshotService svc) =>
+        {
+            if (string.IsNullOrWhiteSpace(symbol))
+                return Results.BadRequest(new { message = "symbol 不能为空" });
+            var result = await svc.GetPositionAsync(symbol.Trim());
+            return result is null ? Results.NotFound() : Results.Ok(result);
+        })
+        .WithName("GetPortfolioPosition")
+        .WithOpenApi();
+
+        portfolioGroup.MapGet("/snapshot", async (IPortfolioSnapshotService svc) =>
+        {
+            var result = await svc.GetSnapshotAsync();
+            return Results.Ok(result);
+        })
+        .WithName("GetPortfolioSnapshot")
+        .WithOpenApi();
+
+        portfolioGroup.MapGet("/exposure", async (IPortfolioSnapshotService svc) =>
+        {
+            var result = await svc.GetExposureAsync();
+            return Results.Ok(result);
+        })
+        .WithName("GetPortfolioExposure")
+        .WithOpenApi();
+
+        portfolioGroup.MapGet("/context", async (IPortfolioSnapshotService svc) =>
+        {
+            var result = await svc.GetPortfolioContextAsync();
+            return Results.Ok(result);
+        })
+        .WithName("GetPortfolioContext")
         .WithOpenApi();
     }
 

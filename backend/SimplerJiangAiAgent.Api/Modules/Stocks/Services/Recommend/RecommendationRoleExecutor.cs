@@ -152,7 +152,7 @@ public sealed class RecommendationRoleExecutor : IRecommendationRoleExecutor
         {
             try
             {
-                return await _llmService.ChatAsync("default", request, ct);
+                return await _llmService.ChatAsync("active", request, ct);
             }
             catch (Exception ex) when (attempt < maxRetries && IsRetryableException(ex, ct))
             {

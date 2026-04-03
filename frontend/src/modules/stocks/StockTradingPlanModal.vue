@@ -11,6 +11,28 @@ defineProps({
 })
 
 defineEmits(['close', 'save'])
+
+function formatPercent(v) {
+  return v == null ? '-' : (Number(v) * 100).toFixed(1) + '%'
+}
+
+function winRateColorClass(rate) {
+  if (rate == null) return ''
+  const pct = Number(rate)
+  if (pct > 0.6) return 'winrate-green'
+  if (pct >= 0.4) return 'winrate-yellow'
+  return 'winrate-red'
+}
+
+function saveButtonClass(mode) {
+  if (!mode) return ''
+  switch (mode.confirmationLevel) {
+    case 'confirm': return 'save-confirm'
+    case 'strong-confirm': return 'save-strong-confirm'
+    case 'discouraged': return 'save-discouraged'
+    default: return ''
+  }
+}
 </script>
 
 <template>
@@ -40,6 +62,14 @@ defineEmits(['close', 'save'])
           <span v-if="workspace.planForm.marketContext.counterTrendWarning"> 存在逆势提示，建议降低执行频率。</span>
         </p>
       </section>
+
+      <!-- 执行模式提示条 -->
+      <div v-if="workspace.planForm.executionMode" class="execution-mode-bar" :class="'mode-' + workspace.planForm.executionMode.confirmationLevel">
+        <span class="mode-label">{{ workspace.planForm.executionMode.executionMode }}模式</span>
+        <span class="mode-stage">市场阶段：{{ workspace.planForm.executionMode.marketStage }}</span>
+        <span class="mode-scale">建议仓位 × {{ workspace.planForm.executionMode.positionScale }}</span>
+        <span class="mode-warning" v-if="workspace.planForm.executionMode.warningMessage">⚠️ {{ workspace.planForm.executionMode.warningMessage }}</span>
+      </div>
 
       <div class="plan-form-grid">
         <label class="plan-field">
@@ -99,11 +129,38 @@ defineEmits(['close', 'save'])
         </label>
       </div>
 
+      <section class="signal-winrate-section" v-if="workspace.planForm.metricsLoading || workspace.planForm.signalMetrics || workspace.planForm.realTradeMetrics">
+        <strong>📊 双线胜率</strong>
+        <p v-if="workspace.planForm.metricsLoading" class="muted">加载中...</p>
+        <div v-else class="winrate-dual">
+          <div class="winrate-card" v-if="workspace.planForm.signalMetrics">
+            <div class="winrate-label">AI 纸面命中率</div>
+            <div class="winrate-value" :class="winRateColorClass(workspace.planForm.signalMetrics.hitRate5Day)">
+              {{ formatPercent(workspace.planForm.signalMetrics.hitRate5Day) }}
+            </div>
+            <div class="winrate-detail">
+              过去 {{ workspace.planForm.signalMetrics.sampleCount }} 次"{{ workspace.planForm.signalMetrics.direction }}"建议，5日命中率
+            </div>
+            <div class="winrate-caveat" v-if="workspace.planForm.signalMetrics.caveat">{{ workspace.planForm.signalMetrics.caveat }}</div>
+          </div>
+          <div class="winrate-card" v-if="workspace.planForm.realTradeMetrics">
+            <div class="winrate-label">你的实盘胜率</div>
+            <div class="winrate-value" :class="winRateColorClass(workspace.planForm.realTradeMetrics.winRate)">
+              {{ formatPercent(workspace.planForm.realTradeMetrics.winRate) }}
+            </div>
+            <div class="winrate-detail">
+              过去 {{ workspace.planForm.realTradeMetrics.totalTrades }} 次交易，盈利 {{ workspace.planForm.realTradeMetrics.winCount }} 次
+            </div>
+            <div class="winrate-caveat" v-if="workspace.planForm.realTradeMetrics.caveat">{{ workspace.planForm.realTradeMetrics.caveat }}</div>
+          </div>
+        </div>
+      </section>
+
       <div class="plan-modal-actions">
         <span class="muted">{{ workspace.planForm.id ? `编辑计划 #${workspace.planForm.id}` : (workspace.planForm.analysisHistoryId ? `AnalysisHistory #${workspace.planForm.analysisHistoryId}` : '手动新建') }}</span>
         <div class="plan-modal-buttons">
           <button class="market-news-button" @click="$emit('close')">取消</button>
-          <button class="plan-save-button" @click="$emit('save')" :disabled="workspace.planSaving || workspace.planDraftLoading">
+          <button class="plan-save-button" :class="saveButtonClass(workspace.planForm.executionMode)" @click="$emit('save')" :disabled="workspace.planSaving || workspace.planDraftLoading">
             {{ workspace.planSaving ? '保存中...' : (workspace.planForm.id ? '保存修改' : '保存为 Pending 计划') }}
           </button>
         </div>
@@ -249,5 +306,128 @@ defineEmits(['close', 'save'])
   .plan-form-grid {
     grid-template-columns: 1fr;
   }
+}
+
+.signal-winrate-section {
+  display: grid;
+  gap: 0.65rem;
+  padding: 0.9rem;
+  border-radius: 16px;
+  background: rgba(248, 250, 252, 0.92);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.signal-winrate-section strong {
+  color: #0f172a;
+  font-size: 0.9rem;
+}
+
+.winrate-dual {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.75rem;
+}
+
+.winrate-card {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.75rem;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(148, 163, 184, 0.15);
+}
+
+.winrate-label {
+  font-size: 0.78rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.winrate-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.winrate-green { color: #15803d; }
+.winrate-yellow { color: #a16207; }
+.winrate-red { color: #b91c1c; }
+
+.winrate-detail {
+  font-size: 0.75rem;
+  color: #475569;
+}
+
+.winrate-caveat {
+  font-size: 0.72rem;
+  color: #94a3b8;
+  font-style: italic;
+}
+
+/* 执行模式提示条 */
+.execution-mode-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.7rem 0.9rem;
+  border-radius: 12px;
+  font-size: 0.82rem;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(248, 250, 252, 0.92);
+}
+
+.execution-mode-bar.mode-normal {
+  border-color: rgba(34, 197, 94, 0.3);
+  background: rgba(240, 253, 244, 0.92);
+}
+
+.execution-mode-bar.mode-confirm {
+  border-color: rgba(234, 179, 8, 0.35);
+  background: rgba(254, 252, 232, 0.92);
+}
+
+.execution-mode-bar.mode-strong-confirm {
+  border-color: rgba(234, 179, 8, 0.5);
+  background: rgba(254, 249, 195, 0.92);
+}
+
+.execution-mode-bar.mode-discouraged {
+  border-color: rgba(239, 68, 68, 0.4);
+  background: rgba(254, 242, 242, 0.92);
+}
+
+.mode-label {
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.mode-stage {
+  color: #475569;
+}
+
+.mode-scale {
+  color: #1d4ed8;
+  font-weight: 500;
+}
+
+.mode-warning {
+  color: #b91c1c;
+  font-weight: 500;
+}
+
+/* 保存按钮 - 根据 confirmationLevel 变色 */
+.plan-save-button.save-confirm {
+  border: 2px solid #eab308;
+}
+
+.plan-save-button.save-strong-confirm {
+  background: linear-gradient(135deg, #ca8a04, #eab308);
+  color: #fff;
+}
+
+.plan-save-button.save-discouraged {
+  background: linear-gradient(135deg, #dc2626, #ef4444);
+  color: #fff;
 }
 </style>

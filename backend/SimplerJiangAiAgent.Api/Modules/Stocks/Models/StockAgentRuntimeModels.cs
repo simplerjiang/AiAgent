@@ -206,7 +206,8 @@ public sealed record StockCopilotMarketContextDataDto(
     IReadOnlyList<MarketContextIndexDto>? Indices = null,
     MarketContextCapitalFlowDto? MainCapitalFlow = null,
     MarketContextNorthboundDto? NorthboundFlow = null,
-    MarketContextBreadthDto? Breadth = null);
+    MarketContextBreadthDto? Breadth = null,
+    string? MarketTrendSummary = null);
 
 public sealed record StockCopilotSentimentCountDto(
     int PositiveCount,

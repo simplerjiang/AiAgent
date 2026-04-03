@@ -71,7 +71,7 @@ public sealed class RecommendFollowUpRouter : IRecommendFollowUpRouter
             var prompt = BuildRouterPrompt(contextSummary, userMessage);
 
             var result = await _llmService.ChatAsync(
-                "default",
+                "active",
                 new LlmChatRequest(prompt, null, 0.1),
                 ct);
 

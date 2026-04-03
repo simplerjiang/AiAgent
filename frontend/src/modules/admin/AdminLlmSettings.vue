@@ -13,6 +13,12 @@ const providerPresets = {
     label: 'Gemini 官方',
     baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai/',
     model: 'gemini-3.1-flash-lite-preview-thinking-high'
+  },
+  antigravity: {
+    label: 'Antigravity（免费 Claude/Gemini）',
+    baseUrl: '',
+    model: 'gemini-3-flash',
+    providerType: 'antigravity'
   }
 }
 
@@ -23,7 +29,7 @@ const providerOptions = Object.entries(providerPresets).map(([value, preset]) =>
 
 const username = ref('')
 const password = ref('')
-const token = ref(localStorage.getItem('admin_token') || '')
+const token = ref('local-bypass')
 const loginError = ref('')
 const loginLoading = ref(false)
 
@@ -46,7 +52,15 @@ const saveMessage = ref('')
 const systemPrompt = ref('')
 const forceChinese = ref(false)
 
+// Antigravity OAuth 状态
+const antigravityModels = ref([])
+const antigravityAuthStatus = ref('idle')
+const antigravityAuthLoading = ref(false)
+const antigravityAuthError = ref('')
+const antigravityEmail = ref('')
+
 const isLoggedIn = computed(() => Boolean(token.value))
+const isAntigravity = computed(() => provider.value === 'antigravity')
 
 const authHeaders = () => ({
   Authorization: `Bearer ${token.value}`
@@ -78,6 +92,7 @@ const login = async () => {
     localStorage.setItem('admin_token', token.value)
     const loaded = await loadActiveProvider()
     if (loaded) {
+      provider.value = activeProviderKey.value
       await loadSettings()
     }
   } catch (error) {
@@ -90,6 +105,66 @@ const login = async () => {
 const logout = () => {
   token.value = ''
   localStorage.removeItem('admin_token')
+}
+
+const loadAntigravityModels = async () => {
+  try {
+    const response = await fetch('/api/admin/antigravity/models', {
+      headers: authHeaders()
+    })
+    if (response.ok) {
+      antigravityModels.value = await response.json()
+    }
+  } catch {
+    // 静默失败
+  }
+}
+
+const startAntigravityAuth = async () => {
+  antigravityAuthLoading.value = true
+  antigravityAuthError.value = ''
+
+  try {
+    const startResponse = await fetch('/api/admin/antigravity/auth-start', {
+      method: 'POST',
+      headers: authHeaders()
+    })
+
+    if (!startResponse.ok) {
+      throw new Error('启动 Google 授权失败')
+    }
+
+    const { authUrl, port } = await startResponse.json()
+
+    window.open(authUrl, '_blank')
+    antigravityAuthStatus.value = 'waiting'
+
+    const completeResponse = await fetch('/api/admin/antigravity/auth-complete', {
+      method: 'POST',
+      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ port })
+    })
+
+    if (!completeResponse.ok) {
+      const errorData = await completeResponse.json().catch(() => ({}))
+      throw new Error(errorData.message || '授权完成失败')
+    }
+
+    const result = await completeResponse.json()
+
+    antigravityEmail.value = result.email || ''
+    apiKey.value = result.refreshToken
+    project.value = result.projectId || 'rising-fact-p41fc'
+    organization.value = result.email || ''
+    antigravityAuthStatus.value = 'completed'
+
+    await saveSettings()
+  } catch (error) {
+    antigravityAuthError.value = error.message || '授权失败'
+    antigravityAuthStatus.value = 'error'
+  } finally {
+    antigravityAuthLoading.value = false
+  }
 }
 
 const applyProviderPreset = selectedProvider => {
@@ -106,6 +181,11 @@ const applyProviderPreset = selectedProvider => {
   hasApiKey.value = false
   tavilyApiKeyMasked.value = ''
   hasTavilyApiKey.value = false
+
+  if (selectedProvider === 'antigravity') {
+    project.value = 'rising-fact-p41fc'
+    loadAntigravityModels()
+  }
 }
 
 const loadActiveProvider = async () => {
@@ -167,6 +247,13 @@ const loadSettings = async () => {
     hasApiKey.value = data.hasApiKey || false
     tavilyApiKeyMasked.value = data.tavilyApiKeyMasked || ''
     hasTavilyApiKey.value = data.hasTavilyApiKey || false
+
+    if (provider.value === 'antigravity') {
+      await loadAntigravityModels()
+      if (data.organization) {
+        antigravityEmail.value = data.organization
+      }
+    }
   } catch (error) {
     settingsError.value = error.message || '获取配置失败'
   } finally {
@@ -196,7 +283,8 @@ const saveSettings = async () => {
         forceChinese: forceChinese.value,
         organization: organization.value,
         project: project.value,
-        enabled: enabled.value
+        enabled: enabled.value,
+        providerType: providerPresets[provider.value]?.providerType || undefined
       })
     })
 
@@ -263,9 +351,52 @@ const saveActiveProvider = async () => {
   }
 }
 
+const testLoading = ref(false)
+const testResult = ref('')
+const testError = ref('')
+
+const testConnection = async () => {
+  if (!token.value) return
+  testLoading.value = true
+  testResult.value = ''
+  testError.value = ''
+
+  try {
+    const testProvider = provider.value === activeProviderKey.value ? 'active' : provider.value
+    const response = await fetch(`/api/admin/llm/test/${testProvider}`, {
+      method: 'POST',
+      headers: {
+        ...authHeaders(),
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        prompt: '你好，请用一句话回复确认连接正常。'
+      })
+    })
+
+    if (response.status === 401 || response.status === 403) {
+      handleUnauthorized()
+      return
+    }
+
+    if (!response.ok) {
+      const message = await response.text()
+      throw new Error(message || '测试失败')
+    }
+
+    const data = await response.json()
+    testResult.value = data.content || '连接成功，但未返回内容'
+  } catch (error) {
+    testError.value = error.message || '连接测试失败'
+  } finally {
+    testLoading.value = false
+  }
+}
+
 if (token.value) {
   loadActiveProvider().then(loaded => {
     if (loaded) {
+      provider.value = activeProviderKey.value
       loadSettings()
     }
   })
@@ -349,30 +480,62 @@ if (token.value) {
 
       <!-- 密钥组 -->
       <div class="field-group">
-        <div class="field-group-header">密钥配置</div>
-        <div class="form-field">
-          <label class="form-label">主 LLM API Key</label>
-          <input class="form-input" v-model="apiKey" placeholder="填写新的主模型 Key（留空保持不变）" />
-          <p v-if="hasApiKey" class="form-hint">当前已保存：{{ apiKeyMasked }}</p>
-        </div>
-        <div class="form-field">
-          <label class="form-label">Tavily API Key（外部搜索）</label>
-          <input class="form-input" v-model="tavilyApiKey" placeholder="填写 Tavily Key（留空保持不变）" />
-          <p class="form-hint">仅用于外部搜索工具，不影响主 LLM API Key。</p>
-          <p v-if="hasTavilyApiKey" class="form-hint">当前已保存 Tavily Key：{{ tavilyApiKeyMasked }}</p>
-        </div>
+        <div class="field-group-header">{{ isAntigravity ? 'Google 账号认证' : '密钥配置' }}</div>
+
+        <!-- Antigravity: Google 登录 -->
+        <template v-if="isAntigravity">
+          <div class="form-field">
+            <div v-if="antigravityEmail" class="antigravity-status">
+              <span class="status-dot status-dot--ok"></span>
+              已授权：{{ antigravityEmail }}
+            </div>
+            <div v-else-if="hasApiKey" class="antigravity-status">
+              <span class="status-dot status-dot--ok"></span>
+              已配置 Google 账号（Token 已保存）
+            </div>
+            <div v-else class="antigravity-status">
+              <span class="status-dot status-dot--warn"></span>
+              未登录 Google 账号
+            </div>
+
+            <button class="btn-secondary" @click="startAntigravityAuth" :disabled="antigravityAuthLoading" style="margin-top: 8px;">
+              {{ antigravityAuthLoading ? '等待 Google 授权中...' : (hasApiKey ? '重新登录 Google' : '登录 Google 账号') }}
+            </button>
+
+            <p v-if="antigravityAuthError" class="form-error" style="margin-top: 8px;">{{ antigravityAuthError }}</p>
+            <p class="form-hint">⚠️ 使用 Antigravity 通道有 Google 封号风险，建议使用非主力账号。</p>
+          </div>
+        </template>
+
+        <!-- 其他 Provider: API Key 输入 -->
+        <template v-else>
+          <div class="form-field">
+            <label class="form-label">主 LLM API Key</label>
+            <input class="form-input" v-model="apiKey" placeholder="填写新的主模型 Key（留空保持不变）" />
+            <p v-if="hasApiKey" class="form-hint">当前已保存：{{ apiKeyMasked }}</p>
+          </div>
+          <div class="form-field">
+            <label class="form-label">Tavily API Key（外部搜索）</label>
+            <input class="form-input" v-model="tavilyApiKey" placeholder="填写 Tavily Key（留空保持不变）" />
+            <p class="form-hint">仅用于外部搜索工具，不影响主 LLM API Key。</p>
+            <p v-if="hasTavilyApiKey" class="form-hint">当前已保存 Tavily Key：{{ tavilyApiKeyMasked }}</p>
+          </div>
+        </template>
       </div>
 
       <!-- 模型组 -->
       <div class="field-group">
         <div class="field-group-header">模型设置</div>
-        <div class="form-field">
+        <div class="form-field" v-if="!isAntigravity">
           <label class="form-label">Base URL</label>
           <input class="form-input" v-model="baseUrl" placeholder="https://api.openai.com/v1" />
         </div>
         <div class="form-field">
           <label class="form-label">模型</label>
-          <input class="form-input" v-model="model" placeholder="gpt-4o-mini" />
+          <select v-if="isAntigravity && antigravityModels.length > 0" class="form-input" v-model="model">
+            <option v-for="m in antigravityModels" :key="m" :value="m">{{ m }}</option>
+          </select>
+          <input v-else class="form-input" v-model="model" placeholder="gpt-4o-mini" />
         </div>
         <div class="form-field">
           <label class="form-label">预设提示词</label>
@@ -401,9 +564,16 @@ if (token.value) {
 
       <!-- 操作栏 -->
       <div class="form-actions">
-        <button class="btn-primary-lg" @click="saveSettings" :disabled="settingsLoading">
-          {{ settingsLoading ? '保存中...' : '保存设置' }}
-        </button>
+        <div class="action-buttons">
+          <button class="btn-primary-lg" @click="saveSettings" :disabled="settingsLoading" style="flex:1;">
+            {{ settingsLoading ? '保存中...' : '保存设置' }}
+          </button>
+          <button class="btn-secondary" @click="testConnection" :disabled="testLoading" style="margin-left: 8px; height: 44px;">
+            {{ testLoading ? '测试中...' : '🔗 测试连接' }}
+          </button>
+        </div>
+        <div v-if="testResult" class="form-success" style="margin-top: 8px;">✅ {{ testResult }}</div>
+        <div v-if="testError" class="form-error" style="margin-top: 8px;">❌ {{ testError }}</div>
         <p v-if="saveMessage" class="form-success">{{ saveMessage }}</p>
         <p v-if="settingsError" class="form-error">{{ settingsError }}</p>
       </div>
@@ -694,4 +864,25 @@ if (token.value) {
   padding-top: var(--space-5);
   border-top: 1px solid var(--color-border-light);
 }
+.action-buttons {
+  display: flex;
+  align-items: center;
+}
+
+/* ── Antigravity 状态 ── */
+.antigravity-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-base);
+  color: var(--color-text-body);
+}
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.status-dot--ok { background: var(--color-success); }
+.status-dot--warn { background: #f59e0b; }
 </style>

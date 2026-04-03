@@ -52,6 +52,8 @@ defineEmits(['refresh'])
                 <span v-for="tag in item.aiTags" :key="`${section.key}-${item.title}-${tag}`" class="local-news-tag">{{ tag }}</span>
               </div>
               <small>{{ item.source }} · {{ formatDate(item.publishTime) }}</small>
+              <span v-if="item.isAiProcessed" class="ai-processed-badge" title="已 AI 清洗">🤖 已清洗</span>
+              <span v-else class="ai-unprocessed-badge" title="待 AI 清洗">⏳ 待清洗</span>
             </li>
           </ul>
           <p v-else class="muted">暂无匹配资讯。</p>
@@ -97,4 +99,6 @@ defineEmits(['refresh'])
 .news-bucket-list::-webkit-scrollbar { width:8px; }
 .news-bucket-list::-webkit-scrollbar-thumb { border-radius:999px; background:rgba(148,163,184,.45); }
 @media (max-width:720px) { .news-impact-header { flex-direction:column; } .news-impact-list li { grid-template-columns:1fr; } }
+.ai-processed-badge { display:inline-flex; align-items:center; gap:.2rem; padding:.1rem .4rem; border-radius:999px; font-size:.68rem; font-weight:600; background:rgba(34,197,94,.12); color:#16a34a; }
+.ai-unprocessed-badge { display:inline-flex; align-items:center; gap:.2rem; padding:.1rem .4rem; border-radius:999px; font-size:.68rem; font-weight:600; background:rgba(234,179,8,.12); color:#ca8a04; }
 </style>

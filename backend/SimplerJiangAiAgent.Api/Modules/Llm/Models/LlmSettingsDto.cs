@@ -9,7 +9,8 @@ public sealed record LlmSettingsRequest(
     bool ForceChinese,
     string? Organization,
     string? Project,
-    bool Enabled);
+    bool Enabled,
+    string? ProviderType = null);
 
 public sealed record LlmSettingsResponse(
     string Provider,

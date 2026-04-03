@@ -92,6 +92,12 @@ builder.Services.AddHostedService<LocalFactIngestionWorker>();
 builder.Services.AddHostedService<SourceGovernanceWorker>();
 builder.Services.AddHostedService<RecommendZombieCleanupWorker>();
 
+builder.Services.AddScoped<ITradeAccountingService, TradeAccountingService>();
+builder.Services.AddScoped<ITradeComplianceService, TradeComplianceService>();
+builder.Services.AddScoped<ITradeReviewService, TradeReviewService>();
+builder.Services.AddScoped<IPortfolioSnapshotService, PortfolioSnapshotService>();
+builder.Services.AddScoped<ITradingBehaviorService, TradingBehaviorService>();
+
 builder.Services.AddModules(builder.Configuration);
 
 var app = builder.Build();
@@ -115,6 +121,7 @@ using (var scope = app.Services.CreateScope())
     await MarketSentimentSchemaInitializer.EnsureAsync(dbContext);
     await ResearchSessionSchemaInitializer.EnsureAsync(dbContext);
     await RecommendSessionSchemaInitializer.EnsureAsync(dbContext);
+    await TradeExecutionSchemaInitializer.EnsureAsync(dbContext);
 }
 
 // 中间件管道

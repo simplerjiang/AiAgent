@@ -60,3 +60,8 @@ frontend/scripts/edge-check-*.mjs
 
 # Frontend automation screenshots
 frontend/.automation/screenshots/
+
+# Temp debug files
+err1.txt
+out1.txt
+.github/agents/role.zip

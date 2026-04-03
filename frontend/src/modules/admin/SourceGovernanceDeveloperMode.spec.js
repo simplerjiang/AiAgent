@@ -15,9 +15,10 @@ describe('SourceGovernanceDeveloperMode', () => {
     vi.restoreAllMocks()
   })
 
-  it('renders login panel when no token', () => {
+  it('renders main content directly without login', () => {
     const wrapper = mount(SourceGovernanceDeveloperMode)
-    expect(wrapper.text()).toContain('管理员登录')
+    expect(wrapper.text()).toContain('来源治理 Developer Mode')
+    expect(wrapper.text()).not.toContain('管理员登录')
   })
 
   it('loads dashboard after enabling developer mode', async () => {

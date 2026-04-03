@@ -347,7 +347,7 @@ public sealed class RecommendationRunner : IRecommendationRunner
             {userMessage}
             """;
 
-        var result = await _llmService.ChatAsync("default", new LlmChatRequest(prompt, null, 0.3), ct);
+        var result = await _llmService.ChatAsync("active", new LlmChatRequest(prompt, null, 0.3), ct);
         return result.Content ?? "无法生成回答。";
     }
 

@@ -86,7 +86,8 @@ const normalizeArchiveItem = item => ({
   crawledAt: item?.crawledAt ?? item?.CrawledAt ?? '',
   url: item?.url ?? item?.Url ?? '',
   aiTarget: item?.aiTarget ?? item?.AiTarget ?? '',
-  aiTags: Array.isArray(item?.aiTags ?? item?.AiTags) ? (item.aiTags ?? item.AiTags) : []
+  aiTags: Array.isArray(item?.aiTags ?? item?.AiTags) ? (item.aiTags ?? item.AiTags) : [],
+  isAiProcessed: item?.isAiProcessed ?? item?.IsAiProcessed ?? false,
 })
 
 const formatDate = value => {
@@ -254,6 +255,8 @@ onMounted(() => {
           <span>{{ buildMetaLine(item) || '未标注实体' }}</span>
           <span>{{ item.source }}</span>
           <span>{{ formatDate(item.publishTime) }}</span>
+          <span v-if="item.isAiProcessed" class="ai-processed-badge" title="已 AI 清洗">🤖 已清洗</span>
+          <span v-else class="ai-unprocessed-badge" title="待 AI 清洗">⏳ 待清洗</span>
         </div>
       </article>
     </section>
@@ -603,4 +606,6 @@ onMounted(() => {
     justify-content: stretch;
   }
 }
+.ai-processed-badge { display:inline-flex; align-items:center; gap:.2rem; padding:.1rem .4rem; border-radius:999px; font-size:.68rem; font-weight:600; background:rgba(34,197,94,.12); color:#16a34a; }
+.ai-unprocessed-badge { display:inline-flex; align-items:center; gap:.2rem; padding:.1rem .4rem; border-radius:999px; font-size:.68rem; font-weight:600; background:rgba(234,179,8,.12); color:#ca8a04; }
 </style>

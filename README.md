@@ -97,7 +97,34 @@ docs/      截图与补充文档
 
 ## 当前状态
 
-**v0.2.0** — 多 Agent 推荐系统上线，主要更新：
+**v0.2.1** — Antigravity LLM Provider、新闻清洗状态、市场趋势增强，详见下方变更记录。
+
+---
+
+### v0.2.1 (2026-04-02)
+
+#### 新功能
+- **Antigravity LLM Provider** — 接入 Google Antigravity API，支持 Claude Opus/Sonnet、Gemini 3、GPT-OSS 等模型
+  - OAuth 2.0 + PKCE 认证流程，本地回调 + token 自动刷新
+  - 3 端点智能降级（daily sandbox → autopush sandbox → production）
+  - SSE 流式输出支持
+  - Google Search Grounding（联网搜索）— 仅 Gemini 模型
+  - 自动模型映射：外部模型名自动匹配 Antigravity 可用模型
+- **新闻 AI 清洗状态指示器** — 前端新增 🤖已清洗 / ⏳待清洗 badge
+- **市场趋势数据增强** — 推荐系统现在使用 30 天板块轮动历史，而非仅当天快照
+
+#### Bug 修复
+- **B25**: Antigravity 单端点超时从 180s 降至 30s，最坏总超时从 540s 降至 90s
+- **B26**: 推荐系统 provider 路由硬编码 `"default"` 改为 `"active"`，现在跟随用户设置
+- **B21**: 股票分析 AI 结果使用 Markdown 渲染代替原始 JSON 展示
+- **B24**: Antigravity 支持 Google Search Grounding 联网搜索
+- **B27**: 板块轮动查询支持 30d/60d 窗口，推荐提示词区分实时信号（72h）和趋势数据（30天）
+
+---
+
+### v0.2.0
+
+多 Agent 推荐系统上线，主要更新：
 
 - **13-Agent 推荐系统**：覆盖市场扫描 → 板块分析 → 选股 → 辩论 → 决策五大阶段，每个阶段多角色并行分析
 - **实时分析进度**：SSE 推送各角色执行状态，前端实时展示团队进度面板和辩论过程

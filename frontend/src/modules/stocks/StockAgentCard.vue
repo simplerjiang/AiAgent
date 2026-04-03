@@ -1,6 +1,7 @@
 <script setup>
 import StockAgentChart from './StockAgentChart.vue'
 import { buildMetricRows, formatMetricLabel, formatMetricValue } from './agentFormat'
+import { markdownToSafeHtml, ensureMarkdown } from '@/utils/jsonMarkdownService'
 
 const props = defineProps({
   agent: { type: Object, default: null },
@@ -178,6 +179,17 @@ const getCellText = (section, row, col) => {
   return isExpiredPublishedAt(row?.[col]) ? `${value || '未知'}（过期风险）` : value
 }
 
+const richTextKeys = new Set([
+  'analysis_opinion', 'trigger_conditions', 'invalid_conditions',
+  'risk_warning', 'evidence_summary', 'reasoning', 'notes'
+])
+const isRichText = (key) => richTextKeys.has(key)
+
+const renderHtml = (text) => {
+  if (!text) return ''
+  return markdownToSafeHtml(ensureMarkdown(text))
+}
+
 const canDraftPlan = agent => getAgentId(agent) === 'commander' && getAgentSuccess(agent) && !!getAgentData(agent)
 </script>
 
@@ -199,14 +211,15 @@ const canDraftPlan = agent => getAgentId(agent) === 'commander' && getAgentSucce
     </header>
 
     <div v-if="getAgentData(props.agent)" class="agent-content">
-      <p class="summary">{{ getAgentData(props.agent).summary }}</p>
+      <p class="summary" v-html="renderHtml(getAgentData(props.agent).summary)"></p>
 
       <div v-if="getNarrativeRows(getAgentData(props.agent)).length" class="recommendation-block">
         <h5>核心判断</h5>
         <div class="metrics">
           <div v-for="row in getNarrativeRows(getAgentData(props.agent))" :key="`rec-${row.key}`" class="metric-row narrative-row">
             <span class="metric-key">{{ formatMetricLabel(row.key) }}</span>
-            <span class="metric-value">{{ formatMetricValue(row.value, row.key) }}</span>
+            <span v-if="isRichText(row.key)" class="metric-value" v-html="renderHtml(row.value)"></span>
+            <span v-else class="metric-value">{{ formatMetricValue(row.value, row.key) }}</span>
           </div>
         </div>
       </div>
