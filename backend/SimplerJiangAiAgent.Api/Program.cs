@@ -144,7 +144,22 @@ if (!string.IsNullOrWhiteSpace(distPath) && Directory.Exists(distPath))
 {
     var fileProvider = new PhysicalFileProvider(distPath);
     app.UseDefaultFiles(new DefaultFilesOptions { FileProvider = fileProvider });
-    app.UseStaticFiles(new StaticFileOptions { FileProvider = fileProvider });
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        FileProvider = fileProvider,
+        OnPrepareResponse = ctx =>
+        {
+            if (ctx.File.Name.Equals("index.html", StringComparison.OrdinalIgnoreCase))
+            {
+                ctx.Context.Response.Headers["Cache-Control"] = "no-cache, no-store, must-revalidate";
+                ctx.Context.Response.Headers["Pragma"] = "no-cache";
+            }
+            else
+            {
+                ctx.Context.Response.Headers["Cache-Control"] = "public, max-age=31536000, immutable";
+            }
+        }
+    });
 }
 
 // 基础健康检查
@@ -176,7 +191,12 @@ if (!string.IsNullOrWhiteSpace(distPath) && Directory.Exists(distPath))
 {
     app.MapFallbackToFile("index.html", new StaticFileOptions
     {
-        FileProvider = new PhysicalFileProvider(distPath)
+        FileProvider = new PhysicalFileProvider(distPath),
+        OnPrepareResponse = ctx =>
+        {
+            ctx.Context.Response.Headers["Cache-Control"] = "no-cache, no-store, must-revalidate";
+            ctx.Context.Response.Headers["Pragma"] = "no-cache";
+        }
     });
 }
 
