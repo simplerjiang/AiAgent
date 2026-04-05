@@ -178,7 +178,7 @@ onMounted(async () => {
   updateClock()
   clockTimer = setInterval(updateClock, 1000)
   checkHealth()
-  healthTimer = setInterval(checkHealth, 30000)
+  healthTimer = setInterval(checkHealth, 300000)
   document.addEventListener('click', closeSettings)
   window.addEventListener('navigate-stock', handleNavigateStock)
   window.addEventListener('navigate-trade-log', handleNavigateTradeLog)
@@ -264,10 +264,12 @@ onBeforeUnmount(() => {
         <button class="btn btn-sm btn-warning btn-pill" @click="openOnboardingTab">去配置</button>
       </section>
 
-      <component
-        :is="activeComponent"
-        @settings-saved="loadOnboardingStatus()"
-      />
+      <keep-alive>
+        <component
+          :is="activeComponent"
+          @settings-saved="loadOnboardingStatus()"
+        />
+      </keep-alive>
     </main>
     <AppToast />
     <ConfirmDialog />

@@ -37,6 +37,7 @@ const baseProps = {
 describe('StockTopMarketOverview', () => {
   beforeEach(() => {
     vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-04-01T10:00:00+08:00'))
     localStorage.clear()
   })
 

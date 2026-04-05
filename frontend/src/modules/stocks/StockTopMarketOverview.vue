@@ -42,19 +42,27 @@ const isLikelyTradingHours = computed(() => {
   return t >= 9 * 60 + 15 && t <= 15 * 60 + 5
 })
 
+const isBreadthAllZero = computed(() => {
+  const b = props.overview?.breadth
+  if (!b) return true
+  return !Number(b.advancers) && !Number(b.decliners) && !Number(b.limitUpCount) && !Number(b.limitDownCount) && !Number(b.flatCount)
+})
+
 const AUTO_REFRESH_SECONDS = 30
+const AUTO_REFRESH_SECONDS_OFF = 300
 const expanded = ref(localStorage.getItem('market_bar_expanded') === 'true')
+const effectiveRefreshSeconds = computed(() => isLikelyTradingHours.value ? AUTO_REFRESH_SECONDS : AUTO_REFRESH_SECONDS_OFF)
 const countdown = ref(AUTO_REFRESH_SECONDS)
 let countdownTimer = null
 
 const startCountdown = () => {
   stopCountdown()
-  countdown.value = AUTO_REFRESH_SECONDS
+  countdown.value = effectiveRefreshSeconds.value
   countdownTimer = setInterval(() => {
     countdown.value--
     if (countdown.value <= 0) {
       emit('refresh')
-      countdown.value = AUTO_REFRESH_SECONDS
+      countdown.value = effectiveRefreshSeconds.value
     }
   }, 1000)
 }
@@ -65,7 +73,7 @@ const stopCountdown = () => {
 
 const manualRefresh = () => {
   emit('refresh')
-  countdown.value = AUTO_REFRESH_SECONDS
+  countdown.value = effectiveRefreshSeconds.value
 }
 
 const toggleExpand = () => {
@@ -79,7 +87,7 @@ const openChart = (item, icon) => {
 
 const ARC_CIRCUMFERENCE = 2 * Math.PI * 10
 const countdownArcOffset = computed(() => {
-  const progress = countdown.value / AUTO_REFRESH_SECONDS
+  const progress = countdown.value / effectiveRefreshSeconds.value
   return ARC_CIRCUMFERENCE * (1 - progress)
 })
 
@@ -155,11 +163,17 @@ onUnmounted(() => { stopCountdown() })
           </div>
           <div class="pulse-chip">
             <span class="pulse-chip-label">📊 广度</span>
-            <strong class="pulse-chip-value">{{ overview.breadth?.advancers ?? 0 }}<span class="text-rise-sm">↑</span> / {{ overview.breadth?.decliners ?? 0 }}<span class="text-fall-sm">↓</span></strong>
+            <strong class="pulse-chip-value">
+              <template v-if="isBreadthAllZero && !isLikelyTradingHours">休市</template>
+              <template v-else>{{ overview.breadth?.advancers ?? 0 }}<span class="text-rise-sm">↑</span> / {{ overview.breadth?.decliners ?? 0 }}<span class="text-fall-sm">↓</span></template>
+            </strong>
           </div>
           <div class="pulse-chip">
             <span class="pulse-chip-label">🔥 封板</span>
-            <strong class="pulse-chip-value">{{ overview.breadth?.limitUpCount ?? 0 }}<span class="text-rise-sm">↑</span> / {{ overview.breadth?.limitDownCount ?? 0 }}<span class="text-fall-sm">↓</span></strong>
+            <strong class="pulse-chip-value">
+              <template v-if="isBreadthAllZero && !isLikelyTradingHours">休市</template>
+              <template v-else>{{ overview.breadth?.limitUpCount ?? 0 }}<span class="text-rise-sm">↑</span> / {{ overview.breadth?.limitDownCount ?? 0 }}<span class="text-fall-sm">↓</span></template>
+            </strong>
           </div>
         </div>
 

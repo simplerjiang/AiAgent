@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onActivated, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import StockCharts from './StockCharts.vue'
 import StockMarketNewsPanel from './StockMarketNewsPanel.vue'
 import StockNewsImpactPanel from './StockNewsImpactPanel.vue'
@@ -91,6 +91,8 @@ const sources = ref([])
 const selectedSource = ref(localStorage.getItem('stock_source') || '')
 let refreshTimer = null
 let planRefreshTimer = null
+let lastPlanRefreshTime = 0
+const PLAN_REFRESH_MIN_INTERVAL = 55000
 let minuteTdSequentialRefreshTimer = null
 const selectedSymbol = ref('')
 const searchResults = ref([])
@@ -126,7 +128,7 @@ const { size: splitterRatio, isDragging: splitterDragging, startResize: startSpl
   direction: 'horizontal',
   min: 0.55,
   max: 0.75,
-  defaultValue: 0.65,
+  defaultValue: 0.70,
   storageKey: 'splitter_ratio',
   containerRef: workspaceRef
 })
@@ -935,6 +937,10 @@ const setupPlanRefresh = () => {
 
   if (refreshSeconds.value > 0) {
     planRefreshTimer = setInterval(() => {
+      const now = Date.now()
+      if (now - lastPlanRefreshTime < PLAN_REFRESH_MIN_INTERVAL) return
+      lastPlanRefreshTime = now
+
       if (!rootWorkspace.planListLoading && !rootWorkspace.planAlertsLoading) {
         refreshTradingPlanBoard(true)
       }
@@ -947,7 +953,7 @@ const setupPlanRefresh = () => {
       if (workspace && !workspace.planListLoading && !workspace.planAlertsLoading) {
         refreshTradingPlanSection(currentStockKey.value, true)
       }
-    }, Math.max(15, refreshSeconds.value) * 1000)
+    }, Math.max(60, refreshSeconds.value) * 1000)
   }
 }
 
@@ -1073,6 +1079,7 @@ onMounted(() => {
   setupRefresh()
   fetchHistory()
   fetchMarketNews()
+  lastPlanRefreshTime = Date.now()
   refreshTradingPlanBoard()
   fetchStockRealtimeOverview('', { force: true })
   setupHistoryRefresh()
@@ -1093,6 +1100,11 @@ onMounted(() => {
       fetchQuote()
     }
   }
+})
+
+onActivated(() => {
+  const scrollContainer = document.querySelector('.app-content')
+  if (scrollContainer) scrollContainer.scrollTop = 0
 })
 
 onUnmounted(() => {
@@ -1150,21 +1162,21 @@ watch(
     }
     fetchNewsImpact(symbolKey)
     fetchLocalNews(symbolKey)
-    refreshTradingPlanSection(symbolKey)
     fetchStockRealtimeOverview(symbolKey)
   }
 )
 
-watch(currentStockKey, () => {
+watch(currentStockKey, (newKey) => {
+  if (newKey) {
+    lastPlanRefreshTime = Date.now()
+    refreshTradingPlanSection(newKey)
+  }
   setupPlanRefresh()
 })
 </script>
 
 <template>
   <section class="panel" :class="{ monochrome: monochromeMode }">
-    <button class="panel-mode-btn btn btn-sm btn-ghost" @click="monochromeMode = !monochromeMode">
-      {{ monochromeMode ? '彩色模式' : '黑白模式' }}
-    </button>
 
     <StockSearchToolbar
         :symbol="symbol"
@@ -1203,7 +1215,13 @@ watch(currentStockKey, () => {
         @apply-history-symbol="applyHistorySymbol($event)"
         @open-context-menu="openContextMenu"
         @delete-history-item="deleteHistoryItem"
-      />
+      >
+        <template #actions>
+          <button class="panel-mode-btn btn btn-sm btn-ghost" @click="monochromeMode = !monochromeMode">
+            {{ monochromeMode ? '彩色模式' : '黑白模式' }}
+          </button>
+        </template>
+      </StockSearchToolbar>
 
     <StockTopMarketOverview
       :enabled="stockRealtimeOverviewEnabled"
@@ -1411,10 +1429,7 @@ watch(currentStockKey, () => {
 }
 
 .panel-mode-btn {
-  position: absolute;
-  top: var(--space-3);
-  right: var(--space-3);
-  z-index: 2;
+  flex-shrink: 0;
 }
 
 .stock-chart-section {
@@ -1440,7 +1455,7 @@ watch(currentStockKey, () => {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  min-width: 320px;
+  min-width: 280px;
   min-height: 0;
   max-height: calc(100vh - 180px);
   overflow-y: auto;

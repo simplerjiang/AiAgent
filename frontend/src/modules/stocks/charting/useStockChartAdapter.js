@@ -593,7 +593,11 @@ export function useStockChartAdapter({ props, klineRef, minuteRef, featureVisibi
       recordMap = new Map()
     }
 
-    return { ensureChart, render, resize, destroy }
+    const scrollToRealTime = () => {
+      chart?.scrollToRealTime?.(0)
+    }
+
+    return { ensureChart, render, resize, destroy, scrollToRealTime }
   }
 
   const klineController = createController({ containerRef: klineRef, viewType: 'kline', hoverRef: klineHover })
@@ -675,6 +679,11 @@ export function useStockChartAdapter({ props, klineRef, minuteRef, featureVisibi
     minuteController.destroy()
   }
 
+  const scrollChartsToRealTime = () => {
+    klineController.scrollToRealTime()
+    minuteController.scrollToRealTime()
+  }
+
   return {
     aiLevelText,
     destroyCharts,
@@ -682,6 +691,7 @@ export function useStockChartAdapter({ props, klineRef, minuteRef, featureVisibi
     minuteHover,
     mountCharts,
     queueResize,
-    renderAll
+    renderAll,
+    scrollChartsToRealTime
   }
 }

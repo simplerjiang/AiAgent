@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onActivated, onMounted, onUnmounted, ref, watch } from 'vue'
 import { CHART_VIEW_OPTIONS, isKlineChartView, normalizeKlineInterval, resolveInitialChartView } from './charting/chartViews'
 import { createStrategyVisibilityState, getActiveStrategyBadgesForView, getStrategyGroupsForView } from './charting/chartStrategyRegistry'
 import { useStockChartAdapter } from './charting/useStockChartAdapter'
@@ -53,12 +53,13 @@ const {
   minuteHover,
   mountCharts,
   queueResize,
-  renderAll
+  renderAll,
+  scrollChartsToRealTime
 } = useStockChartAdapter({ props, chartShellRef, klineRef, minuteRef, featureVisibilityByView })
 
 const activeTab = computed(() => CHART_VIEW_OPTIONS.find(item => item.id === activeView.value) ?? CHART_VIEW_OPTIONS[0])
 const activeHover = computed(() => (activeView.value === 'minute' ? minuteHover.value : klineHover.value))
-const activePlaceholder = computed(() => (activeView.value === 'minute' ? '暂无分时数据' : '暂无 K 线数据'))
+const activePlaceholder = computed(() => (activeView.value === 'minute' ? '休市中 · 下一交易日开盘后自动加载' : '暂无 K 线数据'))
 const hasActiveData = computed(() => (activeView.value === 'minute' ? props.minuteLines.length > 0 : props.kLines.length > 0))
 const strategyGroups = computed(() => getStrategyGroupsForView(activeView.value, featureVisibilityByView.value[activeView.value] ?? {}))
 const activeStrategyBadges = computed(() => getActiveStrategyBadgesForView(activeView.value, featureVisibilityByView.value[activeView.value] ?? {}))
@@ -204,6 +205,14 @@ onMounted(() => {
   document.addEventListener('MSFullscreenChange', handleFullscreenChange)
   window.addEventListener('keydown', handleFullscreenKeydown)
   nextTick(queueResize)
+})
+
+onActivated(() => {
+  renderAll()
+  nextTick(() => {
+    queueResize()
+    requestAnimationFrame(() => scrollChartsToRealTime())
+  })
 })
 
 onUnmounted(() => {

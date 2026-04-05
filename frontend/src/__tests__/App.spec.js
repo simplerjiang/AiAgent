@@ -15,6 +15,12 @@ const stubFetch = onboardingPayload => vi.fn(async url => {
   return makeResponse(onboardingPayload)
 })
 
+const mountOptions = {
+  global: {
+    stubs: { KeepAlive: { template: '<slot />' } }
+  }
+}
+
 describe('App', () => {
   beforeEach(() => {
     window.history.replaceState({}, '', '/')
@@ -27,7 +33,7 @@ describe('App', () => {
   })
 
   it('renders tab buttons', () => {
-    const wrapper = shallowMount(App)
+    const wrapper = shallowMount(App, mountOptions)
     const buttons = wrapper.findAll('button.nav-tab')
     expect(buttons.length).toBeGreaterThan(0)
     expect(wrapper.text()).toContain('情绪轮动')
@@ -40,7 +46,7 @@ describe('App', () => {
       recommendedTabKey: 'admin-llm'
     }))
 
-    const wrapper = shallowMount(App)
+    const wrapper = shallowMount(App, mountOptions)
     await flushPromises()
 
     expect(wrapper.text()).toContain('首次启动还未配置 LLM Key')
@@ -70,7 +76,7 @@ describe('App', () => {
 
     vi.stubGlobal('fetch', fetchMock)
 
-    const wrapper = shallowMount(App)
+    const wrapper = shallowMount(App, mountOptions)
     await flushPromises()
 
     expect(wrapper.text()).toContain('首次启动还未配置 LLM Key')

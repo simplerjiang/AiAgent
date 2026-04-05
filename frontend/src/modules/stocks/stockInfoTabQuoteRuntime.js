@@ -118,7 +118,7 @@ export const createStockInfoTabQuoteRuntime = deps => {
       const cachePromise = (async () => {
         try {
           const cacheResponse = await fetchBackendGet(`/api/stocks/detail/cache?${params.toString()}`, { signal: controller.signal })
-          if (!cacheResponse.ok) {
+          if (!cacheResponse.ok || cacheResponse.status === 204) {
             setStockLoadStage(workspace, requestToken, 'cache', 'success', '未命中缓存，继续实时加载')
             return
           }

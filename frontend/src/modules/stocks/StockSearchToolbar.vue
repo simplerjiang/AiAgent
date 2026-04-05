@@ -110,6 +110,8 @@ const handleSearchKeydown = event => {
         <button class="toolbar-advanced-toggle" @click="advancedOpen = !advancedOpen">
           ⚙ {{ advancedOpen ? '收起' : '高级' }}
         </button>
+
+        <slot name="actions" />
       </div>
 
       <template v-if="advancedOpen">
@@ -159,9 +161,12 @@ const handleSearchKeydown = event => {
       </template>
 
       <div class="toolbar-compact-status" v-if="!advancedOpen">
-        <p class="muted toolbar-status">
-          {{ autoRefresh ? `自动刷新 ${refreshSeconds}s` : '手动刷新' }}
+        <p v-if="autoRefresh" class="muted toolbar-status">
+          自动刷新 {{ refreshSeconds }}s
         </p>
+        <button v-else class="toolbar-manual-refresh" @click="$emit('fetch-quote')" :disabled="isBlockingQuoteLoad">
+          ↻ 手动刷新
+        </button>
         <p v-if="error" class="muted toolbar-status error-text">{{ error }}</p>
         <p v-else-if="isBlockingQuoteLoad" class="muted toolbar-status">查询中...</p>
         <p v-else-if="isBackgroundQuoteRefresh" class="muted toolbar-status">后台刷新中...</p>
@@ -177,10 +182,10 @@ const handleSearchKeydown = event => {
             @click="$emit('apply-history-symbol', item)"
             @contextmenu.prevent="$emit('open-context-menu', $event, item)"
           >
-            <span>{{ item.name ?? item.Name }}</span>
+            <span>{{ (item.name ?? item.Name) || (item.symbol ?? item.Symbol) }}</span>
             <strong>{{ item.symbol ?? item.Symbol }}</strong>
             <small :class="getChangeClass(item.changePercent ?? item.ChangePercent)">
-              {{ formatPercent(item.changePercent ?? item.ChangePercent) || '0%' }}
+              {{ (item.name ?? item.Name) ? formatPercent(item.changePercent ?? item.ChangePercent) : '—' }}
             </small>
           </button>
         </div>
@@ -224,7 +229,7 @@ const handleSearchKeydown = event => {
 
 .toolbar-main-row {
   display: grid;
-  grid-template-columns: auto minmax(320px, 1fr) auto;
+  grid-template-columns: auto minmax(320px, 1fr) auto auto;
   gap: 0.75rem;
   align-items: center;
 }
@@ -259,6 +264,28 @@ const handleSearchKeydown = event => {
   display: flex;
   gap: 0.75rem;
   align-items: center;
+}
+
+.toolbar-manual-refresh {
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 8px;
+  padding: 0.25rem 0.6rem;
+  background: rgba(37, 99, 235, 0.08);
+  color: var(--color-accent, #2563eb);
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+
+.toolbar-manual-refresh:hover:not(:disabled) {
+  background: rgba(37, 99, 235, 0.16);
+  border-color: var(--color-accent, #2563eb);
+}
+
+.toolbar-manual-refresh:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .toolbar-title {

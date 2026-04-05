@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 const emit = defineEmits(['settings-saved'])
 
@@ -19,6 +19,12 @@ const providerPresets = {
     baseUrl: '',
     model: 'gemini-3-flash',
     providerType: 'antigravity'
+  },
+  ollama: {
+    label: 'Ollama 本地模型',
+    baseUrl: 'http://localhost:11434',
+    model: 'gemma4:e4b',
+    providerType: 'ollama'
   }
 }
 
@@ -61,6 +67,9 @@ const antigravityEmail = ref('')
 
 const isLoggedIn = computed(() => Boolean(token.value))
 const isAntigravity = computed(() => provider.value === 'antigravity')
+const isOllamaProvider = computed(() => provider.value === 'ollama')
+const modelPlaceholder = computed(() => isOllamaProvider.value ? '例如: gemma4:latest' : 'gpt-4o-mini')
+const providerKeys = Object.keys(providerPresets)
 
 const authHeaders = () => ({
   Authorization: `Bearer ${token.value}`
@@ -94,6 +103,7 @@ const login = async () => {
     if (loaded) {
       provider.value = activeProviderKey.value
       await loadSettings()
+      await loadNewsCleansing()
     }
   } catch (error) {
     loginError.value = error.message || '登录失败'
@@ -355,12 +365,18 @@ const saveActiveProvider = async () => {
 const testLoading = ref(false)
 const testResult = ref('')
 const testError = ref('')
+const testAbortController = ref(null)
 
 const testConnection = async () => {
   if (!token.value) return
   testLoading.value = true
   testResult.value = ''
   testError.value = ''
+
+  const controller = new AbortController()
+  testAbortController.value = controller
+  const timeoutMs = isOllamaProvider.value ? 60000 : 30000
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
 
   try {
     const testProvider = provider.value === activeProviderKey.value ? 'active' : provider.value
@@ -372,8 +388,10 @@ const testConnection = async () => {
       },
       body: JSON.stringify({
         prompt: '你好，请用一句话回复确认连接正常。'
-      })
+      }),
+      signal: controller.signal
     })
+    clearTimeout(timeoutId)
 
     if (response.status === 401 || response.status === 403) {
       handleUnauthorized()
@@ -388,17 +406,143 @@ const testConnection = async () => {
     const data = await response.json()
     testResult.value = data.content || '连接成功，但未返回内容'
   } catch (error) {
-    testError.value = error.message || '连接测试失败'
+    clearTimeout(timeoutId)
+    if (error.name === 'AbortError') {
+      testError.value = isOllamaProvider.value
+        ? '⏳ 请求超时 — 本地模型首次加载可能需要数分钟，请确认 Ollama 已运行'
+        : '⏳ 请求超时'
+    } else {
+      testError.value = error.message || '连接测试失败'
+    }
   } finally {
+    testAbortController.value = null
     testLoading.value = false
   }
 }
 
+function cancelTest() {
+  testAbortController.value?.abort()
+}
+
+// 新闻清洗渠道
+const newsProvider = ref('active')
+const newsModel = ref('')
+const newsBatchSize = ref(12)
+const newsLoading = ref(false)
+const newsSaveMsg = ref('')
+const newsTestMsg = ref('')
+const newsTesting = ref(false)
+const newsTestAbortController = ref(null)
+
+async function loadNewsCleansing() {
+  try {
+    const res = await fetch('/api/admin/llm/news-cleansing', {
+      headers: { 'Authorization': `Bearer ${token.value}` }
+    })
+    if (res.ok) {
+      const data = await res.json()
+      newsProvider.value = data.provider || 'active'
+      newsModel.value = data.model || ''
+      newsBatchSize.value = data.batchSize || 12
+    }
+  } catch (e) { /* ignore load errors */ }
+}
+
+async function saveNewsCleansing() {
+  newsLoading.value = true
+  newsSaveMsg.value = ''
+  try {
+    const res = await fetch('/api/admin/llm/news-cleansing', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token.value}`
+      },
+      body: JSON.stringify({
+        provider: newsProvider.value,
+        model: newsModel.value,
+        batchSize: newsBatchSize.value
+      })
+    })
+    if (res.ok) {
+      const data = await res.json()
+      newsProvider.value = data.provider
+      newsModel.value = data.model
+      newsBatchSize.value = data.batchSize
+      newsSaveMsg.value = '保存成功'
+    } else {
+      newsSaveMsg.value = '保存失败'
+    }
+  } catch (e) {
+    newsSaveMsg.value = '保存失败: ' + e.message
+  } finally {
+    newsLoading.value = false
+    setTimeout(() => { newsSaveMsg.value = '' }, 3000)
+  }
+}
+async function testNewsCleansing() {
+  if (newsProvider.value === 'active') {
+    newsTestMsg.value = '请先选择具体渠道'
+    setTimeout(() => { newsTestMsg.value = '' }, 3000)
+    return
+  }
+  newsTesting.value = true
+  newsTestMsg.value = ''
+
+  const controller = new AbortController()
+  newsTestAbortController.value = controller
+  const isLocalModel = newsProvider.value === 'ollama'
+  const timeoutMs = isLocalModel ? 60000 : 30000
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+
+  try {
+    const res = await fetch(`/api/admin/llm/test/${newsProvider.value}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token.value}`
+      },
+      body: JSON.stringify({ prompt: '你好，请用一句话回复' }),
+      signal: controller.signal
+    })
+    clearTimeout(timeoutId)
+    if (res.ok) {
+      newsTestMsg.value = '✅ 连接正常'
+    } else {
+      const data = await res.json().catch(() => null)
+      newsTestMsg.value = '❌ ' + (data?.message || `HTTP ${res.status}`)
+    }
+  } catch (e) {
+    clearTimeout(timeoutId)
+    if (e.name === 'AbortError') {
+      newsTestMsg.value = isLocalModel
+        ? '⏳ 请求超时 — 本地模型首次加载可能需要数分钟，请确认 Ollama 已运行'
+        : '⏳ 请求超时'
+    } else {
+      newsTestMsg.value = '❌ ' + e.message
+    }
+  } finally {
+    newsTestAbortController.value = null
+    newsTesting.value = false
+    setTimeout(() => { newsTestMsg.value = '' }, 8000)
+  }
+}
+
+function cancelNewsTest() {
+  newsTestAbortController.value?.abort()
+}
+
+watch(newsProvider, (val) => {
+  if (val === 'active') {
+    newsModel.value = ''
+  }
+})
 if (token.value) {
   loadActiveProvider().then(loaded => {
     if (loaded) {
       provider.value = activeProviderKey.value
       loadSettings()
+      loadNewsCleansing()
     }
   })
 }
@@ -510,7 +654,7 @@ if (token.value) {
 
         <!-- 其他 Provider: API Key 输入 -->
         <template v-else>
-          <div class="form-field">
+          <div class="form-field" v-if="!isOllamaProvider">
             <label class="form-label">主 LLM API Key</label>
             <input class="form-input" v-model="apiKey" placeholder="填写新的主模型 Key（留空保持不变）" />
             <p v-if="hasApiKey" class="form-hint">当前已保存：{{ apiKeyMasked }}</p>
@@ -536,18 +680,21 @@ if (token.value) {
           <select v-if="isAntigravity && antigravityModels.length > 0" class="form-input" v-model="model">
             <option v-for="m in antigravityModels" :key="m" :value="m">{{ m }}</option>
           </select>
-          <input v-else class="form-input" v-model="model" placeholder="gpt-4o-mini" />
+          <input v-else class="form-input" v-model="model" :placeholder="modelPlaceholder" />
         </div>
         <div class="form-field">
           <label class="form-label">预设提示词</label>
           <textarea class="form-input form-textarea" v-model="systemPrompt" rows="4" placeholder="用于引导模型的系统提示词"></textarea>
+        </div>
+        <div v-if="isOllamaProvider" style="background: var(--color-success-bg); padding: 8px 12px; border-radius: var(--radius-sm); margin-top: 4px; font-size: var(--text-sm); color: var(--color-success);">
+          💡 Ollama 本地模型无需 API Key，确保 Ollama 服务已启动 (默认端口 11434)。首次加载模型可能需要数分钟。
         </div>
       </div>
 
       <!-- 高级组 -->
       <div class="field-group">
         <div class="field-group-header">高级选项</div>
-        <div class="row-fields">
+        <div class="row-fields" v-if="!isOllamaProvider">
           <div class="form-field grow">
             <label class="form-label">Organization</label>
             <input class="form-input" v-model="organization" placeholder="可选" />
@@ -572,11 +719,60 @@ if (token.value) {
           <button class="btn-secondary" @click="testConnection" :disabled="testLoading" style="margin-left: 8px; height: 44px;">
             {{ testLoading ? '测试中...' : '🔗 测试连接' }}
           </button>
+          <span v-if="testLoading" @click="cancelTest" style="margin-left: 8px; color: #ff9800; cursor: pointer; font-size: 12px; text-decoration: underline;">取消</span>
         </div>
         <div v-if="testResult" class="form-success" style="margin-top: 8px;">✅ {{ testResult }}</div>
         <div v-if="testError" class="form-error" style="margin-top: 8px;">❌ {{ testError }}</div>
         <p v-if="saveMessage" class="form-success">{{ saveMessage }}</p>
         <p v-if="settingsError" class="form-error">{{ settingsError }}</p>
+      </div>
+    </div>
+
+    <!-- 新闻清洗渠道设置 -->
+    <div class="settings-card">
+      <div class="card-section-title">
+        <span class="section-dot" style="background: #ff9800;"></span>
+        新闻清洗渠道设置
+      </div>
+      <p class="form-hint" style="margin-bottom: var(--space-4);">
+        新闻清洗可以使用独立渠道（如本地 Ollama），不影响其他 LLM 功能
+      </p>
+
+      <div class="form-field">
+        <label class="form-label">清洗渠道</label>
+        <select class="form-input" v-model="newsProvider">
+          <option value="active">跟随主渠道 (active)</option>
+          <option v-for="key in providerKeys" :key="key" :value="key">{{ providerPresets[key]?.label || key }}</option>
+        </select>
+      </div>
+
+      <div class="form-field">
+        <label class="form-label">模型 (留空则跟随渠道默认)</label>
+        <input class="form-input" v-model="newsModel" type="text" placeholder="例如: gemma4:e4b"
+               :disabled="newsProvider === 'active'"
+               :style="{ opacity: newsProvider === 'active' ? 0.5 : 1 }" />
+      </div>
+
+      <div class="form-field">
+        <label class="form-label">批次大小 (5-20)</label>
+        <input class="form-input" v-model.number="newsBatchSize" type="number" min="5" max="20"
+               :disabled="newsProvider === 'active'"
+               :style="{ width: '120px', opacity: newsProvider === 'active' ? 0.5 : 1 }" />
+      </div>
+
+      <div style="display: flex; align-items: center; gap: var(--space-3); margin-top: var(--space-3); flex-wrap: wrap;">
+        <button class="btn-secondary" @click="saveNewsCleansing" :disabled="newsLoading">
+          {{ newsLoading ? '保存中...' : '保存' }}
+        </button>
+        <button class="btn-secondary" @click="testNewsCleansing" :disabled="newsTesting || newsProvider === 'active'">
+          {{ newsTesting ? '测试中...' : '🔗 测试连接' }}
+        </button>
+        <span v-if="newsTesting" @click="cancelNewsTest" style="color: #ff9800; cursor: pointer; font-size: 12px; text-decoration: underline;">取消</span>
+        <span v-if="newsSaveMsg" style="font-size: var(--text-sm); color: var(--color-success);">{{ newsSaveMsg }}</span>
+        <span v-if="newsTestMsg" style="font-size: var(--text-sm);"
+              :style="{ color: newsTestMsg.startsWith('✅') ? 'var(--color-success)' : newsTestMsg.startsWith('❌') ? 'var(--color-danger)' : '#ff9800' }">
+          {{ newsTestMsg }}
+        </span>
       </div>
     </div>
   </div>

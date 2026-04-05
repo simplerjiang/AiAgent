@@ -26,7 +26,7 @@ const getChangeClass = value => {
     <header class="terminal-view-header">
       <div>
         <p class="terminal-view-label">行情终端</p>
-        <h3>{{ quote ? `${quote.name}（${quote.symbol}）` : '专业看盘终端' }}</h3>
+        <h3>{{ quote ? `${quote.name}（${quote.symbol}）` : '' }}</h3>
       </div>
       <div v-if="quote" class="terminal-view-quote">
         <strong>{{ quote.price }}</strong>

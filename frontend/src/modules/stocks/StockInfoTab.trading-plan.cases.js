@@ -358,7 +358,7 @@ export const stockInfoTabTradingPlanCases = ({
       expect(boardPlanCalls).toBe(1)
       expect(boardAlertCalls).toBe(1)
 
-      await vi.advanceTimersByTimeAsync(30000)
+      await vi.advanceTimersByTimeAsync(120000)
       await Promise.resolve()
       await vi.advanceTimersByTimeAsync(0)
 
