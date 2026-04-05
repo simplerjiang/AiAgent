@@ -46,3 +46,1189 @@ https://robo.datayes.com/v1.5/datacenter/datareport
 1. 数据库问题，目前使用的SQlite虽然符合我们免安装的情况，但是考虑到它性能可能不好（你觉得呢？），并且如果我们还要下载公司财报等大文件大数据，可能SQLite的性能不足以支撑我们，你认为哪一种数据库适合开盒即用（跟随安装包直接安装，不需要配置运行环境），并且有好的大数据大文件效率。
 2. 财报pdf,excel解析，转做可利用，可快速读取（可供LLM读取分析），方便记录的。企业财报大部分都是pdf和excel，我们需要设计一个高效，稳定的转化工具，并且支持复用。
 3. 财报数据暴露给mcp和llm使用，要结合现有代码结构，我们已经将个股AI分析，股票板块推荐已经写好了，新加入这些数据要同时暴露以上功能使用，需要计划一下怎么样最小代价更新给他们，并丰富LLM能获取到的数据，以此达到更好的AI分析效果。
+
+---
+
+# Agent 整理：完整需求与开发计划
+
+> 基于 2026-04-04 讨论确认，以下为 Agent 整理的正式开发计划。
+
+## 1. 系统架构
+
+### 1.1 总体架构图
+
+```
+┌─────────────────────────────────────────────────┐
+│                  Desktop (Electron)              │
+│  ┌─────────────────────────────────────────────┐ │
+│  │            Frontend (Vue 3)                  │ │
+│  │  ┌──────────┐  ┌──────────┐  ┌───────────┐ │ │
+│  │  │ 财报浏览  │  │ 公告列表  │  │ 采集设置   │ │ │
+│  │  └──────────┘  └──────────┘  └───────────┘ │ │
+│  └─────────────────────────────────────────────┘ │
+└────────────────────┬────────────────────────────┘
+                     │ HTTP
+┌────────────────────▼────────────────────────────┐
+│           Backend API (ASP.NET Core)             │
+│  ┌─────────────────────────────────────────────┐ │
+│  │     CompanyData Module (新增)                │ │
+│  │  ┌──────────┐  ┌──────────┐  ┌───────────┐ │ │
+│  │  │ 查询 API  │  │ MCP 工具  │  │ 采集配置   │ │ │
+│  │  └──────────┘  └──────────┘  └───────────┘ │ │
+│  └─────────────────────────────────────────────┘ │
+│  ┌─────────────────────────────────────────────┐ │
+│  │     既有 Modules (Stocks/Market/Llm)         │ │
+│  └─────────────────────────────────────────────┘ │
+└────────────────────┬────────────────────────────┘
+                     │ 共享 LiteDB + 文件系统
+┌────────────────────▼────────────────────────────┐
+│     FinancialDataWorker (独立 .NET Worker)       │
+│  ┌──────────┐  ┌──────────┐  ┌───────────────┐ │
+│  │ 巨潮爬取  │  │ PDF解析   │  │ LLM结构化     │ │
+│  │  Worker   │  │  Pipeline │  │  Enrichment   │ │
+│  └──────────┘  └──────────┘  └───────────────┘ │
+└─────────────────────────────────────────────────┘
+                     │
+        ┌────────────┼────────────┐
+        ▼            ▼            ▼
+   ┌─────────┐ ┌─────────┐ ┌──────────┐
+   │ LiteDB  │ │ 文件系统 │ │  SQLite  │
+   │(财报数据)│ │(原始PDF) │ │(现有数据) │
+   └─────────┘ └─────────┘ └──────────┘
+```
+
+### 1.2 新增项目结构
+
+```
+backend/
+├── SimplerJiangAiAgent.Api/
+│   └── Modules/
+│       └── CompanyData/              ← 新增 Module
+│           ├── CompanyDataModule.cs   ← 模块注册、路由映射
+│           ├── Models/
+│           │   ├── FinancialReport.cs     ← LiteDB 文档模型
+│           │   ├── CompanyAnnouncement.cs
+│           │   ├── CompanyBasicInfo.cs
+│           │   ├── ExecutiveHolding.cs
+│           │   └── DataCollectionConfig.cs ← 用户采集配置
+│           ├── Services/
+│           │   ├── IFinancialDataStore.cs      ← LiteDB 存取抽象
+│           │   ├── LiteDbFinancialDataStore.cs ← LiteDB 实现
+│           │   ├── FinancialReportQueryService.cs
+│           │   └── Mcp/
+│           │       └── CompanyDataMcpProvider.cs ← MCP 工具提供者
+│           └── Endpoints/
+│               ├── FinancialReportEndpoints.cs
+│               ├── AnnouncementEndpoints.cs
+│               └── CollectionConfigEndpoints.cs
+│
+├── SimplerJiangAiAgent.FinancialWorker/   ← 新增独立项目
+│   ├── Program.cs
+│   ├── appsettings.json
+│   ├── Workers/
+│   │   ├── CninfoReportCrawler.cs        ← 巨潮网报告爬取
+│   │   ├── EastmoneyCrawler.cs           ← 东方财富补充数据
+│   │   └── DataCollectionOrchestrator.cs ← 采集调度器
+│   ├── Parsers/
+│   │   ├── PdfExtractionPipeline.cs      ← 三路 PDF 解析管线
+│   │   ├── PdfPigExtractor.cs
+│   │   ├── DocnetExtractor.cs
+│   │   ├── ITextExtractor.cs
+│   │   ├── ExcelParser.cs                ← EPPlus Excel 解析
+│   │   ├── FinancialTableParser.cs       ← 三张主表规则引擎
+│   │   └── NarrativeLlmSummarizer.cs     ← 叙述性内容 LLM 精简
+│   └── Models/
+│       └── CrawlTask.cs
+```
+
+### 1.3 文件存储结构
+
+```
+App_Data/
+├── financial-reports/
+│   ├── {symbol}/              例: 600519/
+│   │   ├── {year}/            例: 2025/
+│   │   │   ├── annual-report.pdf
+│   │   │   ├── q1-report.pdf
+│   │   │   ├── q2-report.pdf (半年报)
+│   │   │   ├── q3-report.pdf
+│   │   │   └── announcements/
+│   │   │       ├── 2025-03-15_增发公告.pdf
+│   │   │       └── ...
+│   │   └── ...
+│   └── ...
+├── financial-data.litedb        ← LiteDB 数据文件
+├── financial-data-log.litedb    ← LiteDB 日志
+└── app.db                       ← 现有 SQLite（不动）
+```
+
+## 2. 数据模型设计（LiteDB 文档）
+
+### 2.1 核心文档模型
+
+```csharp
+// 财务报告文档（按报告期存储）
+public class FinancialReport
+{
+    public ObjectId Id { get; set; }
+    public string Symbol { get; set; }           // 股票代码 如 "600519"
+    public string CompanyName { get; set; }       // 公司简称
+    public string ReportType { get; set; }        // "annual" | "q1" | "semi-annual" | "q3"
+    public int FiscalYear { get; set; }           // 财年 如 2025
+    public string ReportPeriod { get; set; }      // "2025-Q3" | "2025-Annual"
+    public DateTime PublishDate { get; set; }     // 发布日期
+
+    // 原始文件引用
+    public string PdfFilePath { get; set; }       // 文件系统中的相对路径
+    public long PdfFileSize { get; set; }         // 文件大小(bytes)
+    public string PdfHash { get; set; }           // SHA256 用于增量同步
+
+    // 结构化财务数据（代码提取）
+    public BalanceSheet BalanceSheet { get; set; }         // 资产负债表
+    public IncomeStatement IncomeStatement { get; set; }   // 利润表
+    public CashFlowStatement CashFlow { get; set; }        // 现金流量表
+
+    // LLM 精简的叙述内容
+    public string ManagementAnalysis { get; set; }    // 管理层分析摘要
+    public string RiskWarnings { get; set; }          // 风险提示摘要
+    public string BusinessHighlights { get; set; }    // 经营亮点摘要
+
+    // 解析元数据
+    public string ParseStatus { get; set; }       // "pending" | "parsed" | "failed" | "llm-enriched"
+    public DateTime? ParsedAt { get; set; }
+    public string ParseEngine { get; set; }       // 实际使用的解析引擎
+    public List<string> ParseWarnings { get; set; } // 解析警告
+
+    // 数据源追踪
+    public string SourceUrl { get; set; }         // 下载来源 URL
+    public string DataSource { get; set; }        // "cninfo" | "eastmoney"
+    public DateTime CreatedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
+}
+
+// 资产负债表
+public class BalanceSheet
+{
+    public decimal? TotalAssets { get; set; }              // 总资产
+    public decimal? TotalLiabilities { get; set; }         // 总负债
+    public decimal? TotalEquity { get; set; }              // 股东权益
+    public decimal? CurrentAssets { get; set; }            // 流动资产
+    public decimal? NonCurrentAssets { get; set; }         // 非流动资产
+    public decimal? CurrentLiabilities { get; set; }       // 流动负债
+    public decimal? NonCurrentLiabilities { get; set; }    // 非流动负债
+    public decimal? CashAndEquivalents { get; set; }       // 货币资金
+    public decimal? AccountsReceivable { get; set; }       // 应收账款
+    public decimal? Inventory { get; set; }                // 存货
+    public decimal? ShortTermBorrowings { get; set; }      // 短期借款
+    public decimal? LongTermBorrowings { get; set; }       // 长期借款
+    public Dictionary<string, decimal> RawItems { get; set; } // 所有原始科目
+}
+
+// 利润表
+public class IncomeStatement
+{
+    public decimal? Revenue { get; set; }                  // 营业收入
+    public decimal? OperatingCost { get; set; }            // 营业成本
+    public decimal? GrossProfit { get; set; }              // 毛利润
+    public decimal? OperatingProfit { get; set; }          // 营业利润
+    public decimal? NetProfit { get; set; }                // 净利润
+    public decimal? NetProfitExcluding { get; set; }       // 扣非净利润
+    public decimal? EarningsPerShare { get; set; }         // 每股收益
+    public decimal? SellingExpenses { get; set; }          // 销售费用
+    public decimal? AdminExpenses { get; set; }            // 管理费用
+    public decimal? RdExpenses { get; set; }               // 研发费用
+    public decimal? FinancialExpenses { get; set; }        // 财务费用
+    public Dictionary<string, decimal> RawItems { get; set; }
+}
+
+// 现金流量表
+public class CashFlowStatement
+{
+    public decimal? OperatingCashFlow { get; set; }        // 经营活动现金流净额
+    public decimal? InvestingCashFlow { get; set; }        // 投资活动现金流净额
+    public decimal? FinancingCashFlow { get; set; }        // 筹资活动现金流净额
+    public decimal? NetCashFlow { get; set; }              // 现金净增加额
+    public decimal? FreeCashFlow { get; set; }             // 自由现金流
+    public Dictionary<string, decimal> RawItems { get; set; }
+}
+
+// 公司公告（第二期）
+public class CompanyAnnouncement
+{
+    public ObjectId Id { get; set; }
+    public string Symbol { get; set; }
+    public string Title { get; set; }
+    public string AnnouncementType { get; set; }  // "增发" | "配股" | "分红" | "股权质押" | "其他"
+    public DateTime PublishDate { get; set; }
+    public string Summary { get; set; }            // LLM 精简摘要
+    public string PdfFilePath { get; set; }
+    public string SourceUrl { get; set; }
+    public Dictionary<string, object> StructuredData { get; set; } // 类型特定的结构化数据
+    public DateTime CreatedAt { get; set; }
+}
+
+// 股票基本信息（第三期）
+public class CompanyBasicInfo
+{
+    public ObjectId Id { get; set; }
+    public string Symbol { get; set; }
+    public string FullName { get; set; }
+    public string Industry { get; set; }
+    public decimal? TotalShares { get; set; }      // 总股本
+    public decimal? FloatShares { get; set; }      // 流通股本
+    public decimal? TotalMarketCap { get; set; }
+    public decimal? FloatMarketCap { get; set; }
+    public List<ShareCapitalChange> CapitalChanges { get; set; }
+    public DateTime UpdatedAt { get; set; }
+}
+
+// 高管持股变动（第四期）
+public class ExecutiveHolding
+{
+    public ObjectId Id { get; set; }
+    public string Symbol { get; set; }
+    public string PersonName { get; set; }
+    public string Position { get; set; }
+    public string ChangeType { get; set; }         // "增持" | "减持"
+    public decimal ChangeAmount { get; set; }
+    public decimal ChangePrice { get; set; }
+    public DateTime ChangeDate { get; set; }
+    public decimal? HoldingAfter { get; set; }
+    public DateTime CreatedAt { get; set; }
+}
+```
+
+### 2.2 采集配置模型
+
+```csharp
+public class DataCollectionConfig
+{
+    public ObjectId Id { get; set; }
+    public string Scope { get; set; }             // "all" | "watchlist"
+    public List<string> SpecificSymbols { get; set; } // scope="specific" 时使用
+    public DateTime StartFrom { get; set; }        // 采集起始日期
+    public bool AutoSync { get; set; }             // 是否自动定时同步
+    public int SyncIntervalHours { get; set; }     // 同步间隔(小时)
+    public string CninfoApiKey { get; set; }       // 巨潮网 API 密钥（加密存储）
+    public DateTime? LastSyncAt { get; set; }
+    public string LastSyncStatus { get; set; }
+    public long EstimatedStorageBytes { get; set; } // 预估存储空间
+}
+```
+
+## 3. PDF 解析管线设计
+
+### 3.1 三路验证流水线
+
+```
+PDF文件 → ┌─ PdfPig   提取文本+表格 ─┐
+          ├─ Docnet    提取文本+表格 ─┼→ 交叉验证 → 选最佳结果
+          └─ iText7    提取文本+表格 ─┘
+                                         │
+                    ┌────────────────────┘
+                    ▼
+         FinancialTableParser (规则引擎)
+            ├─ 识别资产负债表区域 → 提取科目和数值 → BalanceSheet
+            ├─ 识别利润表区域 → 提取科目和数值 → IncomeStatement
+            └─ 识别现金流量表区域 → 提取科目和数值 → CashFlowStatement
+                    │
+                    ▼
+         NarrativeLlmSummarizer
+            ├─ 提取管理层讨论与分析章节
+            ├─ 提取风险因素章节
+            └─ 调用 LLM Provider 精简为结构化摘要
+                    │
+                    ▼
+         LiteDB 写入完整文档
+```
+
+### 3.2 三路验证策略
+
+```csharp
+public class PdfExtractionPipeline
+{
+    // 三个提取器并行运行
+    // 比较策略：
+    // 1. 如果三路结果一致 → 直接使用
+    // 2. 如果两路一致一路不同 → 使用多数结果，标记警告
+    // 3. 如果三路都不同 → 使用 PdfPig 为主（表格能力最强），标记需人工复核
+    // 4. 数值偏差在 0.01% 以内视为一致（浮点精度）
+}
+```
+
+### 3.3 财务三主表规则引擎
+
+```
+识别逻辑：
+1. 关键词定位：搜索"资产负债表"、"利润表"/"损益表"、"现金流量表"
+2. 表头识别：找到"项目"、"本期金额"、"上期金额"等列头
+3. 科目映射：将 PDF 中的科目名称映射到标准字段名
+   - "货币资金" → CashAndEquivalents
+   - "应收账款" → AccountsReceivable
+   - "营业收入" → Revenue
+   - ... (维护完整映射表)
+4. 数值提取：处理千分位、万元/亿元单位、括号表示负数等格式
+5. 平衡验证：总资产 = 总负债 + 股东权益（容差 0.01%）
+```
+
+## 4. 数据采集流程
+
+### 4.1 巨潮网 OpenAPI 集成
+
+```
+注册 → 获取 API Key → 配置到 DataCollectionConfig
+
+API 调用流程：
+1. /api/stock/p_stock2301 → 获取公告列表（按类型筛选：定期报告、增发、分红等）
+2. 根据公告列表获取 PDF 下载链接
+3. 下载 PDF 到本地文件系统
+4. 记录爬取进度，支持断点续传
+```
+
+### 4.2 增量同步策略
+
+```
+1. 每次同步前检查已有数据的最新日期
+2. 只拉取新增/更新的报告
+3. 用 SHA256 哈希判断文件是否变化（更正报告覆盖旧版）
+4. 同步状态记录在 LiteDB 的 CollectionProgress 集合中
+```
+
+### 4.3 存储空间预估
+
+```
+单股票年均数据量估算：
+- 年报 PDF: ~2-10 MB
+- 半年报: ~1-5 MB
+- 一季报/三季报: ~0.5-2 MB 各
+- 公告类: ~0.1-1 MB 每份, 年均约 10-30 份
+- 结构化数据: ~10-50 KB/年
+
+单股票每年约: 10-30 MB (PDF) + ~50 KB (结构化)
+Watchlist 30 只股票 × 3 年: ~1-3 GB
+全 A 股 5000+ × 3 年: ~150-450 GB (需明确提示用户)
+
+用户配置界面需显示预估存储量，并在采集前确认。
+```
+
+## 5. MCP 集成方案
+
+### 5.1 复用与新建策略
+
+| 数据类型 | 复用现有 MCP | 新建 MCP | 说明 |
+|---------|-----------|---------|------|
+| 财务三主表 | 扩展 `/mcp/fundamentals` | - | 在 FundamentalsData DTO 中添加财报字段 |
+| 管理层分析/风险 | - | `/mcp/financial-report` | 新建，返回指定报告期的完整解析数据 |
+| 公司公告 | 扩展 `/mcp/news` | - | news 的 announcement source 已有基础 |
+| 基本信息 | 扩展 `/mcp/company-overview` | - | 补充股本、市值等字段 |
+| 高管持股 | 扩展 `/mcp/shareholder` | - | 已有 shareholder 端点 |
+| 跨期财务对比 | - | `/mcp/financial-trend` | 新建，支持多报告期对比 |
+
+### 5.2 新增 MCP 工具定义
+
+```csharp
+// /mcp/financial-report
+// 返回指定股票指定报告期的完整财报解析数据
+GetFinancialReportAsync(string symbol, string period, string? taskId, ...)
+→ StockCopilotMcpEnvelopeDto<FinancialReportDataDto>
+
+// /mcp/financial-trend
+// 返回多个报告期的关键指标趋势
+GetFinancialTrendAsync(string symbol, int periods, string? taskId, ...)
+→ StockCopilotMcpEnvelopeDto<FinancialTrendDataDto>
+```
+
+### 5.3 AI 分析流程集成
+
+```
+现有个股 AI 分析流程增强：
+Commander/Researcher 在分析时可调用：
+1. GetFinancialReportAsync → 获取最新财报的三张主表 + 管理层摘要
+2. GetFinancialTrendAsync → 获取近 N 季度关键指标趋势
+3. 这些数据将作为 evidence 注入到分析 prompt 中
+
+Prompt 注入模板：
+## 财务数据（来自公司财报）
+- 最新报告期：{period}
+- 营收：{revenue}（同比 {revenueYoY}%）
+- 净利润：{netProfit}（同比 {netProfitYoY}%）
+- 毛利率：{grossMarginRate}%
+- 资产负债率：{debtRatio}%
+- 经营现金流：{operatingCashFlow}
+- 管理层分析摘要：{managementSummary}
+- 主要风险：{riskSummary}
+```
+
+## 6. 四期开发计划
+
+### 第一期：财报采集与解析 MVP（核心链路）
+
+---
+
+## 9. API 可用性实测报告（2025-04-04）
+
+> 以下接口均已通过实际 HTTP 请求验证，确认返回数据正常。
+
+### 9.1 东方财富（主要结构化数据源）
+
+**所有接口均免认证，仅需标准 User-Agent 头。**
+
+#### 接口 1: 主要财务指标 ★★★★★
+
+```
+URL: https://emweb.securities.eastmoney.com/PC_HSF10/NewFinanceAnalysis/ZYZBAjaxNew
+参数: type=0&code=SH{code}
+方式: GET
+认证: 否
+```
+
+返回 100+ 个财务指标字段，按报告期分页（每页约8个季度）：
+- EPS（`EPSJB`）、每股净资产（`BPS`）
+- 营收（`TOTALOPERATEREVE`）、净利润（`PARENTNETPROFIT`）
+- ROE（`ROEJQ`）、资产负债率（`ZCFZL`）
+- 毛利率（`XSMLL`）、净利率（`XSJLL`）
+- 同比增长率、环比增长率等衍生指标
+- 已验证：茅台 600519 返回 2023Q3~2025Q3 共8个季度完整数据
+
+#### 接口 2: 资产负债表 ★★★★★
+
+```
+URL: https://emweb.securities.eastmoney.com/PC_HSF10/NewFinanceAnalysis/zcfzbAjaxNew
+参数: companyType=4&reportDateType=0&reportType=1&dates={YYYY-MM-DD}&code=SH{code}
+方式: GET
+认证: 否
+```
+
+返回 200+ 个资产负债表科目 + 同比变化（`_YOY` 后缀）：
+- 货币资金（`MONETARYFUNDS`）、存货（`INVENTORY`）
+- 应收账款（`ACCOUNTS_RECE`）、应付账款（`ACCOUNTS_PAYABLE`）
+- 总资产（`TOTAL_ASSETS`）、总负债（`TOTAL_LIABILITIES`）
+- 股东权益（`TOTAL_EQUITY`）、少数股东权益（`MINORITY_EQUITY`）
+- 已验证：茅台 2025Q3 总资产 3047.38亿
+
+#### 接口 3: 利润表 ★★★★★
+
+```
+URL: https://emweb.securities.eastmoney.com/PC_HSF10/NewFinanceAnalysis/lrbAjaxNew
+参数: companyType=4&reportDateType=0&reportType=1&dates={YYYY-MM-DD}&code=SH{code}
+方式: GET
+认证: 否
+```
+
+返回 100+ 个利润表科目 + 同比变化：
+- 营业收入（`TOTAL_OPERATE_INCOME`/`OPERATE_INCOME`）
+- 营业成本（`OPERATE_COST`）、营业税金（`OPERATE_TAX_ADD`）
+- 四费：销售（`SALE_EXPENSE`）、管理（`MANAGE_EXPENSE`）、研发（`RESEARCH_EXPENSE`）、财务（`FINANCE_EXPENSE`）
+- 营业利润（`OPERATE_PROFIT`）、净利润（`NETPROFIT`）
+- 已验证：茅台 2025Q3 净利润 668.99亿
+
+#### 接口 4: 现金流量表 ★★★★★
+
+```
+URL: https://emweb.securities.eastmoney.com/PC_HSF10/NewFinanceAnalysis/xjllbAjaxNew
+参数: companyType=4&reportDateType=0&reportType=1&dates={YYYY-MM-DD}&code=SH{code}
+方式: GET
+认证: 否
+```
+
+返回 100+ 个现金流量表科目 + 同比变化：
+- 经营活动现金流入（`TOTAL_OPERATE_INFLOW`）/流出（`TOTAL_OPERATE_OUTFLOW`）
+- 经营活动净现金流（`NETCASH_OPERATE`）
+- 投资活动净现金流（`NETCASH_INVEST`）
+- 筹资活动净现金流（`NETCASH_FINANCE`）
+- 已验证：茅台 2025Q3 经营净现金流 381.97亿
+
+#### 接口 5: datacenter 通用查询 API ★★★★☆
+
+```
+URL: https://datacenter.eastmoney.com/securities/api/data/v1/get
+参数: reportName={表名}&columns={字段列表|ALL}&filter=({条件})&sortColumns={排序}&sortTypes=-1&pageSize={N}
+方式: GET
+认证: 否
+```
+
+已验证的报表名：
+
+| 报表名 | 数据内容 | 验证状态 |
+|--------|---------|---------|
+| `RPT_DMSK_FN_BALANCE` | 简化资产负债表 | ✅ 返回总资产/负债/权益 |
+| `RPT_EXECUTIVE_HOLD_DETAILS` | 高管持股变动 | ✅ 含人名、变动数量、价格、日期 |
+| `RPT_SHAREBONUS_DET` | 分红数据 | ✅ 26条历史记录，含分配方案、除权日 |
+| `RPTA_WEB_RZRQ_GGMX` | 融资融券余额 | ✅ 3870+日度记录 |
+| `RPT_F10_FN_MAINOP` | 主营业务构成 | ✅ 已在项目中使用 |
+
+**注意事项：**
+- 高管持股：字段名用 `SECURITY_NAME`（非 `SECURITY_NAME_ABBR`），建议用 `columns=ALL`
+- 融资融券：报表名为 `RPTA_WEB_RZRQ_GGMX`，过滤列为 `SCODE`（非 `SECURITY_CODE`）
+
+#### 接口 6: 公司概况 ★★★★★
+
+```
+URL: https://emweb.securities.eastmoney.com/PC_HSF10/CompanySurvey/CompanySurveyAjax
+参数: code={SH/SZ}{code}
+方式: GET
+认证: 否
+已在项目中使用: EastmoneyCompanyProfileParser.cs
+```
+
+### 9.2 巨潮资讯网（PDF 原始文件源）
+
+**免认证，需 Referer 头。**
+
+#### 接口 1: 公告查询 ★★★★☆
+
+```
+URL: http://www.cninfo.com.cn/new/hisAnnouncement/query
+方式: POST
+Content-Type: application/x-www-form-urlencoded
+Referer: http://www.cninfo.com.cn/
+```
+
+参数：
+```
+stock={code},{orgId}    // 重要：必须包含 orgId，如 600519,gssh0600519
+tabName=fulltext
+pageSize=30
+pageNum=1
+column=szse             // szse=深/沪/北，sse=上交所
+category=category_ndbg_szsh  // 年报分类代码
+plate=sh                // sh/sz/bj
+seDate=                 // 日期范围
+```
+
+**公告类别代码：**
+```
+category_ndbg_szsh  - 年报
+category_bndbg_szsh - 半年报
+category_yjdbg_szsh - 一季报
+category_sjdbg_szsh - 三季报
+category_gddh_szsh  - 股东大会
+category_rcjy_szsh  - 日常经营
+```
+
+**orgId 规则：**
+- 上交所：`gssh0{code}`（如 `gssh0600519`）
+- 深交所：`gssz0{code}`（如 `gssz0000001`）
+
+返回数据含：
+- `announcementId` - 公告唯一ID
+- `adjunctUrl` - PDF 相对路径（如 `finalpage/2025-04-03/1222993920.PDF`）
+- `announcementTitle` - 公告标题
+- `announcementTime` - 发布时间戳(毫秒)
+- 已验证：茅台年报 total=56 条
+
+#### 接口 2: PDF 下载 ★★★★★
+
+```
+URL: http://static.cninfo.com.cn/{adjunctUrl}
+方式: GET
+认证: 否
+示例: http://static.cninfo.com.cn/finalpage/2025-04-03/1222993920.PDF
+```
+
+#### 接口 3: 全文搜索 ★★★★☆
+
+```
+URL: https://www.cninfo.com.cn/new/fulltextSearch/full
+参数: searchkey={关键词}&pageNum=1&isfulltext=false&sortName=nothing&sortType=desc
+方式: GET
+认证: 否
+```
+
+返回与关键词匹配的所有公告，含 PDF 下载链接。已验证：搜索"贵州茅台"返回 1230 条。
+
+### 9.3 额外发现的有用数据
+
+以下数据对股票分析有价值，建议纳入后续计划：
+
+| 数据类型 | 来源 | 接口 | 分析价值 |
+|---------|------|------|---------|
+| **融资融券余额** | 东方财富 | `RPTA_WEB_RZRQ_GGMX` | 市场杠杆情绪指标 |
+| **分红历史** | 东方财富 | `RPT_SHAREBONUS_DET` | 股息率计算、分红稳定性 |
+| **主营业务构成** | 东方财富 | `RPT_F10_FN_MAINOP` | 收入结构分析 |
+| **大宗交易** | 东方财富 | datacenter API | 机构动向信号 |
+| **股权质押** | 巨潮 | 公告分类筛选 | 大股东风险预警 |
+| **机构持仓** | 东方财富 | datacenter API | 机构认可度 |
+
+### 9.4 架构影响：重大简化
+
+**关键发现：东方财富直接提供完整结构化三主表数据（JSON格式），无需解析 PDF。**
+
+原始计划的 PDF 三路解析管线（PdfPig + Docnet + iText7）仅需用于：
+1. 叙述性内容提取（管理层分析、风险提示）
+2. 原始文件归档备查
+3. 数据交叉验证（可选）
+
+**第一期 MVP 可大幅简化：**
+- 从东方财富 API 直接获取结构化三主表 + 指标数据
+- 从巨潮网下载 PDF 归档
+- PDF 解析管线降级为第二期功能（用于叙述性内容）
+- 第一期即可跑通：采集 → 存储 → MCP 暴露 → AI 分析
+
+### 9.5 推荐数据源组合
+
+| 数据类型 | 主数据源 | 备选数据源 |
+|---------|---------|-----------|
+| 资产负债表 | 东方财富 zcfzbAjaxNew | 东方财富 datacenter RPT_DMSK_FN_BALANCE |
+| 利润表 | 东方财富 lrbAjaxNew | 东方财富 datacenter API |
+| 现金流量表 | 东方财富 xjllbAjaxNew | 东方财富 datacenter API |
+| 主要指标 | 东方财富 ZYZBAjaxNew | 计算自三主表 |
+| 年报PDF | 巨潮 hisAnnouncement | 东方财富 PDF 链接 |
+| 高管持股 | 东方财富 RPT_EXECUTIVE_HOLD_DETAILS | 巨潮公告筛选 |
+| 分红数据 | 东方财富 RPT_SHAREBONUS_DET | 巨潮公告筛选 |
+| 公司基本信息 | 东方财富 CompanySurveyAjax | 巨潮基本信息 |
+| 融资融券 | 东方财富 RPTA_WEB_RZRQ_GGMX | - |
+
+**所有测试数据均为2026年4月4日实测，接口状态正常。**
+
+**目标**：能自动下载指定股票的财报 PDF，解析出三张主表数据，存入 LiteDB，通过 MCP 暴露给 AI 分析。
+
+| 步骤 | 内容 | 预估复杂度 |
+|-----|------|-----------|
+| 1.1 | 新建 `SimplerJiangAiAgent.FinancialWorker` 项目，配置 LiteDB | 低 |
+| 1.2 | 新建 `CompanyData` Module 框架，注册 LiteDB 服务 | 低 |
+| 1.3 | 实现巨潮网 OpenAPI 客户端（报告列表查询+PDF 下载） | 中 |
+| 1.4 | 实现 PDF 三路解析管线（PdfPig + Docnet + iText7） | 高 |
+| 1.5 | 实现财务三主表规则引擎（科目映射+数值提取+平衡验证） | 高 |
+| 1.6 | 实现叙述性内容 LLM 精简（复用现有 LLM Provider） | 中 |
+| 1.7 | 实现 LiteDB 存取服务 + 查询 API | 中 |
+| 1.8 | 新建 `/mcp/financial-report` 和 `/mcp/financial-trend` MCP 工具 | 中 |
+| 1.9 | 扩展现有 `/mcp/fundamentals` 注入财报数据 | 低 |
+| 1.10 | 前端采集配置界面（范围、起始时间、存储预估） | 中 |
+| 1.11 | 集成测试：选一只股票跑通全链路 | 中 |
+
+**验收标准**：
+- 能通过配置界面设置采集范围和起始时间
+- Worker 能自动下载财报 PDF 并解析出三张主表
+- AI 分析时能自动引用最新财报数据
+- 显示预估存储空间
+
+### 第二期：公司公告采集
+
+| 步骤 | 内容 |
+|-----|------|
+| 2.1 | 巨潮网公告类型筛选（增发、配股、分红、股权质押等） |
+| 2.2 | 公告 PDF 下载 + 类型特定的结构化提取 |
+| 2.3 | 公告摘要 LLM 精简 |
+| 2.4 | 扩展 `/mcp/news` 支持 announcement 源切换到本地数据 |
+| 2.5 | 公告事件时间线前端展示 |
+
+### 第三期：股票基本信息 + 股本结构
+
+| 步骤 | 内容 |
+|-----|------|
+| 3.1 | 东方财富/巨潮 基本信息 API 对接 |
+| 3.2 | 股本变动历史采集和存储 |
+| 3.3 | 扩展 `/mcp/company-overview` 注入详细基本面 |
+| 3.4 | 前端基本信息展示面板 |
+
+### 第四期：高管持股变动
+
+| 步骤 | 内容 |
+|-----|------|
+| 4.1 | 高管持股变动数据采集（巨潮网 API） |
+| 4.2 | 持股变动信号分析（大额减持预警等） |
+| 4.3 | 扩展 `/mcp/shareholder` 注入高管变动数据 |
+| 4.4 | 前端高管持股变动时间线 |
+
+## 7. 技术依赖清单
+
+### NuGet 包（FinancialWorker 项目）
+
+| 包名 | 用途 |
+|------|------|
+| `LiteDB` (v5.x) | 嵌入式文档数据库 |
+| `UglyToad.PdfPig` | PDF 解析路线 1 |
+| `Docnet.Core` | PDF 解析路线 2 |
+| `itext7` | PDF 解析路线 3（注意 AGPL 协议） |
+| `EPPlus` | Excel 解析 |
+| `Microsoft.Extensions.Hosting` | Worker Service 框架 |
+
+### NuGet 包（API 项目新增）
+
+| 包名 | 用途 |
+|------|------|
+| `LiteDB` (v5.x) | 读取财报数据 |
+
+## 8. 风险与注意事项
+
+1. **巨潮网 API 限流**：需实现请求限速器（建议 1-2 QPS），避免被封禁
+2. **PDF 格式多样性**：不同公司财报排版差异大，规则引擎需要持续迭代适配
+3. **iText7 AGPL 协议**：如果项目闭源发布需要购买商业授权或剔除 iText7
+4. **存储增长**：全 A 股模式下存储增长快，需要向用户明确提示并支持清理旧数据
+5. **LLM 成本**：大量财报的叙述性内容 LLM 精简会产生 API 费用，需要做批量控制和失败重试
+6. **巨潮网 API Key 安全**：加密存储在 LiteDB 中，不进入 Git 仓库
+
+### 9.6 备选数据源测试（2026-04-04）
+
+| 数据源 | 接口/入口 | 状态 | 评分 | 备注 |
+|--------|----------|------|------|------|
+| 新浪财经 | 资产负债表 HTML | ❌ 500错误 | ★☆☆☆☆ | 接口疑似下线 |
+| 腾讯财经 | K线行情 JSON | ✅ | ★★★★☆ | 仅行情数据，无财务报表 |
+| 同花顺10jqka | stockph API | ❌ 503 | ★☆☆☆☆ | 服务不可用 |
+| 网易163 | 三主表 CSV/HTML | ❌ TLS失败 | ★☆☆☆☆ | 连接被拒 |
+| 雪球 | 财务报表 | ❌ 400需认证 | ★★☆☆☆ | 需登录token |
+| **东方财富 datacenter** | RPT_DMSK_FN_* | ✅ | ★★★★★ | **有效备选** |
+
+**结论：**
+
+- **免费第三方财务数据源几乎全灭**（新浪/网易/同花顺/雪球均不可直接调用）
+- **可用方案**：东方财富双入口冗余（emweb + datacenter），加上巨潮PDF作为归档和验证
+- **入口冗余策略**：如 emweb API 不可用，降级到 datacenter API（字段较少但核心数据完整）
+- **长期建议**：如需真正异源冗余，考虑 AKShare Python 库或 Tushare Pro 付费接口
+
+### 9.7 最终确定的数据源架构（三通道 + cninfo PDF）
+
+```
+数据采集三通道降级架构：
+
+入口 A (主力): emweb.securities.eastmoney.com
+  ├─ zcfzbAjaxNew    → 资产负债表 (200+ 字段 + YoY)
+  ├─ lrbAjaxNew      → 利润表 (100+ 字段 + YoY)
+  ├─ xjllbAjaxNew    → 现金流量表 (100+ 字段 + YoY)
+  └─ ZYZBAjaxNew     → 主要财务指标
+      │ 降级触发: HTTP 超时(15s)/5xx/数据为空
+      ▼
+入口 B (备用): datacenter.eastmoney.com
+  ├─ RPT_DMSK_FN_BALANCE   → 资产负债表 (关键字段)
+  ├─ RPT_DMSK_FN_INCOME    → 利润表 (关键字段)
+  └─ RPT_DMSK_FN_CASHFLOW  → 现金流量表 (关键字段)
+      │ 降级触发: 入口B也失败
+      ▼
+入口 C (第三备份): basic.10jqka.com.cn
+  ├─ /api/stock/finance/{code}_debt.json   → 资产负债表
+  ├─ /api/stock/finance/{code}_benefit.json → 利润表
+  └─ /api/stock/finance/{code}_cash.json    → 现金流量表
+      │ 并行（不受 A/B/C 状态影响）
+      ▼
+入口 D (PDF归档): cninfo.com.cn
+  ├─ hisAnnouncement/query → 公告列表 (POST)
+  └─ static.cninfo.com.cn  → PDF 下载
+
+额外数据（第一期一并纳入）：
+  ├─ RPT_SHAREBONUS_DET         → 分红历史
+  ├─ RPTA_WEB_RZRQ_GGMX        → 融资融券余额
+  └─ RPT_EXECUTIVE_HOLD_DETAILS → 高管持股变动
+```
+
+**降级逻辑：**
+1. 每次采集先请求入口A，设 15s 超时
+2. 如入口A返回错误/超时/数据为空，自动降级到入口B
+3. 如入口B也失败，降级到入口C（同花顺 basic API）
+4. 巨潮PDF始终并行下载（不受入口A/B/C状态影响）
+5. 降级事件记录到 LiteDB 的 `CollectionLog` 集合，供后续分析
+
+### 9.8 开源项目数据源研究（2026-04-04）
+
+对主流 A 股开源数据项目进行了深度源码分析，目的是寻找非 Eastmoney 的独立数据源。
+
+| 项目 | Stars | 底层数据源 | 财务报表支持 | .NET可调用 | 评估 |
+|------|-------|-----------|------------|-----------|------|
+| **AKShare** | 18k | Eastmoney API (emweb + datacenter) | ✅ 三张报表全覆盖 | ✅ 相同HTTP端点 | 底层与我们方案完全一致 |
+| **efinance** | 10 | Eastmoney push2 API | ❌ 仅行情/资金流 | ✅ | 无财务报表，不可用 |
+| **BaoStock** | ~2k | 自有TCP Socket服务器 | ✅ 指标级（非逐行） | ❌ 需移植TCP协议 | 移植成本高，数据粒度不足 |
+| **Tushare** | ~13k | Sina + 自有服务器 | ✅ | ❌ 需token，免费额度极低 | 免费不可用，付费才行 |
+
+**核心发现：**
+- **所有主流开源项目底层都依赖 Eastmoney**，不存在真正独立的免费结构化财报数据源
+- AKShare 的三张报表代码（`stock_three_report_em.py`）使用的端点与我们验证通过的完全相同
+- AKShare 为退市股额外实现了 `datacenter.eastmoney.com/securities/api/data/get` 的 `RPT_F10_FINANCE_G*` 系列
+- BaoStock 使用自定义二进制 TCP 协议，无法通过 HTTP 直接调用
+
+**AKShare 财报端点源码确认（与我们一致）：**
+- 资产负债表: `emweb.securities.eastmoney.com/.../zcfzbAjaxNew`
+- 利润表: `emweb.securities.eastmoney.com/.../lrbAjaxNew`
+- 现金流量表: `emweb.securities.eastmoney.com/.../xjllbAjaxNew`
+- 需先从 HTML 页面提取 `companyType` (4=一般企业, 1=银行, 2=保险, 3=券商)
+- 每次请求最多传 5 个日期
+
+### 9.9 同花顺数据接口研究（2026-04-04）
+
+#### 接口可用性
+
+| 域名 | 认证要求 | 数据类型 | 可用性 |
+|------|---------|---------|--------|
+| `basic.10jqka.com.cn/api/stock/finance/` | **仅 User-Agent** | 三张报表 JSON | ✅ |
+| `basic.10jqka.com.cn/basicapi/finance/` | **仅 User-Agent** | 财务指标 | ✅ |
+| `data.10jqka.com.cn/` | hexin-v 令牌 | 资金流向等 | ⚠️ 需JS执行 |
+| `d.10jqka.com.cn/` | hexin-v + Referer | K线数据 | ⚠️ 需JS执行 |
+| `stockpage.10jqka.com.cn/` | 完整浏览器渲染 | 个股页面 | ❌ |
+
+#### 同花顺 basic API 端点（无需令牌，Phase 1 纳入）
+
+```
+GET https://basic.10jqka.com.cn/api/stock/finance/{code}_debt.json
+→ 资产负债表结构化 JSON
+
+GET https://basic.10jqka.com.cn/api/stock/finance/{code}_benefit.json
+→ 利润表结构化 JSON
+
+GET https://basic.10jqka.com.cn/api/stock/finance/{code}_cash.json
+→ 现金流量表结构化 JSON
+```
+
+**请求头要求：**
+```
+User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36
+```
+
+#### hexin-v 令牌机制（了解但暂不实现）
+
+- 同花顺使用自定义 JS 挑战（非 Cloudflare），名为 `ths.js`
+- AKShare 通过 `py_mini_racer`（V8引擎）执行此 JS 生成令牌
+- 令牌需同时设为 Cookie (`v={token}`) 和 HTTP Header (`hexin-v: {token}`)
+- `data.10jqka.com.cn` 和 `d.10jqka.com.cn` 域需要此令牌
+- **Phase 1 仅使用免令牌的 basic API**，如未来需要扩展再考虑移植
+
+#### 风险评估
+
+| 因素 | 风险等级 | 说明 |
+|------|---------|------|
+| IP封禁 | 中高 | 同花顺有激进的反爬策略，建议限速 1-2 req/s |
+| 法律/ToS | 中 | 自动化采集可能违反服务条款，仅作为故障降级使用 |
+| 接口稳定性 | 中 | 无 SLA，JSON 结构可能变更 |
+| 生产可靠性 | 中高 | 作为第三备份可接受，不作为主力 |
+
+**采用策略：最小化使用，仅在 Eastmoney 双通道都失败时触发，降低被检测风险。**
+
+### 9.10 Phase 1 最终范围确认（2026-04-04）
+
+基于以上所有研究和讨论，Phase 1 最终范围如下：
+
+**数据采集：**
+- [x] 三张财务报表（资产负债表、利润表、现金流量表）
+- [x] 主要财务指标（100+ 项）
+- [x] 分红送配历史
+- [x] 融资融券余额
+- [x] 三通道降级：Eastmoney emweb → datacenter → 同花顺 basic
+- [x] 巨潮 PDF 并行下载与解析
+
+**系统架构：**
+- [x] 独立 .NET Worker 进程
+- [x] LiteDB 文档数据库
+- [x] PDF 三路验证（Docnet + PdfPig + iText7）
+- [x] LLM 叙述内容摘要
+
+**集成：**
+- [x] MCP 工具（financial-report, financial-trend）
+- [x] AI 分析流程集成
+- [x] 用户配置（起始时间、全量/自选、存储预估）
+
+**已确认技术决策：**
+| 决策项 | 选择 |
+|--------|------|
+| 架构模式 | Hybrid: API Module + 独立 Worker |
+| 新增数据库 | LiteDB (alongside SQLite) |
+| 主力数据源 | Eastmoney emweb API |
+| 第一备用 | Eastmoney datacenter API |
+| 第二备用 | 同花顺 basic API (无令牌) |
+| PDF 源 | cninfo.com.cn (并行) |
+| PDF 解析 | Docnet + PdfPig + iText7 三路验证 |
+| 叙述解析 | LLM 摘要（复用现有 Provider） |
+
+## 10. 前端交互方案
+
+### 10.1 数据消费：双模式设计
+
+**模式一：独立财务报表 Tab**
+- 在右侧边栏（`SidebarTabs.vue`）新增第5个Tab：**「财务报表」**
+- Tab 内容包含：
+  - 报告期选择器（下拉，按季度/年度）
+  - 三张报表切换（资产负债表 / 利润表 / 现金流量表）
+  - 关键指标摘要卡片（营收、净利、ROE、毛利率等）
+  - 趋势迷你图（最近8个季度关键指标折线）
+  - 数据源标记（显示本次数据来自哪个通道：emweb/datacenter/同花顺）
+  - 采集状态指示（最后采集时间、是否有最新数据）
+
+**模式二：AI 分析引用**
+- MCP 工具 `financial-report` / `financial-trend` 供 AI Agent 查询
+- AI 分析 Tab 中的分析结论自动引用财报数据
+- 用户在 AI 分析中可点击引用跳转到财报 Tab 对应数据
+
+### 10.2 Worker 配置入口
+
+在现有设置页面中增加**「财报采集」**配置区：
+
+| 配置项 | 类型 | 默认值 | 说明 |
+|--------|------|--------|------|
+| 启用自动采集 | 开关 | 关 | 控制 Worker 定时任务 |
+| 采集范围 | 单选 | 自选股 | 自选股列表 / 全部A股 |
+| 起始时间 | 日期选择 | 3年前 | 历史数据回溯起点 |
+| 采集频率 | 单选 | 每日收盘后 | 每日/每周/手动 |
+| 存储占用 | 只读显示 | - | 实时显示 LiteDB + PDF 占用空间 |
+| 估算总量 | 只读显示 | - | 根据当前配置估算最终存储量 |
+
+#### 10.2.1 采集测试面板
+
+设置页的财报采集配置区内嵌**测试面板**，让用户可以直观观察 Worker 采集全流程：
+
+**测试面板功能：**
+
+| 功能 | 说明 |
+|------|------|
+| 单股测试 | 输入股票代码，点击「测试采集」，实时显示采集流程 |
+| 通道选择 | 可指定测试哪个通道（主力/备用/同花顺/全部降级链） |
+| 实时日志流 | SSE 或轮询方式展示采集过程的逐步日志 |
+| 结果预览 | 采集完成后直接展示结构化数据和 PDF（如有） |
+| 降级测试 | 模拟主力通道超时，观察是否正确降级到备用 |
+
+**实时日志显示内容：**
+```
+[10:32:01] 开始采集 600519 (贵州茅台)
+[10:32:01] 检测 companyType → 4 (一般企业)
+[10:32:02] 通道A: emweb zcfzbAjaxNew → 200 OK, 5期数据
+[10:32:02] 通道A: emweb lrbAjaxNew → 200 OK, 5期数据
+[10:32:03] 通道A: emweb xjllbAjaxNew → 200 OK, 5期数据
+[10:32:03] 通道A: emweb ZYZBAjaxNew → 200 OK, 20期指标
+[10:32:04] 分红数据: RPT_SHAREBONUS_DET → 200 OK, 26条
+[10:32:05] 融资融券: RPTA_WEB_RZRQ_GGMX → 200 OK, 30条
+[10:32:05] cninfo PDF: 找到 3 份年报公告
+[10:32:06] PDF #1: 下载中... 2.3MB → 完成
+[10:32:08] PDF #1: Docnet提取 → 128页, PdfPig提取 → 128页, iText7提取 → 128页
+[10:32:09] PDF #1: 三路一致性 → 通过
+[10:32:10] LLM摘要生成中...
+[10:32:12] 完成！总耗时 11s, 数据已存入 LiteDB
+```
+
+**结果预览区：**
+- 三报表关键字段表格（可折叠查看完整字段）
+- 分红记录列表
+- 融资融券最近30天
+- PDF 解析结果（原文摘要 + LLM摘要）
+- 日志详情（可导出）
+
+**对应 API：**
+- `POST /api/system/finance-worker/test-collect` → 触发测试采集，返回 task ID
+- `GET /api/system/finance-worker/test-collect/{taskId}/stream` → SSE 实时日志流
+- `GET /api/system/finance-worker/test-collect/{taskId}/result` → 采集结果数据
+
+### 10.3 采集触发机制
+
+**定时自动：**
+- Worker 在每个交易日收盘后（15:30 CST）自动执行批量采集
+- 采集范围由用户配置决定（自选股 or 全量）
+- 增量同步：只采集比本地最新报告期更新的数据
+
+**按需触发：**
+- 用户打开个股时，前端检查该股本地财报数据
+- 如果无数据或数据过期（>1天未更新），通过 API 触发单股即时采集
+- 单股采集走同样的三通道降级逻辑
+- 采集完成后前端自动刷新财报 Tab
+
+### 10.4 前端组件设计
+
+```
+SidebarTabs.vue              → 新增 Tab 5: 财务报表
+  └─ StockFinancePanel.vue   → 财报 Tab 容器
+       ├─ FinanceSummaryCard.vue    → 关键指标摘要
+       ├─ FinanceTrendChart.vue     → 趋势迷你图
+       ├─ FinanceStatementTable.vue → 报表明细表格
+       └─ FinanceCollectionStatus.vue → 采集状态/来源
+```
+
+**数据请求路径：**
+- `GET /api/stocks/{symbol}/finance/summary` → 关键指标摘要
+- `GET /api/stocks/{symbol}/finance/statement?type=balance&period=2024Q3` → 报表明细
+- `GET /api/stocks/{symbol}/finance/trend?indicators=revenue,netProfit,roe` → 趋势数据
+- `POST /api/stocks/{symbol}/finance/collect` → 触发单股按需采集
+- `GET /api/system/finance-worker/status` → Worker 状态和配置
+- `PUT /api/system/finance-worker/config` → 更新 Worker 配置
+
+## 11. Phase 1 开发任务拆解
+
+### Phase 1 总览
+
+Phase 1 目标：完成财报采集全链路 MVP，包含后端三通道采集 + LiteDB 存储 + PDF 解析 + MCP 工具 + 前端基础展示。
+
+预计开发子任务 12 个，按依赖关系排序：
+
+### Step 1: Worker 项目搭建与 LiteDB 集成
+
+**输入**：无
+**输出**：可编译运行的 Worker 项目 + LiteDB 数据库初始化
+
+- [ ] 创建 `SimplerJiangAiAgent.FinancialWorker` .NET Worker Service 项目
+- [ ] 添加到 `SimplerJiangAiAgent.sln`
+- [ ] 引入 NuGet 包：LiteDB, Microsoft.Extensions.Hosting
+- [ ] 实现 LiteDB 数据库服务（`FinancialDbContext`）
+- [ ] 定义核心文档模型：`FinancialReport`, `FinancialIndicator`, `CollectionLog`
+- [ ] 定义配置模型：`FinancialCollectionConfig`
+- [ ] Worker 启动时初始化 LiteDB，创建索引
+- [ ] 单元测试：LiteDB CRUD 操作验证
+
+### Step 2: Eastmoney 主力通道实现
+
+**输入**：Step 1 的 LiteDB 模型
+**输出**：可从 Eastmoney emweb 抓取三表+指标并存 LiteDB
+
+- [ ] 实现 `EastmoneyFinanceClient`（HttpClient 封装）
+- [ ] 实现 companyType 检测逻辑（HTML 解析 `hidctype`）
+- [ ] 实现三表数据抓取：zcfzbAjaxNew / lrbAjaxNew / xjllbAjaxNew
+- [ ] 实现主要指标抓取：ZYZBAjaxNew
+- [ ] JSON 响应解析 → `FinancialReport` 文档
+- [ ] 存入 LiteDB，增量更新（按报告期去重）
+- [ ] 错误处理：超时/5xx/空数据 → 降级标记
+- [ ] 单元测试：模拟 JSON 响应 → 验证解析+存储
+
+### Step 3: Eastmoney 备用通道实现
+
+**输入**：Step 2 的客户端接口
+**输出**：datacenter API 降级通道
+
+- [ ] 实现 `EastmoneyDatacenterClient`
+- [ ] 三表简化版：RPT_DMSK_FN_BALANCE / INCOME / CASHFLOW
+- [ ] 字段映射到与主力通道相同的 `FinancialReport` 模型
+- [ ] 降级逻辑：主力失败 → 自动切换备用
+- [ ] 单元测试：降级场景验证
+
+### Step 4: 同花顺第三通道实现
+
+**输入**：Step 2/3 的客户端接口模式
+**输出**：同花顺 basic API 第三降级通道
+
+- [ ] 实现 `ThsFinanceClient`
+- [ ] 三表端点：`basic.10jqka.com.cn/api/stock/finance/{code}_{type}.json`
+- [ ] 嵌套 JSON 解析（flashData 结构）
+- [ ] 中文数值解析（"2657.05亿" → decimal）
+- [ ] TLS 1.2+ 强制配置
+- [ ] 限速控制（1-2 req/s）
+- [ ] 字段映射到统一 `FinancialReport` 模型
+- [ ] 单元测试：模拟同花顺 JSON → 验证解析
+
+### Step 5: 三通道编排与降级引擎
+
+**输入**：Step 2/3/4 的三个客户端
+**输出**：统一的 `FinancialDataCollector` 服务
+
+- [ ] 实现 `FinancialDataCollector`（策略模式编排三通道）
+- [ ] 降级逻辑：A(15s超时) → B → C
+- [ ] 采集日志：每次记录通道选择、耗时、结果 → `CollectionLog`
+- [ ] 并发控制：单股串行，多股可并行（限并发数）
+- [ ] 增量策略：只拉取比本地最新更新的报告期
+- [ ] 集成测试：模拟各通道失败组合
+
+### Step 6: 额外数据源采集（分红/融资融券）
+
+**输入**：Step 2 的 Eastmoney 客户端
+**输出**：分红、融资融券数据入库
+
+- [ ] 分红数据：RPT_SHAREBONUS_DET → `DividendRecord` 文档
+- [ ] 融资融券：RPTA_WEB_RZRQ_GGMX → `MarginTradingRecord` 文档
+- [ ] LiteDB 模型扩展
+- [ ] 集成到 `FinancialDataCollector` 的采集流程
+- [ ] 单元测试
+
+### Step 7: cninfo PDF 下载与三路解析
+
+**输入**：Step 1 的存储结构
+**输出**：PDF 下载 + 三路文本提取
+
+- [ ] 实现 cninfo 公告查询：`hisAnnouncement/query` POST
+- [ ] 实现 PDF 下载：`static.cninfo.com.cn/{adjunctUrl}`
+- [ ] 文件存储：`App_Data/financial-reports/{symbol}/{year}/`
+- [ ] 三路 PDF 文本提取：Docnet / PdfPig / iText7
+- [ ] 投票一致性验证
+- [ ] LLM 叙述摘要（复用现有 LLM Provider）
+- [ ] 存储解析结果到 LiteDB
+- [ ] 单元测试：模拟 PDF 内容验证解析
+
+### Step 8: 定时调度与按需采集 Worker
+
+**输入**：Step 5 的 Collector + Step 7 的 PDF 管线
+**输出**：完整的 Worker Service 可独立运行
+
+- [ ] BackgroundService 定时调度（每日 15:30+）
+- [ ] 中国A股交易日判断
+- [ ] 配置读取：自选股列表 / 全量、起始时间
+- [ ] 按需单股采集 HTTP 触发端点
+- [ ] 采集进度报告（当前进度/总量/预计剩余）
+- [ ] 健康检查端点
+- [ ] 集成测试
+
+### Step 9: API 层 - 财报查询端点
+
+**输入**：Step 1-8 的 LiteDB 数据
+**输出**：前端可调用的 REST API
+
+- [ ] `GET /api/stocks/{symbol}/finance/summary` → 指标摘要
+- [ ] `GET /api/stocks/{symbol}/finance/statement` → 报表明细
+- [ ] `GET /api/stocks/{symbol}/finance/trend` → 趋势数据
+- [ ] `POST /api/stocks/{symbol}/finance/collect` → 触发采集
+- [ ] `GET /api/system/finance-worker/status` → Worker 状态
+- [ ] `PUT /api/system/finance-worker/config` → 更新配置
+- [ ] 请求 DTO 和响应 DTO 定义
+- [ ] 路由注册到 StocksModule 或新建 FinanceModule
+
+### Step 10: MCP 工具集成
+
+**输入**：Step 9 的 API 层
+**输出**：AI 可调用的 MCP 工具
+
+- [ ] `financial-report` MCP 工具：查询指定股票指定期间财报
+- [ ] `financial-trend` MCP 工具：查询财务趋势和变化
+- [ ] MCP DTO 定义（遵循 `StockCopilotMcpEnvelopeDto<T>` 模式）
+- [ ] 注册到 `IMcpToolGateway`
+- [ ] 单元测试
+
+### Step 11: 前端 - 财务报表 Tab
+
+**输入**：Step 9 的 API
+**输出**：右侧边栏第5个Tab可展示财报数据
+
+- [ ] `StockFinancePanel.vue` 容器组件
+- [ ] `FinanceSummaryCard.vue` 关键指标卡片
+- [ ] `FinanceTrendChart.vue` 趋势迷你图
+- [ ] `FinanceStatementTable.vue` 报表明细
+- [ ] `FinanceCollectionStatus.vue` 采集状态
+- [ ] 注册到 `SidebarTabs.vue` 的 Tab 数组
+- [ ] 数据请求接入 Step 9 的 API
+- [ ] 按需采集触发（无数据时自动调用 collect）
+- [ ] 前端单元测试
+
+### Step 12: 前端 - 设置页 Worker 配置
+
+**输入**：Step 9 的配置 API
+**输出**：设置页中可配置 Worker
+
+- [ ] 财报采集配置卡片组件
+- [ ] 启停开关、范围选择、起始时间
+- [ ] 存储占用实时显示
+- [ ] 估算存储量显示
+- [ ] 保存配置调用 `PUT /api/system/finance-worker/config`
+- [ ] 前端单元测试
+
+### Step 12 补充: 采集测试面板
+
+**输入**：Step 9 的 API + Step 8 的 Worker
+**输出**：设置页内的采集测试面板
+
+- [ ] `POST /api/system/finance-worker/test-collect` API（触发单股测试采集）
+- [ ] SSE 实时日志流端点（`/test-collect/{taskId}/stream`）
+- [ ] 采集结果查询端点（`/test-collect/{taskId}/result`）
+- [ ] Worker 端实现：测试采集模式（单股、指定通道、日志回调）
+- [ ] `FinanceTestPanel.vue` 前端组件
+  - [ ] 股票代码输入 + 通道选择
+  - [ ] 实时日志流展示（滚动日志框）
+  - [ ] 结果预览（三表摘要 + 分红 + PDF状态）
+  - [ ] 日志导出功能
+- [ ] 嵌入设置页的配置区
+- [ ] 前端单元测试
+
+### 依赖关系图
+
+```
+Step 1 (项目搭建+LiteDB)
+  ├─→ Step 2 (Eastmoney主力)
+  │     ├─→ Step 3 (datacenter备用)
+  │     ├─→ Step 6 (分红/融资融券)
+  │     └─→ Step 5 (三通道编排) ←── Step 3, Step 4
+  ├─→ Step 4 (同花顺)
+  └─→ Step 7 (cninfo PDF)
+        │
+Step 5 + Step 7
+  └─→ Step 8 (Worker完整调度)
+        └─→ Step 9 (API层)
+              ├─→ Step 10 (MCP工具)
+              ├─→ Step 11 (前端Tab)
+              └─→ Step 12 (前端配置+测试面板)
+```

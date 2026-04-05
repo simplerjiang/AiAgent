@@ -157,6 +157,7 @@ public sealed class RecommendEventBus : IRecommendEventBus, IDisposable
 
     private sealed class TurnEventState
     {
+        private const int MaxHistorySize = 1000;
         private readonly ConcurrentQueue<RecommendEventEnvelope> _queue = new();
         private readonly ConcurrentQueue<RecommendEventEnvelope> _history = new();
         private long _sequence;
@@ -166,6 +167,8 @@ public sealed class RecommendEventBus : IRecommendEventBus, IDisposable
             var envelope = new RecommendEventEnvelope(Interlocked.Increment(ref _sequence), evt);
             _queue.Enqueue(envelope);
             _history.Enqueue(envelope);
+            while (_history.Count > MaxHistorySize)
+                _history.TryDequeue(out _);
         }
 
         public IReadOnlyList<RecommendEvent> Drain()

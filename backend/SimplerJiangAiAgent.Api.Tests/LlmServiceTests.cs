@@ -85,6 +85,12 @@ public sealed class LlmServiceTests
 
         public Task<string> GetGlobalTavilyKeyAsync(CancellationToken cancellationToken = default)
             => Task.FromResult(string.Empty);
+
+        public Task<(string Provider, string Model, int BatchSize)> GetNewsCleansingSettingsAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(("active", "", 12));
+
+        public Task SetNewsCleansingSettingsAsync(string provider, string model, int batchSize, CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
     }
 
     private sealed class FakeProvider : ILlmProvider

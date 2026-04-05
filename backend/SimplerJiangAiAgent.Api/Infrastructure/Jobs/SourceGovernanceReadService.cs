@@ -387,14 +387,12 @@ public sealed class SourceGovernanceReadService : ISourceGovernanceReadService
 
         var normalizedTake = Math.Clamp(take, 1, 1000);
         var normalizedKeyword = keyword?.Trim();
-        var lines = await File.ReadAllLinesAsync(_logPath, cancellationToken);
-        if (lines.Length == 0)
-        {
-            return Array.Empty<LlmConversationLogItemDto>();
-        }
 
         var sessions = new Dictionary<string, LlmConversationLogSessionBuilder>(StringComparer.OrdinalIgnoreCase);
-        foreach (var line in lines)
+        await using var stream = File.OpenRead(_logPath);
+        using var reader = new StreamReader(stream);
+        string? line;
+        while ((line = await reader.ReadLineAsync(cancellationToken)) != null)
         {
             if (!line.Contains("[LLM", StringComparison.OrdinalIgnoreCase))
             {
@@ -502,23 +500,24 @@ public sealed class SourceGovernanceReadService : ISourceGovernanceReadService
             return matches;
         }
 
-        // Read all lines in one shot and keep only the latest N matches for developer diagnostics.
-        var lines = await File.ReadAllLinesAsync(_logPath, cancellationToken);
-        foreach (var line in lines.Reverse())
+        // Stream lines and keep only the latest N matches for developer diagnostics.
+        await using var logStream = File.OpenRead(_logPath);
+        using var reader = new StreamReader(logStream);
+        string? line;
+        while ((line = await reader.ReadLineAsync(cancellationToken)) != null)
         {
             if (!line.Contains(traceId, StringComparison.OrdinalIgnoreCase))
-            {
                 continue;
-            }
 
             matches.Add(line);
-            if (matches.Count >= normalizedTake)
-            {
-                break;
-            }
         }
 
-        matches.Reverse();
+        // Keep only trailing N matches
+        if (matches.Count > normalizedTake)
+        {
+            matches.RemoveRange(0, matches.Count - normalizedTake);
+        }
+
         return matches;
     }
 

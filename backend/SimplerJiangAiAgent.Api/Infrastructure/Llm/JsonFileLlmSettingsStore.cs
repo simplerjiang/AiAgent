@@ -203,6 +203,38 @@ public sealed class JsonFileLlmSettingsStore : ILlmSettingsStore
         }
     }
 
+    public async Task<(string Provider, string Model, int BatchSize)> GetNewsCleansingSettingsAsync(CancellationToken cancellationToken = default)
+    {
+        var document = await LoadMergedAsync(cancellationToken);
+        var nc = document.NewsCleansing;
+        if (nc is not null)
+        {
+            return (nc.Provider, nc.Model, nc.BatchSize);
+        }
+
+        return ("active", "", 12);
+    }
+
+    public async Task SetNewsCleansingSettingsAsync(string provider, string model, int batchSize, CancellationToken cancellationToken = default)
+    {
+        await _mutex.WaitAsync(cancellationToken);
+        try
+        {
+            var document = await LoadDocumentAsync(_defaultsFilePath, cancellationToken, requireLock: false);
+            document.NewsCleansing = new NewsCleansingDocument
+            {
+                Provider = string.IsNullOrWhiteSpace(provider) ? "active" : provider.Trim(),
+                Model = model?.Trim() ?? "",
+                BatchSize = Math.Clamp(batchSize, 5, 20)
+            };
+            await SaveDocumentAsync(_defaultsFilePath, document, cancellationToken);
+        }
+        finally
+        {
+            _mutex.Release();
+        }
+    }
+
     private async Task<LlmSettingsDocument> LoadMergedAsync(CancellationToken cancellationToken, bool requireLock = true)
     {
         if (requireLock)
@@ -280,7 +312,8 @@ public sealed class JsonFileLlmSettingsStore : ILlmSettingsStore
         localSecretsDocument = NormalizeDocument(localSecretsDocument);
         var merged = new LlmSettingsDocument
         {
-            ActiveProviderKey = defaultsDocument.ActiveProviderKey
+            ActiveProviderKey = defaultsDocument.ActiveProviderKey,
+            NewsCleansing = defaultsDocument.NewsCleansing
         };
 
         foreach (var (provider, settings) in defaultsDocument.Providers)
@@ -446,6 +479,7 @@ public sealed class JsonFileLlmSettingsStore : ILlmSettingsStore
         }
 
         normalized.ActiveProviderKey = ResolveProviderKey(normalized.ActiveProviderKey, normalized);
+        normalized.NewsCleansing = document.NewsCleansing;
         return normalized;
     }
 

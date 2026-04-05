@@ -41,6 +41,12 @@ public sealed class LlmModule : IModule
             client.Timeout = TimeSpan.FromSeconds(timeoutSeconds);
         });
         services.AddSingleton<ILlmProvider, AntigravityProvider>();
+
+        services.AddHttpClient<OllamaProvider>(client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(300);
+        });
+        services.AddSingleton<ILlmProvider, OllamaProvider>();
     }
 
     public void MapEndpoints(IEndpointRouteBuilder app)
@@ -117,6 +123,26 @@ public sealed class LlmModule : IModule
                 providers.Select(item => item.Provider).OrderBy(item => item, StringComparer.OrdinalIgnoreCase).ToArray()));
         })
         .WithName("SetActiveLlmProvider")
+        .WithOpenApi();
+
+        secureAdminGroup.MapGet("/llm/news-cleansing", async (ILlmSettingsStore store) =>
+        {
+            var (provider, model, batchSize) = await store.GetNewsCleansingSettingsAsync();
+            return Results.Ok(new NewsCleansingSettingsResponse(provider, model, batchSize));
+        })
+        .WithName("GetNewsCleansingSettings")
+        .WithOpenApi();
+
+        secureAdminGroup.MapPut("/llm/news-cleansing", async (NewsCleansingSettingsRequest request, ILlmSettingsStore store) =>
+        {
+            await store.SetNewsCleansingSettingsAsync(
+                request.Provider ?? "active",
+                request.Model ?? "",
+                request.BatchSize ?? 12);
+            var (provider, model, batchSize) = await store.GetNewsCleansingSettingsAsync();
+            return Results.Ok(new NewsCleansingSettingsResponse(provider, model, batchSize));
+        })
+        .WithName("SetNewsCleansingSettings")
         .WithOpenApi();
 
         secureAdminGroup.MapGet("/llm/settings/{provider}", async (string provider, ILlmSettingsStore store) =>

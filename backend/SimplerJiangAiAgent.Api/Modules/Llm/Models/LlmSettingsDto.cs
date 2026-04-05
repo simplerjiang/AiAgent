@@ -40,3 +40,13 @@ public sealed record LlmOnboardingStatusResponse(
     bool RequiresOnboarding,
     string ActiveProviderKey,
     string RecommendedTabKey);
+
+public sealed record NewsCleansingSettingsRequest(
+    string? Provider,
+    string? Model,
+    int? BatchSize);
+
+public sealed record NewsCleansingSettingsResponse(
+    string Provider,
+    string Model,
+    int BatchSize);

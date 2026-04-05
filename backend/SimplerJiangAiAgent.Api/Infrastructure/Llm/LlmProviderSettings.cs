@@ -20,4 +20,12 @@ public sealed class LlmSettingsDocument
 {
     public string ActiveProviderKey { get; set; } = "default";
     public Dictionary<string, LlmProviderSettings> Providers { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    public NewsCleansingDocument? NewsCleansing { get; set; }
+}
+
+public sealed class NewsCleansingDocument
+{
+    public string Provider { get; set; } = "active";
+    public string Model { get; set; } = "";
+    public int BatchSize { get; set; } = 12;
 }

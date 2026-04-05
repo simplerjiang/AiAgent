@@ -20,6 +20,8 @@ namespace SimplerJiangAiAgent.Api.Modules.Stocks;
 
 public sealed class StocksModule : IModule
 {
+    private static readonly SemaphoreSlim _concurrentTurns = new(5, 5);
+
     public void Register(IServiceCollection services, IConfiguration configuration)
     {
         // 爬虫配置（预留反爬/代理池）
@@ -1047,7 +1049,7 @@ public sealed class StocksModule : IModule
 
             if (quote is null)
             {
-                return Results.NotFound();
+                return Results.NoContent();
             }
 
             var messages = await dbContext.IntradayMessages
@@ -1211,28 +1213,38 @@ public sealed class StocksModule : IModule
 
             // Fire-and-forget: run the research pipeline in a background scope
             var turnId = response.TurnId;
+            if (!_concurrentTurns.Wait(0))
+                return Results.StatusCode(429);
+
             _ = Task.Run(async () =>
             {
-                using var scope = scopeFactory.CreateScope();
-                var scopedRunner = scope.ServiceProvider.GetRequiredService<IResearchRunner>();
                 try
                 {
-                    await scopedRunner.RunTurnAsync(turnId, CancellationToken.None);
-                }
-                catch (Exception ex)
-                {
-                    var logger = scope.ServiceProvider.GetService<ILogger<StocksModule>>();
-                    logger?.LogError(ex, "Research turn {TurnId} pipeline failed", turnId);
-                    // Publish TurnFailed so SSE clients see a terminal event
+                    using var scope = scopeFactory.CreateScope();
+                    var scopedRunner = scope.ServiceProvider.GetRequiredService<IResearchRunner>();
                     try
                     {
-                        var eventBus = scope.ServiceProvider.GetService<IRecommendEventBus>();
-                        eventBus?.Publish(new RecommendEvent(
-                            RecommendEventType.TurnFailed, 0, turnId, null, null, null, null,
-                            $"研究流水线启动失败: {ex.Message}", null, DateTime.UtcNow));
-                        eventBus?.MarkTurnTerminal(turnId);
+                        await scopedRunner.RunTurnAsync(turnId, CancellationToken.None);
                     }
-                    catch { /* best-effort */ }
+                    catch (Exception ex)
+                    {
+                        var logger = scope.ServiceProvider.GetService<ILogger<StocksModule>>();
+                        logger?.LogError(ex, "Research turn {TurnId} pipeline failed", turnId);
+                        // Publish TurnFailed so SSE clients see a terminal event
+                        try
+                        {
+                            var eventBus = scope.ServiceProvider.GetService<IRecommendEventBus>();
+                            eventBus?.Publish(new RecommendEvent(
+                                RecommendEventType.TurnFailed, 0, turnId, null, null, null, null,
+                                $"研究流水线启动失败: {ex.Message}", null, DateTime.UtcNow));
+                            eventBus?.MarkTurnTerminal(turnId);
+                        }
+                        catch { /* best-effort */ }
+                    }
+                }
+                finally
+                {
+                    _concurrentTurns.Release();
                 }
             });
 
@@ -1302,25 +1314,34 @@ public sealed class StocksModule : IModule
             var turnId = session.ActiveTurnId!.Value;
             var sessionId = session.Id;
 
+            if (!_concurrentTurns.Wait(0))
+                return Results.StatusCode(429);
+
             _ = Task.Run(async () =>
             {
-                using var scope = scopeFactory.CreateScope();
-                var scopedRunner = scope.ServiceProvider.GetRequiredService<IRecommendationRunner>();
-                try { await scopedRunner.RunTurnAsync(turnId, CancellationToken.None); }
-                catch (Exception ex)
+                try
                 {
-                    var logger = scope.ServiceProvider.GetService<ILogger<StocksModule>>();
-                    logger?.LogError(ex, "Recommend turn {TurnId} pipeline failed", turnId);
-                    // Publish TurnFailed so SSE clients see a terminal event
-                    try
+                    using var scope = scopeFactory.CreateScope();
+                    var scopedRunner = scope.ServiceProvider.GetRequiredService<IRecommendationRunner>();
+                    try { await scopedRunner.RunTurnAsync(turnId, CancellationToken.None); }
+                    catch (Exception ex)
                     {
-                        var eventBus = scope.ServiceProvider.GetService<IRecommendEventBus>();
-                        eventBus?.Publish(new RecommendEvent(
-                            RecommendEventType.TurnFailed, sessionId, turnId, null, null, null, null,
-                            $"流水线启动失败: {ex.Message}", null, DateTime.UtcNow));
-                        eventBus?.MarkTurnTerminal(turnId);
+                        var logger = scope.ServiceProvider.GetService<ILogger<StocksModule>>();
+                        logger?.LogError(ex, "Recommend turn {TurnId} pipeline failed", turnId);
+                        try
+                        {
+                            var eventBus = scope.ServiceProvider.GetService<IRecommendEventBus>();
+                            eventBus?.Publish(new RecommendEvent(
+                                RecommendEventType.TurnFailed, sessionId, turnId, null, null, null, null,
+                                $"流水线启动失败: {ex.Message}", null, DateTime.UtcNow));
+                            eventBus?.MarkTurnTerminal(turnId);
+                        }
+                        catch { /* best-effort */ }
                     }
-                    catch { /* best-effort */ }
+                }
+                finally
+                {
+                    _concurrentTurns.Release();
                 }
             });
 
@@ -1420,25 +1441,34 @@ public sealed class StocksModule : IModule
                 case FollowUpStrategy.PartialRerun:
                 {
                     var fromStage = plan.FromStageIndex ?? 0;
+                    if (!_concurrentTurns.Wait(0))
+                        return Results.StatusCode(429);
+
                     _ = Task.Run(async () =>
                     {
-                        using var scope = scopeFactory.CreateScope();
-                        var scopedRunner = scope.ServiceProvider.GetRequiredService<IRecommendationRunner>();
-                        try { await scopedRunner.RunPartialTurnAsync(turnId, fromStage, CancellationToken.None); }
-                        catch (Exception ex)
+                        try
                         {
-                            var logger = scope.ServiceProvider.GetService<ILogger<StocksModule>>();
-                            logger?.LogError(ex, "Recommend partial rerun turn {TurnId} from stage {Stage} failed", turnId, fromStage);
-                            // Publish TurnFailed so SSE clients see a terminal event
-                            try
+                            using var scope = scopeFactory.CreateScope();
+                            var scopedRunner = scope.ServiceProvider.GetRequiredService<IRecommendationRunner>();
+                            try { await scopedRunner.RunPartialTurnAsync(turnId, fromStage, CancellationToken.None); }
+                            catch (Exception ex)
                             {
-                                var eventBus = scope.ServiceProvider.GetService<IRecommendEventBus>();
-                                eventBus?.Publish(new RecommendEvent(
-                                    RecommendEventType.TurnFailed, id, turnId, null, null, null, null,
-                                    $"部分重跑流水线启动失败: {ex.Message}", null, DateTime.UtcNow));
-                                eventBus?.MarkTurnTerminal(turnId);
+                                var logger = scope.ServiceProvider.GetService<ILogger<StocksModule>>();
+                                logger?.LogError(ex, "Recommend partial rerun turn {TurnId} from stage {Stage} failed", turnId, fromStage);
+                                try
+                                {
+                                    var eventBus = scope.ServiceProvider.GetService<IRecommendEventBus>();
+                                    eventBus?.Publish(new RecommendEvent(
+                                        RecommendEventType.TurnFailed, id, turnId, null, null, null, null,
+                                        $"部分重跑流水线启动失败: {ex.Message}", null, DateTime.UtcNow));
+                                    eventBus?.MarkTurnTerminal(turnId);
+                                }
+                                catch { /* best-effort */ }
                             }
-                            catch { /* best-effort */ }
+                        }
+                        finally
+                        {
+                            _concurrentTurns.Release();
                         }
                     });
                     return Results.Ok(new { TurnId = turnId, turn.TurnIndex, Strategy = plan.Strategy.ToString(),
@@ -1446,25 +1476,34 @@ public sealed class StocksModule : IModule
                 }
                 default: // FullRerun
                 {
+                    if (!_concurrentTurns.Wait(0))
+                        return Results.StatusCode(429);
+
                     _ = Task.Run(async () =>
                     {
-                        using var scope = scopeFactory.CreateScope();
-                        var scopedRunner = scope.ServiceProvider.GetRequiredService<IRecommendationRunner>();
-                        try { await scopedRunner.RunTurnAsync(turnId, CancellationToken.None); }
-                        catch (Exception ex)
+                        try
                         {
-                            var logger = scope.ServiceProvider.GetService<ILogger<StocksModule>>();
-                            logger?.LogError(ex, "Recommend follow-up turn {TurnId} pipeline failed", turnId);
-                            // Publish TurnFailed so SSE clients see a terminal event
-                            try
+                            using var scope = scopeFactory.CreateScope();
+                            var scopedRunner = scope.ServiceProvider.GetRequiredService<IRecommendationRunner>();
+                            try { await scopedRunner.RunTurnAsync(turnId, CancellationToken.None); }
+                            catch (Exception ex)
                             {
-                                var eventBus = scope.ServiceProvider.GetService<IRecommendEventBus>();
-                                eventBus?.Publish(new RecommendEvent(
-                                    RecommendEventType.TurnFailed, id, turnId, null, null, null, null,
-                                    $"流水线启动失败: {ex.Message}", null, DateTime.UtcNow));
-                                eventBus?.MarkTurnTerminal(turnId);
+                                var logger = scope.ServiceProvider.GetService<ILogger<StocksModule>>();
+                                logger?.LogError(ex, "Recommend follow-up turn {TurnId} pipeline failed", turnId);
+                                try
+                                {
+                                    var eventBus = scope.ServiceProvider.GetService<IRecommendEventBus>();
+                                    eventBus?.Publish(new RecommendEvent(
+                                        RecommendEventType.TurnFailed, id, turnId, null, null, null, null,
+                                        $"流水线启动失败: {ex.Message}", null, DateTime.UtcNow));
+                                    eventBus?.MarkTurnTerminal(turnId);
+                                }
+                                catch { /* best-effort */ }
                             }
-                            catch { /* best-effort */ }
+                        }
+                        finally
+                        {
+                            _concurrentTurns.Release();
                         }
                     });
                     return Results.Ok(new { TurnId = turnId, turn.TurnIndex, Strategy = plan.Strategy.ToString(),
@@ -1501,27 +1540,37 @@ public sealed class StocksModule : IModule
 
             var turnId = latestTurn.Id;
 
+            if (!_concurrentTurns.Wait(0))
+                return Results.StatusCode(429);
+
             _ = Task.Run(async () =>
             {
-                using var scope = scopeFactory.CreateScope();
-                var scopedRunner = scope.ServiceProvider.GetRequiredService<IRecommendationRunner>();
                 try
                 {
-                    await scopedRunner.RunPartialTurnAsync(turnId, fromStage, CancellationToken.None);
-                }
-                catch (Exception ex)
-                {
-                    var logger = scope.ServiceProvider.GetService<ILogger<StocksModule>>();
-                    logger?.LogError(ex, "Retry-from-stage turn {TurnId} from stage {Stage} failed", turnId, fromStage);
+                    using var scope = scopeFactory.CreateScope();
+                    var scopedRunner = scope.ServiceProvider.GetRequiredService<IRecommendationRunner>();
                     try
                     {
-                        var eventBus = scope.ServiceProvider.GetService<IRecommendEventBus>();
-                        eventBus?.Publish(new RecommendEvent(
-                            RecommendEventType.TurnFailed, id, turnId, null, null, null, null,
-                            $"重试流水线启动失败: {ex.Message}", null, DateTime.UtcNow));
-                        eventBus?.MarkTurnTerminal(turnId);
+                        await scopedRunner.RunPartialTurnAsync(turnId, fromStage, CancellationToken.None);
                     }
-                    catch { /* best-effort */ }
+                    catch (Exception ex)
+                    {
+                        var logger = scope.ServiceProvider.GetService<ILogger<StocksModule>>();
+                        logger?.LogError(ex, "Retry-from-stage turn {TurnId} from stage {Stage} failed", turnId, fromStage);
+                        try
+                        {
+                            var eventBus = scope.ServiceProvider.GetService<IRecommendEventBus>();
+                            eventBus?.Publish(new RecommendEvent(
+                                RecommendEventType.TurnFailed, id, turnId, null, null, null, null,
+                                $"重试流水线启动失败: {ex.Message}", null, DateTime.UtcNow));
+                            eventBus?.MarkTurnTerminal(turnId);
+                        }
+                        catch { /* best-effort */ }
+                    }
+                }
+                finally
+                {
+                    _concurrentTurns.Release();
                 }
             });
 

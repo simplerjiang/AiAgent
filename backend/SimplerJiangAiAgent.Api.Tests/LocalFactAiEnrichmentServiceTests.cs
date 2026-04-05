@@ -43,6 +43,7 @@ public sealed class LocalFactAiEnrichmentServiceTests
               }
             ]
             """),
+            new StubSettingsStore(),
             Options.Create(new StockSyncOptions()),
             NullLogger<LocalFactAiEnrichmentService>.Instance);
 
@@ -77,6 +78,7 @@ public sealed class LocalFactAiEnrichmentServiceTests
         var service = new LocalFactAiEnrichmentService(
             dbContext,
             new StubLlmService(exception: new InvalidOperationException("429 Too Many Requests")),
+            new StubSettingsStore(),
             Options.Create(new StockSyncOptions()),
             NullLogger<LocalFactAiEnrichmentService>.Instance);
 
@@ -117,5 +119,27 @@ public sealed class LocalFactAiEnrichmentServiceTests
 
             return Task.FromResult(new LlmChatResult(_content));
         }
+    }
+
+    private sealed class StubSettingsStore : ILlmSettingsStore
+    {
+        public Task<IReadOnlyCollection<LlmProviderSettings>> GetAllAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyCollection<LlmProviderSettings>>(Array.Empty<LlmProviderSettings>());
+        public Task<string> GetActiveProviderKeyAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult("default");
+        public Task<string> SetActiveProviderKeyAsync(string provider, CancellationToken cancellationToken = default)
+            => Task.FromResult(provider);
+        public Task<string> ResolveProviderKeyAsync(string? provider, CancellationToken cancellationToken = default)
+            => Task.FromResult(provider ?? "default");
+        public Task<LlmProviderSettings?> GetProviderAsync(string provider, CancellationToken cancellationToken = default)
+            => Task.FromResult<LlmProviderSettings?>(null);
+        public Task<LlmProviderSettings> UpsertAsync(LlmProviderSettings settings, CancellationToken cancellationToken = default)
+            => Task.FromResult(settings);
+        public Task<string> GetGlobalTavilyKeyAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(string.Empty);
+        public Task<(string Provider, string Model, int BatchSize)> GetNewsCleansingSettingsAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(("active", "", 12));
+        public Task SetNewsCleansingSettingsAsync(string provider, string model, int batchSize, CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
     }
 }

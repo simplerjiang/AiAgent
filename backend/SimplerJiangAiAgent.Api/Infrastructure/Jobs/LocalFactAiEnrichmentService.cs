@@ -20,17 +20,20 @@ public sealed class LocalFactAiEnrichmentService : ILocalFactAiEnrichmentService
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly AppDbContext _dbContext;
     private readonly ILlmService _llmService;
+    private readonly ILlmSettingsStore _settingsStore;
     private readonly StockSyncOptions _options;
     private readonly ILogger<LocalFactAiEnrichmentService> _logger;
 
     public LocalFactAiEnrichmentService(
         AppDbContext dbContext,
         ILlmService llmService,
+        ILlmSettingsStore settingsStore,
         IOptions<StockSyncOptions> options,
         ILogger<LocalFactAiEnrichmentService> logger)
     {
         _dbContext = dbContext;
         _llmService = llmService;
+        _settingsStore = settingsStore;
         _options = options.Value;
         _logger = logger;
     }
@@ -105,7 +108,21 @@ public sealed class LocalFactAiEnrichmentService : ILocalFactAiEnrichmentService
             return;
         }
 
-        var batchSize = Math.Clamp(_options.AiBatchSize, 5, 20);
+        // Resolve news cleansing settings (fallback to StockSyncOptions defaults)
+        var (cleansingProvider, cleansingModel, cleansingBatchSize) = await _settingsStore.GetNewsCleansingSettingsAsync(cancellationToken);
+        var aiProvider = string.IsNullOrWhiteSpace(cleansingProvider) || cleansingProvider == "active"
+            ? _options.AiProvider
+            : cleansingProvider;
+        var aiModel = string.IsNullOrWhiteSpace(cleansingModel) ? _options.AiModel : cleansingModel;
+        var aiBatchSize = cleansingBatchSize > 0 ? cleansingBatchSize : _options.AiBatchSize;
+
+        var batchSize = Math.Clamp(aiBatchSize, 5, 20);
+
+        // Resolve provider type for concurrency adaptation
+        var resolvedProviderKey = await _settingsStore.ResolveProviderKeyAsync(aiProvider, cancellationToken);
+        var providerSettings = await _settingsStore.GetProviderAsync(resolvedProviderKey, cancellationToken);
+        var providerType = providerSettings?.ProviderType ?? "openai";
+        var maxConcurrency = string.Equals(providerType, "ollama", StringComparison.OrdinalIgnoreCase) ? 1 : 3;
 
         // Build all batches upfront
         var batches = new List<PendingNewsEnvelope[]>();
@@ -113,7 +130,6 @@ public sealed class LocalFactAiEnrichmentService : ILocalFactAiEnrichmentService
             batches.Add(pending.Skip(index).Take(batchSize).ToArray());
 
         // Fire LLM calls in parallel with concurrency limit; cancel remaining on rate limit
-        const int maxConcurrency = 3;
         using var semaphore = new SemaphoreSlim(maxConcurrency);
         using var rateLimitCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var tasks = batches.Select(async batch =>
@@ -123,8 +139,8 @@ public sealed class LocalFactAiEnrichmentService : ILocalFactAiEnrichmentService
             {
                 var prompt = BuildPrompt(batch);
                 var result = await _llmService.ChatAsync(
-                    _options.AiProvider,
-                    new LlmChatRequest(prompt, _options.AiModel, 0.1, false),
+                    aiProvider,
+                    new LlmChatRequest(prompt, aiModel, 0.1, false),
                     rateLimitCts.Token);
                 return (batch, content: result.Content, error: (Exception?)null);
             }
