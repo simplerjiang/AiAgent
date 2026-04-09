@@ -1,6 +1,39 @@
 {
   "tasks": [
     {
+      "id": "MANUAL-20260407-OLLAMA-BENCH-EXPANSION",
+      "title": "Local Ollama benchmarking and runtime parameter expansion",
+      "status": "done",
+      "stages": {
+        "plan": "done",
+        "dev": "done",
+        "test": "done"
+      },
+      "notes": "2026-04-07 已完成新一轮 Ollama 本地优化任务：1) 在当前 RTX 5060 8GB 机器上完成 `llama3.2:3b`、`gemma4:e2b`、`gemma4:latest` 与 `1024/2048/4096 num_ctx` 的本地压测，报告见 `.automation/reports/ollama-local-benchmark-20260407.json`；2) 给出当前机器推荐默认档：`gemma4:e2b` + `Q4_K_M` + `num_ctx=2048`，速度优先备选为 `llama3.2:3b` + `Q4_K_M` + `num_ctx=2048`；3) 在现有 `num_ctx / keep_alive / num_predict / top_k / top_p` 之外新增 `temperature / min_p / stop / think`，并为所有暴露参数提供显式默认值；4) 已完成后端定向单测、前端定向单测、frontend build、源码态浏览器检查，以及真实 `/api/admin/llm/test/active` 请求验证。计划报告：`.automation/reports/MANUAL-20260407-OLLAMA-BENCH-EXPANSION-PLAN-20260407.md`；开发报告：`.automation/reports/MANUAL-20260407-OLLAMA-BENCH-EXPANSION-DEV-20260407.md`。"
+    },
+    {
+      "id": "MANUAL-20260407-OLLAMA-ADVANCED-SETTINGS",
+      "title": "Ollama advanced runtime settings and local tuning",
+      "status": "done",
+      "stages": {
+        "plan": "done",
+        "dev": "done",
+        "test": "done"
+      },
+      "notes": "2026-04-07 已完成 Ollama 高级运行参数扩展：1) `LLM 设置` 页新增并回显 `num_ctx`、`keep_alive`、`num_predict`、`top_k`、`top_p`；2) 后端 `OllamaProvider` 切到原生 `/api/chat`，并正式写入 `options` 与 `keep_alive`，同时修复 `keep_alive=-1` 需要以数字而不是字符串发送的问题；3) 本机用户环境变量已更新为 `OLLAMA_FLASH_ATTENTION=1`、`OLLAMA_KV_CACHE_TYPE=q8_0`、`OLLAMA_KEEP_ALIVE=-1`、`OLLAMA_CONTEXT_LENGTH=2048`，并重启本地 Ollama 服务；4) 通过 admin API 把当前 `ollama` provider 默认值改为 `ollamaNumCtx=2048`、`ollamaKeepAlive=-1`。验证：`dotnet test ... --filter FullyQualifiedName~OllamaProviderTests` 通过，`dotnet test ... --filter FullyQualifiedName~JsonFileLlmSettingsStoreTests` 通过，`npm --prefix .\\frontend run test:unit -- src/modules/admin/AdminLlmSettings.spec.js` 17/17 通过，source validation 通过 `node frontend/scripts/edge-check-ollama-settings.mjs` 确认页面可见新字段且 console error 为 0，`POST /api/admin/llm/test/active` 返回成功响应。运行态最终基线：`ollama ps` 显示 `CONTEXT=2048`、`UNTIL=Forever`，但仍只有约 `75%/25% CPU/GPU`，单流 decode 约 `38.62 tok/s`，说明当前机器的主瓶颈仍是显存不足导致的部分 CPU 回退，而不是参数缺失。规划报告：`.automation/reports/MANUAL-20260407-OLLAMA-ADVANCED-SETTINGS-PLAN-20260407.md`；开发报告：`.automation/reports/MANUAL-20260407-OLLAMA-ADVANCED-SETTINGS-DEV-20260407.md`。"
+    },
+    {
+      "id": "MANUAL-20260406-BUGFIX-R1",
+      "title": "20260405 open bug round R1 - archive pending AI cleaning",
+      "status": "in-progress",
+      "stages": {
+        "plan": "done",
+        "dev": "done",
+        "test": "in-progress"
+      },
+      "notes": "2026-04-06 本轮只处理 2026-04-05 手工补录开放项中的 Bug 1。根据 PM review follow-up，已补 archive sweep 单进程串行保护，`processed` 改为本次请求实际落库工作量，前端停止条件改为 `remaining = 0`、明确 `stopReason` 或前端轮次上限，不再把 `processed.total == 0` 当作通用完成条件。2026-04-06 second follow-up：补上 `backend/SimplerJiangAiAgent.Api/Modules/Stocks/StocksModule.cs` 中遗漏的 route wiring，`/api/news/archive/process-pending` 现已携带 `CancellationToken` 调用 `ProcessPendingBatchAsync(...)` 并返回真实 `processed / remaining / completed / stopReason` summary，不再落回旧的 `{ success: true }` 占位响应。定向验证：`dotnet test .\\backend\\SimplerJiangAiAgent.Api.Tests\\SimplerJiangAiAgent.Api.Tests.csproj --filter \"FullyQualifiedName~LocalFactAiEnrichmentServiceTests\"` 通过，`npm --prefix .\\frontend run test:unit -- src/modules/stocks/NewsArchiveTab.spec.js` 通过，`dotnet build backend/SimplerJiangAiAgent.Api/SimplerJiangAiAgent.Api.csproj` 通过（存在 2 个既有 `SourceGovernanceService.cs` nullable warnings，与本次 route fix 无关）。另尝试 fresh source `dotnet run` + POST 直探该 endpoint，但进程在验证窗口内未暴露本地监听端口，日志同时出现与本次修改无关的 `LocalFactIngestionService` 上游 SSL EOF 失败，因此未能完成干净的 live probe。2026-04-07 follow-up：archive 背景清洗继续收口，后端 coordinator 现已支持首轮可恢复无进展/异常自动重试、显式 pause/restart、最近 request/response/progress/error 事件回显，并修复“首轮计数尚未产生即暂停”时 paused 状态不可恢复的问题；前端 `NewsArchiveTab` 已改为区分 running/paused/failed/completed/idle，新增 `暂停后台清洗` 与 `重新开始清洗` 控制和可折叠详情面板，不再把首轮可恢复无进展误报为 `本轮后台清洗已结束`。本轮定向验证：`npm --prefix .\\frontend run test:unit -- src/modules/stocks/NewsArchiveTab.spec.js` 9/9 通过，`dotnet test .\\backend\\SimplerJiangAiAgent.Api.Tests\\SimplerJiangAiAgent.Api.Tests.csproj --filter \"FullyQualifiedName~LocalFactAiEnrichmentServiceTests\" -v minimal` 15/15 通过。由于本次尚未补 browser / live source/package 验收，任务继续保持 in-progress。对应报告：`.automation/reports/MANUAL-20260406-BUGFIX-R1-20260406.md`；follow-up 报告：`.automation/reports/MANUAL-20260406-BUGFIX-R1-20260407.md`。Bug 2+ 保持开放，未在本轮处理。"
+    },
+    {
       "id": "GOAL-AGENT-NEW-001-R8",
       "title": "MCP reliability optimization and data source redundancy",
       "status": "in-progress",

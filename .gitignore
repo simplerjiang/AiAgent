@@ -34,21 +34,23 @@ frontend/.automation/edge-profile/
 .automation/chart-popup-*.png
 .automation/market-*.png
 
-# Temp build/test outputs
-_llm_log_tail.txt
-_march26_logs.txt
+# Temp build/test outputs (root-level _* debug/test artifacts)
+/_*.txt
+/_*.json
+/_*.html
+/_*.ps1
+/_*.log
+/_*.png
 build_out.txt
 test_build_out.txt
 frontend_test_out.txt
+mcp_out.json
 .vite/
 frontend/_ui-validate.cjs
 frontend/test-market-bar*.cjs
 frontend/ua-review*.cjs
 frontend/edge-check-*.mjs
 frontend/validate-out.txt
-
-# Temp data/test artifacts
-_news_test_output.json
 .noupload/
 /screenshots/
 ui-validation-*.png

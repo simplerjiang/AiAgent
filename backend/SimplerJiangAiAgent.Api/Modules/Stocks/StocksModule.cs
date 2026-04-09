@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
+using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -9,7 +10,6 @@ using Microsoft.Extensions.Logging;
 using SimplerJiangAiAgent.Api.Data;
 using SimplerJiangAiAgent.Api.Data.Entities;
 using SimplerJiangAiAgent.Api.Infrastructure.Jobs;
-using SimplerJiangAiAgent.Api.Infrastructure.Security;
 using SimplerJiangAiAgent.Api.Modules.Market.Models;
 using SimplerJiangAiAgent.Api.Modules.Stocks.Models;
 using SimplerJiangAiAgent.Api.Modules.Stocks.Services;
@@ -22,6 +22,8 @@ namespace SimplerJiangAiAgent.Api.Modules.Stocks;
 public sealed class StocksModule : IModule
 {
     private static readonly SemaphoreSlim _concurrentTurns = new(5, 5);
+    private static readonly TimeSpan FinancialWorkerProxyTimeout = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan FinancialWorkerCollectProxyTimeout = TimeSpan.FromSeconds(60);
 
     public void Register(IServiceCollection services, IConfiguration configuration)
     {
@@ -49,10 +51,12 @@ public sealed class StocksModule : IModule
         services.AddScoped<IActiveWatchlistService, ActiveWatchlistService>();
         services.AddHttpClient<ILocalFactIngestionService, LocalFactIngestionService>(client => ConfigureStockHttpClient(client, stockHttpTimeout));
         services.AddScoped<ILocalFactAiEnrichmentService, LocalFactAiEnrichmentService>();
+        services.AddSingleton<ILocalFactArchiveJobCoordinator, LocalFactArchiveJobCoordinator>();
         services.AddHttpClient<ILocalFactArticleReadService, LocalFactArticleReadService>(client => ConfigureStockHttpClient(client, stockHttpTimeout));
         services.AddScoped<IQueryLocalFactDatabaseTool, QueryLocalFactDatabaseTool>();
         services.AddScoped<IStockDataService, StockDataService>();
         services.AddScoped<IStockHistoryService, StockHistoryService>();
+        services.AddScoped<IFinancialDataReadService, FinancialDataReadService>();
         services.AddHttpClient<IStockSearchService, StockSearchService>(client => ConfigureStockHttpClient(client, stockHttpTimeout));
         services.AddScoped<IStockAgentHistoryService, StockAgentHistoryService>();
         services.AddScoped<IStockAgentFeatureEngineeringService, StockAgentFeatureEngineeringService>();
@@ -97,7 +101,6 @@ public sealed class StocksModule : IModule
         services.AddSingleton<IWebSearchService, WebSearchService>();
         services.AddHostedService<TradingPlanTriggerWorker>();
         services.AddHostedService<TradingPlanReviewWorker>();
-        services.AddSingleton<IFinancialDataReadService, FinancialDataReadService>();
     }
 
     private static void ConfigureStockHttpClient(HttpClient client, TimeSpan timeout)
@@ -108,6 +111,106 @@ public sealed class StocksModule : IModule
     public void MapEndpoints(IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/stocks");
+
+        var financialGroup = group.MapGroup("/financial");
+
+        financialGroup.MapGet("/trend/{symbol}", (string symbol, IFinancialDataReadService financialDataReadService) =>
+        {
+            if (string.IsNullOrWhiteSpace(symbol))
+            {
+                return Results.BadRequest(new { message = "symbol 不能为空" });
+            }
+
+            var trimmedSymbol = symbol.Trim();
+            var result = financialDataReadService.GetTrendSummary(trimmedSymbol) ?? new FinancialTrendSummary { Symbol = trimmedSymbol };
+            return Results.Ok(result);
+        })
+        .WithName("GetStockFinancialTrend")
+        .WithOpenApi();
+
+        financialGroup.MapGet("/summary/{symbol}", (string symbol, IFinancialDataReadService financialDataReadService) =>
+        {
+            if (string.IsNullOrWhiteSpace(symbol))
+            {
+                return Results.BadRequest(new { message = "symbol 不能为空" });
+            }
+
+            var trimmedSymbol = symbol.Trim();
+            var result = financialDataReadService.GetReportSummary(trimmedSymbol) ?? new FinancialReportSummary { Symbol = trimmedSymbol };
+            return Results.Ok(result);
+        })
+        .WithName("GetStockFinancialSummary")
+        .WithOpenApi();
+
+        financialGroup.MapPost("/collect/{symbol}", async (string symbol, IConfiguration configuration, IHttpClientFactory httpClientFactory, HttpContext httpContext) =>
+        {
+            if (string.IsNullOrWhiteSpace(symbol))
+            {
+                return Results.BadRequest(new { message = "symbol 不能为空", errorMessage = "symbol 不能为空" });
+            }
+
+            var workerSymbol = NormalizeFinancialWorkerSymbol(symbol);
+            if (string.IsNullOrWhiteSpace(workerSymbol))
+            {
+                return Results.BadRequest(new { message = "symbol 不能为空", errorMessage = "symbol 不能为空" });
+            }
+
+            return await ProxyFinancialWorkerAsync(
+                HttpMethod.Post,
+                $"api/collect/{Uri.EscapeDataString(workerSymbol)}",
+                configuration,
+                httpClientFactory,
+                httpContext.RequestAborted,
+                includeCollectErrorFields: true);
+        })
+        .WithName("CollectStockFinancialData")
+        .WithOpenApi();
+
+        financialGroup.MapGet("/logs", (string? symbol, int? limit, IFinancialDataReadService financialDataReadService) =>
+        {
+            var trimmedSymbol = string.IsNullOrWhiteSpace(symbol) ? null : symbol.Trim();
+            var take = Math.Clamp(limit ?? 50, 1, 200);
+            return Results.Ok(financialDataReadService.GetCollectionLogs(trimmedSymbol, take));
+        })
+        .WithName("GetStockFinancialLogs")
+        .WithOpenApi();
+
+        financialGroup.MapGet("/worker/status", async (IConfiguration configuration, IHttpClientFactory httpClientFactory, HttpContext httpContext) =>
+        {
+            return await ProxyFinancialWorkerAsync(
+                HttpMethod.Get,
+                "health",
+                configuration,
+                httpClientFactory,
+                httpContext.RequestAborted);
+        })
+        .WithName("GetStockFinancialWorkerStatus")
+        .WithOpenApi();
+
+        financialGroup.MapGet("/config", async (IConfiguration configuration, IHttpClientFactory httpClientFactory, HttpContext httpContext) =>
+        {
+            return await ProxyFinancialWorkerAsync(
+                HttpMethod.Get,
+                "api/config",
+                configuration,
+                httpClientFactory,
+                httpContext.RequestAborted);
+        })
+        .WithName("GetStockFinancialConfig")
+        .WithOpenApi();
+
+        financialGroup.MapPut("/config", async (JsonElement payload, IConfiguration configuration, IHttpClientFactory httpClientFactory, HttpContext httpContext) =>
+        {
+            return await ProxyFinancialWorkerAsync(
+                HttpMethod.Put,
+                "api/config",
+                configuration,
+                httpClientFactory,
+                httpContext.RequestAborted,
+                payload);
+        })
+        .WithName("UpdateStockFinancialConfig")
+        .WithOpenApi();
 
         group.MapGet("/watchlist", async (IActiveWatchlistService watchlistService) =>
         {
@@ -387,30 +490,6 @@ public sealed class StocksModule : IModule
         .WithName("SearchStockMcp")
         .WithOpenApi();
 
-        group.MapGet("/mcp/financial-report", async (string symbol, int? periods, string? taskId, IMcpToolGateway gateway, HttpContext httpContext) =>
-        {
-            if (string.IsNullOrWhiteSpace(symbol))
-                return Results.BadRequest(new { message = "symbol 不能为空" });
-
-            return await StockMcpEndpointExecutor.ExecuteAsync(
-                cancellationToken => gateway.GetFinancialReportAsync(symbol.Trim(), periods ?? 4, taskId, cancellationToken),
-                httpContext.RequestAborted);
-        })
-        .WithName("GetFinancialReportMcp")
-        .WithOpenApi();
-
-        group.MapGet("/mcp/financial-trend", async (string symbol, int? periods, string? taskId, IMcpToolGateway gateway, HttpContext httpContext) =>
-        {
-            if (string.IsNullOrWhiteSpace(symbol))
-                return Results.BadRequest(new { message = "symbol 不能为空" });
-
-            return await StockMcpEndpointExecutor.ExecuteAsync(
-                cancellationToken => gateway.GetFinancialTrendAsync(symbol.Trim(), periods ?? 8, taskId, cancellationToken),
-                httpContext.RequestAborted);
-        })
-        .WithName("GetFinancialTrendMcp")
-        .WithOpenApi();
-
         group.MapPost("/copilot/turns/draft", async (StockCopilotTurnDraftRequestDto request, IStockCopilotSessionService sessionService, HttpContext httpContext) =>
         {
             if (string.IsNullOrWhiteSpace(request.Symbol))
@@ -657,12 +736,36 @@ public sealed class StocksModule : IModule
         .WithName("GetLocalNewsArchive")
         .WithOpenApi();
 
-        app.MapPost("/api/news/archive/process-pending", async (ILocalFactAiEnrichmentService aiService) =>
+        app.MapPost("/api/news/archive/process-pending", async (ILocalFactArchiveJobCoordinator archiveJobCoordinator, CancellationToken cancellationToken) =>
         {
-            await aiService.ProcessMarketPendingAsync();
-            return Results.Ok(new { success = true });
+            var status = await archiveJobCoordinator.StartOrResumeAsync(cancellationToken);
+            return Results.Ok(status);
         })
         .WithName("ProcessPendingNews")
+        .WithOpenApi();
+
+        app.MapPost("/api/news/archive/process-pending/pause", async (ILocalFactArchiveJobCoordinator archiveJobCoordinator, CancellationToken cancellationToken) =>
+        {
+            var status = await archiveJobCoordinator.PauseAsync(cancellationToken);
+            return Results.Ok(status);
+        })
+        .WithName("PausePendingNews")
+        .WithOpenApi();
+
+        app.MapPost("/api/news/archive/process-pending/restart", async (ILocalFactArchiveJobCoordinator archiveJobCoordinator, CancellationToken cancellationToken) =>
+        {
+            var status = await archiveJobCoordinator.RestartAsync(cancellationToken);
+            return Results.Ok(status);
+        })
+        .WithName("RestartPendingNews")
+        .WithOpenApi();
+
+        app.MapGet("/api/news/archive/process-pending/status", (ILocalFactArchiveJobCoordinator archiveJobCoordinator) =>
+        {
+            var status = archiveJobCoordinator.GetStatus();
+            return Results.Ok(status);
+        })
+        .WithName("GetPendingNewsStatus")
         .WithOpenApi();
 
         // 事件驱动信号（含证据/反证与历史对齐）
@@ -717,6 +820,11 @@ public sealed class StocksModule : IModule
             return Results.Ok(guidance);
         })
         .WithName("GetStockPositionGuidance")
+        .WithOpenApi();
+
+        group.MapGet("/market-context", async (string? symbol, IStockMarketContextService marketContextService, HttpContext httpContext) =>
+            await GetLatestMarketContextResultAsync(symbol, marketContextService, httpContext.RequestAborted))
+        .WithName("GetStockMarketContext")
         .WithOpenApi();
 
         // 手动触发一次同步
@@ -1998,108 +2106,6 @@ public sealed class StocksModule : IModule
         })
         .WithName("GetPortfolioContext")
         .WithOpenApi();
-
-        // ── Financial data query endpoints (LiteDB read-only) ──────────
-
-        group.MapGet("/financial/reports/{symbol}", (string symbol, int? limit, IFinancialDataReadService fin) =>
-        {
-            var reports = fin.GetReports(symbol.Trim(), limit ?? 20);
-            return Results.Ok(reports);
-        })
-        .WithName("GetFinancialReports")
-        .WithOpenApi();
-
-        group.MapGet("/financial/indicators/{symbol}", (string symbol, int? limit, IFinancialDataReadService fin) =>
-        {
-            var indicators = fin.GetIndicators(symbol.Trim(), limit ?? 20);
-            return Results.Ok(indicators);
-        })
-        .WithName("GetFinancialIndicators")
-        .WithOpenApi();
-
-        group.MapGet("/financial/dividends/{symbol}", (string symbol, IFinancialDataReadService fin) =>
-        {
-            var dividends = fin.GetDividends(symbol.Trim());
-            return Results.Ok(dividends);
-        })
-        .WithName("GetFinancialDividends")
-        .WithOpenApi();
-
-        group.MapGet("/financial/margin/{symbol}", (string symbol, int? limit, IFinancialDataReadService fin) =>
-        {
-            var margin = fin.GetMarginTrading(symbol.Trim(), limit ?? 100);
-            return Results.Ok(margin);
-        })
-        .WithName("GetFinancialMarginTrading")
-        .WithOpenApi();
-
-        group.MapGet("/financial/logs", (string? symbol, int? limit, IFinancialDataReadService fin) =>
-        {
-            var logs = fin.GetCollectionLogs(symbol?.Trim(), limit ?? 50);
-            return Results.Ok(logs);
-        })
-        .WithName("GetFinancialCollectionLogs")
-        .WithOpenApi();
-
-        group.MapGet("/financial/config", (IFinancialDataReadService fin) =>
-        {
-            var config = fin.GetConfig();
-            return config is null ? Results.NotFound() : Results.Ok(config);
-        })
-        .WithName("GetFinancialConfig")
-        .WithOpenApi();
-
-        group.MapGet("/financial/summary/{symbol}", (string symbol, int? periods, IFinancialDataReadService fin) =>
-        {
-            var summary = fin.GetReportSummary(symbol.Trim(), periods ?? 4);
-            return summary is null ? Results.NotFound() : Results.Ok(summary);
-        })
-        .WithName("GetFinancialReportSummary")
-        .WithOpenApi();
-
-        group.MapGet("/financial/trend/{symbol}", (string symbol, int? periods, IFinancialDataReadService fin) =>
-        {
-            var trend = fin.GetTrendSummary(symbol.Trim(), periods ?? 8);
-            return trend is null ? Results.NotFound() : Results.Ok(trend);
-        })
-        .WithName("GetFinancialTrend")
-        .WithOpenApi();
-
-        group.MapPut("/financial/config", async (HttpContext httpContext, HttpClient httpClient, CancellationToken ct) =>
-        {
-            try
-            {
-                var body = await new StreamReader(httpContext.Request.Body).ReadToEndAsync(ct);
-                var content = new StringContent(body, System.Text.Encoding.UTF8, "application/json");
-                var resp = await httpClient.PutAsync("http://localhost:5120/api/config", content, ct);
-                var result = await resp.Content.ReadAsStringAsync(ct);
-                return Results.Content(result, "application/json", statusCode: (int)resp.StatusCode);
-            }
-            catch (HttpRequestException)
-            {
-                return Results.Json(new { error = "Financial Worker 未运行或不可达" }, statusCode: 503);
-            }
-        })
-        .AddEndpointFilter<AdminAuthFilter>()
-        .WithName("PutFinancialConfig")
-        .WithOpenApi();
-
-        group.MapPost("/financial/collect/{symbol}", async (string symbol, HttpClient httpClient, CancellationToken ct) =>
-        {
-            try
-            {
-                var resp = await httpClient.PostAsync($"http://localhost:5120/api/collect/{symbol.Trim()}", null, ct);
-                var content = await resp.Content.ReadAsStringAsync(ct);
-                return Results.Content(content, "application/json");
-            }
-            catch (HttpRequestException)
-            {
-                return Results.Json(new { error = "Financial Worker 未运行或不可达" }, statusCode: 503);
-            }
-        })
-        .AddEndpointFilter<AdminAuthFilter>()
-        .WithName("TriggerFinancialCollection")
-        .WithOpenApi();
     }
 
     private static StockCopilotMcpWindowOptions? CreateMcpWindowOptions(int? evidenceSkip, int? evidenceTake, int? factSkip = null, int? factTake = null)
@@ -2114,6 +2120,244 @@ public sealed class StocksModule : IModule
             evidenceTake,
             factSkip ?? 0,
             factTake);
+    }
+
+    internal static string ResolveFinancialWorkerBaseUrl(IConfiguration configuration)
+    {
+        var configured = configuration["FinancialWorker:BaseUrl"]?.Trim();
+        if (Uri.TryCreate(configured, UriKind.Absolute, out var configuredUri))
+        {
+            return configuredUri.ToString().TrimEnd('/');
+        }
+
+        return "http://localhost:5120";
+    }
+
+    internal static string NormalizeFinancialWorkerSymbol(string symbol)
+    {
+        if (string.IsNullOrWhiteSpace(symbol))
+        {
+            return string.Empty;
+        }
+
+        var normalized = StockSymbolNormalizer.Normalize(symbol);
+        if (normalized.Length == 8
+            && (normalized.StartsWith("sh", StringComparison.OrdinalIgnoreCase)
+                || normalized.StartsWith("sz", StringComparison.OrdinalIgnoreCase)))
+        {
+            return normalized[2..];
+        }
+
+        return symbol.Trim();
+    }
+
+    internal static async Task<IResult> GetLatestMarketContextResultAsync(
+        string? symbol,
+        IStockMarketContextService marketContextService,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(symbol))
+        {
+            return Results.BadRequest(new { message = "symbol 不能为空" });
+        }
+
+        var target = symbol.Trim();
+        var marketContext = await marketContextService.GetLatestAsync(target, cancellationToken);
+        return marketContext is null ? Results.NotFound() : Results.Ok(marketContext);
+    }
+
+    private static async Task<IResult> ProxyFinancialWorkerAsync(
+        HttpMethod method,
+        string relativePath,
+        IConfiguration configuration,
+        IHttpClientFactory httpClientFactory,
+        CancellationToken cancellationToken,
+        object? payload = null,
+        bool includeCollectErrorFields = false)
+    {
+        var baseUrl = ResolveFinancialWorkerBaseUrl(configuration);
+        var requestTimeout = ResolveFinancialWorkerProxyTimeout(relativePath);
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutCts.CancelAfter(requestTimeout);
+
+        try
+        {
+            using var httpClient = httpClientFactory.CreateClient();
+            using var request = new HttpRequestMessage(method, BuildFinancialWorkerUri(baseUrl, relativePath));
+            if (payload is not null)
+            {
+                request.Content = JsonContent.Create(payload);
+            }
+
+            using var response = await httpClient.SendAsync(request, timeoutCts.Token);
+            var responseText = await response.Content.ReadAsStringAsync(timeoutCts.Token);
+            if (response.IsSuccessStatusCode)
+            {
+                if (string.IsNullOrWhiteSpace(responseText))
+                {
+                    return Results.Json(new { success = true, baseUrl });
+                }
+
+                var contentType = response.Content.Headers.ContentType?.MediaType ?? "application/json";
+                return Results.Content(responseText, contentType);
+            }
+
+            return Results.Json(
+                BuildFinancialWorkerErrorPayload(
+                    baseUrl,
+                    responseText,
+                    response.StatusCode.ToString(),
+                    includeCollectErrorFields,
+                    $"财务 Worker 请求失败 ({(int)response.StatusCode})"),
+                statusCode: (int)response.StatusCode);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return Results.Json(
+                BuildFinancialWorkerErrorPayload(
+                    baseUrl,
+                    null,
+                    "timeout",
+                    includeCollectErrorFields,
+                    "财务 Worker 请求超时"),
+                statusCode: StatusCodes.Status504GatewayTimeout);
+        }
+        catch (HttpRequestException ex)
+        {
+            return Results.Json(
+                BuildFinancialWorkerErrorPayload(
+                    baseUrl,
+                    ex.Message,
+                    "unreachable",
+                    includeCollectErrorFields,
+                    "财务 Worker 不可用"),
+                statusCode: StatusCodes.Status503ServiceUnavailable);
+        }
+        catch (Exception ex)
+        {
+            return Results.Json(
+                BuildFinancialWorkerErrorPayload(
+                    baseUrl,
+                    ex.Message,
+                    "error",
+                    includeCollectErrorFields,
+                    "财务 Worker 代理失败"),
+                statusCode: StatusCodes.Status500InternalServerError);
+        }
+    }
+
+    internal static TimeSpan ResolveFinancialWorkerProxyTimeout(string relativePath)
+    {
+        var normalizedRelativePath = relativePath.TrimStart('/');
+        return normalizedRelativePath.StartsWith("api/collect/", StringComparison.OrdinalIgnoreCase)
+            ? FinancialWorkerCollectProxyTimeout
+            : FinancialWorkerProxyTimeout;
+    }
+
+    internal static Uri BuildFinancialWorkerUri(string baseUrl, string relativePath)
+    {
+        var baseUri = new Uri($"{baseUrl.TrimEnd('/')}/", UriKind.Absolute);
+        var normalizedRelativePath = relativePath.TrimStart('/');
+        var basePath = baseUri.AbsolutePath.Trim('/');
+
+        if (string.Equals(basePath, "api", StringComparison.OrdinalIgnoreCase)
+            && normalizedRelativePath.StartsWith("api/", StringComparison.OrdinalIgnoreCase))
+        {
+            normalizedRelativePath = normalizedRelativePath[4..];
+        }
+
+        return new Uri(baseUri, normalizedRelativePath);
+    }
+
+    private static Dictionary<string, object?> BuildFinancialWorkerErrorPayload(
+        string baseUrl,
+        string? responseText,
+        string fallbackStatus,
+        bool includeCollectErrorFields,
+        string fallbackMessage)
+    {
+        var error = ExtractJsonString(responseText, "error")
+            ?? ExtractJsonString(responseText, "message")
+            ?? ExtractJsonString(responseText, "errorMessage")
+            ?? fallbackMessage;
+        var detail = ExtractJsonString(responseText, "detail");
+        var errorMessage = ExtractJsonString(responseText, "errorMessage")
+            ?? ExtractJsonString(responseText, "ErrorMessage")
+            ?? error;
+        var status = ExtractJsonString(responseText, "status") ?? fallbackStatus;
+
+        if (string.IsNullOrWhiteSpace(detail) && !string.IsNullOrWhiteSpace(responseText) && !LooksLikeJson(responseText))
+        {
+            detail = responseText.Trim();
+        }
+
+        var payload = new Dictionary<string, object?>
+        {
+            ["success"] = false,
+            ["reachable"] = false,
+            ["status"] = status,
+            ["baseUrl"] = baseUrl,
+            ["error"] = error,
+            ["message"] = error,
+        };
+
+        if (!string.IsNullOrWhiteSpace(detail))
+        {
+            payload["detail"] = detail;
+        }
+
+        if (includeCollectErrorFields)
+        {
+            payload["errorMessage"] = errorMessage;
+        }
+
+        return payload;
+    }
+
+    private static string? ExtractJsonString(string? json, params string[] propertyNames)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            if (document.RootElement.ValueKind != JsonValueKind.Object)
+            {
+                return null;
+            }
+
+            foreach (var propertyName in propertyNames)
+            {
+                if (!document.RootElement.TryGetProperty(propertyName, out var propertyValue))
+                {
+                    continue;
+                }
+
+                return propertyValue.ValueKind switch
+                {
+                    JsonValueKind.String => propertyValue.GetString(),
+                    JsonValueKind.Number => propertyValue.GetRawText(),
+                    JsonValueKind.True => bool.TrueString,
+                    JsonValueKind.False => bool.FalseString,
+                    _ => propertyValue.GetRawText(),
+                };
+            }
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+
+        return null;
+    }
+
+    private static bool LooksLikeJson(string value)
+    {
+        var trimmed = value.TrimStart();
+        return trimmed.StartsWith('{') || trimmed.StartsWith('[');
     }
 
     private static string? ExtractAgentSummary(JsonElement result)

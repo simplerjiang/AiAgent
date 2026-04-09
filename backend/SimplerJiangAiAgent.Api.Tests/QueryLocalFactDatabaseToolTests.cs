@@ -1,4 +1,6 @@
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore;
+using System.Runtime.CompilerServices;
 using SimplerJiangAiAgent.Api.Data;
 using SimplerJiangAiAgent.Api.Data.Entities;
 using SimplerJiangAiAgent.Api.Modules.Stocks.Models;
@@ -8,6 +10,8 @@ namespace SimplerJiangAiAgent.Api.Tests;
 
 public sealed class QueryLocalFactDatabaseToolTests
 {
+    private static readonly ConditionalWeakTable<AppDbContext, DbContextOptions<AppDbContext>> ContextOptionsMap = new();
+
     [Fact]
     public async Task QueryAsync_ShouldReturnStockSectorAndMarketBuckets()
     {
@@ -483,18 +487,112 @@ public sealed class QueryLocalFactDatabaseToolTests
         Assert.Null(item.TranslatedTitle);
     }
 
-    private static AppDbContext CreateDbContext()
+    [Fact]
+    public async Task QueryAsync_ShouldPersistPreparedArticleFieldsWhenArticleReadServiceMutatesTrackedEntities()
     {
-        var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseInMemoryDatabase(Guid.NewGuid().ToString("N"))
-            .Options;
+        var databaseName = Guid.NewGuid().ToString("N");
+        var root = new InMemoryDatabaseRoot();
 
-        return new AppDbContext(options);
+        await using (var seedContext = CreateDbContext(databaseName, root))
+        {
+            seedContext.LocalStockNews.Add(new LocalStockNews
+            {
+                Symbol = "sh600000",
+                Name = "浦发银行",
+                SectorName = "银行",
+                Title = "浦发银行公告",
+                Source = "测试源",
+                SourceTag = "stock-test",
+                AiSentiment = "利好",
+                AiTarget = "个股:浦发银行",
+                PublishTime = new DateTime(2026, 3, 18, 9, 0, 0, DateTimeKind.Utc),
+                CrawledAt = new DateTime(2026, 3, 18, 9, 1, 0, DateTimeKind.Utc),
+                Url = "https://example.com/stock"
+            });
+            await seedContext.SaveChangesAsync();
+
+            var tool = CreateTool(seedContext, new MutatingLocalFactArticleReadService());
+            var result = await tool.QueryAsync("600000");
+
+            var item = Assert.Single(result.StockNews);
+            Assert.Equal("prepared excerpt", item.Excerpt);
+            Assert.Equal("prepared summary", item.Summary);
+            Assert.Equal("url_fetched", item.ReadMode);
+            Assert.Equal("full_text_read", item.ReadStatus);
+            Assert.NotNull(item.IngestedAt);
+        }
+
+        await using var verifyContext = CreateDbContext(databaseName, root);
+        var saved = await verifyContext.LocalStockNews.SingleAsync();
+        Assert.Equal("prepared excerpt", saved.ArticleExcerpt);
+        Assert.Equal("prepared summary", saved.ArticleSummary);
+        Assert.Equal("url_fetched", saved.ReadMode);
+        Assert.Equal("full_text_read", saved.ReadStatus);
+        Assert.NotNull(saved.IngestedAt);
     }
 
-    private static QueryLocalFactDatabaseTool CreateTool(AppDbContext dbContext)
+    [Fact]
+    public async Task QueryAsync_ConcurrentCalls_ShouldMaterializeDifferentTrackedEntitiesPerCall()
     {
-        return new QueryLocalFactDatabaseTool(dbContext, new NoOpLocalFactArticleReadService());
+        var databaseName = Guid.NewGuid().ToString("N");
+        var root = new InMemoryDatabaseRoot();
+
+        await using var dbContext = CreateDbContext(databaseName, root);
+        dbContext.LocalStockNews.Add(new LocalStockNews
+        {
+            Symbol = "sh600000",
+            Name = "浦发银行",
+            SectorName = "银行",
+            Title = "浦发银行公告",
+            Source = "测试源",
+            SourceTag = "stock-test",
+            AiSentiment = "利好",
+            AiTarget = "个股:浦发银行",
+            PublishTime = new DateTime(2026, 3, 18, 9, 0, 0, DateTimeKind.Utc),
+            CrawledAt = new DateTime(2026, 3, 18, 9, 1, 0, DateTimeKind.Utc)
+        });
+        await dbContext.SaveChangesAsync();
+
+        var articleReadService = new ConcurrentCaptureLocalFactArticleReadService();
+        var tool = CreateTool(dbContext, articleReadService);
+
+        var results = await Task.WhenAll(
+            tool.QueryAsync("600000"),
+            tool.QueryAsync("600000"));
+
+        Assert.All(results, result => Assert.Single(result.StockNews));
+        Assert.Equal(2, articleReadService.StockItems.Count);
+        Assert.NotSame(articleReadService.StockItems[0], articleReadService.StockItems[1]);
+    }
+
+    private static AppDbContext CreateDbContext(string? databaseName = null, InMemoryDatabaseRoot? root = null)
+    {
+        databaseName ??= Guid.NewGuid().ToString("N");
+        root ??= new InMemoryDatabaseRoot();
+
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseInMemoryDatabase(databaseName, root)
+            .Options;
+
+        var context = new AppDbContext(options);
+        ContextOptionsMap.Add(context, options);
+        return context;
+    }
+
+    private static QueryLocalFactDatabaseTool CreateTool(
+        AppDbContext dbContext,
+        ILocalFactArticleReadService? articleReadService = null)
+    {
+        return new QueryLocalFactDatabaseTool(
+            GetOptions(dbContext),
+            articleReadService ?? new NoOpLocalFactArticleReadService());
+    }
+
+    private static DbContextOptions<AppDbContext> GetOptions(AppDbContext dbContext)
+    {
+        return ContextOptionsMap.TryGetValue(dbContext, out var options)
+            ? options
+            : throw new InvalidOperationException("Missing AppDbContext options for test instance.");
     }
 
     private sealed class NoOpLocalFactArticleReadService : ILocalFactArticleReadService
@@ -502,6 +600,59 @@ public sealed class QueryLocalFactDatabaseToolTests
         public Task PrepareAsync(IReadOnlyList<LocalStockNews> items, CancellationToken cancellationToken = default)
         {
             return Task.CompletedTask;
+        }
+
+        public Task PrepareAsync(IReadOnlyList<LocalSectorReport> items, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class MutatingLocalFactArticleReadService : ILocalFactArticleReadService
+    {
+        public Task PrepareAsync(IReadOnlyList<LocalStockNews> items, CancellationToken cancellationToken = default)
+        {
+            foreach (var item in items)
+            {
+                item.ArticleExcerpt = "prepared excerpt";
+                item.ArticleSummary = "prepared summary";
+                item.ReadMode = "url_fetched";
+                item.ReadStatus = "full_text_read";
+                item.IngestedAt = new DateTime(2026, 3, 18, 9, 2, 0, DateTimeKind.Utc);
+            }
+
+            return Task.CompletedTask;
+        }
+
+        public Task PrepareAsync(IReadOnlyList<LocalSectorReport> items, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class ConcurrentCaptureLocalFactArticleReadService : ILocalFactArticleReadService
+    {
+        private readonly TaskCompletionSource _bothCallsReached = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _stockPrepareCount;
+
+        public List<LocalStockNews> StockItems { get; } = new();
+
+        public async Task PrepareAsync(IReadOnlyList<LocalStockNews> items, CancellationToken cancellationToken = default)
+        {
+            lock (StockItems)
+            {
+                if (items.Count > 0)
+                {
+                    StockItems.Add(items[0]);
+                }
+            }
+
+            if (Interlocked.Increment(ref _stockPrepareCount) >= 2)
+            {
+                _bothCallsReached.TrySetResult();
+            }
+
+            await _bothCallsReached.Task.WaitAsync(cancellationToken);
         }
 
         public Task PrepareAsync(IReadOnlyList<LocalSectorReport> items, CancellationToken cancellationToken = default)

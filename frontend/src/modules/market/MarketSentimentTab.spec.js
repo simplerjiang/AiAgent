@@ -14,11 +14,144 @@ const makeResponse = ({ ok = true, status = 200, json }) => {
 
 const flushPromises = () => new Promise(resolve => setTimeout(resolve, 0))
 
+const createDeferred = () => {
+  let resolve
+  let reject
+  const promise = new Promise((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+
+  return { promise, resolve, reject }
+}
+
+const createSummary = overrides => ({
+  snapshotTime: '2026-03-15T06:35:00Z',
+  sessionPhase: '盘中',
+  stageLabel: '主升',
+  stageLabelV2: '主升',
+  stageScore: 78.6,
+  stageConfidence: 84,
+  maxLimitUpStreak: 5,
+  limitUpCount: 62,
+  limitDownCount: 4,
+  brokenBoardCount: 10,
+  brokenBoardRate: 16.1,
+  advancers: 3680,
+  decliners: 1120,
+  flatCount: 202,
+  top3SectorTurnoverShare: 26.4,
+  top10SectorTurnoverShare: 58.8,
+  diffusionScore: 72.5,
+  continuationScore: 76.1,
+  top3SectorTurnoverShare5dAvg: 24.1,
+  top10SectorTurnoverShare5dAvg: 55.2,
+  limitUpCount5dAvg: 48.6,
+  brokenBoardRate5dAvg: 15.2,
+  isDegraded: false,
+  degradeReason: '',
+  ...overrides
+})
+
+const createSectorPage = overrides => ({
+  total: 1,
+  snapshotTime: '2026-03-15T06:35:00Z',
+  isDegraded: false,
+  degradeReason: '',
+  items: [{ boardType: 'concept', sectorCode: 'BK1', sectorName: '概念A', rankNo: 1, strengthScore: 80, changePercent: 4.2, mainNetInflow: 12, newsHotCount: 2, leaderName: '龙头A', advancerCount: 10 }],
+  ...overrides
+})
+
+const createDetail = overrides => ({
+  snapshot: { boardType: 'concept', sectorCode: 'BK1', sectorName: '概念A', changePercent: 4.2 },
+  history: [],
+  leaders: [],
+  news: [],
+  ...overrides
+})
+
+const createRealtimeOverview = overrides => ({
+  snapshotTime: '2026-03-15T06:35:00Z',
+  indices: [],
+  breadth: { buckets: [] },
+  ...overrides
+})
+
+const settle = async (times = 3) => {
+  for (let index = 0; index < times; index += 1) {
+    await flushPromises()
+  }
+}
+
 beforeEach(() => {
   vi.restoreAllMocks()
+  window.localStorage.clear()
 })
 
 describe('MarketSentimentTab', () => {
+  it('shows neutral loading copy in hero before the first latest snapshot resolves', async () => {
+    const latestDeferred = createDeferred()
+    const fetchMock = vi.fn(async input => {
+      const url = String(input)
+      if (url === '/api/market/sentiment/latest') {
+        return makeResponse({ json: async () => latestDeferred.promise })
+      }
+      if (url === '/api/market/sentiment/history?days=10') {
+        return makeResponse({ json: async () => ([]) })
+      }
+      if (url === '/api/market/realtime/overview') {
+        return makeResponse({
+          json: async () => createRealtimeOverview({
+            indices: [{ symbol: 'sh000001', name: '上证指数', price: 3300.12, changePercent: 0.1, turnoverAmount: 0 }]
+          })
+        })
+      }
+      if (url.includes('/api/market/sectors/realtime?boardType=concept')) {
+        return makeResponse({ json: async () => ({ items: [] }) })
+      }
+      if (url.includes('/api/market/sectors?boardType=concept')) {
+        return makeResponse({ json: async () => createSectorPage({ total: 0, items: [] }) })
+      }
+      throw new Error(`unexpected url: ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const wrapper = mount(MarketSentimentTab)
+    await flushPromises()
+
+    const heroStage = wrapper.find('.hero-stage')
+    expect(heroStage.classes()).toContain('hero-stage-loading')
+    expect(heroStage.text()).toContain('加载中')
+    expect(heroStage.text()).toContain('正在获取最新快照')
+    expect(heroStage.text()).not.toContain('待同步')
+    expect(heroStage.text()).not.toContain('暂无快照')
+
+    const metricCards = wrapper.findAll('.metric-card')
+    expect(metricCards).toHaveLength(4)
+    metricCards.forEach(card => {
+      expect(card.classes()).toContain('metric-card-placeholder')
+      expect(card.text()).toContain('加载中')
+    })
+    expect(metricCards[0].text()).not.toContain('0 / 0')
+    expect(metricCards[1].text()).not.toContain('0.00%')
+    expect(metricCards[2].text()).not.toContain('0.0 / 0.0')
+    expect(metricCards[3].text()).not.toContain('0.00%')
+
+    const realtimeIndexCard = wrapper.find('.realtime-index-card').text()
+    const realtimeFlowCard = wrapper.find('.realtime-flow-card').text()
+    expect(realtimeIndexCard).toContain('成交额 实时补充中')
+    expect(realtimeIndexCard).not.toContain('成交额 0')
+    expect(realtimeFlowCard).toContain('待补齐')
+    expect(realtimeFlowCard).not.toContain('+0.00 亿')
+    expect(realtimeFlowCard).not.toContain('0 / 0')
+
+    latestDeferred.resolve(createSummary())
+    await settle(4)
+
+    expect(wrapper.find('.hero-stage').text()).toContain('主升')
+    expect(wrapper.find('.hero-stage').text()).not.toContain('正在获取最新快照')
+  })
+
   it('loads market summary, sector list and first detail on mount', async () => {
     const fetchMock = vi.fn(async input => {
       const url = String(input)
@@ -181,6 +314,7 @@ describe('MarketSentimentTab', () => {
     await flushPromises()
     await flushPromises()
 
+    expect(wrapper.find('.hero-subtitle').text()).toBe('把涨停高度、涨跌家数、炸板率与板块扩散度压成同一屏，快速判断今天是主升、分歧、混沌还是退潮。')
     expect(wrapper.text()).toContain('情绪轮动')
     expect(wrapper.text()).toContain('主升')
     expect(wrapper.text()).toContain('机器人')
@@ -396,5 +530,246 @@ describe('MarketSentimentTab', () => {
     expect(wrapper.text()).toContain('待同步')
     expect(wrapper.text()).toContain('快照有限')
     expect(wrapper.text()).toContain('当前板块只有涨幅快照')
+  })
+
+  it('renders degraded hero, placeholder cards, empty board and realtime note clearly', async () => {
+    const fetchMock = vi.fn(async input => {
+      const url = String(input)
+      if (url === '/api/market/sentiment/latest') {
+        return makeResponse({
+          json: async () => createSummary({
+            stageLabel: '混沌',
+            stageLabelV2: '同步不完整',
+            stageScore: 0,
+            stageConfidence: 0,
+            maxLimitUpStreak: 0,
+            limitUpCount: 0,
+            limitDownCount: 0,
+            brokenBoardCount: 0,
+            brokenBoardRate: 0,
+            advancers: 0,
+            decliners: 0,
+            flatCount: 0,
+            top3SectorTurnoverShare: 0,
+            top10SectorTurnoverShare: 0,
+            diffusionScore: 0,
+            continuationScore: 0,
+            top3SectorTurnoverShare5dAvg: 0,
+            top10SectorTurnoverShare5dAvg: 0,
+            limitUpCount5dAvg: 0,
+            brokenBoardRate5dAvg: 0,
+            isDegraded: true,
+            degradeReason: 'market_breadth_unavailable,sector_rankings_unavailable'
+          })
+        })
+      }
+      if (url === '/api/market/sentiment/history?days=10') {
+        return makeResponse({
+          json: async () => ([
+            { tradingDate: '2026-03-15T00:00:00Z', snapshotTime: '2026-03-15T06:35:00Z', stageLabel: '混沌', stageScore: 0 }
+          ])
+        })
+      }
+      if (url === '/api/market/realtime/overview') {
+        return makeResponse({
+          json: async () => createRealtimeOverview({
+            indices: [{ symbol: 'sh000001', name: '上证指数', price: 3300.12, changePercent: 0.1, turnoverAmount: 0 }]
+          })
+        })
+      }
+      if (url.includes('/api/market/sectors/realtime?boardType=concept')) {
+        return makeResponse({ json: async () => ({ items: [] }) })
+      }
+      if (url.includes('/api/market/sectors?boardType=concept')) {
+        return makeResponse({
+          json: async () => createSectorPage({
+            total: 0,
+            items: [],
+            isDegraded: true,
+            degradeReason: 'sector_rankings_unavailable'
+          })
+        })
+      }
+      throw new Error(`unexpected url: ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const wrapper = mount(MarketSentimentTab)
+    await settle()
+
+    const heroStage = wrapper.find('.hero-stage').text()
+    const heroSubtitle = wrapper.find('.hero-subtitle').text()
+    const historyChip = wrapper.find('.history-chip').text()
+    const emptyState = wrapper.find('.sector-empty-state').text()
+    const toolbarMeta = wrapper.find('.toolbar-meta').text()
+    const metricCards = wrapper.findAll('.metric-card')
+    const realtimeIndexCard = wrapper.find('.realtime-index-card').text()
+    const realtimeFlowCard = wrapper.find('.realtime-flow-card').text()
+    const realtimeBreadthCard = wrapper.find('.realtime-breadth-card').text()
+
+    expect(heroSubtitle).toBe('当前仅同步到部分市场快照，下方实时数据仅供参考。')
+    expect(heroStage).toContain('同步不完整')
+    expect(heroStage).toContain('关键广度或榜单未同步完成，暂不输出阶段判断。')
+    expect(heroStage).not.toContain('情绪分 0.00 / 置信 0')
+    expect(heroStage).toContain('市场涨跌与涨跌停数据暂未同步完成')
+    expect(historyChip).toContain('同步不完整')
+    expect(historyChip).not.toContain('混沌')
+    expect(toolbarMeta).toContain('榜单待补齐')
+    expect(toolbarMeta).not.toContain('共 0 个板块')
+    expect(emptyState).toContain('这次同步只拿到市场摘要，板块排行未同步完成。')
+    expect(emptyState).toContain('为了避免把旧榜单误当最新结果，这里暂不展示历史榜单。')
+    expect(metricCards[0].classes()).toContain('metric-card-placeholder')
+    expect(metricCards[0].text()).toContain('待补齐')
+    expect(metricCards[0].text()).not.toContain('0 / 0')
+    expect(metricCards[1].text()).toContain('暂不展示')
+    expect(metricCards[1].text()).not.toContain('0.00%')
+    expect(metricCards[2].text()).toContain('以实时补充为准')
+    expect(metricCards[2].text()).not.toContain('0.0 / 0.0')
+    expect(metricCards[3].text()).toContain('待补齐')
+    expect(metricCards[3].text()).not.toContain('0.00%')
+    expect(wrapper.find('.realtime-note').text()).toContain('仅供参考')
+    expect(realtimeIndexCard).toContain('成交额 实时补充中')
+    expect(realtimeIndexCard).not.toContain('成交额 0')
+    expect(realtimeFlowCard).toContain('待补齐')
+    expect(realtimeFlowCard).toContain('涨停 暂不展示')
+    expect(realtimeFlowCard).not.toContain('+0.00 亿')
+    expect(realtimeFlowCard).not.toContain('0 / 0')
+    expect(realtimeFlowCard).not.toContain('涨停 0 / 跌停 0 / 平盘 0')
+    expect(realtimeBreadthCard).toContain('实时补充中')
+  })
+
+  it('shows partial sync feedback when refreshed data is still degraded', async () => {
+    let summaryCalls = 0
+    let sectorCalls = 0
+    const summaryPayloads = [
+      createSummary(),
+      createSummary({
+        stageLabel: '混沌',
+        stageLabelV2: '同步不完整',
+        stageScore: 0,
+        stageConfidence: 0,
+        isDegraded: true,
+        degradeReason: 'market_breadth_unavailable,sector_rankings_unavailable'
+      })
+    ]
+    const sectorPayloads = [
+      createSectorPage(),
+      createSectorPage({ total: 0, items: [], isDegraded: true, degradeReason: 'sector_rankings_unavailable' })
+    ]
+    const fetchMock = vi.fn(async (input, init) => {
+      const url = String(input)
+      if (url === '/api/market/sync' && init?.method === 'POST') {
+        return makeResponse({ json: async () => ({ synced: true, timestamp: '2026-03-15T06:40:00Z' }) })
+      }
+      if (url === '/api/market/sentiment/latest') {
+        return makeResponse({
+          json: async () => summaryPayloads[Math.min(summaryCalls++, summaryPayloads.length - 1)]
+        })
+      }
+      if (url === '/api/market/sentiment/history?days=10') {
+        return makeResponse({ json: async () => ([]) })
+      }
+      if (url === '/api/market/realtime/overview') {
+        return makeResponse({ json: async () => createRealtimeOverview() })
+      }
+      if (url.includes('/api/market/sectors/realtime?boardType=concept')) {
+        return makeResponse({ json: async () => ({ items: [] }) })
+      }
+      if (url.includes('/api/market/sectors?boardType=concept')) {
+        return makeResponse({
+          json: async () => sectorPayloads[Math.min(sectorCalls++, sectorPayloads.length - 1)]
+        })
+      }
+      if (url.includes('/api/market/sectors/BK1?')) {
+        return makeResponse({ json: async () => createDetail() })
+      }
+      throw new Error(`unexpected url: ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const wrapper = mount(MarketSentimentTab)
+    await settle()
+
+    await wrapper.find('.hero-actions .hero-button').trigger('click')
+    await settle(4)
+
+    expect(wrapper.text()).toContain('本次同步已完成，但仍有部分数据缺失')
+    expect(wrapper.text()).toContain('市场涨跌与涨跌停数据暂未同步完成')
+    expect(wrapper.text()).not.toContain('market_breadth_unavailable')
+  })
+
+  it('shows full success sync feedback when summary and boards refresh cleanly', async () => {
+    const fetchMock = vi.fn(async (input, init) => {
+      const url = String(input)
+      if (url === '/api/market/sync' && init?.method === 'POST') {
+        return makeResponse({ json: async () => ({ synced: true, timestamp: '2026-03-15T06:40:00Z' }) })
+      }
+      if (url === '/api/market/sentiment/latest') {
+        return makeResponse({ json: async () => createSummary() })
+      }
+      if (url === '/api/market/sentiment/history?days=10') {
+        return makeResponse({ json: async () => ([]) })
+      }
+      if (url === '/api/market/realtime/overview') {
+        return makeResponse({ json: async () => createRealtimeOverview() })
+      }
+      if (url.includes('/api/market/sectors/realtime?boardType=concept')) {
+        return makeResponse({ json: async () => ({ items: [] }) })
+      }
+      if (url.includes('/api/market/sectors?boardType=concept')) {
+        return makeResponse({ json: async () => createSectorPage() })
+      }
+      if (url.includes('/api/market/sectors/BK1?')) {
+        return makeResponse({ json: async () => createDetail() })
+      }
+      throw new Error(`unexpected url: ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const wrapper = mount(MarketSentimentTab)
+    await settle()
+
+    await wrapper.find('.hero-actions .hero-button').trigger('click')
+    await settle(4)
+
+    expect(wrapper.text()).toContain('最新市场摘要与板块榜单已同步完成。')
+  })
+
+  it('shows sync failure feedback without hiding the current dashboard', async () => {
+    const fetchMock = vi.fn(async (input, init) => {
+      const url = String(input)
+      if (url === '/api/market/sync' && init?.method === 'POST') {
+        return makeResponse({ ok: false, status: 503, json: async () => ({ message: '同步通道暂不可用' }) })
+      }
+      if (url === '/api/market/sentiment/latest') {
+        return makeResponse({ json: async () => createSummary() })
+      }
+      if (url === '/api/market/sentiment/history?days=10') {
+        return makeResponse({ json: async () => ([]) })
+      }
+      if (url === '/api/market/realtime/overview') {
+        return makeResponse({ json: async () => createRealtimeOverview() })
+      }
+      if (url.includes('/api/market/sectors/realtime?boardType=concept')) {
+        return makeResponse({ json: async () => ({ items: [] }) })
+      }
+      if (url.includes('/api/market/sectors?boardType=concept')) {
+        return makeResponse({ json: async () => createSectorPage() })
+      }
+      if (url.includes('/api/market/sectors/BK1?')) {
+        return makeResponse({ json: async () => createDetail() })
+      }
+      throw new Error(`unexpected url: ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const wrapper = mount(MarketSentimentTab)
+    await settle()
+
+    await wrapper.find('.hero-actions .hero-button').trigger('click')
+    await settle(2)
+
+    expect(wrapper.text()).toContain('同步通道暂不可用')
+    expect(wrapper.text()).toContain('概念A')
   })
 })

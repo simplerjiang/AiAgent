@@ -188,6 +188,16 @@ public sealed class LlmModule : IModule
                 ForceChinese = request.ForceChinese,
                 Organization = request.Organization ?? string.Empty,
                 Project = request.Project ?? string.Empty,
+                OllamaNumCtx = request.OllamaNumCtx,
+                OllamaNumGpu = request.OllamaNumGpu,
+                OllamaKeepAlive = request.OllamaKeepAlive ?? string.Empty,
+                OllamaNumPredict = request.OllamaNumPredict,
+                OllamaTemperature = request.OllamaTemperature,
+                OllamaTopK = request.OllamaTopK,
+                OllamaTopP = request.OllamaTopP,
+                OllamaMinP = request.OllamaMinP,
+                OllamaStop = request.OllamaStop ?? Array.Empty<string>(),
+                OllamaThink = request.OllamaThink,
                 Enabled = request.Enabled
             });
 
@@ -284,23 +294,7 @@ public sealed class LlmModule : IModule
             }
             catch { /* not running, fall through */ }
 
-            // Not running — check if ollama is installed
-            var installed = true;
-            try
-            {
-                var checkPsi = new System.Diagnostics.ProcessStartInfo
-                {
-                    FileName = "ollama",
-                    Arguments = "--version",
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                };
-                using var p = System.Diagnostics.Process.Start(checkPsi);
-                if (p != null) { p.WaitForExit(3000); }
-                else { installed = false; }
-            }
-            catch (System.ComponentModel.Win32Exception) { installed = false; }
-            catch { /* assume installed but other error */ }
+            var installed = ResolveOllamaExecutablePath() is not null;
 
             return Results.Ok(new { status = "not_running", installed, models = (object?)null });
         })
@@ -319,18 +313,25 @@ public sealed class LlmModule : IModule
             }
             catch { /* not running, proceed to start */ }
 
+            var ollamaExecutablePath = ResolveOllamaExecutablePath();
+            if (string.IsNullOrWhiteSpace(ollamaExecutablePath))
+            {
+                return Results.Ok(new { success = false, message = "未找到 Ollama 可执行文件，请先安装 Ollama（https://ollama.com）" });
+            }
+
             try
             {
                 var psi = new System.Diagnostics.ProcessStartInfo
                 {
-                    FileName = "ollama",
+                    FileName = ollamaExecutablePath,
                     Arguments = "serve",
                     UseShellExecute = false,
                     CreateNoWindow = true,
+                    WorkingDirectory = Path.GetDirectoryName(ollamaExecutablePath) ?? string.Empty,
                 };
                 var process = System.Diagnostics.Process.Start(psi);
                 if (process == null)
-                    return Results.Ok(new { success = false, message = "无法启动 Ollama 进程，请确认 ollama 已安装" });
+                    return Results.Ok(new { success = false, message = "无法启动 Ollama 进程，请确认 Ollama 已安装" });
 
                 for (int i = 0; i < 30; i++)
                 {
@@ -596,6 +597,7 @@ public sealed class LlmModule : IModule
     {
         var masked = MaskKey(settings.ApiKey);
         var tavilyMasked = MaskKey(settings.TavilyApiKey);
+        var isOllamaProvider = OllamaRuntimeDefaults.IsOllamaProvider(settings);
         return new LlmSettingsResponse(
             settings.Provider,
             settings.ProviderType,
@@ -608,8 +610,18 @@ public sealed class LlmModule : IModule
             settings.Enabled,
             !string.IsNullOrWhiteSpace(settings.ApiKey),
             masked,
-                !string.IsNullOrWhiteSpace(settings.TavilyApiKey),
-                tavilyMasked,
+            !string.IsNullOrWhiteSpace(settings.TavilyApiKey),
+            tavilyMasked,
+                isOllamaProvider ? OllamaRuntimeDefaults.ResolveNumCtx(settings.OllamaNumCtx) : settings.OllamaNumCtx,
+                isOllamaProvider ? OllamaRuntimeDefaults.ResolveNumGpu(settings.OllamaNumGpu) : settings.OllamaNumGpu,
+                isOllamaProvider ? OllamaRuntimeDefaults.ResolveKeepAlive(settings.OllamaKeepAlive) : settings.OllamaKeepAlive,
+                isOllamaProvider ? OllamaRuntimeDefaults.ResolveNumPredict(settings.OllamaNumPredict) : settings.OllamaNumPredict,
+                isOllamaProvider ? OllamaRuntimeDefaults.ResolveTemperature(settings.OllamaTemperature) : settings.OllamaTemperature,
+                isOllamaProvider ? OllamaRuntimeDefaults.ResolveTopK(settings.OllamaTopK) : settings.OllamaTopK,
+                isOllamaProvider ? OllamaRuntimeDefaults.ResolveTopP(settings.OllamaTopP) : settings.OllamaTopP,
+                isOllamaProvider ? OllamaRuntimeDefaults.ResolveMinP(settings.OllamaMinP) : settings.OllamaMinP,
+                OllamaRuntimeDefaults.ResolveStop(settings.OllamaStop),
+                isOllamaProvider ? OllamaRuntimeDefaults.ResolveThink(settings.OllamaThink) : (settings.OllamaThink ?? false),
             settings.UpdatedAt);
     }
 
@@ -644,6 +656,107 @@ public sealed class LlmModule : IModule
         return normalized.Length <= maxLength
             ? normalized
             : normalized[..maxLength] + "...(truncated)";
+    }
+
+    private static string? ResolveOllamaExecutablePath()
+    {
+        var comparer = OperatingSystem.IsWindows()
+            ? StringComparer.OrdinalIgnoreCase
+            : StringComparer.Ordinal;
+        var seen = new HashSet<string>(comparer);
+
+        foreach (var candidate in EnumerateOllamaExecutableCandidates())
+        {
+            if (string.IsNullOrWhiteSpace(candidate))
+            {
+                continue;
+            }
+
+            var normalized = candidate.Trim();
+            if (!seen.Add(normalized))
+            {
+                continue;
+            }
+
+            if (File.Exists(normalized))
+            {
+                return normalized;
+            }
+        }
+
+        return null;
+    }
+
+    private static IEnumerable<string> EnumerateOllamaExecutableCandidates()
+    {
+        foreach (var candidate in EnumerateOllamaPathCandidates(Environment.GetEnvironmentVariable("PATH")))
+        {
+            yield return candidate;
+        }
+
+        if (!OperatingSystem.IsWindows())
+        {
+            yield break;
+        }
+
+        foreach (var candidate in EnumerateOllamaPathCandidates(Environment.GetEnvironmentVariable("Path", EnvironmentVariableTarget.User)))
+        {
+            yield return candidate;
+        }
+
+        foreach (var candidate in EnumerateOllamaPathCandidates(Environment.GetEnvironmentVariable("Path", EnvironmentVariableTarget.Machine)))
+        {
+            yield return candidate;
+        }
+
+        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        if (!string.IsNullOrWhiteSpace(localAppData))
+        {
+            yield return Path.Combine(localAppData, "Programs", "Ollama", "ollama.exe");
+        }
+
+        var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+        if (!string.IsNullOrWhiteSpace(programFiles))
+        {
+            yield return Path.Combine(programFiles, "Ollama", "ollama.exe");
+        }
+
+        var programFilesX86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
+        if (!string.IsNullOrWhiteSpace(programFilesX86))
+        {
+            yield return Path.Combine(programFilesX86, "Ollama", "ollama.exe");
+        }
+    }
+
+    private static IEnumerable<string> EnumerateOllamaPathCandidates(string? pathValue)
+    {
+        if (string.IsNullOrWhiteSpace(pathValue))
+        {
+            yield break;
+        }
+
+        var executableName = OperatingSystem.IsWindows() ? "ollama.exe" : "ollama";
+
+        foreach (var rawSegment in pathValue.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var expandedSegment = Environment.ExpandEnvironmentVariables(rawSegment.Trim().Trim('"'));
+            if (string.IsNullOrWhiteSpace(expandedSegment))
+            {
+                continue;
+            }
+
+            string candidate;
+            try
+            {
+                candidate = Path.Combine(expandedSegment, executableName);
+            }
+            catch
+            {
+                continue;
+            }
+
+            yield return candidate;
+        }
     }
 
     private static int NormalizePage(int? page)

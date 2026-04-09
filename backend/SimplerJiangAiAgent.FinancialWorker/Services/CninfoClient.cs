@@ -13,10 +13,8 @@ public class CninfoClient
     {
         _httpClient = httpClient;
         _logger = logger;
-
-        // Find repo root (same pattern as other services)
-        var repoRoot = FindRepoRoot();
-        _reportsDir = Path.Combine(repoRoot, "App_Data", "financial-reports");
+        _reportsDir = FinancialWorkerRuntimePaths.ResolveFinancialReportsPath();
+        Directory.CreateDirectory(_reportsDir);
     }
 
     /// <summary>
@@ -173,18 +171,43 @@ public class CninfoClient
         return clean.Length > 100 ? clean[..100] : clean;
     }
 
-    private static string FindRepoRoot()
+}
+
+internal static class FinancialWorkerRuntimePaths
+{
+    private const string DataRootEnvironmentVariable = "SJAI_DATA_ROOT";
+    private const string ApplicationFolderName = "SimplerJiangAiAgent";
+
+    public static string ResolveDataRoot()
     {
-        var dir = AppContext.BaseDirectory;
-        for (var i = 0; i < 8; i++)
+        var environmentOverride = Environment.GetEnvironmentVariable(DataRootEnvironmentVariable);
+        if (!string.IsNullOrWhiteSpace(environmentOverride))
         {
-            if (Directory.GetFiles(dir, "*.sln").Length > 0 || Directory.Exists(Path.Combine(dir, ".git")))
-                return dir;
-            var parent = Directory.GetParent(dir);
-            if (parent == null) break;
-            dir = parent.FullName;
+            return Path.GetFullPath(environmentOverride);
         }
-        return Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..");
+
+        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        if (string.IsNullOrWhiteSpace(localAppData))
+        {
+            localAppData = AppContext.BaseDirectory;
+        }
+
+        return Path.Combine(localAppData, ApplicationFolderName);
+    }
+
+    public static string ResolveAppDataPath()
+    {
+        return Path.Combine(ResolveDataRoot(), "App_Data");
+    }
+
+    public static string ResolveFinancialDatabasePath()
+    {
+        return Path.Combine(ResolveAppDataPath(), "financial-data.db");
+    }
+
+    public static string ResolveFinancialReportsPath()
+    {
+        return Path.Combine(ResolveAppDataPath(), "financial-reports");
     }
 }
 

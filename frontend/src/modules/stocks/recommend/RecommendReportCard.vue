@@ -28,6 +28,34 @@ const getTurnStageSnapshots = turn => Array.isArray(turn?.stageSnapshots)
     ? turn.StageSnapshots
     : []
 
+const TURN_TERMINAL_STATUSES = new Set(['Completed', 'Failed', 'Cancelled'])
+const SESSION_TERMINAL_STATUSES = new Set(['Completed', 'Degraded', 'Failed', 'Closed', 'TimedOut'])
+
+const getSessionStatus = session => session?.status ?? session?.Status ?? ''
+const getTurnStatus = turn => turn?.status ?? turn?.Status ?? ''
+
+const getTurnSortValue = turn => {
+  const turnIndex = Number(turn?.turnIndex ?? turn?.TurnIndex)
+  if (Number.isFinite(turnIndex)) return turnIndex
+
+  const requestedAt = Date.parse(turn?.requestedAt ?? turn?.RequestedAt ?? '')
+  if (Number.isFinite(requestedAt)) return requestedAt
+
+  const turnId = Number(turn?.id ?? turn?.Id)
+  return Number.isFinite(turnId) ? turnId : -1
+}
+
+const getActiveTurn = session => {
+  const turns = getSessionTurns(session)
+    .slice()
+    .sort((left, right) => getTurnSortValue(left) - getTurnSortValue(right))
+  if (!turns.length) return null
+
+  const activeTurnId = session?.activeTurnId ?? session?.ActiveTurnId ?? null
+  return turns.find(turn => (turn.id ?? turn.Id) === activeTurnId)
+    ?? turns[turns.length - 1]
+}
+
 const getSnapshotRoleStates = snapshot => Array.isArray(snapshot?.roleStates)
   ? snapshot.roleStates
   : Array.isArray(snapshot?.RoleStates)
@@ -41,23 +69,51 @@ const stripCodeFence = (str) => {
   return m ? m[1] : str
 }
 
-const directorOutput = computed(() => {
+const parseDirectorOutput = turn => {
+  const finalStage = getTurnStageSnapshots(turn)
+    .find(snapshot => snapshot?.stageType === 'FinalDecision' || snapshot?.StageType === 'FinalDecision' || snapshot?.stageType === 4 || snapshot?.StageType === 4)
+  if (!finalStage) return null
+
+  const director = getSnapshotRoleStates(finalStage)
+    .find(roleState => roleState?.roleId === 'recommend_director' || roleState?.RoleId === 'recommend_director')
+  const outputContentJson = director?.outputContentJson ?? director?.OutputContentJson
+  if (!outputContentJson) return null
+
+  const cleaned = stripCodeFence(outputContentJson)
+  return typeof cleaned === 'string'
+    ? JSON.parse(cleaned)
+    : cleaned
+}
+
+const selectedTurn = computed(() => getActiveTurn(props.session))
+
+const isSelectedTurnTerminal = computed(() => {
+  const turnStatus = getTurnStatus(selectedTurn.value)
+  if (TURN_TERMINAL_STATUSES.has(turnStatus)) return true
+  return SESSION_TERMINAL_STATUSES.has(getSessionStatus(props.session))
+})
+
+const reportSourceTurns = computed(() => {
   const turns = getSessionTurns(props.session)
-  for (const turn of [...turns].reverse()) {
-    const finalStage = getTurnStageSnapshots(turn)
-      .find(snapshot => snapshot?.stageType === 'FinalDecision' || snapshot?.StageType === 'FinalDecision' || snapshot?.stageType === 4 || snapshot?.StageType === 4)
-    if (!finalStage) continue
+    .slice()
+    .sort((left, right) => getTurnSortValue(left) - getTurnSortValue(right))
+  if (!turns.length) return []
 
-    const director = getSnapshotRoleStates(finalStage)
-      .find(roleState => roleState?.roleId === 'recommend_director' || roleState?.RoleId === 'recommend_director')
-    const outputContentJson = director?.outputContentJson ?? director?.OutputContentJson
-    if (!outputContentJson) continue
+  const activeTurn = selectedTurn.value
+  if (!activeTurn) return [...turns].reverse()
 
+  const activeTurnId = activeTurn.id ?? activeTurn.Id
+  const ordered = [activeTurn]
+  if (isSelectedTurnTerminal.value) return ordered
+
+  return ordered.concat([...turns].reverse().filter(turn => (turn.id ?? turn.Id) !== activeTurnId))
+})
+
+const directorOutput = computed(() => {
+  for (const turn of reportSourceTurns.value) {
     try {
-      const cleaned = stripCodeFence(outputContentJson)
-      return typeof cleaned === 'string'
-        ? JSON.parse(cleaned)
-        : cleaned
+      const parsed = parseDirectorOutput(turn)
+      if (parsed) return parsed
     } catch {
       continue
     }
@@ -72,11 +128,12 @@ const STAGE_KEYS = ['MarketScan', 'SectorDebate', 'StockPicking', 'StockDebate',
 
 const degradedReport = computed(() => {
   if (report.value) return null
-  const turns = getSessionTurns(props.session)
+  const turns = reportSourceTurns.value
   if (!turns.length) return null
 
   const result = { marketSummaries: [], sectorSummaries: [], stockSummaries: [], debateSummaries: [] }
   const stageMap = { MarketScan: 'marketSummaries', SectorDebate: 'sectorSummaries', StockPicking: 'stockSummaries', StockDebate: 'debateSummaries', FinalDecision: 'debateSummaries' }
+  const selectedTurnId = selectedTurn.value?.id ?? selectedTurn.value?.Id ?? null
 
   const ROLE_NAMES = {
     recommend_macro_analyst: '宏观分析师', recommend_sector_hunter: '板块猎手', recommend_smart_money: '资金分析师',
@@ -86,7 +143,7 @@ const degradedReport = computed(() => {
     recommend_director: '推荐总监'
   }
 
-  for (const turn of [...turns].reverse()) {
+  for (const turn of turns) {
     const snapshots = getTurnStageSnapshots(turn)
     for (const snapshot of snapshots) {
       const stageType = snapshot?.stageType ?? snapshot?.StageType ?? ''
@@ -98,6 +155,13 @@ const degradedReport = computed(() => {
         const roleId = rs?.roleId ?? rs?.RoleId ?? ''
         const outputJson = rs?.outputContentJson ?? rs?.OutputContentJson
         if (!outputJson) continue
+
+        const isFinalDirector = roleId === 'recommend_director'
+          && (stageType === 'FinalDecision' || stageType === 4)
+        const isCurrentTerminalDirector = isSelectedTurnTerminal.value
+          && selectedTurnId != null
+          && (turn?.id ?? turn?.Id) === selectedTurnId
+          && isFinalDirector
 
         let summary = ''
         try {
@@ -128,6 +192,10 @@ const degradedReport = computed(() => {
             summary = parsed
           }
         } catch {
+          if (isCurrentTerminalDirector) {
+            continue
+          }
+
           // outputJson may be "Chinese text + JSON object" mix; extract meaningful content
           const plain = stripCodeFence(typeof outputJson === 'string' ? outputJson : '')
           if (typeof plain === 'string' && plain.length > 0) {
@@ -188,8 +256,20 @@ const sessionStatus = computed(() => {
 })
 
 const isSessionTerminal = computed(() => {
+  if (isSelectedTurnTerminal.value) return true
   const status = sessionStatus.value.toLowerCase()
   return ['completed', 'failed', 'degraded', 'closed', 'timedout'].includes(status)
+})
+
+const terminalFallbackMessage = computed(() => {
+  const turnStatus = getTurnStatus(selectedTurn.value)
+  const currentSessionStatus = sessionStatus.value
+
+  if (turnStatus === 'Failed' || turnStatus === 'Cancelled' || currentSessionStatus === 'Failed' || currentSessionStatus === 'TimedOut') {
+    return '⚠️ 分析已结束，未能生成可解析的推荐报告，可查看辩论过程或重新推荐。'
+  }
+
+  return '⚠️ 分析已完成，但推荐总监报告缺失或无法解析，可重新推荐。'
 })
 
 const sentimentClass = computed(() => {
@@ -263,7 +343,7 @@ const formatValidity = raw => {
   <div class="report-card">
     <div v-if="!report && !degradedReport" class="report-empty">
       <p v-if="isSessionTerminal" class="report-error-hint">
-        ⚠️ 分析已完成但报告数据异常，建议重新推荐。
+        {{ terminalFallbackMessage }}
       </p>
       <p v-else class="muted">推荐报告尚未生成，请等待分析完成。</p>
     </div>

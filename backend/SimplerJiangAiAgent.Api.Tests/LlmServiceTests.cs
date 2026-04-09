@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using System.Net;
+using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using SimplerJiangAiAgent.Api.Infrastructure.Llm;
@@ -50,6 +52,52 @@ public sealed class LlmServiceTests
 
         Assert.Equal("echo:hello", result.Content);
         Assert.Equal("hello", provider.LastPrompt);
+    }
+
+    [Fact]
+    public async Task OllamaProvider_ThrowsWhenModelIsBlankInsteadOfFallingBack()
+    {
+        var provider = new OllamaProvider(
+            new HttpClient(new UnexpectedHttpCallHandler()),
+            new FakeLogWriter());
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => provider.ChatAsync(
+            new LlmProviderSettings
+            {
+                Provider = "ollama",
+                ProviderType = "ollama",
+                BaseUrl = "http://localhost:11434",
+                Model = ""
+            },
+            new LlmChatRequest("hello", null, null, false),
+            CancellationToken.None));
+
+        Assert.Contains("Ollama 模型未配置", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task OllamaProvider_ThrowsClearErrorWhenConfiguredModelIsUnavailable()
+    {
+        var provider = new OllamaProvider(
+            new HttpClient(new StaticResponseHandler(_ => new HttpResponseMessage(HttpStatusCode.BadRequest)
+            {
+                Content = new StringContent("{\"error\":\"model 'missing:model' not found, try pulling it first\"}")
+            })),
+            new FakeLogWriter());
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => provider.ChatAsync(
+            new LlmProviderSettings
+            {
+                Provider = "ollama",
+                ProviderType = "ollama",
+                BaseUrl = "http://localhost:11434",
+                Model = "missing:model"
+            },
+            new LlmChatRequest("hello", null, null, false),
+            CancellationToken.None));
+
+        Assert.Contains("Ollama 模型不可用：missing:model", error.Message, StringComparison.Ordinal);
+        Assert.Contains("ollama pull", error.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     private sealed class FakeSettingsStore : ILlmSettingsStore
@@ -112,6 +160,29 @@ public sealed class LlmServiceTests
         public void Write(string category, string message)
         {
             Entries.Add($"{category}:{message}");
+        }
+    }
+
+    private sealed class UnexpectedHttpCallHandler : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            throw new InvalidOperationException("HTTP call should not occur for a blank Ollama model.");
+        }
+    }
+
+    private sealed class StaticResponseHandler : HttpMessageHandler
+    {
+        private readonly Func<HttpRequestMessage, HttpResponseMessage> _responseFactory;
+
+        public StaticResponseHandler(Func<HttpRequestMessage, HttpResponseMessage> responseFactory)
+        {
+            _responseFactory = responseFactory;
+        }
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(_responseFactory(request));
         }
     }
 }

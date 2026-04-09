@@ -18,6 +18,9 @@ public sealed class StockCopilotLiveGateService : IStockCopilotLiveGateService
     private const int DefaultReplaySampleTake = 40;
     private const int MaxTotalLatencyMs = 15000;
     private const int MaxPollingSteps = 2000;
+    private const int MaxJsonRepairAttempts = 1;
+    private const double JsonRepairTemperature = 0.2;
+    private const int MaxRepairRawSnippetLength = 600;
 
     private readonly IStockChatHistoryService _chatHistoryService;
     private readonly ILlmService _llmService;
@@ -64,15 +67,19 @@ public sealed class StockCopilotLiveGateService : IStockCopilotLiveGateService
         var marketContext = await _marketContextService.GetLatestAsync(normalizedSymbol, cancellationToken);
         var checklist = _roleContractRegistry.BuildChecklist();
         var prompt = BuildPrompt(normalizedSymbol, trimmedQuestion, request.AllowExternalSearch, marketContext, checklist);
-        var llmResult = await _llmService.ChatAsync(
+        var (planJson, rawModelResponse, llmTraceId, parseError) = await RequestPlanWithRepairAsync(
             provider,
-            new LlmChatRequest(prompt, request.Model, request.Temperature, false),
+            request.Model,
+            request.Temperature,
+            prompt,
+            normalizedSymbol,
+            trimmedQuestion,
+            request.AllowExternalSearch,
+            marketContext,
+            checklist,
             cancellationToken);
 
-        var rawModelResponse = llmResult.Content?.Trim() ?? string.Empty;
-        var llmTraceId = llmResult.TraceId ?? string.Empty;
-
-        if (!StockAgentJsonParser.TryParse(rawModelResponse, out var planJson, out var parseError) || planJson is null)
+        if (planJson is null)
         {
             return await BuildParseFailureResultAsync(
                 normalizedSymbol,
@@ -154,6 +161,94 @@ public sealed class StockCopilotLiveGateService : IStockCopilotLiveGateService
             prompt,
             rawModelResponse,
             validation.RejectedCalls);
+    }
+
+    private async Task<(JsonElement? PlanJson, string RawResponse, string TraceId, string? ParseError)> RequestPlanWithRepairAsync(
+        string provider,
+        string? model,
+        double? temperature,
+        string prompt,
+        string symbol,
+        string question,
+        bool allowExternalSearch,
+        StockMarketContextDto? marketContext,
+        StockCopilotRoleContractChecklistDto checklist,
+        CancellationToken cancellationToken)
+    {
+        var initialResult = await _llmService.ChatAsync(
+            provider,
+            new LlmChatRequest(prompt, model, temperature, false, ResponseFormat: LlmResponseFormats.Json),
+            cancellationToken);
+
+        var currentRawResponse = initialResult.Content?.Trim() ?? string.Empty;
+        var currentTraceId = initialResult.TraceId ?? string.Empty;
+
+        if (StockAgentJsonParser.TryParse(currentRawResponse, out var parsedPlan, out var parseError) && parsedPlan is not null)
+        {
+            return (parsedPlan, currentRawResponse, currentTraceId, null);
+        }
+
+        var currentParseError = parseError ?? "LLM 计划解析失败。";
+        for (var attempt = 0; attempt < MaxJsonRepairAttempts; attempt++)
+        {
+            var repairPrompt = BuildRepairPrompt(symbol, question, allowExternalSearch, marketContext, checklist, currentRawResponse, currentParseError);
+            var repairResult = await _llmService.ChatAsync(
+                provider,
+                new LlmChatRequest(
+                    repairPrompt,
+                    model,
+                    Math.Min(temperature ?? JsonRepairTemperature, JsonRepairTemperature),
+                    false,
+                    ResponseFormat: LlmResponseFormats.Json),
+                cancellationToken);
+
+            currentRawResponse = repairResult.Content?.Trim() ?? string.Empty;
+            currentTraceId = repairResult.TraceId ?? currentTraceId;
+
+            if (StockAgentJsonParser.TryParse(currentRawResponse, out parsedPlan, out parseError) && parsedPlan is not null)
+            {
+                return (parsedPlan, currentRawResponse, currentTraceId, null);
+            }
+
+            currentParseError = parseError ?? "LLM 计划解析失败。";
+        }
+
+        var finalError = MaxJsonRepairAttempts > 0
+            ? $"LLM 计划解析失败，repair 后仍不是有效 JSON：{currentParseError}"
+            : currentParseError;
+        return (null, currentRawResponse, currentTraceId, finalError);
+    }
+
+    private string BuildRepairPrompt(
+        string symbol,
+        string question,
+        bool allowExternalSearch,
+        StockMarketContextDto? marketContext,
+        StockCopilotRoleContractChecklistDto checklist,
+        string rawModelResponse,
+        string? parseError)
+    {
+        var builder = new StringBuilder();
+        builder.AppendLine("上次输出不是有效 JSON，现在只做一次 JSON repair。");
+        AppendRequestContext(builder, symbol, question, allowExternalSearch, marketContext);
+        builder.AppendLine();
+        builder.AppendLine("只输出一个 JSON object。第一字符必须是 {，最后一个字符必须是 }。不要解释、markdown、代码块、自然语言或思考过程。");
+        builder.AppendLine("必须字段：plannerSummary, governorSummary, finalAnswerDraft, toolCalls。toolCalls 项字段：roleId, toolName, purpose, inputSummary。");
+        builder.AppendLine($"硬限制：最多 {MaxPlannedToolCalls} 个 toolCalls；最多 {MaxExternalSearchCalls} 个 StockSearchMcp；先本地后外部；direct=false/disabled 角色不得取数。");
+        builder.AppendLine("若无工具需求，toolCalls=[]。不要输出“好的，请提供您需要我处理的请求。”之类的对话文本。");
+        builder.AppendLine();
+        builder.AppendLine("工具注册表：");
+        AppendToolRegistrySummary(builder);
+        builder.AppendLine("角色约束：");
+        AppendRoleConstraintSummary(builder, checklist);
+        if (!string.IsNullOrWhiteSpace(parseError))
+        {
+            builder.AppendLine($"上一次解析错误：{parseError}");
+        }
+
+        builder.AppendLine("上一次无效输出片段：");
+        builder.AppendLine(BuildRepairRawSnippet(rawModelResponse));
+        return builder.ToString().Trim();
     }
 
     private async Task<StockCopilotLiveGateResultDto> BuildParseFailureResultAsync(
@@ -622,64 +717,105 @@ public sealed class StockCopilotLiveGateService : IStockCopilotLiveGateService
         StockCopilotRoleContractChecklistDto checklist)
     {
         var builder = new StringBuilder();
-        builder.AppendLine("你是 Stock Copilot 的 live LLM gate planner。你的任务不是直接给投资建议，而是为一次受控 MCP 验收生成工具计划 JSON。");
-        builder.AppendLine("硬性规则：");
-        builder.AppendLine("1. 只能使用下方角色 contract 和 tool registry 中真实存在的 roleId 与 toolName。");
-        builder.AppendLine("2. local_required / local_preferred 工具必须优先；external_gated 只能在 allowExternalSearch=true 且本地链路先执行后再考虑。");
-        builder.AppendLine("3. disabled 或 blocked 的角色不得规划任何查询工具。");
-        builder.AppendLine("4. 触发 stop rule 时必须停止，不得通过改写角色、改写 toolName 或伪造 fallback 绕过。");
-        builder.AppendLine("5. 不允许切换 symbol，不允许生成未注册工具，不允许越权调用。");
-        builder.AppendLine($"6. 最多输出 {MaxPlannedToolCalls} 个 toolCalls，其中最多 {MaxExternalSearchCalls} 个 StockSearchMcp。");
-        builder.AppendLine("7. 只返回一个 JSON object，不要输出解释、markdown、代码块或思考过程。");
-        builder.AppendLine("8. 对返回 evidence 的 MCP，可在 inputSummary 里传 evidenceSkip/evidenceTake；对 StockFundamentalsMcp 还可传 factSkip/factTake。");
+        AppendRequestContext(builder, symbol, question, allowExternalSearch, marketContext);
         builder.AppendLine();
-        builder.AppendLine("输出 JSON schema：");
-        builder.AppendLine("{");
-        builder.AppendLine("  \"plannerSummary\": \"string\",");
-        builder.AppendLine("  \"governorSummary\": \"string\",");
-        builder.AppendLine("  \"finalAnswerDraft\": \"string\",");
-        builder.AppendLine("  \"toolCalls\": [");
-        builder.AppendLine("    {");
-        builder.AppendLine("      \"roleId\": \"string\",");
-        builder.AppendLine("      \"toolName\": \"string\",");
-        builder.AppendLine("      \"purpose\": \"string\",");
-        builder.AppendLine("      \"inputSummary\": \"key=value; key=value\"");
-        builder.AppendLine("    }");
-        builder.AppendLine("  ]");
-        builder.AppendLine("}");
+        builder.AppendLine("你是 Stock Copilot 的 live gate planner。只为当前请求生成一次受控 MCP 工具计划，不直接给投资建议。");
         builder.AppendLine();
-        builder.AppendLine("当前请求：");
-        builder.AppendLine($"- symbol={symbol}");
-        builder.AppendLine($"- question={question}");
-        builder.AppendLine($"- allowExternalSearch={allowExternalSearch}");
-        if (marketContext is not null)
-        {
-            builder.AppendLine($"- marketContextStageConfidence={marketContext.StageConfidence:0.##}");
-            builder.AppendLine($"- mainlineSector={marketContext.MainlineSectorName ?? "unknown"}");
-            builder.AppendLine($"- stockSector={marketContext.StockSectorName ?? "unknown"}");
-            builder.AppendLine($"- mainlineScore={marketContext.MainlineScore:0.##}");
-        }
-
+        builder.AppendLine("输出要求：");
+        builder.AppendLine("- 只输出一个 JSON object；第一字符必须是 {，最后一个字符必须是 }；不要解释、markdown、代码块、自然语言或思考过程。");
+        builder.AppendLine("- schema={\"plannerSummary\":\"string\",\"governorSummary\":\"string\",\"finalAnswerDraft\":\"string\",\"toolCalls\":[{\"roleId\":\"string\",\"toolName\":\"string\",\"purpose\":\"string\",\"inputSummary\":\"key=value; key=value\"}]}");
+        builder.AppendLine("- toolCalls 字段必须存在，可为空数组；若无工具需求必须返回 toolCalls=[]。");
+        builder.AppendLine("- finalAnswerDraft 只能写计划草案与执行约束；未执行的工具结论不能当作事实。");
         builder.AppendLine();
-        builder.AppendLine("tool registry：");
-        foreach (var registration in _mcpServiceRegistry.List())
-        {
-            builder.AppendLine($"- toolName={registration.ToolName}; policyClass={registration.PolicyClass}");
-        }
-
+        builder.AppendLine("核心约束：");
+        builder.AppendLine($"1. roleId 与 toolName 只能来自下方注册表；最多 {MaxPlannedToolCalls} 个 toolCalls，其中最多 {MaxExternalSearchCalls} 个 StockSearchMcp。");
+        builder.AppendLine("2. 先本地后外部：local_required / local_preferred 先走本地；external_gated 只有 allowExternalSearch=true 且本地链路先执行后才可规划。");
+        builder.AppendLine("3. 若必需本地工具不可用、关键事实不足或角色被 disabled/blocked/direct=false，必须停止该角色，不得改 symbol、伪造 toolName、伪造 fallback 或越权绕过。");
+        builder.AppendLine("4. 对返回 evidence 的 MCP，可在 inputSummary 里传 evidenceSkip/evidenceTake；对 StockFundamentalsMcp 还可传 factSkip/factTake。");
+        builder.AppendLine("5. 不要反问，不要输出“好的，请提供您需要我处理的请求。”之类的对话文本。");
         builder.AppendLine();
-        builder.AppendLine("角色 contract：");
-        foreach (var role in checklist.Roles)
-        {
-            var preferredTools = role.PreferredMcpSequence.Count == 0
-                ? "none"
-                : string.Join(", ", role.PreferredMcpSequence);
-            builder.AppendLine($"- roleId={role.RoleId}; roleClass={role.RoleClass}; toolAccessMode={role.ToolAccessMode}; allowsDirectQueryTools={role.AllowsDirectQueryTools}; minimumEvidenceCount={role.MinimumEvidenceCount}; preferredMcpSequence=[{preferredTools}]; fallbackRule={role.FallbackRule}; stopRule={role.StopRule}; reason={role.Reason ?? "none"}");
-        }
-
+        builder.AppendLine("工具注册表：");
+        AppendToolRegistrySummary(builder);
+        builder.AppendLine("角色约束：");
+        AppendRoleConstraintSummary(builder, checklist);
         builder.AppendLine();
         builder.AppendLine("你生成的 finalAnswerDraft 必须明确说明：这是 live gate 的计划草案，真正可采信的事实以后端 tool results 为准。不要在 finalAnswerDraft 中编造尚未执行的工具结论。");
         return builder.ToString().Trim();
+    }
+
+    private static void AppendRequestContext(
+        StringBuilder builder,
+        string symbol,
+        string question,
+        bool allowExternalSearch,
+        StockMarketContextDto? marketContext)
+    {
+        builder.AppendLine("当前请求：");
+        builder.AppendLine($"symbol={symbol}");
+        builder.AppendLine($"question={question}");
+        builder.AppendLine($"allowExternalSearch={allowExternalSearch}");
+        if (marketContext is not null)
+        {
+            builder.AppendLine($"marketContext=stageConfidence:{marketContext.StageConfidence:0.##}; mainlineSector:{marketContext.MainlineSectorName ?? "unknown"}; stockSector:{marketContext.StockSectorName ?? "unknown"}; mainlineScore:{marketContext.MainlineScore:0.##}");
+        }
+    }
+
+    private void AppendToolRegistrySummary(StringBuilder builder)
+    {
+        var registrations = _mcpServiceRegistry.List();
+        var localRequired = registrations
+            .Where(item => string.Equals(item.PolicyClass, "local_required", StringComparison.OrdinalIgnoreCase))
+            .Select(item => item.ToolName);
+        var localPreferred = registrations
+            .Where(item => string.Equals(item.PolicyClass, "local_preferred", StringComparison.OrdinalIgnoreCase))
+            .Select(item => item.ToolName);
+        var externalGated = registrations
+            .Where(item => string.Equals(item.PolicyClass, "external_gated", StringComparison.OrdinalIgnoreCase))
+            .Select(item => item.ToolName);
+
+        builder.AppendLine($"- local_required={string.Join(", ", localRequired)}");
+        if (localPreferred.Any())
+        {
+            builder.AppendLine($"- local_preferred={string.Join(", ", localPreferred)}");
+        }
+
+        builder.AppendLine($"- external_gated={string.Join(", ", externalGated)}");
+    }
+
+    private static void AppendRoleConstraintSummary(StringBuilder builder, StockCopilotRoleContractChecklistDto checklist)
+    {
+        foreach (var role in checklist.Roles.Where(item => item.AllowsDirectQueryTools))
+        {
+            var preferredTools = role.PreferredMcpSequence.Count == 0
+                ? "none"
+                : string.Join(">", role.PreferredMcpSequence);
+            builder.AppendLine($"- {role.RoleId}: direct=true; access={role.ToolAccessMode}; minEvidence={role.MinimumEvidenceCount}; preferred={preferredTools}");
+        }
+
+        var noDirectRoles = checklist.Roles
+            .Where(item => !item.AllowsDirectQueryTools)
+            .Select(item => item.RoleId)
+            .ToArray();
+        if (noDirectRoles.Length > 0)
+        {
+            builder.AppendLine($"- {string.Join(", ", noDirectRoles)}: direct=false; access=disabled; preferred=none");
+        }
+    }
+
+    private static string BuildRepairRawSnippet(string rawModelResponse)
+    {
+        if (string.IsNullOrWhiteSpace(rawModelResponse))
+        {
+            return "(empty)";
+        }
+
+        var normalized = rawModelResponse.Replace("\r", string.Empty).Trim();
+        if (normalized.Length <= MaxRepairRawSnippetLength)
+        {
+            return normalized;
+        }
+
+        return $"{normalized[..MaxRepairRawSnippetLength]}...[truncated {normalized.Length - MaxRepairRawSnippetLength} chars]";
     }
 
     private static ParsedPlan ParsePlan(JsonElement root)

@@ -14,6 +14,9 @@ public sealed class SectorRotationIngestionService : ISectorRotationIngestionSer
     private static readonly SemaphoreSlim SyncLock = new(1, 1);
     private static readonly TimeZoneInfo ChinaTimeZone = ResolveChinaTimeZone();
     private static readonly TimeSpan MarketOpenTime = new(9, 30, 0);
+    private const string DefaultSourceTag = "eastmoney";
+    private const string PartialSourceTag = "eastmoney_partial";
+    private const string PartialStageLabel = "同步不完整";
 
     private readonly AppDbContext _dbContext;
     private readonly IEastmoneySectorRotationClient _client;
@@ -78,7 +81,11 @@ public sealed class SectorRotationIngestionService : ISectorRotationIngestionSer
                 .Append(brokenBoardTask)
                 .Append(maxStreakTask));
 
-            var allRows = boardTasks.SelectMany(pair => pair.Value.Result.Value).ToList();
+            var boardFetchResults = boardTasks.ToDictionary(
+                pair => pair.Key,
+                pair => pair.Value.Result,
+                StringComparer.OrdinalIgnoreCase);
+            var allRows = boardFetchResults.SelectMany(pair => pair.Value.Value).ToList();
             var breadthSnapshot = breadthTask.Result.Value;
             var limitUpCount = limitUpTask.Result.Value;
             var limitDownCount = limitDownTask.Result.Value;
@@ -88,6 +95,15 @@ public sealed class SectorRotationIngestionService : ISectorRotationIngestionSer
             var totalTurnoverBase = breadthSnapshot.TotalTurnover > 0
                 ? breadthSnapshot.TotalTurnover
                 : sectorTurnoverBase;
+            var degradedFlags = BuildDegradedFlags(
+                boardFetchResults,
+                breadthTask.Result.Succeeded,
+                limitUpTask.Result.Succeeded,
+                limitDownTask.Result.Succeeded,
+                brokenBoardTask.Result.Succeeded,
+                maxStreakTask.Result.Succeeded,
+                totalTurnoverBase);
+            var isCriticalSummaryIncomplete = !breadthTask.Result.Succeeded || totalTurnoverBase <= 0;
             var (top3Share, top10Share) = ComputeTurnoverConcentration(allRows, totalTurnoverBase);
             var brokenBoardRate = limitUpCount > 0
                 ? brokenBoardCount / (decimal)Math.Max(1, limitUpCount) * 100m
@@ -101,6 +117,7 @@ public sealed class SectorRotationIngestionService : ISectorRotationIngestionSer
                 brokenBoardRate,
                 maxLimitUpStreak);
             var stageLabel = ResolveStageLabel(stageScore);
+            var degradeReason = degradedFlags.Count > 0 ? string.Join(',', degradedFlags) : null;
 
             var marketSnapshot = new MarketSentimentSnapshot
             {
@@ -108,7 +125,7 @@ public sealed class SectorRotationIngestionService : ISectorRotationIngestionSer
                 SnapshotTime = snapshotTime,
                 SessionPhase = ResolveSessionPhase(localNow),
                 StageLabel = stageLabel,
-                StageScore = stageScore,
+                StageScore = isCriticalSummaryIncomplete ? 0m : stageScore,
                 MaxLimitUpStreak = maxLimitUpStreak,
                 LimitUpCount = limitUpCount,
                 LimitDownCount = limitDownCount,
@@ -120,19 +137,33 @@ public sealed class SectorRotationIngestionService : ISectorRotationIngestionSer
                 TotalTurnover = decimal.Round(totalTurnoverBase, 2),
                 Top3SectorTurnoverShare = top3Share,
                 Top10SectorTurnoverShare = top10Share,
-                SourceTag = "eastmoney",
+                StageLabelV2 = isCriticalSummaryIncomplete ? PartialStageLabel : string.Empty,
+                StageConfidence = isCriticalSummaryIncomplete ? 0m : 0m,
+                SourceTag = degradedFlags.Count > 0 ? PartialSourceTag : DefaultSourceTag,
                 RawJson = JsonSerializer.Serialize(new
                 {
                     breadth = breadthSnapshot,
                     limitUp = limitUpCount,
                     limitDown = limitDownCount,
                     brokenBoard = brokenBoardCount,
-                    maxStreak = maxLimitUpStreak
+                    maxStreak = maxLimitUpStreak,
+                    status = new
+                    {
+                        isDegraded = degradedFlags.Count > 0,
+                        isCriticalSummaryIncomplete,
+                        degradeReason,
+                        degradedFlags,
+                        sectorSnapshotCount = allRows.Count,
+                        successfulBoardTypes = boardFetchResults
+                            .Where(pair => pair.Value.Succeeded && pair.Value.Value.Count > 0)
+                            .Select(pair => pair.Key)
+                            .ToArray()
+                    }
                 }),
                 CreatedAt = snapshotTime
             };
 
-            var shouldPersistMarketSnapshot = ShouldPersistMarketSnapshot(
+            var shouldApplyMarketRollingMetrics = ShouldApplyMarketRollingMetrics(
                 marketSnapshot,
                 breadthTask.Result.Succeeded,
                 limitUpTask.Result.Succeeded,
@@ -140,33 +171,27 @@ public sealed class SectorRotationIngestionService : ISectorRotationIngestionSer
                 brokenBoardTask.Result.Succeeded,
                 maxStreakTask.Result.Succeeded);
 
-            if (shouldPersistMarketSnapshot)
-            {
-                // Log if any supplementary sources failed but we still persist
-                if (!limitUpTask.Result.Succeeded || !limitDownTask.Result.Succeeded || !brokenBoardTask.Result.Succeeded || !maxStreakTask.Result.Succeeded)
-                {
-                    _logger.LogWarning(
-                        "MarketSentimentSnapshot 以降级模式落库：部分数据源失败。limitUp={LimitUpSucceeded}, limitDown={LimitDownSucceeded}, brokenBoard={BrokenBoardSucceeded}, maxStreak={MaxStreakSucceeded}",
-                        limitUpTask.Result.Succeeded,
-                        limitDownTask.Result.Succeeded,
-                        brokenBoardTask.Result.Succeeded,
-                        maxStreakTask.Result.Succeeded);
-                }
-                _dbContext.MarketSentimentSnapshots.Add(marketSnapshot);
-            }
-            else
+            if (isCriticalSummaryIncomplete)
             {
                 _logger.LogWarning(
-                    "跳过 MarketSentimentSnapshot 落库：关键市场数据抓取不完整。breadth={BreadthSucceeded}, limitUp={LimitUpSucceeded}, limitDown={LimitDownSucceeded}, brokenBoard={BrokenBoardSucceeded}, maxStreak={MaxStreakSucceeded}, turnover={TotalTurnover}, advancers={Advancers}, decliners={Decliners}",
+                    "MarketSentimentSnapshot 以 fresh partial 模式落库：关键市场数据抓取不完整。reasons={Reasons}, breadth={BreadthSucceeded}, turnover={TotalTurnover}, sectorRows={SectorRowCount}",
+                    degradeReason,
                     breadthTask.Result.Succeeded,
+                    marketSnapshot.TotalTurnover,
+                    allRows.Count);
+            }
+            else if (degradedFlags.Count > 0)
+            {
+                _logger.LogWarning(
+                    "MarketSentimentSnapshot 以降级模式落库：部分数据源失败。reasons={Reasons}, limitUp={LimitUpSucceeded}, limitDown={LimitDownSucceeded}, brokenBoard={BrokenBoardSucceeded}, maxStreak={MaxStreakSucceeded}",
+                    degradeReason,
                     limitUpTask.Result.Succeeded,
                     limitDownTask.Result.Succeeded,
                     brokenBoardTask.Result.Succeeded,
-                    maxStreakTask.Result.Succeeded,
-                    marketSnapshot.TotalTurnover,
-                    marketSnapshot.Advancers,
-                    marketSnapshot.Decliners);
+                    maxStreakTask.Result.Succeeded);
             }
+
+            _dbContext.MarketSentimentSnapshots.Add(marketSnapshot);
 
             var currentSectorSnapshots = new List<SectorRotationSnapshot>();
 
@@ -235,7 +260,7 @@ public sealed class SectorRotationIngestionService : ISectorRotationIngestionSer
                     LeaderStabilityScore = 0m,
                     MainlineScore = 0m,
                     IsMainline = false,
-                    SourceTag = "eastmoney",
+                    SourceTag = DefaultSourceTag,
                     RawJson = row.RawJson,
                     CreatedAt = snapshotTime,
                     Leaders = leaders.Select(item => new SectorRotationLeaderSnapshot
@@ -256,7 +281,7 @@ public sealed class SectorRotationIngestionService : ISectorRotationIngestionSer
             }
 
             await _dbContext.SaveChangesAsync(cancellationToken);
-            await ApplyRollingMetricsAsync(shouldPersistMarketSnapshot ? marketSnapshot : null, currentSectorSnapshots, cancellationToken);
+            await ApplyRollingMetricsAsync(shouldApplyMarketRollingMetrics ? marketSnapshot : null, currentSectorSnapshots, cancellationToken);
             await _dbContext.SaveChangesAsync(cancellationToken);
         }
         catch (Exception ex)
@@ -378,7 +403,7 @@ public sealed class SectorRotationIngestionService : ISectorRotationIngestionSer
         }
     }
 
-    private static bool ShouldPersistMarketSnapshot(
+    private static bool ShouldApplyMarketRollingMetrics(
         MarketSentimentSnapshot marketSnapshot,
         bool breadthSucceeded,
         bool limitUpSucceeded,
@@ -397,6 +422,63 @@ public sealed class SectorRotationIngestionService : ISectorRotationIngestionSer
         // are best-effort — their fallback defaults (0) are acceptable for snapshot persistence.
         return breadthTotal > 0
             && marketSnapshot.TotalTurnover > 0;
+    }
+
+    private static List<string> BuildDegradedFlags(
+        IReadOnlyDictionary<string, FetchResult<IReadOnlyList<EastmoneySectorBoardRow>>> boardFetchResults,
+        bool breadthSucceeded,
+        bool limitUpSucceeded,
+        bool limitDownSucceeded,
+        bool brokenBoardSucceeded,
+        bool maxStreakSucceeded,
+        decimal totalTurnoverBase)
+    {
+        var degradedFlags = new List<string>();
+
+        if (!breadthSucceeded)
+        {
+            degradedFlags.Add("market_breadth_unavailable");
+        }
+
+        if (totalTurnoverBase <= 0)
+        {
+            degradedFlags.Add("market_turnover_unavailable");
+        }
+
+        if (!limitUpSucceeded)
+        {
+            degradedFlags.Add("limit_up_unavailable");
+        }
+
+        if (!limitDownSucceeded)
+        {
+            degradedFlags.Add("limit_down_unavailable");
+        }
+
+        if (!brokenBoardSucceeded)
+        {
+            degradedFlags.Add("broken_board_unavailable");
+        }
+
+        if (!maxStreakSucceeded)
+        {
+            degradedFlags.Add("max_streak_unavailable");
+        }
+
+        foreach (var boardResult in boardFetchResults)
+        {
+            if (!boardResult.Value.Succeeded || boardResult.Value.Value.Count == 0)
+            {
+                degradedFlags.Add($"sector_rankings_{boardResult.Key}_unavailable");
+            }
+        }
+
+        if (boardFetchResults.Values.All(result => result.Value.Count == 0))
+        {
+            degradedFlags.Add("sector_rankings_unavailable");
+        }
+
+        return degradedFlags;
     }
 
     private sealed record FetchResult<T>(T Value, bool Succeeded);
@@ -504,10 +586,45 @@ public sealed class SectorRotationIngestionService : ISectorRotationIngestionSer
 
         return rows
             .GroupBy(item => item.TradingDate.Date)
-            .Select(group => group.OrderByDescending(item => item.SnapshotTime).First())
+            .Select(group => group
+                .OrderByDescending(GetMarketHistoryIntegrityScore)
+                .ThenByDescending(item => item.SnapshotTime)
+                .First())
             .OrderByDescending(item => item.TradingDate)
             .Take(5)
             .ToList();
+    }
+
+    private static int GetMarketHistoryIntegrityScore(MarketSentimentSnapshot item)
+    {
+        if (string.Equals(item.StageLabelV2, PartialStageLabel, StringComparison.Ordinal))
+        {
+            return 0;
+        }
+
+        var score = 0;
+        var breadthTotal = item.Advancers + item.Decliners + item.FlatCount;
+        if (breadthTotal > 0)
+        {
+            score += 3;
+        }
+
+        if (item.TotalTurnover > 0)
+        {
+            score += 2;
+        }
+
+        if (item.Top3SectorTurnoverShare > 0 || item.Top10SectorTurnoverShare > 0)
+        {
+            score += 2;
+        }
+
+        if (item.LimitUpCount > 0 || item.LimitDownCount > 0 || item.BrokenBoardCount > 0 || item.MaxLimitUpStreak > 0)
+        {
+            score += 1;
+        }
+
+        return score;
     }
 
     private static int ComputeRankChange(IReadOnlyList<SectorRotationSnapshot> rows, int window)

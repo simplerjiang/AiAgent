@@ -14,18 +14,30 @@ public sealed class ResearchSessionService : IResearchSessionService
     private readonly AppDbContext _dbContext;
     private readonly IResearchEventBus _eventBus;
     private readonly IResearchFollowUpRoutingService _followUpRoutingService;
+    private readonly ResearchZombieCleanupService _zombieCleanup;
     private readonly ILogger<ResearchSessionService> _logger;
 
-    public ResearchSessionService(AppDbContext dbContext, IResearchEventBus eventBus, IResearchFollowUpRoutingService followUpRoutingService, ILogger<ResearchSessionService> logger)
+    public ResearchSessionService(
+        AppDbContext dbContext,
+        IResearchEventBus eventBus,
+        IResearchFollowUpRoutingService followUpRoutingService,
+        ResearchZombieCleanupService zombieCleanup,
+        ILogger<ResearchSessionService> logger)
     {
         _dbContext = dbContext;
         _eventBus = eventBus;
         _followUpRoutingService = followUpRoutingService;
+        _zombieCleanup = zombieCleanup;
         _logger = logger;
     }
 
     public async Task<ResearchActiveSessionDto?> GetActiveSessionAsync(string symbol, CancellationToken cancellationToken = default)
     {
+        await _zombieCleanup.CleanupStaleRunningAsync(
+            ResearchZombieCleanupService.QueryStaleThreshold,
+            symbol: symbol,
+            cancellationToken: cancellationToken);
+
         var session = await _dbContext.ResearchSessions
             .AsNoTracking()
             .Where(s => s.Symbol == symbol && s.Status != ResearchSessionStatus.Closed && s.Status != ResearchSessionStatus.Failed)
@@ -49,8 +61,14 @@ public sealed class ResearchSessionService : IResearchSessionService
 
     public async Task<ResearchSessionDetailDto?> GetSessionDetailAsync(long sessionId, CancellationToken cancellationToken = default)
     {
+        await _zombieCleanup.CleanupStaleRunningAsync(
+            ResearchZombieCleanupService.QueryStaleThreshold,
+            sessionId: sessionId,
+            cancellationToken: cancellationToken);
+
         var session = await _dbContext.ResearchSessions
-            .AsNoTracking()
+            .AsNoTrackingWithIdentityResolution()
+            .AsSplitQuery()
             .Include(s => s.Turns).ThenInclude(t => t.StageSnapshots).ThenInclude(ss => ss.RoleStates)
             .Include(s => s.Turns).ThenInclude(t => t.FeedItems)
             .Include(s => s.Reports)
@@ -118,6 +136,11 @@ public sealed class ResearchSessionService : IResearchSessionService
 
     public async Task<IReadOnlyList<ResearchSessionSummaryDto>> ListSessionsAsync(string symbol, int limit = 20, CancellationToken cancellationToken = default)
     {
+        await _zombieCleanup.CleanupStaleRunningAsync(
+            ResearchZombieCleanupService.QueryStaleThreshold,
+            symbol: symbol,
+            cancellationToken: cancellationToken);
+
         return await _dbContext.ResearchSessions
             .AsNoTracking()
             .Where(s => s.Symbol == symbol)
@@ -145,6 +168,11 @@ public sealed class ResearchSessionService : IResearchSessionService
 
     private async Task<ResearchTurnSubmitResponseDto> SubmitTurnCoreAsync(ResearchTurnSubmitRequestDto request, CancellationToken cancellationToken)
     {
+        await _zombieCleanup.CleanupStaleRunningAsync(
+            ResearchZombieCleanupService.QueryStaleThreshold,
+            symbol: request.Symbol,
+            cancellationToken: cancellationToken);
+
         var mode = ParseContinuationMode(request.ContinuationMode);
         ResearchSession session;
         ResearchFollowUpRoutingDecision? routingDecision = null;

@@ -15,24 +15,146 @@ const activeStatement = ref('income')
 const collecting = ref(false)
 const collectResult = ref(null)
 const collectError = ref('')
+let fetchRequestId = 0
 
-async function fetchData() {
-  if (!symbolRef.value || !props.active) return
-  loading.value = true
+function getCollectField(result, camelKey, pascalKey) {
+  return result?.[camelKey] ?? result?.[pascalKey]
+}
+
+function toCollectBoolean(value) {
+  if (typeof value === 'boolean') return value
+  if (typeof value === 'string') return value.toLowerCase() === 'true'
+  if (typeof value === 'number') return value !== 0
+  return false
+}
+
+function toCollectNumber(value) {
+  const num = Number(value)
+  return Number.isFinite(num) ? num : 0
+}
+
+function normalizeCollectResult(result) {
+  if (!result || typeof result !== 'object') {
+    return {
+      success: false,
+      channel: '',
+      reportCount: 0,
+      durationMs: 0,
+      isDegraded: false,
+      degradeReason: '',
+      errorMessage: ''
+    }
+  }
+
+  return {
+    success: toCollectBoolean(getCollectField(result, 'success', 'Success')),
+    channel: String(getCollectField(result, 'channel', 'Channel') ?? ''),
+    reportCount: toCollectNumber(getCollectField(result, 'reportCount', 'ReportCount')),
+    durationMs: toCollectNumber(getCollectField(result, 'durationMs', 'DurationMs')),
+    isDegraded: toCollectBoolean(getCollectField(result, 'isDegraded', 'IsDegraded')),
+    degradeReason: String(getCollectField(result, 'degradeReason', 'DegradeReason') ?? ''),
+    errorMessage: String(getCollectField(result, 'errorMessage', 'ErrorMessage') ?? '')
+  }
+}
+
+const localizedCollectMessages = [
+  {
+    pattern: /all channels \(api \+ pdf\) failed or returned empty data/i,
+    text: '所有采集渠道都未返回有效财务数据，请稍后重试或更换股票。'
+  },
+  {
+    pattern: /all channels exhausted/i,
+    text: '采集渠道未返回有效数据，请稍后重试。'
+  },
+  {
+    pattern: /(?:financial )?worker (?:is )?unavailable|worker unavailable|service unavailable|collector unavailable/i,
+    text: '财务采集服务暂不可用，请稍后重试。'
+  },
+  {
+    pattern: /emweb\s*\+\s*datacenter empty data/i,
+    text: '常用采集渠道未返回有效财务数据，请稍后重试。'
+  },
+  {
+    pattern: /(?:emweb|datacenter|api|pdf) empty data/i,
+    text: '采集渠道未返回有效数据。'
+  }
+]
+
+function localizeCollectMessage(message) {
+  const text = String(message ?? '').trim()
+  if (!text) return ''
+  const matched = localizedCollectMessages.find(item => item.pattern.test(text))
+  return matched?.text || text
+}
+
+function getCollectMessage(result) {
+  return localizeCollectMessage(result.errorMessage || result.degradeReason || '采集未成功')
+}
+
+function hasRenderableMetricValue(value) {
+  if (value == null) return false
+  if (typeof value === 'number') return Number.isFinite(value)
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    return trimmed !== '' && trimmed !== '-' && trimmed !== '--'
+  }
+  return true
+}
+
+function findLatestRenderableEntry(series) {
+  if (!Array.isArray(series)) return null
+  return series.find(item => hasRenderableMetricValue(item?.value)) || null
+}
+
+function uniqueStrings(values) {
+  return Array.from(new Set(values.map(value => String(value ?? '').trim()).filter(Boolean)))
+}
+
+async function fetchData(options = {}) {
+  const { preserveCollectState = false } = options
+  const symbol = symbolRef.value?.trim() || ''
+  const requestId = ++fetchRequestId
+
   error.value = ''
-  collectError.value = ''
-  collectResult.value = null
+  if (!preserveCollectState) {
+    collectError.value = ''
+    collectResult.value = null
+  }
+  trend.value = null
+  summary.value = null
+
+  if (!symbol || !props.active) {
+    loading.value = false
+    return
+  }
+
+  loading.value = true
   try {
     const [trendRes, summaryRes] = await Promise.all([
-      fetch(`/api/stocks/financial/trend/${symbolRef.value}`),
-      fetch(`/api/stocks/financial/summary/${symbolRef.value}`)
+      fetch(`/api/stocks/financial/trend/${symbol}`),
+      fetch(`/api/stocks/financial/summary/${symbol}`)
     ])
-    if (trendRes.ok) trend.value = await trendRes.json()
-    if (summaryRes.ok) summary.value = await summaryRes.json()
+
+    const [trendData, summaryData] = await Promise.all([
+      trendRes.ok ? trendRes.json() : Promise.resolve(null),
+      summaryRes.ok ? summaryRes.json() : Promise.resolve(null)
+    ])
+
+    if (requestId !== fetchRequestId || symbol !== (symbolRef.value?.trim() || '') || !props.active) {
+      return
+    }
+
+    trend.value = trendData
+    summary.value = summaryData
   } catch (e) {
+    if (requestId !== fetchRequestId) {
+      return
+    }
     error.value = '加载失败: ' + e.message
   } finally {
-    loading.value = false
+    if (requestId === fetchRequestId) {
+      loading.value = false
+    }
   }
 }
 
@@ -45,23 +167,33 @@ async function collectData() {
     const resp = await fetch(`/api/stocks/financial/collect/${encodeURIComponent(symbolRef.value)}`, { method: 'POST' })
     if (!resp.ok) {
       const body = await resp.json().catch(() => null)
-      throw new Error(body?.error || `采集失败 (${resp.status})`)
+      throw new Error(body?.errorMessage || body?.ErrorMessage || body?.error || `采集失败 (${resp.status})`)
     }
-    const result = await resp.json()
-    collectResult.value = result
-    if (result.Success) {
-      await fetchData()
+    const result = await resp.json().catch(() => null)
+    const normalizedResult = normalizeCollectResult(result)
+    collectResult.value = normalizedResult
+    if (normalizedResult.success) {
+      await fetchData({ preserveCollectState: true })
     } else {
-      collectError.value = result.ErrorMessage || '采集未成功'
+      collectError.value = getCollectMessage(normalizedResult)
     }
   } catch (e) {
-    collectError.value = e.message || '采集请求异常'
+    collectError.value = localizeCollectMessage(e.message || '采集请求异常')
   } finally {
     collecting.value = false
   }
 }
 
 watch([symbolRef, () => props.active], () => { fetchData() }, { immediate: true })
+
+const hasTrendMetricData = computed(() => {
+  if (!trend.value) return false
+  return [trend.value.revenue, trend.value.netProfit, trend.value.totalAssets]
+    .some(series => Array.isArray(series) && series.some(item => hasRenderableMetricValue(item?.value)))
+})
+
+const hasDividendData = computed(() => Array.isArray(trend.value?.recentDividends) && trend.value.recentDividends.length > 0)
+const hasSummaryPeriods = computed(() => Array.isArray(summary.value?.periods) && summary.value.periods.length > 0)
 
 const statementTypes = [
   { key: 'income', label: '利润表' },
@@ -72,35 +204,32 @@ const statementTypes = [
 const topMetrics = computed(() => {
   if (!trend.value) return []
   const metrics = []
-  const rev = trend.value.revenue
-  const np = trend.value.netProfit
-  const ta = trend.value.totalAssets
+  const rev = findLatestRenderableEntry(trend.value.revenue)
+  const np = findLatestRenderableEntry(trend.value.netProfit)
+  const ta = findLatestRenderableEntry(trend.value.totalAssets)
 
-  if (rev?.length > 0) {
-    const latest = rev[0]
+  if (rev) {
     metrics.push({
       label: '营业收入',
-      value: formatLargeNumber(latest.value),
-      yoyText: formatYoY(latest.yoY),
-      yoyClass: getYoYClass(latest.yoY)
+      value: formatLargeNumber(rev.value),
+      yoyText: formatYoY(rev.yoY),
+      yoyClass: getYoYClass(rev.yoY)
     })
   }
-  if (np?.length > 0) {
-    const latest = np[0]
+  if (np) {
     metrics.push({
       label: '净利润',
-      value: formatLargeNumber(latest.value),
-      yoyText: formatYoY(latest.yoY),
-      yoyClass: getYoYClass(latest.yoY)
+      value: formatLargeNumber(np.value),
+      yoyText: formatYoY(np.yoY),
+      yoyClass: getYoYClass(np.yoY)
     })
   }
-  if (ta?.length > 0) {
-    const latest = ta[0]
+  if (ta) {
     metrics.push({
       label: '总资产',
-      value: formatLargeNumber(latest.value),
-      yoyText: formatYoY(latest.yoY),
-      yoyClass: getYoYClass(latest.yoY)
+      value: formatLargeNumber(ta.value),
+      yoyText: formatYoY(ta.yoY),
+      yoyClass: getYoYClass(ta.yoY)
     })
   }
   return metrics
@@ -114,18 +243,26 @@ const trendRows = computed(() => {
   const maxLen = Math.max(rev.length, np.length, ta.length)
   const rows = []
   for (let i = 0; i < Math.min(maxLen, 8); i++) {
+    const revenueItem = rev[i]
+    const netProfitItem = np[i]
+    const totalAssetsItem = ta[i]
+    const hasAnyValue = [revenueItem, netProfitItem, totalAssetsItem]
+      .some(item => hasRenderableMetricValue(item?.value))
+
+    if (!hasAnyValue) continue
+
     rows.push({
-      period: rev[i]?.period || np[i]?.period || ta[i]?.period || '-',
-      revenue: formatCellValue(rev[i]?.value, rev[i]?.yoY),
-      netProfit: formatCellValue(np[i]?.value, np[i]?.yoY),
-      totalAssets: formatCellValue(ta[i]?.value, ta[i]?.yoY)
+      period: revenueItem?.period || netProfitItem?.period || totalAssetsItem?.period || '-',
+      revenue: formatCellValue(revenueItem?.value, revenueItem?.yoY),
+      netProfit: formatCellValue(netProfitItem?.value, netProfitItem?.yoY),
+      totalAssets: formatCellValue(totalAssetsItem?.value, totalAssetsItem?.yoY)
     })
   }
   return rows
 })
 
 const summaryPeriods = computed(() => {
-  if (!summary.value?.periods) return []
+  if (!hasSummaryPeriods.value) return []
   return summary.value.periods.map(p => p.reportDate).slice(0, 6)
 })
 
@@ -154,17 +291,68 @@ const statementFieldMap = {
   ]
 }
 
+const summaryMetricDefinitions = Object.values(statementFieldMap).flat()
+
+const hasStructuredSummaryData = computed(() => {
+  if (!hasSummaryPeriods.value) return false
+  return summary.value.periods.some(period => {
+    const keyMetrics = period?.keyMetrics
+    if (!keyMetrics || typeof keyMetrics !== 'object') return false
+    return summaryMetricDefinitions.some(field => hasRenderableMetricValue(keyMetrics[field.key] ?? keyMetrics[field.label]))
+  })
+})
+
+const hasRenderableFinancialData = computed(() => hasTrendMetricData.value || hasStructuredSummaryData.value)
+
+const showPartialDataState = computed(() => {
+  if (hasRenderableFinancialData.value) return false
+  return hasSummaryPeriods.value || (collectResult.value?.success && collectResult.value.reportCount > 0)
+})
+
+const partialDataTitle = computed(() => {
+  if (!showPartialDataState.value) return ''
+  const count = hasSummaryPeriods.value ? summary.value.periods.length : collectResult.value?.reportCount || 0
+  const countText = count > 0 ? `${count} 期报表` : '报表数据'
+
+  if (collectResult.value?.success && collectResult.value.channel) {
+    return `已通过 ${collectResult.value.channel} 获取 ${countText}，但当前暂无可展示的结构化财务指标。`
+  }
+
+  return `已获取 ${countText}，但当前暂无可展示的结构化财务指标。`
+})
+
+const partialDataMeta = computed(() => {
+  if (!showPartialDataState.value || !hasSummaryPeriods.value) return ''
+
+  const periods = summary.value.periods
+    .map(period => period?.reportDate)
+    .filter(Boolean)
+    .slice(0, 6)
+  const sources = uniqueStrings(summary.value.periods.map(period => period?.sourceChannel)).slice(0, 3)
+  const parts = []
+
+  if (periods.length > 0) parts.push(`期次：${periods.join('、')}`)
+  if (sources.length > 0) parts.push(`来源：${sources.join(' / ')}`)
+
+  return parts.join('；')
+})
+
 const summaryRows = computed(() => {
   if (!summary.value?.periods?.length) return []
   const fields = statementFieldMap[activeStatement.value] || []
   return fields.map(f => {
     const values = {}
+    let hasValue = false
     for (const p of summary.value.periods) {
       const km = p.keyMetrics || {}
-      values[p.reportDate] = formatMetricValue(km[f.key] ?? km[f.label], f.isRatio)
+      const rawValue = km[f.key] ?? km[f.label]
+      if (hasRenderableMetricValue(rawValue)) {
+        hasValue = true
+      }
+      values[p.reportDate] = formatMetricValue(rawValue, f.isRatio)
     }
-    return { key: f.key, label: f.label, values }
-  })
+    return { key: f.key, label: f.label, values, hasValue }
+  }).filter(row => row.hasValue)
 })
 
 const dividendRows = computed(() => {
@@ -196,6 +384,7 @@ function getYoYClass(yoy) {
 
 function formatCellValue(val, yoy) {
   const numStr = formatLargeNumber(val)
+  if (numStr === '-') return '-'
   const yoyStr = yoy != null ? ` (${formatYoY(yoy)})` : ''
   return numStr + yoyStr
 }
@@ -218,12 +407,12 @@ function formatMetricValue(val, isRatio = false) {
     <div v-else-if="!symbolRef" class="empty-state">
       <p>请先选择一只股票</p>
     </div>
-    <div v-else-if="!trend && !summary" class="empty-state">
+    <div v-else-if="!hasRenderableFinancialData && !hasDividendData && !showPartialDataState" class="empty-state">
       <p>暂无财务数据</p>
       <button class="collect-btn" @click="collectData" :disabled="collecting">
         {{ collecting ? '获取中...' : '获取财务数据' }}
       </button>
-      <p v-if="collectError" class="error-msg">{{ collectError }}</p>
+      <p v-if="collectError" class="error-msg error-msg-prominent">{{ collectError }}</p>
     </div>
     <template v-else>
 
@@ -233,73 +422,83 @@ function formatMetricValue(val, isRatio = false) {
           {{ collecting ? '刷新中...' : '🔄 刷新数据' }}
         </button>
       </div>
-      <p v-if="collectResult && collectResult.Success" class="collect-info">
-        ✅ 已通过 {{ collectResult.Channel }} 获取 {{ collectResult.ReportCount }} 期报表，耗时 {{ (collectResult.DurationMs / 1000).toFixed(1) }}s
-        <span v-if="collectResult.IsDegraded">（降级：{{ collectResult.DegradeReason }}）</span>
+      <p v-if="collectResult && collectResult.success && hasRenderableFinancialData" class="collect-info">
+        ✅ 已通过 {{ collectResult.channel }} 获取 {{ collectResult.reportCount }} 期报表，耗时 {{ (collectResult.durationMs / 1000).toFixed(1) }}s
+        <span v-if="collectResult.isDegraded && collectResult.degradeReason">（提示：{{ localizeCollectMessage(collectResult.degradeReason) }}）</span>
       </p>
+      <div v-else-if="showPartialDataState" class="partial-data-message">
+        <p class="partial-data-title">{{ partialDataTitle }}</p>
+        <p v-if="partialDataMeta" class="partial-data-meta">{{ partialDataMeta }}</p>
+        <p v-if="collectResult && collectResult.isDegraded && collectResult.degradeReason" class="partial-data-meta">
+          提示：{{ localizeCollectMessage(collectResult.degradeReason) }}
+        </p>
+      </div>
       <p v-if="collectError" class="error-msg">{{ collectError }}</p>
 
-      <!-- 区域 1: 核心指标卡片 -->
-      <div class="metric-cards">
-        <div class="metric-card" v-for="metric in topMetrics" :key="metric.label">
-          <div class="metric-label">{{ metric.label }}</div>
-          <div class="metric-value">{{ metric.value }}</div>
-          <div class="metric-yoy" :class="metric.yoyClass">{{ metric.yoyText }}</div>
+      <template v-if="!showPartialDataState">
+        <!-- 区域 1: 核心指标卡片 -->
+        <div v-if="topMetrics.length > 0" class="metric-cards">
+          <div class="metric-card" v-for="metric in topMetrics" :key="metric.label">
+            <div class="metric-label">{{ metric.label }}</div>
+            <div class="metric-value">{{ metric.value }}</div>
+            <div class="metric-yoy" :class="metric.yoyClass">{{ metric.yoyText }}</div>
+          </div>
         </div>
-      </div>
 
-      <!-- 区域 2: 财务趋势表格 -->
-      <div class="section-title">📈 财务趋势</div>
-      <div class="trend-table-container">
-        <table class="trend-table">
-          <thead>
-            <tr>
-              <th>期间</th>
-              <th>营业收入</th>
-              <th>净利润</th>
-              <th>总资产</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="(item, idx) in trendRows" :key="idx">
-              <td>{{ item.period }}</td>
-              <td>{{ item.revenue }}</td>
-              <td>{{ item.netProfit }}</td>
-              <td>{{ item.totalAssets }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+        <!-- 区域 2: 财务趋势表格 -->
+        <div class="section-title">📈 财务趋势</div>
+        <div v-if="trendRows.length > 0" class="trend-table-container">
+          <table class="trend-table">
+            <thead>
+              <tr>
+                <th>期间</th>
+                <th>营业收入</th>
+                <th>净利润</th>
+                <th>总资产</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(item, idx) in trendRows" :key="idx">
+                <td>{{ item.period }}</td>
+                <td>{{ item.revenue }}</td>
+                <td>{{ item.netProfit }}</td>
+                <td>{{ item.totalAssets }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div v-else class="empty-section">暂无趋势数据</div>
 
-      <!-- 区域 3: 报表摘要 -->
-      <div class="section-title">📋 报表摘要</div>
-      <div class="statement-tabs">
-        <button v-for="st in statementTypes" :key="st.key"
-                :class="{ active: activeStatement === st.key }"
-                @click="activeStatement = st.key">
-          {{ st.label }}
-        </button>
-      </div>
-      <div class="summary-table-container" v-if="summaryRows.length > 0">
-        <table class="summary-table">
-          <thead>
-            <tr>
-              <th>指标</th>
-              <th v-for="period in summaryPeriods" :key="period">{{ period }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="row in summaryRows" :key="row.key">
-              <td class="metric-name">{{ row.label }}</td>
-              <td v-for="period in summaryPeriods" :key="period">{{ row.values[period] ?? '-' }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <div v-else class="empty-section">暂无报表数据</div>
+        <!-- 区域 3: 报表摘要 -->
+        <div class="section-title">📋 报表摘要</div>
+        <div class="statement-tabs">
+          <button v-for="st in statementTypes" :key="st.key"
+                  :class="{ active: activeStatement === st.key }"
+                  @click="activeStatement = st.key">
+            {{ st.label }}
+          </button>
+        </div>
+        <div class="summary-table-container" v-if="summaryRows.length > 0">
+          <table class="summary-table">
+            <thead>
+              <tr>
+                <th>指标</th>
+                <th v-for="period in summaryPeriods" :key="period">{{ period }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="row in summaryRows" :key="row.key">
+                <td class="metric-name">{{ row.label }}</td>
+                <td v-for="period in summaryPeriods" :key="period">{{ row.values[period] ?? '-' }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div v-else class="empty-section">暂无报表数据</div>
+      </template>
 
       <!-- 区域 4: 分红记录 -->
-      <div class="section-title">💰 近期分红</div>
+      <div v-if="hasDividendData || !showPartialDataState" class="section-title">💰 近期分红</div>
       <div v-if="dividendRows.length > 0">
         <table class="dividend-table">
           <thead>
@@ -313,7 +512,7 @@ function formatMetricValue(val, isRatio = false) {
           </tbody>
         </table>
       </div>
-      <div v-else class="empty-section">暂无分红数据</div>
+      <div v-else-if="!showPartialDataState" class="empty-section">暂无分红数据</div>
 
     </template>
   </div>
@@ -443,9 +642,47 @@ td:first-child, th:first-child { text-align: left; }
   color: var(--text-secondary, #aaa);
   margin-top: 6px;
 }
+
+.partial-data-message {
+  margin-top: 6px;
+  padding: 10px 12px;
+  border: 1px solid rgba(238, 191, 64, 0.28);
+  border-left: 3px solid #eebf40;
+  border-radius: 8px;
+  background: rgba(238, 191, 64, 0.1);
+}
+
+.partial-data-title {
+  margin: 0;
+  color: #f0ddb0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.partial-data-meta {
+  margin: 6px 0 0;
+  color: #cbb781;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .error-msg {
   color: #e74c3c;
   font-size: 12px;
   margin-top: 6px;
+}
+
+.error-msg-prominent {
+  display: inline-block;
+  max-width: 420px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(231, 76, 60, 0.35);
+  border-left: 3px solid #e74c3c;
+  border-radius: 8px;
+  background: rgba(231, 76, 60, 0.12);
+  color: #ffb3ab;
+  font-size: 13px;
+  line-height: 1.5;
 }
 </style>

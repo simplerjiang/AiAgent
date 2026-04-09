@@ -422,6 +422,14 @@ public sealed class AppDbContext : DbContext
             .HasIndex(x => new { x.Symbol, x.UpdatedAt });
         modelBuilder.Entity<ResearchSession>()
             .Property(x => x.Status).HasConversion<string>().HasMaxLength(32);
+        modelBuilder.Entity<ResearchSession>()
+            .Property(x => x.Name).IsUnicode();
+        modelBuilder.Entity<ResearchSession>()
+            .Property(x => x.LastUserIntent).IsUnicode();
+        modelBuilder.Entity<ResearchSession>()
+            .Property(x => x.LatestDecisionHeadline).IsUnicode();
+        modelBuilder.Entity<ResearchSession>()
+            .Property(x => x.ActiveStage).IsUnicode();
 
         modelBuilder.Entity<ResearchTurn>()
             .HasIndex(x => new { x.SessionId, x.TurnIndex }).IsUnique();
@@ -431,6 +439,8 @@ public sealed class AppDbContext : DbContext
             .Property(x => x.ContinuationMode).HasConversion<string>().HasMaxLength(32);
         modelBuilder.Entity<ResearchTurn>()
             .Property(x => x.RoutingDecision).HasMaxLength(32);
+        modelBuilder.Entity<ResearchTurn>()
+            .Property(x => x.UserPrompt).IsUnicode();
         modelBuilder.Entity<ResearchTurn>()
             .HasOne(x => x.Session).WithMany(x => x.Turns)
             .HasForeignKey(x => x.SessionId).OnDelete(DeleteBehavior.Cascade);

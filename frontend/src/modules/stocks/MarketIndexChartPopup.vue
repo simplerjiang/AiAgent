@@ -21,6 +21,8 @@ let minuteChart = null
 let klineChart = null
 let abortController = null
 
+const DEFAULT_DAY_KLINE_COUNT = 240
+
 const GLOBAL_INDEX_FALLBACK_NAMES = {
   hsi: '恒生指数', hstech: '恒生科技', n225: '日经225',
   ndx: '纳斯达克', spx: '标普500', ftse: '富时100', ks11: '韩国KOSPI'
@@ -230,7 +232,7 @@ const fetchAndRender = async () => {
     const klineParams = new URLSearchParams({
       symbol: props.indexItem.symbol,
       interval: 'day',
-      count: '30',
+      count: String(DEFAULT_DAY_KLINE_COUNT),
       includeQuote: 'false',
       includeMinute: 'false'
     })

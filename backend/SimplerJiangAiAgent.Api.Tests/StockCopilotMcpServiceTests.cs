@@ -656,6 +656,34 @@ public sealed class StockCopilotMcpServiceTests
     }
 
     [Fact]
+    public async Task GetSocialSentimentAsync_ShouldRefreshMarketFactsExplicitly()
+    {
+        var ingestionService = new CountingLocalFactIngestionService();
+        var service = CreateService(
+            queryTool: new FakeQueryLocalFactDatabaseTool(
+                marketReports: new[]
+                {
+                    CreateLocalNewsItem(
+                        901,
+                        "market",
+                        DateTime.UtcNow.AddHours(-1),
+                        DateTime.UtcNow.AddMinutes(-15),
+                        "大盘情绪回暖",
+                        "大盘情绪回暖",
+                        title: "大盘情绪回暖",
+                        aiTarget: "大盘")
+                }),
+            sectorRotationQueryService: new NullSectorRotationQueryService(),
+            localFactIngestionService: ingestionService);
+
+        var result = await service.GetSocialSentimentAsync("sh601998", "research:1:20:sh601998::SocialSentimentMcp");
+
+        Assert.Equal(1, ingestionService.EnsureMarketFreshCallCount);
+        Assert.Equal(1, ingestionService.EnsureFreshCallCount);
+        Assert.Equal(1, result.Data.MarketReports.TotalCount);
+    }
+
+    [Fact]
     public async Task GetSocialSentimentAsync_WhenOnlyMarketProxyAvailable_ShouldReturnDegradedContract()
     {
         var service = CreateService(
@@ -721,6 +749,19 @@ public sealed class StockCopilotMcpServiceTests
     }
 
     [Fact]
+    public async Task GetKlineAsync_ShouldNotRefreshMarketFactsExplicitly()
+    {
+        var ingestionService = new CountingLocalFactIngestionService();
+        var service = CreateService(localFactIngestionService: ingestionService);
+
+        var result = await service.GetKlineAsync("sh601999", "day", 60, null, "research:1:22:sh601999::StockKlineMcp");
+
+        Assert.Equal(1, ingestionService.EnsureFreshCallCount);
+        Assert.Equal(0, ingestionService.EnsureMarketFreshCallCount);
+        Assert.Equal("sh601999", result.Data.Symbol);
+    }
+
+    [Fact]
     public async Task GetNewsAsync_ShouldExposeLocalEvidenceObjects()
     {
         var service = CreateService();
@@ -732,6 +773,34 @@ public sealed class StockCopilotMcpServiceTests
         Assert.Equal("上交所公告", result.Evidence[0].Source);
         Assert.Equal("local_required", result.Meta.PolicyClass);
         Assert.Equal("fresh", result.FreshnessTag);
+    }
+
+    [Fact]
+    public async Task GetNewsAsync_WhenLevelMarket_ShouldRefreshMarketFactsExplicitly()
+    {
+        var ingestionService = new CountingLocalFactIngestionService();
+        var service = CreateService(
+            queryTool: new FakeQueryLocalFactDatabaseTool(
+                marketReports: new[]
+                {
+                    CreateLocalNewsItem(
+                        902,
+                        "market",
+                        DateTime.UtcNow.AddHours(-2),
+                        DateTime.UtcNow.AddMinutes(-20),
+                        "市场快报",
+                        "市场快报",
+                        title: "市场快报",
+                        aiTarget: "大盘")
+                }),
+            localFactIngestionService: ingestionService);
+
+        var result = await service.GetNewsAsync("sh600000", "market", "research:1:21:sh600000::StockNewsMcp");
+
+        Assert.Equal(1, ingestionService.EnsureMarketFreshCallCount);
+        Assert.Equal(0, ingestionService.EnsureFreshCallCount);
+        Assert.Equal("market", result.Data.Level);
+        Assert.Single(result.Evidence);
     }
 
     [Fact]
@@ -1009,6 +1078,80 @@ public sealed class StockCopilotMcpServiceTests
         Assert.Equal(9m, tdSignal.NumericValue);
     }
 
+    [Fact]
+    public async Task SharedResearchTaskScope_ShouldDeduplicateSymbolRefreshAcrossTools()
+    {
+        const string symbol = "sh600111";
+        const string taskScope = "research:1:10:sh600111";
+        var ingestionService = new CountingLocalFactIngestionService(TimeSpan.FromMilliseconds(50));
+        var service = CreateService(localFactIngestionService: ingestionService);
+
+        var companyTask = service.GetCompanyOverviewAsync(symbol, $"{taskScope}::{StockMcpToolNames.CompanyOverview}");
+        var fundamentalsTask = service.GetFundamentalsAsync(symbol, $"{taskScope}::{StockMcpToolNames.Fundamentals}");
+        var newsTask = service.GetNewsAsync(symbol, "stock", $"{taskScope}::{StockMcpToolNames.News}");
+
+        await Task.WhenAll(companyTask, fundamentalsTask, newsTask);
+        var companyResult = await companyTask;
+        var fundamentalsResult = await fundamentalsTask;
+        var newsResult = await newsTask;
+
+        Assert.Equal(1, ingestionService.EnsureFreshCallCount);
+        Assert.Equal(symbol, companyResult.Data.Symbol);
+        Assert.Equal(symbol, fundamentalsResult.Data.Symbol);
+        Assert.Equal(symbol, newsResult.Data.Symbol);
+    }
+
+    [Fact]
+    public async Task SharedResearchTaskScope_ShouldDeduplicateBundleAcrossKlineMinuteStrategy()
+    {
+        const string symbol = "sh600112";
+        const string taskScope = "research:1:11:sh600112";
+        var ingestionService = new CountingLocalFactIngestionService(TimeSpan.FromMilliseconds(50));
+        var dataService = new CountingStockDataService(TimeSpan.FromMilliseconds(50));
+        var queryTool = new CountingQueryLocalFactDatabaseTool();
+        var service = CreateService(
+            dataService: dataService,
+            queryTool: queryTool,
+            localFactIngestionService: ingestionService);
+
+        var klineTask = service.GetKlineAsync(symbol, "day", 60, null, $"{taskScope}::{StockMcpToolNames.Kline}");
+        var minuteTask = service.GetMinuteAsync(symbol, null, $"{taskScope}::{StockMcpToolNames.Minute}");
+        var strategyTask = service.GetStrategyAsync(symbol, "day", 60, null, new[] { "ma" }, $"{taskScope}::{StockMcpToolNames.Strategy}");
+
+        await Task.WhenAll(klineTask, minuteTask, strategyTask);
+        var klineResult = await klineTask;
+        var minuteResult = await minuteTask;
+        var strategyResult = await strategyTask;
+
+        Assert.Equal(1, ingestionService.EnsureFreshCallCount);
+        Assert.Equal(1, dataService.GetQuoteCallCount);
+        Assert.Equal(1, dataService.GetKLineCallCount);
+        Assert.Equal(1, dataService.GetMinuteLineCallCount);
+        Assert.Equal(1, dataService.GetIntradayMessagesCallCount);
+        Assert.Equal(1, queryTool.QueryCallCount);
+        Assert.NotEmpty(klineResult.Data.Bars);
+        Assert.NotEmpty(minuteResult.Data.Points);
+        Assert.NotEmpty(strategyResult.Data.Signals);
+    }
+
+    [Fact]
+    public async Task DifferentResearchTaskScopes_ShouldNotReuseBundleAcrossTurns()
+    {
+        const string symbol = "sh600113";
+        var dataService = new CountingStockDataService();
+        var queryTool = new CountingQueryLocalFactDatabaseTool();
+        var service = CreateService(dataService: dataService, queryTool: queryTool);
+
+        await service.GetKlineAsync(symbol, "day", 60, null, "research:1:12:sh600113::StockKlineMcp");
+        await service.GetKlineAsync(symbol, "day", 60, null, "research:1:13:sh600113::StockKlineMcp");
+
+        Assert.Equal(2, dataService.GetQuoteCallCount);
+        Assert.Equal(2, dataService.GetKLineCallCount);
+        Assert.Equal(2, dataService.GetMinuteLineCallCount);
+        Assert.Equal(2, dataService.GetIntradayMessagesCallCount);
+        Assert.Equal(2, queryTool.QueryCallCount);
+    }
+
     private static StockCopilotMcpService CreateService(
         StockCopilotSearchOptions? options = null,
         IStockDataService? dataService = null,
@@ -1019,7 +1162,8 @@ public sealed class StockCopilotMcpServiceTests
         IStockMarketContextService? marketContextService = null,
         ILlmService? llmService = null,
         StockSyncOptions? syncOptions = null,
-        IRealtimeMarketOverviewService? overviewService = null)
+        IRealtimeMarketOverviewService? overviewService = null,
+        ILocalFactIngestionService? localFactIngestionService = null)
     {
         return new StockCopilotMcpService(
             dataService ?? new FakeStockDataService(),
@@ -1039,7 +1183,8 @@ public sealed class StockCopilotMcpServiceTests
             Options.Create(options ?? new StockCopilotSearchOptions { Enabled = false, Provider = "tavily" }),
             llmService,
             Options.Create(syncOptions ?? new StockSyncOptions()),
-            overviewService);
+                overviewService,
+                localFactIngestionService);
     }
 
     private static JsonSerializerOptions CreateWebJsonOptions()
@@ -1169,7 +1314,7 @@ public sealed class StockCopilotMcpServiceTests
 
         public Task<LocalNewsBucketDto> QueryMarketAsync(CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(new LocalNewsBucketDto("market", "market", null, Array.Empty<LocalNewsItemDto>()));
+            return Task.FromResult(new LocalNewsBucketDto("market", "market", null, _marketReports));
         }
 
         public Task<LocalNewsArchivePageDto> QueryArchiveAsync(string? keyword, string? level, string? sentiment, int page, int pageSize, CancellationToken cancellationToken = default)
@@ -1249,6 +1394,168 @@ public sealed class StockCopilotMcpServiceTests
         public Task<IReadOnlyList<IntradayMessageDto>> GetIntradayMessagesAsync(string symbol, string? source = null, CancellationToken cancellationToken = default)
         {
             throw new NotSupportedException();
+        }
+    }
+
+    private sealed class CountingStockDataService : IStockDataService
+    {
+        private readonly TimeSpan _delay;
+        private readonly StockQuoteDto _quote = new("sh600000", "浦发银行", 10.5m, 0.2m, 1.9m, 13m, 8m, 10.7m, 10.1m, 0.1m, new DateTime(2026, 3, 21, 10, 0, 0), Array.Empty<StockNewsDto>(), Array.Empty<StockIndicatorDto>(), 320_000_000_000m, 2.8m, 100000, "银行");
+        private readonly IReadOnlyList<KLinePointDto> _kLines = Enumerable.Range(0, 30)
+            .Select(index => new KLinePointDto(new DateTime(2026, 2, 1).AddDays(index), 9.8m + index * 0.02m, 9.9m + index * 0.02m, 10m + index * 0.02m, 9.7m + index * 0.02m, 1000 + index * 20))
+            .ToArray();
+        private readonly IReadOnlyList<MinuteLinePointDto> _minuteLines = new[]
+        {
+            new MinuteLinePointDto(new DateOnly(2026, 3, 21), new TimeSpan(9, 30, 0), 10.2m, 10.2m, 100),
+            new MinuteLinePointDto(new DateOnly(2026, 3, 21), new TimeSpan(10, 0, 0), 10.3m, 10.25m, 180),
+            new MinuteLinePointDto(new DateOnly(2026, 3, 21), new TimeSpan(14, 50, 0), 10.45m, 10.32m, 220)
+        };
+
+        private int _getQuoteCallCount;
+        private int _getKLineCallCount;
+        private int _getMinuteLineCallCount;
+        private int _getIntradayMessagesCallCount;
+
+        public CountingStockDataService(TimeSpan? delay = null)
+        {
+            _delay = delay ?? TimeSpan.Zero;
+        }
+
+        public int GetQuoteCallCount => _getQuoteCallCount;
+
+        public int GetKLineCallCount => _getKLineCallCount;
+
+        public int GetMinuteLineCallCount => _getMinuteLineCallCount;
+
+        public int GetIntradayMessagesCallCount => _getIntradayMessagesCallCount;
+
+        public async Task<StockQuoteDto> GetQuoteAsync(string symbol, string? source = null, CancellationToken cancellationToken = default)
+        {
+            Interlocked.Increment(ref _getQuoteCallCount);
+            await MaybeDelayAsync(cancellationToken);
+            return _quote with { Symbol = symbol };
+        }
+
+        public Task<MarketIndexDto> GetMarketIndexAsync(string symbol, string? source = null, CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
+
+        public async Task<IReadOnlyList<KLinePointDto>> GetKLineAsync(string symbol, string interval, int count, string? source = null, CancellationToken cancellationToken = default)
+        {
+            Interlocked.Increment(ref _getKLineCallCount);
+            await MaybeDelayAsync(cancellationToken);
+            return _kLines;
+        }
+
+        public async Task<IReadOnlyList<MinuteLinePointDto>> GetMinuteLineAsync(string symbol, string? source = null, CancellationToken cancellationToken = default)
+        {
+            Interlocked.Increment(ref _getMinuteLineCallCount);
+            await MaybeDelayAsync(cancellationToken);
+            return _minuteLines;
+        }
+
+        public async Task<IReadOnlyList<IntradayMessageDto>> GetIntradayMessagesAsync(string symbol, string? source = null, CancellationToken cancellationToken = default)
+        {
+            Interlocked.Increment(ref _getIntradayMessagesCallCount);
+            await MaybeDelayAsync(cancellationToken);
+            return new[]
+            {
+                new IntradayMessageDto("浦发银行公告", "上交所公告", new DateTime(2026, 3, 21, 8, 30, 0), "https://example.com/a")
+            };
+        }
+
+        private Task MaybeDelayAsync(CancellationToken cancellationToken)
+        {
+            return _delay > TimeSpan.Zero ? Task.Delay(_delay, cancellationToken) : Task.CompletedTask;
+        }
+    }
+
+    private sealed class CountingQueryLocalFactDatabaseTool : IQueryLocalFactDatabaseTool
+    {
+        private int _queryCallCount;
+
+        public int QueryCallCount => _queryCallCount;
+
+        public Task<LocalFactPackageDto> QueryAsync(string symbol, CancellationToken cancellationToken = default)
+        {
+            Interlocked.Increment(ref _queryCallCount);
+            return Task.FromResult(new LocalFactPackageDto(
+                symbol,
+                "浦发银行",
+                "银行",
+                new[]
+                {
+                    CreateLocalNewsItem(1, "stock", DateTime.UtcNow.AddHours(-1), DateTime.UtcNow.AddMinutes(-30), "公告摘要", "公告摘要")
+                },
+                Array.Empty<LocalNewsItemDto>(),
+                Array.Empty<LocalNewsItemDto>(),
+                DateTime.UtcNow.AddHours(-2),
+                new[]
+                {
+                    new LocalFundamentalFactDto("机构目标价", "11.5", "东方财富")
+                }));
+        }
+
+        public Task<LocalNewsBucketDto> QueryLevelAsync(string symbol, string level, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new LocalNewsBucketDto(
+                symbol,
+                level,
+                "银行",
+                new[]
+                {
+                    CreateLocalNewsItem(1, level, DateTime.UtcNow.AddHours(-1), DateTime.UtcNow.AddMinutes(-30), "公告摘要", "公告摘要")
+                }));
+        }
+
+        public Task<LocalNewsBucketDto> QueryMarketAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new LocalNewsBucketDto("market", "market", null, Array.Empty<LocalNewsItemDto>()));
+        }
+
+        public Task<LocalNewsArchivePageDto> QueryArchiveAsync(string? keyword, string? level, string? sentiment, int page, int pageSize, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new LocalNewsArchivePageDto(page, pageSize, 0, keyword, level, sentiment, Array.Empty<LocalNewsArchiveItemDto>()));
+        }
+    }
+
+    private sealed class CountingLocalFactIngestionService : ILocalFactIngestionService
+    {
+        private readonly TimeSpan _delay;
+        private int _ensureFreshCallCount;
+        private int _ensureMarketFreshCallCount;
+
+        public CountingLocalFactIngestionService(TimeSpan? delay = null)
+        {
+            _delay = delay ?? TimeSpan.Zero;
+        }
+
+        public int EnsureFreshCallCount => _ensureFreshCallCount;
+
+        public int EnsureMarketFreshCallCount => _ensureMarketFreshCallCount;
+
+        public Task SyncAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public async Task EnsureMarketFreshAsync(CancellationToken cancellationToken = default)
+        {
+            Interlocked.Increment(ref _ensureMarketFreshCallCount);
+            if (_delay > TimeSpan.Zero)
+            {
+                await Task.Delay(_delay, cancellationToken);
+            }
+        }
+
+        public async Task EnsureFreshAsync(string symbol, CancellationToken cancellationToken = default)
+        {
+            Interlocked.Increment(ref _ensureFreshCallCount);
+            if (_delay > TimeSpan.Zero)
+            {
+                await Task.Delay(_delay, cancellationToken);
+            }
         }
     }
 

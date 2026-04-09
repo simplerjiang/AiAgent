@@ -22,14 +22,14 @@ public sealed class OllamaProvider : ILlmProvider
 
     public async Task<LlmChatResult> ChatAsync(LlmProviderSettings settings, LlmChatRequest request, CancellationToken cancellationToken = default)
     {
-        var baseUrl = string.IsNullOrWhiteSpace(settings.BaseUrl)
-            ? "http://localhost:11434"
-            : settings.BaseUrl.TrimEnd('/');
+        var baseUrl = ResolveBaseUrl(settings.BaseUrl);
 
         var model = string.IsNullOrWhiteSpace(request.Model) ? settings.Model : request.Model;
+        model = model?.Trim() ?? string.Empty;
         if (string.IsNullOrWhiteSpace(model))
         {
-            model = "gemma4:e4b";
+            LogError("error provider=ollama stage=validate reason=missing-model", request.TraceId);
+            throw new InvalidOperationException("Ollama 模型未配置。请在 LLM 设置中选择一个已安装模型后再重试。");
         }
 
         // --- Internet search via Tavily ---
@@ -78,10 +78,10 @@ public sealed class OllamaProvider : ILlmProvider
                 : systemPrompt + "\n\n" + searchContext;
         }
 
-        LogInfo($"request provider=ollama model={model} baseUrl={baseUrl} promptChars={SafeLength(request.Prompt)} systemChars={SafeLength(systemPrompt)}", request.TraceId);
+        LogInfo($"request provider=ollama model={model} baseUrl={baseUrl} promptChars={SafeLength(request.Prompt)} systemChars={SafeLength(systemPrompt)} numCtx={OllamaRuntimeDefaults.ResolveNumCtx(settings.OllamaNumCtx)} keepAlive={OllamaRuntimeDefaults.ResolveKeepAlive(settings.OllamaKeepAlive)} think={OllamaRuntimeDefaults.ResolveThink(settings.OllamaThink)}", request.TraceId);
         LogPrompt("ollama", model, request.Prompt, systemPrompt, request.TraceId);
 
-        var url = $"{baseUrl}/v1/chat/completions";
+        var url = $"{baseUrl}/api/chat";
 
         var messages = new List<object>();
         if (!string.IsNullOrWhiteSpace(systemPrompt))
@@ -90,13 +90,31 @@ public sealed class OllamaProvider : ILlmProvider
         }
         messages.Add(new { role = "user", content = request.Prompt });
 
-        var payload = new
+        var options = BuildRuntimeOptions(settings, request);
+        var payload = new Dictionary<string, object?>
         {
-            model,
-            messages,
-            temperature = request.Temperature ?? 0.3,
-            stream = false
+            ["model"] = model,
+            ["messages"] = messages,
+            ["stream"] = false,
+            ["think"] = OllamaRuntimeDefaults.ResolveThink(settings.OllamaThink)
         };
+
+        if (options.Count > 0)
+        {
+            payload["options"] = options;
+        }
+
+        var keepAlive = ResolveKeepAliveValue(OllamaRuntimeDefaults.ResolveKeepAlive(settings.OllamaKeepAlive));
+        if (keepAlive is not null)
+        {
+            payload["keep_alive"] = keepAlive;
+        }
+
+        var responseFormat = request.ResponseFormat?.Trim();
+        if (!string.IsNullOrWhiteSpace(responseFormat))
+        {
+            payload["format"] = responseFormat;
+        }
 
         using var httpRequest = new HttpRequestMessage(HttpMethod.Post, url);
         httpRequest.Content = JsonContent.Create(payload);
@@ -124,32 +142,101 @@ public sealed class OllamaProvider : ILlmProvider
             if (!response.IsSuccessStatusCode)
             {
                 LogError($"error provider=ollama model={model} status={response.StatusCode} body={responseText}", request.TraceId);
+                if (IsUnavailableModelResponse(responseText))
+                {
+                    var detail = ExtractOllamaErrorMessage(responseText);
+                    var suffix = string.IsNullOrWhiteSpace(detail)
+                        ? string.Empty
+                        : $" 详情: {detail}";
+                    throw new InvalidOperationException($"Ollama 模型不可用：{model}。请在 LLM 设置中改为已安装模型，或先执行 ollama pull。{suffix}".TrimEnd());
+                }
+
                 throw new InvalidOperationException($"Ollama 请求失败: {response.StatusCode} {responseText}");
             }
 
             using var doc = JsonDocument.Parse(responseText);
-            if (!doc.RootElement.TryGetProperty("choices", out var choices)
-                || choices.ValueKind != JsonValueKind.Array
-                || choices.GetArrayLength() == 0)
-            {
-                return new LlmChatResult(string.Empty);
-            }
-
-            var firstChoice = choices[0];
-            if (!firstChoice.TryGetProperty("message", out var message)
-                || message.ValueKind != JsonValueKind.Object
-                || !message.TryGetProperty("content", out var contentEl))
-            {
-                return new LlmChatResult(string.Empty);
-            }
-
-            var content = contentEl.ValueKind == JsonValueKind.String
-                ? contentEl.GetString() ?? string.Empty
-                : string.Empty;
+            var content = ExtractResponseContent(doc.RootElement);
             LogInfo($"response provider=ollama model={model} status=ok", request.TraceId);
             LogResponse("ollama", model, content, request.TraceId);
             return new LlmChatResult(content.Trim());
         }
+    }
+
+    private static Dictionary<string, object?> BuildRuntimeOptions(LlmProviderSettings settings, LlmChatRequest request)
+    {
+        var options = new Dictionary<string, object?>
+        {
+            ["temperature"] = OllamaRuntimeDefaults.ResolveTemperature(settings.OllamaTemperature, request.Temperature),
+            ["num_ctx"] = OllamaRuntimeDefaults.ResolveNumCtx(settings.OllamaNumCtx),
+            ["num_gpu"] = OllamaRuntimeDefaults.ResolveNumGpu(settings.OllamaNumGpu),
+            ["num_predict"] = request.MaxOutputTokens ?? OllamaRuntimeDefaults.ResolveNumPredict(settings.OllamaNumPredict),
+            ["top_k"] = OllamaRuntimeDefaults.ResolveTopK(settings.OllamaTopK),
+            ["top_p"] = OllamaRuntimeDefaults.ResolveTopP(settings.OllamaTopP),
+            ["min_p"] = OllamaRuntimeDefaults.ResolveMinP(settings.OllamaMinP)
+        };
+
+        var stop = OllamaRuntimeDefaults.ResolveStop(settings.OllamaStop);
+        if (stop.Length == 1)
+        {
+            options["stop"] = stop[0];
+        }
+        else if (stop.Length > 1)
+        {
+            options["stop"] = stop;
+        }
+
+        return options;
+    }
+
+    private static string ExtractResponseContent(JsonElement root)
+    {
+        if (root.TryGetProperty("message", out var message)
+            && message.ValueKind == JsonValueKind.Object
+            && message.TryGetProperty("content", out var contentElement)
+            && contentElement.ValueKind == JsonValueKind.String)
+        {
+            return contentElement.GetString() ?? string.Empty;
+        }
+
+        if (root.TryGetProperty("choices", out var choices)
+            && choices.ValueKind == JsonValueKind.Array
+            && choices.GetArrayLength() > 0)
+        {
+            var firstChoice = choices[0];
+            if (firstChoice.TryGetProperty("message", out var choiceMessage)
+                && choiceMessage.ValueKind == JsonValueKind.Object
+                && choiceMessage.TryGetProperty("content", out var choiceContent)
+                && choiceContent.ValueKind == JsonValueKind.String)
+            {
+                return choiceContent.GetString() ?? string.Empty;
+            }
+        }
+
+        return string.Empty;
+    }
+
+    private static string ResolveBaseUrl(string? baseUrl)
+    {
+        var normalized = string.IsNullOrWhiteSpace(baseUrl)
+            ? "http://localhost:11434"
+            : baseUrl.Trim().TrimEnd('/');
+
+        if (normalized.EndsWith("/v1", StringComparison.OrdinalIgnoreCase))
+        {
+            normalized = normalized[..^3];
+        }
+
+        return normalized;
+    }
+
+    private static string? ResolveKeepAliveValue(string? keepAlive)
+    {
+        if (string.IsNullOrWhiteSpace(keepAlive))
+        {
+            return null;
+        }
+
+        return keepAlive.Trim();
     }
 
     private static string BuildSystemPrompt(string? systemPrompt, bool forceChinese)
@@ -202,5 +289,43 @@ public sealed class OllamaProvider : ILlmProvider
     private static int SafeLength(string? value)
     {
         return string.IsNullOrEmpty(value) ? 0 : value.Length;
+    }
+
+    private static bool IsUnavailableModelResponse(string responseText)
+    {
+        var errorMessage = ExtractOllamaErrorMessage(responseText);
+        if (string.IsNullOrWhiteSpace(errorMessage))
+        {
+            return false;
+        }
+
+        return errorMessage.Contains("not found", StringComparison.OrdinalIgnoreCase)
+            || errorMessage.Contains("no such model", StringComparison.OrdinalIgnoreCase)
+            || (errorMessage.Contains("model", StringComparison.OrdinalIgnoreCase)
+                && errorMessage.Contains("pull", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string ExtractOllamaErrorMessage(string responseText)
+    {
+        if (string.IsNullOrWhiteSpace(responseText))
+        {
+            return string.Empty;
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(responseText);
+            if (doc.RootElement.TryGetProperty("error", out var errorElement)
+                && errorElement.ValueKind == JsonValueKind.String)
+            {
+                return errorElement.GetString() ?? string.Empty;
+            }
+        }
+        catch (JsonException)
+        {
+            // Ignore invalid JSON and fall back to the raw text.
+        }
+
+        return responseText.Trim();
     }
 }

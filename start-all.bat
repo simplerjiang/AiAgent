@@ -14,18 +14,14 @@ pushd "%ROOT%" || exit /b 1
 
 echo Stopping existing desktop and backend instances...
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-  "$backendRoot = [System.IO.Path]::GetFullPath('%BACKEND_ROOT%');" ^
-  "$packageRoot = [System.IO.Path]::GetFullPath('%PACKAGE_ROOT%');" ^
-  "$escapedBackendRoot = [Regex]::Escape($backendRoot);" ^
-  "$escapedPackageRoot = [Regex]::Escape($packageRoot);" ^
-  "$repoProcesses = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -and ($_.CommandLine -match $escapedBackendRoot -or $_.CommandLine -match $escapedPackageRoot) -and $_.CommandLine -match 'SimplerJiangAiAgent\.(Desktop|Api)' };" ^
-  "foreach ($process in $repoProcesses) { Stop-Process -Id $process.ProcessId -Force -ErrorAction SilentlyContinue }" ^
-  "if ($repoProcesses) { Start-Sleep -Seconds 2 }" ^
-  "$portOwner = Get-NetTCPConnection -LocalPort 5119 -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty OwningProcess;" ^
-  "if (-not $portOwner) { exit 0 }" ^
-  "$portProcess = Get-CimInstance Win32_Process -Filter \"ProcessId = $portOwner\" -ErrorAction SilentlyContinue;" ^
-  "Write-Host ('Port 5119 is already occupied by another process: ' + $portOwner);" ^
-  "if ($portProcess) { Write-Host $portProcess.Name; Write-Host $portProcess.CommandLine }" ^
+  "$procs = Get-Process -Name SimplerJiangAiAgent.Desktop,SimplerJiangAiAgent.Api,SimplerJiangAiAgent.FinancialWorker -ErrorAction SilentlyContinue;" ^
+  "if ($procs) { $procs | Stop-Process -Force -ErrorAction SilentlyContinue; Start-Sleep -Seconds 2 }" ^
+  "$m = @(netstat -ano | Select-String ':5119\s.*LISTEN')[0];" ^
+  "if (-not $m) { exit 0 }" ^
+  "$portPid = ($m.Line.Trim() -split '\s+')[-1];" ^
+  "$p = Get-Process -Id $portPid -ErrorAction SilentlyContinue;" ^
+  "Write-Host ('Port 5119 is already occupied by another process: ' + $portPid);" ^
+  "if ($p) { Write-Host $p.ProcessName; Write-Host $p.Path }" ^
   "exit 20"
 if errorlevel 20 goto :port_conflict
 if errorlevel 1 goto :fail
@@ -46,7 +42,7 @@ echo Waiting for packaged backend health check...
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$healthUrl = '%HEALTH_URL%';" ^
   "$deadline = (Get-Date).AddSeconds(90);" ^
-  "do { try { $response = Invoke-WebRequest -UseBasicParsing $healthUrl -TimeoutSec 3; if ($response.Content -match '\"status\"\s*:\s*\"ok\"') { exit 0 } } catch {}; Start-Sleep -Milliseconds 500 } while ((Get-Date) -lt $deadline);" ^
+  "do { try { $r = Invoke-WebRequest -UseBasicParsing $healthUrl -TimeoutSec 3; $j = ConvertFrom-Json $r.Content; if ($j.status -eq 'ok') { exit 0 } } catch {}; Start-Sleep -Milliseconds 500 } while ((Get-Date) -lt $deadline);" ^
   "Write-Host 'Packaged desktop backend did not become healthy in time.'; exit 1"
 if errorlevel 1 (
 	echo Packaged desktop failed to become healthy. Check the desktop window and packaged backend logs.

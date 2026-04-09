@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount } from '@vue/test-utils'
-import { nextTick, ref } from 'vue'
+import { nextTick, ref, defineComponent, toRef } from 'vue'
 import TradingWorkbench from './workbench/TradingWorkbench.vue'
 import TradingWorkbenchHeader from './workbench/TradingWorkbenchHeader.vue'
 import TradingWorkbenchProgress from './workbench/TradingWorkbenchProgress.vue'
@@ -10,8 +10,66 @@ import TradingWorkbenchFeed from './workbench/TradingWorkbenchFeed.vue'
 import { useTradingWorkbench, STAGES, STATUS_MAP } from './workbench/useTradingWorkbench.js'
 
 const flushPromises = () => new Promise(resolve => setTimeout(resolve, 0))
+const originalFetch = globalThis.fetch
+const originalScrollIntoView = globalThis.HTMLElement?.prototype.scrollIntoView
 
-beforeEach(() => { vi.restoreAllMocks() })
+const WorkbenchHarness = defineComponent({
+  props: {
+    symbol: { type: String, default: '' }
+  },
+  setup(props) {
+    return useTradingWorkbench(toRef(props, 'symbol'))
+  },
+  template: '<div />'
+})
+
+function createJsonResponse(body, { status = 200, statusText = 'OK' } = {}) {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    statusText,
+    text: async () => (body == null ? '' : JSON.stringify(body)),
+    json: async () => body
+  }
+}
+
+function createDeferred() {
+  let resolve
+  let reject
+  const promise = new Promise((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
+}
+
+async function flushWorkbench() {
+  await flushPromises()
+  await nextTick()
+  await flushPromises()
+  await nextTick()
+}
+
+beforeEach(() => {
+  vi.restoreAllMocks()
+  if (globalThis.HTMLElement) {
+    globalThis.HTMLElement.prototype.scrollIntoView = vi.fn()
+  }
+})
+afterEach(() => {
+  if (originalFetch) {
+    globalThis.fetch = originalFetch
+  } else {
+    delete globalThis.fetch
+  }
+  if (globalThis.HTMLElement) {
+    if (originalScrollIntoView) {
+      globalThis.HTMLElement.prototype.scrollIntoView = originalScrollIntoView
+    } else {
+      delete globalThis.HTMLElement.prototype.scrollIntoView
+    }
+  }
+})
 
 // ── Header ────────────────────────────────────────────
 
@@ -125,6 +183,18 @@ describe('TradingWorkbenchProgress', () => {
   it('shows empty state when no stages', () => {
     const wrapper = mount(TradingWorkbenchProgress, { props: { stages: [] } })
     expect(wrapper.text()).toContain('等待研究会话启动')
+  })
+
+  it('shows load failure state when progress is empty after an error', () => {
+    const wrapper = mount(TradingWorkbenchProgress, {
+      props: {
+        stages: [],
+        error: 'API 500: disk full'
+      }
+    })
+
+    expect(wrapper.text()).toContain('研究进度加载失败')
+    expect(wrapper.text()).not.toContain('等待研究会话启动')
   })
 })
 
@@ -250,6 +320,20 @@ describe('TradingWorkbenchReport', () => {
     expect(wrapper.text()).toContain('暂无研究报告')
   })
 
+  it('shows load failure state when report is empty after an error', () => {
+    const wrapper = mount(TradingWorkbenchReport, {
+      props: {
+        blocks: [],
+        decision: null,
+        nextActions: [],
+        error: 'API 500: disk full'
+      }
+    })
+
+    expect(wrapper.text()).toContain('研究报告加载失败')
+    expect(wrapper.text()).not.toContain('暂无研究报告')
+  })
+
   it('shows evidence and counter-evidence tags', () => {
     const wrapper = mount(TradingWorkbenchReport, {
       props: {
@@ -351,6 +435,341 @@ describe('useTradingWorkbench', () => {
     expect(STATUS_MAP.Completed.label).toBe('已完成')
     expect(STATUS_MAP.Failed.label).toBe('失败')
   })
+
+  it('clears stale completed state before a new submitted session detail loads', async () => {
+    const oldDetail = {
+      id: 12,
+      status: 'Completed',
+      turns: [{ id: 101, turnIndex: 3, status: 'Completed', userPrompt: '旧分析' }],
+      feedItems: [{ id: 1, turnId: 101, type: 'RoleOutput', summary: '旧会话输出' }],
+      stageSnapshots: [{ stageType: 'AnalystTeam', status: 'Completed', roleStates: [] }]
+    }
+    const newDetailDeferred = createDeferred()
+
+    globalThis.fetch = vi.fn(async (input, init) => {
+      const url = String(input)
+      if (url === '/api/stocks/translations/json-keys') return createJsonResponse({})
+      if (url.includes('/active-session?symbol=')) {
+        return createJsonResponse({ sessionId: 12, status: 'Completed', sessionKey: 'old-session' })
+      }
+      if (url.endsWith('/sessions/12')) return createJsonResponse(oldDetail)
+      if (url.endsWith('/turns/101/report')) {
+        return createJsonResponse({
+          blocks: [{ id: 'old-block', headline: '旧报告标题' }],
+          finalDecision: { rating: 'buy', executiveSummary: '旧决策摘要' }
+        })
+      }
+      if (url.endsWith('/turns') && init?.method === 'POST') {
+        return createJsonResponse({ sessionId: 56 })
+      }
+      if (url.endsWith('/sessions/56')) return newDetailDeferred.promise
+      if (url.endsWith('/turns/201/report')) {
+        return createJsonResponse({
+          blocks: [{ id: 'new-block', headline: '新报告标题' }],
+          finalDecision: { rating: 'hold', executiveSummary: '新决策摘要' }
+        })
+      }
+      throw new Error(`Unexpected fetch: ${url}`)
+    })
+
+    const wrapper = mount(WorkbenchHarness, { props: { symbol: 'sh600000' } })
+    await flushWorkbench()
+
+    expect(wrapper.vm.session.id).toBe(12)
+    expect(wrapper.vm.activeTurn.id).toBe(101)
+    expect(wrapper.vm.reportBlocks).toHaveLength(1)
+    expect(wrapper.vm.reportBlocks[0].headline).toBe('旧报告标题')
+    expect(wrapper.vm.stageSnapshots[1].status).toBe('Completed')
+    expect(wrapper.vm.feedItems).toHaveLength(1)
+
+    const submitPromise = wrapper.vm.submitFollowUp('开始新的研究')
+    await flushWorkbench()
+
+    expect(wrapper.vm.session.id).toBe(56)
+    expect(wrapper.vm.session.status).toBe('Running')
+    expect(wrapper.vm.sessionDetail).toBeNull()
+    expect(wrapper.vm.activeTurn).toBeNull()
+    expect(wrapper.vm.stageSnapshots).toEqual([])
+    expect(wrapper.vm.currentStageName).toBeNull()
+    expect(wrapper.vm.reportBlocks).toEqual([])
+    expect(wrapper.vm.decision).toBeNull()
+    expect(wrapper.vm.feedItems).toHaveLength(1)
+    expect(wrapper.vm.feedItems[0].content).toBe('开始新的研究')
+    expect(wrapper.vm.feedItems[0]._optimistic).toBe(true)
+
+    newDetailDeferred.resolve(createJsonResponse({
+      id: 56,
+      status: 'Running',
+      turns: [{ id: 201, turnIndex: 4, status: 'Running', userPrompt: '开始新的研究' }],
+      feedItems: [{ id: 9, turnId: 201, type: 'UserFollowUp', content: '开始新的研究' }],
+      stageSnapshots: [{ stageType: 'AnalystTeam', status: 'Running', roleStates: [] }]
+    }))
+
+    await submitPromise
+    await flushWorkbench()
+
+    expect(wrapper.vm.activeTurn.id).toBe(201)
+    expect(wrapper.vm.reportBlocks).toHaveLength(1)
+    expect(wrapper.vm.reportBlocks[0].headline).toBe('新报告标题')
+    expect(wrapper.vm.feedItems).toHaveLength(1)
+    expect(wrapper.vm.feedItems[0].content).toBe('开始新的研究')
+    expect(wrapper.vm.feedItems[0]._optimistic).toBeUndefined()
+
+    wrapper.unmount()
+  })
+
+  it('clears stale completed state before a rerun turn detail loads', async () => {
+    const oldDetail = {
+      id: 12,
+      status: 'Completed',
+      turns: [{ id: 101, turnIndex: 3, status: 'Completed', userPrompt: '旧分析' }],
+      feedItems: [{ id: 1, turnId: 101, type: 'RoleOutput', summary: '旧会话输出' }],
+      stageSnapshots: [{ stageType: 'AnalystTeam', status: 'Completed', roleStates: [] }]
+    }
+    const rerunDetailDeferred = createDeferred()
+    let session12RequestCount = 0
+
+    globalThis.fetch = vi.fn(async (input, init) => {
+      const url = String(input)
+      if (url === '/api/stocks/translations/json-keys') return createJsonResponse({})
+      if (url.includes('/active-session?symbol=')) {
+        return createJsonResponse({ sessionId: 12, status: 'Completed', sessionKey: 'old-session' })
+      }
+      if (url.endsWith('/sessions/12')) {
+        session12RequestCount += 1
+        return session12RequestCount === 1 ? createJsonResponse(oldDetail) : rerunDetailDeferred.promise
+      }
+      if (url.endsWith('/turns/101/report')) {
+        return createJsonResponse({
+          blocks: [{ id: 'old-block', headline: '旧报告标题' }],
+          finalDecision: { rating: 'buy', executiveSummary: '旧决策摘要' }
+        })
+      }
+      if (url.endsWith('/turns') && init?.method === 'POST') {
+        return createJsonResponse({ sessionId: 12 })
+      }
+      if (url.endsWith('/turns/202/report')) {
+        return createJsonResponse({
+          blocks: [{ id: 'rerun-block', headline: '重跑报告标题' }],
+          finalDecision: { rating: 'sell', executiveSummary: '重跑决策摘要' }
+        })
+      }
+      throw new Error(`Unexpected fetch: ${url}`)
+    })
+
+    const wrapper = mount(WorkbenchHarness, { props: { symbol: 'sh600000' } })
+    await flushWorkbench()
+
+    expect(wrapper.vm.activeTurn.id).toBe(101)
+    expect(wrapper.vm.stageSnapshots[1].status).toBe('Completed')
+    expect(wrapper.vm.feedItems).toHaveLength(1)
+
+    const rerunPromise = wrapper.vm.rerunFromStage(1)
+    await flushWorkbench()
+
+    expect(wrapper.vm.session.id).toBe(12)
+    expect(wrapper.vm.session.status).toBe('Running')
+    expect(wrapper.vm.activeTab).toBe('feed')
+    expect(wrapper.vm.sessionDetail).toBeNull()
+    expect(wrapper.vm.activeTurn).toBeNull()
+    expect(wrapper.vm.stageSnapshots).toEqual([])
+    expect(wrapper.vm.reportBlocks).toEqual([])
+    expect(wrapper.vm.decision).toBeNull()
+    expect(wrapper.vm.feedItems).toEqual([])
+
+    rerunDetailDeferred.resolve(createJsonResponse({
+      id: 12,
+      status: 'Running',
+      turns: [{ id: 202, turnIndex: 4, status: 'Running', userPrompt: '旧分析' }],
+      feedItems: [{ id: 10, turnId: 202, type: 'TurnStarted', summary: '第 4 轮分析开始' }],
+      stageSnapshots: [{ stageType: 'AnalystTeam', status: 'Running', roleStates: [] }]
+    }))
+
+    await rerunPromise
+    await flushWorkbench()
+
+    expect(wrapper.vm.activeTurn.id).toBe(202)
+    expect(wrapper.vm.reportBlocks).toHaveLength(1)
+    expect(wrapper.vm.reportBlocks[0].headline).toBe('重跑报告标题')
+    expect(wrapper.vm.feedItems).toHaveLength(1)
+
+    wrapper.unmount()
+  })
+
+  it('clears replay turn identity when returning to latest and the active-session refresh fails', async () => {
+    let activeSessionCallCount = 0
+
+    globalThis.fetch = vi.fn(async (input) => {
+      const url = String(input)
+      if (url === '/api/stocks/translations/json-keys') return createJsonResponse({})
+      if (url.includes('/active-session?symbol=')) {
+        activeSessionCallCount += 1
+        if (activeSessionCallCount === 1) {
+          return createJsonResponse({ sessionId: 77, status: 'Running', sessionKey: 'live-session' })
+        }
+        return createJsonResponse({ message: 'disk full' }, { status: 500, statusText: 'Internal Server Error' })
+      }
+      if (url.endsWith('/sessions/77')) {
+        return createJsonResponse({
+          id: 77,
+          status: 'Running',
+          turns: [{ id: 701, turnIndex: 5, status: 'Running', userPrompt: '最新研究' }],
+          feedItems: [{ id: 1, turnId: 701, type: 'RoleOutput', summary: '最新会话输出' }],
+          stageSnapshots: [{ stageType: 'AnalystTeam', status: 'Running', roleStates: [] }]
+        })
+      }
+      if (url.endsWith('/turns/701/report')) {
+        return createJsonResponse({
+          blocks: [{ id: 'live-block', headline: '最新报告标题' }],
+          finalDecision: { rating: 'buy', executiveSummary: '最新决策摘要' }
+        })
+      }
+      if (url.endsWith('/sessions/12')) {
+        return createJsonResponse({
+          id: 12,
+          status: 'Completed',
+          turns: [
+            { id: 201, turnIndex: 1, status: 'Completed', userPrompt: '历史回放' },
+            { id: 202, turnIndex: 2, status: 'Completed', userPrompt: '另一条历史回放' }
+          ],
+          feedItems: [{ id: 2, turnId: 201, type: 'RoleOutput', summary: '历史会话输出' }],
+          stageSnapshots: [{ stageType: 'AnalystTeam', status: 'Completed', roleStates: [] }]
+        })
+      }
+      if (url.endsWith('/turns/201/report')) {
+        return createJsonResponse({
+          blocks: [{ id: 'replay-block', headline: '历史报告标题' }],
+          finalDecision: { rating: 'sell', executiveSummary: '历史决策摘要' }
+        })
+      }
+      throw new Error(`Unexpected fetch: ${url}`)
+    })
+
+    const wrapper = mount(WorkbenchHarness, { props: { symbol: 'sh600000' } })
+    await flushWorkbench()
+
+    expect(wrapper.vm.session.id).toBe(77)
+    expect(wrapper.vm.activeTurn.id).toBe(701)
+    expect(wrapper.vm.reportBlocks[0].headline).toBe('最新报告标题')
+
+    await wrapper.vm.enterReplay(12, 201)
+    await flushWorkbench()
+
+    expect(wrapper.vm.session.id).toBe(12)
+    expect(wrapper.vm.session.status).toBe('Completed')
+    expect(wrapper.vm.sessionStatus.label).toBe('已完成')
+    expect(wrapper.vm.replayTurnId).toBe(201)
+    expect(wrapper.vm.activeTurn.id).toBe(201)
+    expect(wrapper.vm.reportBlocks[0].headline).toBe('历史报告标题')
+
+    const replayHeader = mount(TradingWorkbenchHeader, {
+      props: {
+        session: wrapper.vm.session,
+        activeTurn: wrapper.vm.activeTurn,
+        sessionStatus: wrapper.vm.sessionStatus,
+        currentStage: wrapper.vm.currentStageName,
+        isRunning: wrapper.vm.isRunning,
+        error: wrapper.vm.error
+      }
+    })
+
+    expect(replayHeader.text()).toContain('S12')
+    expect(replayHeader.text()).toContain('T1')
+    expect(replayHeader.text()).toContain('已完成')
+    expect(replayHeader.text()).not.toContain('S77')
+
+    replayHeader.unmount()
+
+    wrapper.vm.exitReplay()
+    await flushWorkbench()
+
+    expect(wrapper.vm.session).toBeNull()
+    expect(wrapper.vm.replayTurnId).toBeNull()
+    expect(wrapper.vm.sessionDetail).toBeNull()
+    expect(wrapper.vm.activeTurn).toBeNull()
+    expect(wrapper.vm.reportBlocks).toEqual([])
+    expect(wrapper.vm.decision).toBeNull()
+    expect(wrapper.vm.feedItems).toEqual([])
+    expect(wrapper.vm.error).toContain('API 500')
+
+    const header = mount(TradingWorkbenchHeader, {
+      props: {
+        session: wrapper.vm.session,
+        activeTurn: wrapper.vm.activeTurn,
+        sessionStatus: wrapper.vm.sessionStatus,
+        currentStage: wrapper.vm.currentStageName,
+        isRunning: wrapper.vm.isRunning,
+        error: wrapper.vm.error
+      }
+    })
+
+    expect(header.find('.wb-session-badge').exists()).toBe(false)
+    expect(header.find('.wb-status').text()).not.toContain('已完成')
+    expect(header.text()).toContain('API 500')
+
+    header.unmount()
+
+    wrapper.unmount()
+  })
+
+  it('clears stale progress, report, and feed when the latest session detail refresh fails', async () => {
+    let activeSessionCallCount = 0
+
+    globalThis.fetch = vi.fn(async (input) => {
+      const url = String(input)
+      if (url === '/api/stocks/translations/json-keys') return createJsonResponse({})
+      if (url.includes('/active-session?symbol=')) {
+        activeSessionCallCount += 1
+        return activeSessionCallCount === 1
+          ? createJsonResponse({ sessionId: 12, status: 'Completed', sessionKey: 'old-session' })
+          : createJsonResponse({ sessionId: 56, status: 'Running', sessionKey: 'new-session' })
+      }
+      if (url.endsWith('/sessions/12')) {
+        return createJsonResponse({
+          id: 12,
+          status: 'Completed',
+          turns: [{ id: 101, turnIndex: 3, status: 'Completed', userPrompt: '旧分析' }],
+          feedItems: [{ id: 1, turnId: 101, type: 'RoleOutput', summary: '旧会话输出' }],
+          stageSnapshots: [{ stageType: 'AnalystTeam', status: 'Completed', roleStates: [] }]
+        })
+      }
+      if (url.endsWith('/turns/101/report')) {
+        return createJsonResponse({
+          blocks: [{ id: 'old-block', headline: '旧报告标题' }],
+          finalDecision: { rating: 'buy', executiveSummary: '旧决策摘要' }
+        })
+      }
+      if (url.endsWith('/sessions/56')) {
+        return createJsonResponse({ message: 'disk full' }, { status: 500, statusText: 'Internal Server Error' })
+      }
+      throw new Error(`Unexpected fetch: ${url}`)
+    })
+
+    const wrapper = mount(WorkbenchHarness, { props: { symbol: 'sh600000' } })
+    await flushWorkbench()
+
+    expect(wrapper.vm.session.id).toBe(12)
+    expect(wrapper.vm.activeTurn.id).toBe(101)
+    expect(wrapper.vm.stageSnapshots[1].status).toBe('Completed')
+    expect(wrapper.vm.reportBlocks[0].headline).toBe('旧报告标题')
+    expect(wrapper.vm.feedItems).toHaveLength(1)
+
+    await wrapper.vm.loadActiveSession()
+    await flushWorkbench()
+
+    expect(wrapper.vm.session.id).toBe(56)
+    expect(wrapper.vm.session.status).toBe('Running')
+    expect(wrapper.vm.sessionDetail).toBeNull()
+    expect(wrapper.vm.activeTurn).toBeNull()
+    expect(wrapper.vm.stageSnapshots).toEqual([])
+    expect(wrapper.vm.currentStageName).toBeNull()
+    expect(wrapper.vm.reportBlocks).toEqual([])
+    expect(wrapper.vm.decision).toBeNull()
+    expect(wrapper.vm.feedItems).toEqual([])
+    expect(wrapper.vm.error).toContain('API 500')
+
+    wrapper.unmount()
+  })
 })
 
 // ── Main Container ────────────────────────────────────
@@ -391,5 +810,137 @@ describe('TradingWorkbench', () => {
     const tabs = wrapper.findAll('.wb-tab')
     await tabs[1].trigger('click')
     expect(tabs[1].classes()).toContain('active')
+  })
+
+  it('shows explicit failure copy in report and progress after a session detail refresh error clears stale state', async () => {
+    let activeSessionCallCount = 0
+
+    globalThis.fetch = vi.fn(async (input) => {
+      const url = String(input)
+      if (url === '/api/stocks/translations/json-keys') return createJsonResponse({})
+      if (url.includes('/active-session?symbol=')) {
+        activeSessionCallCount += 1
+        return activeSessionCallCount === 1
+          ? createJsonResponse({ sessionId: 12, status: 'Completed', sessionKey: 'old-session' })
+          : createJsonResponse({ sessionId: 56, status: 'Running', sessionKey: 'new-session' })
+      }
+      if (url.endsWith('/sessions/12')) {
+        return createJsonResponse({
+          id: 12,
+          status: 'Completed',
+          turns: [{ id: 101, turnIndex: 3, status: 'Completed', userPrompt: '旧分析' }],
+          feedItems: [{ id: 1, turnId: 101, type: 'RoleOutput', summary: '旧会话输出' }],
+          stageSnapshots: [{ stageType: 'AnalystTeam', status: 'Completed', roleStates: [] }]
+        })
+      }
+      if (url.endsWith('/turns/101/report')) {
+        return createJsonResponse({
+          blocks: [{ id: 'old-block', headline: '旧报告标题' }],
+          finalDecision: { rating: 'buy', executiveSummary: '旧决策摘要' }
+        })
+      }
+      if (url.endsWith('/sessions/56')) {
+        return createJsonResponse({ message: 'disk full' }, { status: 500, statusText: 'Internal Server Error' })
+      }
+      throw new Error(`Unexpected fetch: ${url}`)
+    })
+
+    const wrapper = mount(TradingWorkbench, {
+      props: { symbol: 'sh600000' }
+    })
+    await flushWorkbench()
+
+    await wrapper.find('.wb-refresh-btn').trigger('click')
+    await flushWorkbench()
+
+    expect(wrapper.findComponent(TradingWorkbenchReport).text()).toContain('研究报告加载失败')
+    expect(wrapper.findComponent(TradingWorkbenchProgress).text()).toContain('研究进度加载失败')
+    expect(wrapper.findComponent(TradingWorkbenchProgress).text()).not.toContain('等待研究会话启动')
+  })
+
+  it('keeps the main workbench state intact when history session expansion fails and shows a local history error', async () => {
+    globalThis.fetch = vi.fn(async (input) => {
+      const url = String(input)
+      if (url === '/api/stocks/translations/json-keys') return createJsonResponse({})
+      if (url.includes('/active-session?symbol=')) {
+        return createJsonResponse({ sessionId: 12, status: 'Completed', sessionKey: 'live-session' })
+      }
+      if (url.endsWith('/sessions/12')) {
+        return createJsonResponse({
+          id: 12,
+          name: '当前完成会话',
+          status: 'Completed',
+          turns: [{ id: 101, turnIndex: 3, status: 'Completed', userPrompt: '当前完成研究' }],
+          feedItems: [{ id: 1, turnId: 101, type: 'RoleOutput', summary: '当前会话讨论动态' }],
+          stageSnapshots: [{ stageType: 'AnalystTeam', status: 'Completed', roleStates: [] }]
+        })
+      }
+      if (url.endsWith('/turns/101/report')) {
+        return createJsonResponse({
+          blocks: [{ id: 'live-block', headline: '当前报告标题' }],
+          finalDecision: { rating: 'buy', executiveSummary: '当前决策摘要' }
+        })
+      }
+      if (url.endsWith('/sessions?symbol=sh600000&limit=20')) {
+        return createJsonResponse([
+          {
+            id: 12,
+            name: '当前完成会话',
+            status: 'Completed',
+            createdAt: '2026-04-08T20:00:00Z',
+            latestDecisionHeadline: '当前会话结论'
+          },
+          {
+            id: 45,
+            name: '历史失败会话',
+            status: 'Completed',
+            createdAt: '2026-04-08T19:45:00Z',
+            latestDecisionHeadline: '历史会话结论'
+          }
+        ])
+      }
+      if (url.endsWith('/sessions/45')) {
+        return createJsonResponse({ message: 'disk full' }, { status: 500, statusText: 'Internal Server Error' })
+      }
+      throw new Error(`Unexpected fetch: ${url}`)
+    })
+
+    const wrapper = mount(TradingWorkbench, {
+      props: { symbol: 'sh600000' }
+    })
+    await flushWorkbench()
+
+    expect(wrapper.findComponent(TradingWorkbenchHeader).props('session')?.id).toBe(12)
+    expect(wrapper.findComponent(TradingWorkbenchHeader).props('error')).toBeNull()
+    expect(wrapper.findComponent(TradingWorkbenchReport).props('blocks')[0].headline).toBe('当前报告标题')
+    expect(
+      wrapper.findComponent(TradingWorkbenchProgress).props('stages')
+        .find(stage => stage.key === 'AnalystTeam')?.status
+    ).toBe('Completed')
+    expect(wrapper.findComponent(TradingWorkbenchFeed).props('items')).toHaveLength(1)
+
+    const historyTab = wrapper.findAll('.wb-tab').find(tab => tab.text().includes('历史记录'))
+    expect(historyTab).toBeTruthy()
+    await historyTab.trigger('click')
+    await flushWorkbench()
+
+    const targetRow = wrapper.findAll('.history-session-row').find(row => row.text().includes('历史失败会话'))
+    expect(targetRow).toBeTruthy()
+    await targetRow.trigger('click')
+    await flushWorkbench()
+
+    expect(wrapper.findComponent(TradingWorkbenchHeader).props('session')?.id).toBe(12)
+    expect(wrapper.findComponent(TradingWorkbenchHeader).props('error')).toBeNull()
+    expect(wrapper.findComponent(TradingWorkbenchReport).props('blocks')[0].headline).toBe('当前报告标题')
+    expect(
+      wrapper.findComponent(TradingWorkbenchProgress).props('stages')
+        .find(stage => stage.key === 'AnalystTeam')?.status
+    ).toBe('Completed')
+    expect(wrapper.findComponent(TradingWorkbenchFeed).props('items')).toHaveLength(1)
+
+    const historyPanel = wrapper.find('.wb-history')
+    expect(historyPanel.find('.history-turns-error').exists()).toBe(true)
+    expect(historyPanel.text()).toContain('历史记录加载失败，请重试。')
+    expect(historyPanel.text()).not.toContain('加载中…')
   })
 })

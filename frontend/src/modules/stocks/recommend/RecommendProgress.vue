@@ -33,6 +33,8 @@ const ROLE_LABELS = {
   recommend_director: '推荐总监'
 }
 
+const TURN_LIVE_STATUSES = new Set(['Pending', 'Queued', 'Running'])
+
 const getSessionTurns = session => {
   if (Array.isArray(session?.turns)) return session.turns
   if (Array.isArray(session?.Turns)) return session.Turns
@@ -50,6 +52,8 @@ const getTurnSortValue = turn => {
   return Number.isFinite(turnId) ? turnId : -1
 }
 
+const getTurnStatus = turn => turn?.status ?? turn?.Status ?? null
+const getSessionStatus = session => session?.status ?? session?.Status ?? null
 const getSnapshotType = snapshot => snapshot?.stageType ?? snapshot?.StageType ?? null
 const getSnapshotStatus = snapshot => snapshot?.status ?? snapshot?.Status ?? null
 
@@ -63,6 +67,17 @@ const getRoleStateId = roleState => roleState?.roleId ?? roleState?.RoleId ?? nu
 const getRoleStateStatus = roleState => roleState?.status ?? roleState?.Status ?? null
 const getRoleStateOutput = roleState => roleState?.outputContentJson ?? roleState?.OutputContentJson ?? null
 const getRoleStateElapsed = roleState => roleState?.elapsed ?? roleState?.Elapsed ?? null
+const getTurnFeedItems = turn => Array.isArray(turn?.feedItems)
+  ? turn.feedItems
+  : Array.isArray(turn?.FeedItems)
+    ? turn.FeedItems
+    : []
+const getSessionFeedItems = session => Array.isArray(session?.feedItems)
+  ? session.feedItems
+  : Array.isArray(session?.FeedItems)
+    ? session.FeedItems
+    : []
+const getFeedItemTurnId = item => item?.turnId ?? item?.TurnId ?? null
 
 const sessionTurns = computed(() => {
   return getSessionTurns(props.session)
@@ -75,11 +90,25 @@ const activeTurn = computed(() => {
   if (!turns.length) return null
 
   const activeTurnId = props.session?.activeTurnId ?? props.session?.ActiveTurnId
-  return turns.find(turn => (turn.id ?? turn.Id) === activeTurnId)
-    || turns[turns.length - 1]
+  const selectedTurn = turns.find(turn => (turn.id ?? turn.Id) === activeTurnId) || null
+  const latestLiveTurn = [...turns].reverse().find(turn => TURN_LIVE_STATUSES.has(getTurnStatus(turn))) || null
+
+  if (latestLiveTurn && !TURN_LIVE_STATUSES.has(getTurnStatus(selectedTurn))) {
+    return latestLiveTurn
+  }
+
+  return selectedTurn || turns[turns.length - 1]
 })
 
 const activeTurnId = computed(() => activeTurn.value?.id ?? activeTurn.value?.Id ?? null)
+const sessionStatus = computed(() => getSessionStatus(props.session))
+
+const shouldIsolateCurrentTurn = computed(() => {
+  const currentTurnStatus = getTurnStatus(activeTurn.value)
+  return props.isRunning
+    || sessionStatus.value === 'Running'
+    || TURN_LIVE_STATUSES.has(currentTurnStatus)
+})
 
 const isTurnTerminalFailed = computed(() => {
   const status = activeTurn.value?.status ?? activeTurn.value?.Status
@@ -92,29 +121,40 @@ const getTurnSnapshots = turn => {
   return []
 }
 
+const currentTurnFeedItems = computed(() => {
+  const activeId = activeTurnId.value
+  const sessionFeedItems = getSessionFeedItems(props.session).filter(item => {
+    const eventTurnId = getFeedItemTurnId(item)
+    if (eventTurnId == null) return !shouldIsolateCurrentTurn.value
+    return activeId == null || eventTurnId === activeId
+  })
+
+  return [...sessionFeedItems, ...getTurnFeedItems(activeTurn.value)]
+})
+
 const snapshotTurn = computed(() => {
   const turns = sessionTurns.value
-  const activeSnapshots = getTurnSnapshots(activeTurn.value)
-  if (activeSnapshots.length) return activeTurn.value
+  const currentTurn = activeTurn.value
+  if (!currentTurn) return null
+
+  const activeSnapshots = getTurnSnapshots(currentTurn)
+  if (activeSnapshots.length) return currentTurn
+
+  if (shouldIsolateCurrentTurn.value) return currentTurn
 
   // Fallback: find any turn that has stageSnapshots (prefer later turns)
   return [...turns].reverse().find(turn => getTurnSnapshots(turn).length) || null
 })
 
-// When no turn has stageSnapshots, infer stage status from session-level feedItems
+const snapshotTurnHasSnapshots = computed(() => getTurnSnapshots(snapshotTurn.value).length > 0)
+
+// When the current turn has no snapshots yet, infer stage status from current-turn feed items.
 const feedInferredStageStatus = computed(() => {
-  if (snapshotTurn.value) return {} // snapshots available, no need to infer
+  if (snapshotTurnHasSnapshots.value) return {}
 
   const status = {}
-  const feedItems = props.session?.feedItems ?? props.session?.FeedItems ?? []
-  // Also check all turns' feedItems
-  const allFeedItems = [...feedItems]
-  for (const turn of sessionTurns.value) {
-    const turnFeeds = turn?.feedItems ?? turn?.FeedItems ?? []
-    allFeedItems.push(...turnFeeds)
-  }
 
-  for (const item of allFeedItems) {
+  for (const item of currentTurnFeedItems.value) {
     const eventType = item?.eventType ?? item?.EventType ?? item?.itemType ?? item?.ItemType ?? ''
     const stageType = item?.stageType ?? item?.StageType ?? ''
     if (!stageType) continue
@@ -135,17 +175,11 @@ const feedInferredStageStatus = computed(() => {
 })
 
 const feedInferredRoleStatus = computed(() => {
-  if (snapshotTurn.value) return {}
+  if (snapshotTurnHasSnapshots.value) return {}
 
   const status = {}
-  const feedItems = props.session?.feedItems ?? props.session?.FeedItems ?? []
-  const allFeedItems = [...feedItems]
-  for (const turn of sessionTurns.value) {
-    const turnFeeds = turn?.feedItems ?? turn?.FeedItems ?? []
-    allFeedItems.push(...turnFeeds)
-  }
 
-  for (const item of allFeedItems) {
+  for (const item of currentTurnFeedItems.value) {
     const eventType = item?.eventType ?? item?.EventType ?? item?.itemType ?? item?.ItemType ?? ''
     const roleId = item?.roleId ?? item?.RoleId ?? ''
     if (!roleId) continue

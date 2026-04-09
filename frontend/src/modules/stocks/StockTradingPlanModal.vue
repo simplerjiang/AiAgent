@@ -33,6 +33,15 @@ function saveButtonClass(mode) {
     default: return ''
   }
 }
+
+function shouldShowMarketContextSection(form) {
+  return Boolean(
+    form?.marketContext
+    || form?.marketContextLoading
+    || form?.marketContextMessage
+    || (!form?.id && form?.sourceAgent === 'manual')
+  )
+}
 </script>
 
 <template>
@@ -48,19 +57,23 @@ function saveButtonClass(mode) {
 
       <p v-if="workspace.planError" class="muted error">{{ workspace.planError }}</p>
 
-      <section v-if="workspace.planForm.marketContext" class="plan-market-box">
+      <section v-if="shouldShowMarketContextSection(workspace.planForm)" class="plan-market-box">
         <strong>市场上下文</strong>
-        <div class="plan-pill-row">
-          <span class="plan-pill">阶段 {{ workspace.planForm.marketContext.stageLabel }}</span>
-          <span class="plan-pill">置信 {{ Number(workspace.planForm.marketContext.stageConfidence || 0).toFixed(0) }}</span>
-          <span class="plan-pill">主线 {{ workspace.planForm.marketContext.mainlineSectorName || '暂无' }}</span>
-          <span class="plan-pill">建议仓位 {{ formatPlanScale(workspace.planForm.marketContext.suggestedPositionScale) }}</span>
-          <span class="plan-pill">节奏 {{ workspace.planForm.marketContext.executionFrequencyLabel || '中性' }}</span>
-        </div>
-        <p class="muted">
-          {{ workspace.planForm.marketContext.isMainlineAligned ? '当前股票与主线方向一致。' : '当前股票未明显对齐主线。' }}
-          <span v-if="workspace.planForm.marketContext.counterTrendWarning"> 存在逆势提示，建议降低执行频率。</span>
-        </p>
+        <template v-if="workspace.planForm.marketContext">
+          <div class="plan-pill-row">
+            <span class="plan-pill">阶段 {{ workspace.planForm.marketContext.stageLabel }}</span>
+            <span class="plan-pill">置信 {{ Number(workspace.planForm.marketContext.stageConfidence || 0).toFixed(0) }}</span>
+            <span class="plan-pill">主线 {{ workspace.planForm.marketContext.mainlineSectorName || '暂无' }}</span>
+            <span class="plan-pill">建议仓位 {{ formatPlanScale(workspace.planForm.marketContext.suggestedPositionScale) }}</span>
+            <span class="plan-pill">节奏 {{ workspace.planForm.marketContext.executionFrequencyLabel || '中性' }}</span>
+          </div>
+          <p class="muted">
+            {{ workspace.planForm.marketContext.isMainlineAligned ? '当前股票与主线方向一致。' : '当前股票未明显对齐主线。' }}
+            <span v-if="workspace.planForm.marketContext.counterTrendWarning"> 存在逆势提示，建议降低执行频率。</span>
+          </p>
+        </template>
+        <p v-else-if="workspace.planForm.marketContextLoading" class="muted plan-market-status">正在获取当前市场上下文，不影响保存计划。</p>
+        <p v-else class="muted plan-market-status">{{ workspace.planForm.marketContextMessage || '暂未获取到市场上下文，可继续保存计划。' }}</p>
       </section>
 
       <!-- 执行模式提示条 -->
@@ -229,6 +242,10 @@ function saveButtonClass(mode) {
   background: rgba(37, 99, 235, 0.08);
   color: #1d4ed8;
   font-size: 0.78rem;
+}
+
+.plan-market-status {
+  color: #475569;
 }
 
 .plan-form-grid {

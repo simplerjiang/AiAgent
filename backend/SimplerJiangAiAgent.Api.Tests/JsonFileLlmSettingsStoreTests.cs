@@ -186,6 +186,178 @@ public sealed class JsonFileLlmSettingsStoreTests
     }
 
       [Fact]
+      public async Task UpsertAsync_ShouldPersistOllamaRuntimeOptions()
+      {
+        using var envScope = ApiKeyEnvironmentScope.Clear();
+        var rootPath = CreateTempRoot();
+        var store = new JsonFileLlmSettingsStore(new FakeWebHostEnvironment(rootPath));
+
+        await store.UpsertAsync(new LlmProviderSettings
+        {
+          Provider = "ollama",
+          ProviderType = "ollama",
+          BaseUrl = "http://localhost:11434",
+          Model = "gemma4:e2b",
+          OllamaNumCtx = 4096,
+          OllamaKeepAlive = "10m",
+          OllamaNumPredict = -1,
+          OllamaTemperature = 0.2,
+          OllamaTopK = 40,
+          OllamaTopP = 0.9,
+          OllamaMinP = 0.05,
+          OllamaStop = ["###", "END"],
+          OllamaThink = true,
+          Enabled = true
+        });
+
+        var settings = await store.GetProviderAsync("ollama");
+
+        Assert.NotNull(settings);
+        Assert.Equal(4096, settings!.OllamaNumCtx);
+        Assert.Equal("10m", settings.OllamaKeepAlive);
+        Assert.Equal(-1, settings.OllamaNumPredict);
+        Assert.Equal(0.2, settings.OllamaTemperature);
+        Assert.Equal(40, settings.OllamaTopK);
+        Assert.Equal(0.9, settings.OllamaTopP);
+        Assert.Equal(0.05, settings.OllamaMinP);
+        Assert.Equal(["###", "END"], settings.OllamaStop);
+        Assert.True(settings.OllamaThink);
+      }
+
+      [Fact]
+      public async Task UpsertAsync_ShouldPersistDefaultOllamaRuntimeOptionsWhenUnset()
+      {
+        using var envScope = ApiKeyEnvironmentScope.Clear();
+        var rootPath = CreateTempRoot();
+        var store = new JsonFileLlmSettingsStore(new FakeWebHostEnvironment(rootPath));
+
+        await store.UpsertAsync(new LlmProviderSettings
+        {
+          Provider = "ollama",
+          ProviderType = "ollama",
+          BaseUrl = "http://localhost:11434",
+          Model = "gemma4:e2b",
+          Enabled = true
+        });
+
+        var settings = await store.GetProviderAsync("ollama");
+
+        Assert.NotNull(settings);
+        Assert.Equal(2048, settings!.OllamaNumCtx);
+        Assert.Equal("5m", settings.OllamaKeepAlive);
+        Assert.Equal(2048, settings.OllamaNumPredict);
+        Assert.Equal(0.3, settings.OllamaTemperature);
+        Assert.Equal(64, settings.OllamaTopK);
+        Assert.Equal(0.95, settings.OllamaTopP);
+        Assert.Equal(0, settings.OllamaMinP);
+        Assert.Empty(settings.OllamaStop);
+        Assert.False(settings.OllamaThink);
+      }
+
+    [Fact]
+    public async Task UpsertAsync_ShouldNormalizeLegacyOllamaKeepAliveToDurationDefault()
+    {
+        using var envScope = ApiKeyEnvironmentScope.Clear();
+        var rootPath = CreateTempRoot();
+        var store = new JsonFileLlmSettingsStore(new FakeWebHostEnvironment(rootPath));
+
+        await store.UpsertAsync(new LlmProviderSettings
+        {
+          Provider = "ollama",
+          ProviderType = "ollama",
+          BaseUrl = "http://localhost:11434",
+          Model = "gemma4:e2b",
+          OllamaKeepAlive = "-1",
+          Enabled = true
+        });
+
+        var settings = await store.GetProviderAsync("ollama");
+
+        Assert.NotNull(settings);
+        Assert.Equal("5m", settings!.OllamaKeepAlive);
+    }
+
+    [Fact]
+    public async Task SetNewsCleansingSettingsAsync_ShouldKeepExplicitOllamaBatchSizeWithinGenericRange()
+    {
+        using var envScope = ApiKeyEnvironmentScope.Clear();
+        var rootPath = CreateTempRoot();
+        var appDataPath = Path.Combine(rootPath, "App_Data");
+        Directory.CreateDirectory(appDataPath);
+
+        await File.WriteAllTextAsync(
+            Path.Combine(appDataPath, "llm-settings.json"),
+            """
+            {
+              "activeProviderKey": "default",
+              "providers": {
+                "default": {
+                  "provider": "default",
+                  "providerType": "openai",
+                  "baseUrl": "https://api.example.com",
+                  "model": "gpt-test"
+                },
+                "ollama": {
+                  "provider": "ollama",
+                  "providerType": "ollama",
+                  "baseUrl": "http://localhost:11434",
+                  "model": "gemma4:latest"
+                }
+              }
+            }
+            """);
+
+        var store = new JsonFileLlmSettingsStore(new FakeWebHostEnvironment(rootPath));
+
+        await store.SetNewsCleansingSettingsAsync("ollama", "gemma4:latest", 20);
+        var settings = await store.GetNewsCleansingSettingsAsync();
+
+        Assert.Equal("ollama", settings.Provider);
+        Assert.Equal("gemma4:latest", settings.Model);
+        Assert.Equal(20, settings.BatchSize);
+    }
+
+    [Fact]
+      public async Task SetNewsCleansingSettingsAsync_ShouldKeepActiveBatchSizeWithinGenericRange_WhenActiveProviderIsOllama()
+    {
+        using var envScope = ApiKeyEnvironmentScope.Clear();
+        var rootPath = CreateTempRoot();
+        var appDataPath = Path.Combine(rootPath, "App_Data");
+        Directory.CreateDirectory(appDataPath);
+
+        await File.WriteAllTextAsync(
+            Path.Combine(appDataPath, "llm-settings.json"),
+            """
+            {
+              "activeProviderKey": "ollama",
+              "providers": {
+                "default": {
+                  "provider": "default",
+                  "providerType": "openai",
+                  "baseUrl": "https://api.example.com",
+                  "model": "gpt-test"
+                },
+                "ollama": {
+                  "provider": "ollama",
+                  "providerType": "ollama",
+                  "baseUrl": "http://localhost:11434",
+                  "model": "gemma4:latest"
+                }
+              }
+            }
+            """);
+
+        var store = new JsonFileLlmSettingsStore(new FakeWebHostEnvironment(rootPath));
+
+        await store.SetNewsCleansingSettingsAsync("active", string.Empty, 20);
+        var settings = await store.GetNewsCleansingSettingsAsync();
+
+        Assert.Equal("active", settings.Provider);
+        Assert.Equal(string.Empty, settings.Model);
+        Assert.Equal(20, settings.BatchSize);
+    }
+
+      [Fact]
       public void ServiceCollection_ShouldResolveStoreFromRuntimePaths()
       {
         using var envScope = ApiKeyEnvironmentScope.Clear();

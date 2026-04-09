@@ -21,24 +21,31 @@
 - /api/stocks/detail 组合详情
 - /api/stocks/detail/cache 组合详情缓存（默认只回放基础摘要；仅在显式 `includeLegacyCharts=true` 时才回放旧 K 线/分时表）
 - /api/stocks/plans 交易计划查询/创建/更新/删除/取消/恢复观察，以及 /api/stocks/plans/draft 后端草稿生成；支持不传 `symbol` 直接获取最近交易计划总览
+- /api/stocks/plans/alerts 与 ActiveWatchlist 高频白名单、trigger worker、review worker 已落地，计划状态/事件覆盖 `Pending/Triggered/Invalid/ReviewRequired/NewsReviewed/Resume/Cancel/Delete`，并携带 `stageConfidence`、主线对齐、建议仓位比例、执行频率等市场上下文字段
 - `StockCompanyProfiles` 现支持持久化基本面快照事实 JSON 与刷新时间，`/api/stocks/detail/cache` 可直接回放数据库中的基本面事实，`/api/stocks/detail` 再做实时东财刷新并回写数据库；另已补充 `/api/stocks/fundamental-snapshot` 轻量接口，供前端独立展示东财基本面刷新进度
 - 行情双源策略已正式收口到后端：默认 `分时 -> 东方财富优先 / 腾讯回退`，默认 `日K/周K/月K/年K -> 东方财富优先 / 腾讯回退`；当调用方显式传入 `source` 时仍按指定源执行
 - /api/stocks/sync 手动触发同步
 - /api/news 本地事实新闻查询（按 symbol + level=stock/sector/market 精准过滤，前端展示使用批量 AI 清洗后的翻译/情绪/标签）
+- /api/news/archive 与 /api/news/archive/process-pending 已支撑“全量资讯库”检索、分页与待处理批量清洗，字段包含 `AiSentiment`、`AiTags`、`IsAiProcessed`
 - /api/stocks/news/impact 资讯影响评估（公告/研报/新闻分级、来源可信度、同主题合并去重）
 - /api/stocks/signals 事件驱动信号（证据/反证、历史对齐）
 - /api/stocks/position-guidance 个性化风险与仓位建议（现已叠加 GOAL-009 本地市场阶段 multiplier、主线对齐与执行节奏提示）
 - /api/market/sentiment/latest、/api/market/sentiment/history、/api/market/sectors、/api/market/sectors/realtime、/api/market/sectors/{sectorCode}、/api/market/sectors/{sectorCode}/trend、/api/market/mainline 本地情绪周期、实时板块榜与板块轮动接口
 - /api/stocks/quotes/batch 与 /api/market/realtime/overview 已新增东财实时批量行情、主力资金、北向资金和涨跌分布聚合，采用后端缓存、超时和降级策略统一对外暴露
 - /api/stocks/agents 多Agent分析（默认模型已切到 `gemini-3.1-flash-lite-preview-thinking-high`，支持前端显式触发 `Pro 深度分析` 并路由到 `gemini-3.1-pro-preview-thinking-medium`，普通分析严格禁用 Pro）
+- /api/trades 已支持交易记录的创建/更新/删除/查询，另已补齐 `/api/trades/summary`、`/api/trades/win-rate`、`/api/trades/compliance-stats`、`/api/trades/behavior-stats`、`/api/trades/reviews*` 与 `/api/trades/reset-all`
+- /api/portfolio 已支持 `/settings`、`/positions`、`/snapshot`、`/exposure`、`/context`，为交易日志页、交易计划双线胜率和后续 LLM 持仓上下文提供统一底座
 - /api/admin/login 管理员登录
 - /api/admin/llm/settings/{provider} LLM 配置读取/更新（需管理员 token）
 - /api/admin/llm/test/{provider} LLM 调用测试（需管理员 token）
+- /api/admin/source-governance/overview、`/sources`、`/candidates`、`/changes`、`/errors`、`/trace/{traceId}`、`/llm-logs` 已支撑治理开发者模式的 trace 与 LLM 审计查看
+- /api/admin/ollama/status、`/start`、`/stop`、`/pull` 已支撑本地 Ollama 安装检测、运行状态查询、启停和模型拉取
+- 财务数据链路已拆出独立 `backend/SimplerJiangAiAgent.FinancialWorker`，提供 `/health`、`/api/config`、`/api/collect/{symbol}`；主后端与股票详情页负责代理和消费采集结果
 - 统一 AI 对话审计日志：所有 AI 请求/响应/错误统一记录到 `backend/SimplerJiangAiAgent.Api/App_Data/logs/llm-requests.txt`（含 traceId、耗时与截断保护）
 
 ### 前端
-- Stock Tabs 基础框架
-- LLM 设置页签（管理员配置）
+- 顶层工作台现已固定为 8 个页签：`股票信息`、`情绪轮动`、`全量资讯库`、`交易日志`、`股票推荐`、`LLM 设置`、`治理开发者模式`、`财务数据测试`
+- LLM 设置页签已支持管理员配置、保存即激活当前 provider、Antigravity 授权，以及 Ollama 安装检测 / 启停 / 模型列表 / 拉取 / keepAlive
 - K线/分时图 AI 关键价位叠加（突破线/支撑线，来源于多Agent分析）
 - 专业看盘终端已支持图表区 `全屏 / 退出全屏` 切换，放大后保留原有时间周期、策略按钮与浮动小标交互
 - 股票信息页多Agent面板支持双档位触发：标准分析 / Pro 深度分析
@@ -50,16 +57,36 @@
 - 股票信息页交易计划总览现已新增“市场快链路”条带：把主力/北向/涨跌家数与三大指数快照压缩到总览顶部，便于在跨股票计划面板里先看环境再看计划
 - 股票信息页已支持从 commander 历史分析一键起草交易计划：后端基于 `StockAgentAnalysisHistory` 生成草稿，确定性预填止损/止盈/目标价，用户在弹窗中确认/补录价格后可保存为 `Pending`；已保存计划支持继续编辑、硬删除，并会同时显示在“当前交易计划”和跨股票“交易计划总览”区块，同时自动加入 `ActiveWatchlist`
 - 股票信息页交易计划现已支持 Step 4.4“突发新闻动态定性复核”：后端独立 worker 会对 `ActiveWatchlist` 内 `Pending` 计划结合本地个股快讯与 LLM 结构化复核结果输出 `ReviewRequired` / `NewsReviewed` 事件；前端在“交易计划总览”和“当前交易计划”中展示待复核状态、关联新闻与复核原因，并提供“恢复观察”手动确认入口
+- 股票信息页已内嵌财务报表 Tab：可读取/刷新财务数据，并在字段不足或上游降级时给出本地化降级提示，而不是直接暴露原始异常
 - 顶层已新增“情绪轮动”页签：支持市场阶段摘要、板块分页榜、5/10/20 日 compare window、主线 badge、趋势详情、广度拆解，以及 `主升 / 分歧 / 退潮 / 混沌` 的本地阶段识别
 - “情绪轮动”页签现已叠加实时总览卡片，直接展示指数快照、主力/北向资金、涨跌分布桶，并支持前端本地开关与独立刷新，不影响原有板块轮动面板
 - “情绪轮动”页签现已叠加东财实时板块榜：按涨幅或主力净流入重排现有榜单，优先透出实时强势概念/行业，同时保留原有本地轮动详情与失败隔离
 - 股票推荐页现已新增“推荐前市场快照”：在触发推荐前先展示实时指数、主力/北向、涨跌家数与概念快榜；当实时板块榜为空时会明确降级提示，继续只使用指数与资金快照
+- 股票推荐页现已稳定支持 SSE 进度、会话历史、追问轮次、辩论 feed 和 feed 项中的 traceId 展示，便于后续进入治理开发者模式回查
 - 交易计划流已接入 GOAL-009 市场上下文：草稿/编辑弹窗、当前计划卡、交易计划总览和仓位建议会展示阶段、置信度、主线对齐、建议仓位比例与执行节奏，但不会自动改写用户确认的计划价格
 - 治理开发者模式：参数说明、治理链路 Trace 查询、以及按 traceId 聚合的 LLM 对话会话前端可视化（请求/返回/异常一一对应，支持 JSON 美化）
-- 全量资讯库：支持按关键字、层级（大盘/板块/个股）和情绪筛选本地 AI 清洗资讯，并可直接跳转原文
+- 全量资讯库：支持按关键字、层级（大盘/板块/个股）和情绪筛选本地 AI 清洗资讯，可展示 `已清洗 / 待清洗` 状态，并提供“批量清洗待处理”入口
+- 交易日志页签已落地首层纪律闭环：持仓总览、总本金、胜率、做T 盈亏、交易列表、`DayTrade` badge、AI 复盘面板、复盘历史、风险敞口、交易健康度、双重确认的 `reset-all`
+- 财务数据测试页签已落地：支持 Financial Worker 健康检查、配置读取/更新、手动采集触发与日志查看
 
 ### 桌面端
 - WinForms 容器 + WebView2 载入前端
+
+## GOAL-018 当前主分支现实（部分完成）
+
+虽然 GOAL-018 尚未整体完成，但主分支已经先落地了第一层可用基线，不能再按“纯未来需求”描述：
+
+- `交易日志` 顶层页签已上线，前端可直接查看持仓总览、风险敞口、纪律健康度、汇总指标、交易列表与 AI 复盘历史。
+- 后端 ` /api/trades* ` 与 ` /api/portfolio* ` 已形成交易执行、胜率、合规、行为统计、持仓快照、暴露与上下文的基础接口面。
+- `AI 复盘` 已可生成日/周/月或自定义时段总结，并持久化复盘历史；这属于 GOAL-018 的已交付部分，而不是设计稿。
+- 交易计划弹窗中的双线胜率、交易日志中的 Agent 遵守率、以及投资组合暴露信息，已经把“计划 -> 执行 -> 复盘 -> 风险暴露”串成最小闭环。
+- 持仓/组合上下文与风险暴露已开始反向进入计划和后续 LLM 能力链路，但更完整的“所有 Agent 全面吃到持仓上下文”还没有完全收口。
+
+当前仍未完成的主要切片：
+
+- 更完整的市场阶段 -> 执行纪律联动仍在延伸，尚未把所有纪律规则都落成稳定产品层。
+- 行为模式反馈、冷静仪表盘和更强的长期行为统计仍属于后续切片，不应误写成已经全部交付。
+- GOAL-018 还不是完成态；当前只能描述为“基线已落地，剩余切片继续推进”。
 
 ## 数据同步与配置
 - 后台定时任务按 appsettings.json 的 StockSync 配置抓取并落库
@@ -153,6 +180,11 @@ $env:LLM__GEMINI_OFFICIAL__APIKEY="你的 Gemini 官方_API_KEY"
 opencode
 ```
 
+运行任何程序前，先选定一种验证模式，并在同一轮验证里保持不变：
+- 源码验证：直接启动当前源码的 backend-served app，端口以源码启动日志为准；不要假定 `5119`；不要使用 `.\start-all.bat`。
+- 打包桌面验证：运行 `.\start-all.bat`，它会停止当前仓库残留进程、执行 `scripts\publish-windows-package.ps1`、启动 `artifacts\windows-package\SimplerJiangAiAgent.Desktop.exe`，并等待 `http://localhost:5119/api/health`。
+- 若必须切换模式，先停掉旧模式留下的 repo-owned 进程，再从新模式启动日志重新读取当前端口。
+
 如果需要本地快速打包最新代码并启动和 GitHub 发布物一致的桌面 EXE，直接运行：
 
 ```powershell
@@ -161,6 +193,7 @@ opencode
 
 说明：
 - `start-all.bat` 会先停止当前仓库残留的桌面/后端实例，再执行 `scripts\publish-windows-package.ps1` 打包最新代码，然后直接启动 `artifacts\windows-package\SimplerJiangAiAgent.Desktop.exe`
+- 这个入口只用于打包桌面验证，不用于源码验证
 - 这个入口现在验证的是“GitHub 用户下载后会运行的桌面 EXE”，不是浏览器联调页
 - 脚本会等待打包版桌面拉起内置后端，并用 `http://localhost:5119/api/health` 确认 packaged runtime 已经就绪
 
@@ -192,6 +225,7 @@ opencode
 - 长期目标不是强行追求“磁盘上绝对只有一个文件”，而是追求“一个主 EXE 统一控制启动与关闭 + 用户无需预装 SDK/.NET runtime + 应用可自带必要附属文件”
 - 后续 GOAL-016-R6 会把当前“桌面 EXE 拉起独立 Backend 进程”的形态，收敛成“桌面宿主进程内直接托管 ASP.NET Core 后端”的单宿主、单进程架构
 - 如果继续采用 WebView2，则需要在交付链路中明确 Fixed Version WebView2 Runtime 随包发布与升级策略，而不是继续依赖系统预装状态
+- 如果重新打包时提示 `artifacts\windows-package` 下文件被占用，先结束该目录下旧的桌面或后端进程，再重跑 `scripts\publish-windows-package.ps1`
 
 当前仍需用户自己准备的内容：
 - LLM Key，需要用户在首次使用时自行配置
@@ -246,7 +280,7 @@ opencode
 - [ ] GOAL-016-R6 单宿主单进程 packaged runtime 收口（2026-03-22 已补充详细设计：接受“一个主 EXE + 应用自带附属文件”的交付形态，不再把“绝对单文件”作为硬目标；真正的硬目标改为“单 EXE 统一控制启动与关闭、用户无需预装 SDK/.NET runtime、后端不再作为独立后台进程存在”。实施路线为：把 ASP.NET Core 从独立 `Backend/` 进程改成由 WinForms 宿主进程内直接启动和停止；保留 localhost + WebView2 的现有前端访问契约；重做 `publish-windows-package` 与安装器链路，使桌面宿主成为唯一主入口，并为 WebView2 Fixed Version Runtime 制定随包发布与升级策略。）
 - [ ] GOAL-017 量化双引擎与 Agent/图表协同规划（本轮先完成规划，不急于编码；目标是在现有分时图、K线图、交易计划与多 Agent 分析之间补上一层统一的量化特征与策略能力。总体路线采用 `Skender primary + Lean shadow`：用轻量 .NET 指标库承担在线主引擎，用 Lean 承担 shadow/replay/calibration；图表、Agent、交易计划默认只消费 primary 结果，shadow 结果主要用于开发者模式、回放、校准与研究。规划分 4 个切片：R1 统一 normalized market-data 输入层与 feature/signal/comparison contract；R2 Skender 主运行时整合；R3 Lean shadow replay/calibration 整合；R4 图表、MCP、Agent、交易计划产品层整合。）
 - [ ] GOAL-017-R1 归一化行情输入层与量化 Contract 设计（先锁定双引擎共享底座，不急于真正接入 Skender 或 Lean。范围包括：统一 `NormalizedBar/NormalizedBarSeries`、定义 `QuantFeatureSnapshotDto/QuantStrategySignalDto/QuantEngineComparisonDto/AgentQuantContextDto`，补齐 `warmupState/degradedFlags/engine role/execution mode` 语义。由于 `Stock Copilot / GOAL-AGENT-002` 已被手动删除，后续不再把 `StockCopilot*Dto` 当成必须兼容的产品层前提；如仓库仍残留同名类型，只按待清理遗留处理。）
-- [ ] **GOAL-018 交易纪律闭环与胜率提升系统**（⭐ 首要目标 v3.0。补齐「纪律执行→结果记录→复盘反馈→行为修正」闭环，引入 LLM 交易教练作为客观旁观者，并将用户真实持仓注入所有 LLM Agent 请求。R1 交易执行记录、做T支持、持仓追踪与自动收益核算 P0；R2 信号胜率与实盘胜率双线 P0；R3 LLM 交易教练复盘与反思 P0；R4 持仓上下文注入 LLM Agent 与风险暴露管控 P0；R5 市场阶段执行纪律联动 P1；R6 交易行为模式反馈与冷静仪表盘 P2。详细设计见 `docs/GOAL-018-trading-discipline-closed-loop.md`。）
+- [ ] **GOAL-018 交易纪律闭环与胜率提升系统**（仍是首要未完成目标，但主分支已先落地基线：交易日志页签、`/api/trades*` 交易记录与重置、`/api/portfolio*` 持仓快照/设置/暴露/上下文、胜率/合规/健康度统计、AI 复盘生成与历史、交易计划弹窗中的双线胜率，以及部分 LLM 持仓上下文/风险暴露联动已可用。当前尚未完成整个 GOAL：市场阶段执行纪律联动仍在延伸，行为模式反馈和更完整的冷静仪表盘仍属后续切片。详细设计见 `docs/GOAL-018-trading-discipline-closed-loop.md`。）
 - [x] MANUAL-20260319-EXTENSION-INTERFACE `stock-and-fund-chrome-master` 接口吸收规划（已完成 R1-R5 全链路收口：后端新增 `/api/stocks/quotes/batch`、`/api/market/realtime/overview`、`/api/market/sectors/realtime`，接入东财批量行情、主力资金、北向资金、涨跌分布与实时板块榜；默认分时来源已切到东方财富优先；前端已同步落地到 `情绪轮动`、`股票推荐`、`股票信息` 与交易计划总览等高频决策入口，并通过定向单测与浏览器验收。整体策略仍是不做整包替换，而是只吸收扩展里仍有价值的公开端点；作者自建 `110.40.187.161` 云服务继续排除在正式依赖之外。）
 - [x] MANUAL-20260319-EXTENSION-INTERFACE-R1 实时行情后端切片（新增 Eastmoney realtime adapter 与聚合服务，提供批量行情和市场总览 API；验证覆盖批量行情、主力资金、北向资金、涨跌分布解析，以及本地运行时 smoke test。）
 - [x] MANUAL-20260319-CHART-PERF 股票图表刷新性能收口（已定位慢点不在第三方行情源本身，而在前端把图表刷新绑定到 `/api/stocks/detail` 重聚合链路；现已新增 `/api/stocks/chart` 轻量接口，并把 `StockInfoTab` 首屏图表和 `日K/月K/年K` 切换改为只请求图表数据。定向单测 43/43 通过，Browser MCP 已确认切换 `月K图/年K图` 时只出现 `/api/stocks/chart?...interval=month|year`，不再触发 `/api/stocks/detail/cache`、`/api/stocks/messages` 与 `/api/stocks/fundamental-snapshot`。）

@@ -67,6 +67,7 @@ public sealed class StockCopilotMcpService : IStockCopilotMcpService
         ["资产负债率"] = 11
     };
     private const string LatestFinanceFactSource = "东方财富最新财报";
+    private const string TaskScopeSeparator = "::";
     private static readonly TimeSpan RefreshSkipWindow = TimeSpan.FromMinutes(5);
     private static readonly ConcurrentDictionary<string, DateTime> RecentRefreshTimestamps = new(StringComparer.OrdinalIgnoreCase);
     private readonly IStockDataService _dataService;
@@ -85,6 +86,8 @@ public sealed class StockCopilotMcpService : IStockCopilotMcpService
     private readonly IPortfolioSnapshotService? _portfolioSnapshotService;
     private readonly IFinancialDataReadService? _financialDataReadService;
     private readonly ILogger<StockCopilotMcpService> _logger;
+    private readonly ConcurrentDictionary<string, Lazy<Task<SymbolRefreshExecutionResult>>> _scopedSymbolRefreshes = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, Lazy<Task<SymbolBundleExecutionResult>>> _scopedSymbolBundles = new(StringComparer.OrdinalIgnoreCase);
 
     public StockCopilotMcpService(
         IStockDataService dataService,
@@ -127,7 +130,7 @@ public sealed class StockCopilotMcpService : IStockCopilotMcpService
         var stopwatch = Stopwatch.StartNew();
         var normalizedSymbol = StockSymbolNormalizer.Normalize(symbol);
         var windowOptions = NormalizeWindowOptions(window);
-        await EnsureSymbolFactsRefreshedAsync(normalizedSymbol, cancellationToken);
+        await EnsureSymbolFactsRefreshedAsync(normalizedSymbol, taskId, cancellationToken);
         var quote = await _dataService.GetQuoteAsync(normalizedSymbol, null, cancellationToken);
         var localFacts = await _queryLocalFactDatabaseTool.QueryAsync(normalizedSymbol, cancellationToken);
         var snapshotResolution = await ResolveFundamentalSnapshotAsync(normalizedSymbol, localFacts, cancellationToken);
@@ -200,7 +203,7 @@ public sealed class StockCopilotMcpService : IStockCopilotMcpService
         var stopwatch = Stopwatch.StartNew();
         var normalizedSymbol = StockSymbolNormalizer.Normalize(symbol);
         var windowOptions = NormalizeWindowOptions(window);
-        await EnsureSymbolFactsRefreshedAsync(normalizedSymbol, cancellationToken);
+        await EnsureSymbolFactsRefreshedAsync(normalizedSymbol, taskId, cancellationToken);
         var localFacts = await _queryLocalFactDatabaseTool.QueryAsync(normalizedSymbol, cancellationToken);
         var snapshotResolution = await ResolveFundamentalSnapshotAsync(normalizedSymbol, localFacts, cancellationToken);
         var allFacts = snapshotResolution.Snapshot?.Facts ?? ConvertFacts(localFacts.FundamentalFacts);
@@ -260,7 +263,7 @@ public sealed class StockCopilotMcpService : IStockCopilotMcpService
         var stopwatch = Stopwatch.StartNew();
         var normalizedSymbol = StockSymbolNormalizer.Normalize(symbol);
         var windowOptions = NormalizeWindowOptions(window);
-        await EnsureSymbolFactsRefreshedAsync(normalizedSymbol, cancellationToken);
+        await EnsureSymbolFactsRefreshedAsync(normalizedSymbol, taskId, cancellationToken);
         var localFacts = await _queryLocalFactDatabaseTool.QueryAsync(normalizedSymbol, cancellationToken);
         var snapshotResolution = await ResolveFundamentalSnapshotAsync(normalizedSymbol, localFacts, cancellationToken);
         var allFacts = snapshotResolution.Snapshot?.Facts ?? ConvertFacts(localFacts.FundamentalFacts);
@@ -295,7 +298,7 @@ public sealed class StockCopilotMcpService : IStockCopilotMcpService
         var stopwatch = Stopwatch.StartNew();
         var normalizedSymbol = StockSymbolNormalizer.Normalize(symbol);
         var windowOptions = NormalizeWindowOptions(window);
-        await EnsureSymbolFactsRefreshedAsync(normalizedSymbol, cancellationToken);
+        await EnsureSymbolFactsRefreshedAsync(normalizedSymbol, taskId, cancellationToken);
         var quote = await _dataService.GetQuoteAsync(normalizedSymbol, null, cancellationToken);
         var localFacts = await _queryLocalFactDatabaseTool.QueryAsync(normalizedSymbol, cancellationToken);
         var snapshotResolution = await ResolveFundamentalSnapshotAsync(normalizedSymbol, localFacts, cancellationToken);
@@ -420,7 +423,8 @@ public sealed class StockCopilotMcpService : IStockCopilotMcpService
         var stopwatch = Stopwatch.StartNew();
         var normalizedSymbol = StockSymbolNormalizer.Normalize(symbol);
         var windowOptions = NormalizeWindowOptions(window);
-        await EnsureSymbolFactsRefreshedAsync(normalizedSymbol, cancellationToken);
+        await EnsureMarketFactsRefreshedAsync(cancellationToken);
+        await EnsureSymbolFactsRefreshedAsync(normalizedSymbol, taskId, cancellationToken);
         var localFacts = await _queryLocalFactDatabaseTool.QueryAsync(normalizedSymbol, cancellationToken);
         var marketSummary = await _sectorRotationQueryService.GetLatestSummaryAsync(cancellationToken);
         var marketContext = await _marketContextService.GetLatestAsync(normalizedSymbol, cancellationToken);
@@ -534,9 +538,9 @@ public sealed class StockCopilotMcpService : IStockCopilotMcpService
         var safeCount = Math.Clamp(count, 20, 240);
         var windowOptions = NormalizeWindowOptions(window);
 
-        await EnsureSymbolFactsRefreshedAsync(normalizedSymbol, cancellationToken);
+        await EnsureSymbolFactsRefreshedAsync(normalizedSymbol, taskId, cancellationToken);
 
-        var bundle = await FetchSymbolDataBundleAsync(normalizedSymbol, safeInterval, safeCount, source, cancellationToken);
+        var bundle = await FetchSymbolDataBundleAsync(normalizedSymbol, safeInterval, safeCount, source, taskId, cancellationToken);
         var newsPolicy = StockAgentNewsContextPolicy.Apply(bundle.Messages, DateTime.Now).Policy;
         var prepared = _featureEngineeringService.Prepare(normalizedSymbol, bundle.Quote, bundle.KLines, bundle.MinuteLines, bundle.Messages, newsPolicy, StockAgentLocalFactProjection.Create(bundle.LocalFacts), DateTime.Now);
 
@@ -585,9 +589,9 @@ public sealed class StockCopilotMcpService : IStockCopilotMcpService
         var normalizedSymbol = StockSymbolNormalizer.Normalize(symbol);
         var windowOptions = NormalizeWindowOptions(window);
 
-        await EnsureSymbolFactsRefreshedAsync(normalizedSymbol, cancellationToken);
+        await EnsureSymbolFactsRefreshedAsync(normalizedSymbol, taskId, cancellationToken);
 
-        var bundle = await FetchSymbolDataBundleAsync(normalizedSymbol, "day", 60, source, cancellationToken);
+        var bundle = await FetchSymbolDataBundleAsync(normalizedSymbol, "day", 60, source, taskId, cancellationToken);
         var prepared = _featureEngineeringService.Prepare(
             normalizedSymbol,
             bundle.Quote,
@@ -648,9 +652,9 @@ public sealed class StockCopilotMcpService : IStockCopilotMcpService
         var safeCount = Math.Clamp(count, 30, 180);
         var windowOptions = NormalizeWindowOptions(window);
 
-        await EnsureSymbolFactsRefreshedAsync(normalizedSymbol, cancellationToken);
+        await EnsureSymbolFactsRefreshedAsync(normalizedSymbol, taskId, cancellationToken);
 
-        var bundle = await FetchSymbolDataBundleAsync(normalizedSymbol, safeInterval, safeCount, source, cancellationToken);
+        var bundle = await FetchSymbolDataBundleAsync(normalizedSymbol, safeInterval, safeCount, source, taskId, cancellationToken);
         var prepared = _featureEngineeringService.Prepare(
             normalizedSymbol,
             bundle.Quote,
@@ -694,7 +698,7 @@ public sealed class StockCopilotMcpService : IStockCopilotMcpService
         }
         else
         {
-            await EnsureSymbolFactsRefreshedAsync(normalizedSymbol, cancellationToken);
+            await EnsureSymbolFactsRefreshedAsync(normalizedSymbol, taskId, cancellationToken);
         }
 
         LocalNewsBucketDto bucket = normalizedLevel == "market"
@@ -2347,13 +2351,53 @@ public sealed class StockCopilotMcpService : IStockCopilotMcpService
         IReadOnlyList<IntradayMessageDto> Messages,
         LocalFactPackageDto LocalFacts);
 
+    private sealed record SymbolRefreshExecutionResult(string Mode, long ElapsedMs);
+
+    private sealed record SymbolBundleExecutionResult(SymbolDataBundle Bundle, long ElapsedMs);
+
+    private sealed record ScopedExecutionResult<T>(T Value, bool Reused, long WaitElapsedMs);
+
     /// <summary>
     /// Fetches all common symbol data in parallel. To add new data types,
     /// add a new task and field to SymbolDataBundle.
     /// </summary>
     private async Task<SymbolDataBundle> FetchSymbolDataBundleAsync(
+        string symbol, string interval, int count, string? source, string? taskId, CancellationToken ct)
+    {
+        var scopeKey = ResolveTaskScopeKey(taskId);
+        if (string.IsNullOrWhiteSpace(scopeKey))
+        {
+            var execution = await FetchSymbolDataBundleCoreAsync(symbol, interval, count, source, ct);
+            LogBundleFetch(symbol, interval, count, source, scopeKey, taskId, false, execution.ElapsedMs, execution.ElapsedMs, execution.Bundle);
+            return execution.Bundle;
+        }
+
+        var cacheKey = BuildBundleCacheKey(scopeKey, symbol, interval, count, source);
+        var executionResult = await ExecuteScopedAsync(
+            _scopedSymbolBundles,
+            cacheKey,
+            innerCt => FetchSymbolDataBundleCoreAsync(symbol, interval, count, source, innerCt),
+            ct);
+
+        LogBundleFetch(
+            symbol,
+            interval,
+            count,
+            source,
+            scopeKey,
+            taskId,
+            executionResult.Reused,
+            executionResult.WaitElapsedMs,
+            executionResult.Value.ElapsedMs,
+            executionResult.Value.Bundle);
+
+        return executionResult.Value.Bundle;
+    }
+
+    private async Task<SymbolBundleExecutionResult> FetchSymbolDataBundleCoreAsync(
         string symbol, string interval, int count, string? source, CancellationToken ct)
     {
+        var stopwatch = Stopwatch.StartNew();
         var quoteTask = _dataService.GetQuoteAsync(symbol, source, ct);
         var kLineTask = _dataService.GetKLineAsync(symbol, interval, count, source, ct);
         var minuteTask = _dataService.GetMinuteLineAsync(symbol, source, ct);
@@ -2362,31 +2406,141 @@ public sealed class StockCopilotMcpService : IStockCopilotMcpService
 
         await Task.WhenAll(quoteTask, kLineTask, minuteTask, messagesTask, localFactsTask);
 
-        return new SymbolDataBundle(
-            await quoteTask,
-            await kLineTask,
-            await minuteTask,
-            await messagesTask,
-            await localFactsTask);
+        stopwatch.Stop();
+
+        return new SymbolBundleExecutionResult(
+            new SymbolDataBundle(
+                await quoteTask,
+                await kLineTask,
+                await minuteTask,
+                await messagesTask,
+                await localFactsTask),
+            stopwatch.ElapsedMilliseconds);
     }
 
-    private async Task EnsureSymbolFactsRefreshedAsync(string symbol, CancellationToken cancellationToken)
+    private async Task EnsureSymbolFactsRefreshedAsync(string symbol, string? taskId, CancellationToken cancellationToken)
     {
         if (_localFactIngestionService is null || string.IsNullOrWhiteSpace(symbol))
         {
             return;
         }
 
-        // Skip if this symbol was refreshed recently (avoids redundant crawls
-        // when multiple parallel analysts call MCP for the same symbol).
-        if (RecentRefreshTimestamps.TryGetValue(symbol, out var lastRefresh)
-            && DateTime.UtcNow - lastRefresh < RefreshSkipWindow)
+        var scopeKey = ResolveTaskScopeKey(taskId);
+        if (string.IsNullOrWhiteSpace(scopeKey))
         {
+            var refreshResult = await EnsureSymbolFactsRefreshedCoreAsync(symbol, cancellationToken);
+            LogRefresh(symbol, scopeKey, taskId, false, refreshResult.ElapsedMs, refreshResult);
             return;
         }
 
-        await _localFactIngestionService.EnsureFreshAsync(symbol, cancellationToken);
+        var cacheKey = string.Concat(scopeKey, '|', symbol);
+        var executionResult = await ExecuteScopedAsync(
+            _scopedSymbolRefreshes,
+            cacheKey,
+            innerCt => EnsureSymbolFactsRefreshedCoreAsync(symbol, innerCt),
+            cancellationToken);
+
+        LogRefresh(symbol, scopeKey, taskId, executionResult.Reused, executionResult.WaitElapsedMs, executionResult.Value);
+    }
+
+    private async Task<SymbolRefreshExecutionResult> EnsureSymbolFactsRefreshedCoreAsync(string symbol, CancellationToken cancellationToken)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        if (RecentRefreshTimestamps.TryGetValue(symbol, out var lastRefresh)
+            && DateTime.UtcNow - lastRefresh < RefreshSkipWindow)
+        {
+            stopwatch.Stop();
+            return new SymbolRefreshExecutionResult("recent_skip", stopwatch.ElapsedMilliseconds);
+        }
+
+        await _localFactIngestionService!.EnsureFreshAsync(symbol, cancellationToken);
         RecentRefreshTimestamps[symbol] = DateTime.UtcNow;
+        stopwatch.Stop();
+        return new SymbolRefreshExecutionResult("executed", stopwatch.ElapsedMilliseconds);
+    }
+
+    private static async Task<ScopedExecutionResult<T>> ExecuteScopedAsync<T>(
+        ConcurrentDictionary<string, Lazy<Task<T>>> cache,
+        string cacheKey,
+        Func<CancellationToken, Task<T>> factory,
+        CancellationToken cancellationToken)
+    {
+        var newLazy = new Lazy<Task<T>>(() => factory(cancellationToken), LazyThreadSafetyMode.ExecutionAndPublication);
+        var lazy = cache.GetOrAdd(cacheKey, newLazy);
+        var reused = !ReferenceEquals(lazy, newLazy);
+        var stopwatch = Stopwatch.StartNew();
+
+        try
+        {
+            var value = await lazy.Value;
+            stopwatch.Stop();
+            return new ScopedExecutionResult<T>(value, reused, stopwatch.ElapsedMilliseconds);
+        }
+        catch
+        {
+            cache.TryRemove(cacheKey, out _);
+            throw;
+        }
+    }
+
+    private static string BuildBundleCacheKey(string scopeKey, string symbol, string interval, int count, string? source)
+    {
+        var normalizedInterval = string.IsNullOrWhiteSpace(interval) ? "day" : interval.Trim().ToLowerInvariant();
+        var normalizedSource = NormalizeNullableText(source)?.ToLowerInvariant() ?? string.Empty;
+        return string.Join('|', scopeKey, symbol, normalizedInterval, count.ToString(CultureInfo.InvariantCulture), normalizedSource);
+    }
+
+    private static string? ResolveTaskScopeKey(string? taskId)
+    {
+        var normalizedTaskId = NormalizeNullableText(taskId);
+        if (string.IsNullOrWhiteSpace(normalizedTaskId))
+        {
+            return null;
+        }
+
+        var separatorIndex = normalizedTaskId.IndexOf(TaskScopeSeparator, StringComparison.Ordinal);
+        return separatorIndex >= 0 ? normalizedTaskId[..separatorIndex] : normalizedTaskId;
+    }
+
+    private void LogRefresh(string symbol, string? scopeKey, string? taskId, bool reused, long waitElapsedMs, SymbolRefreshExecutionResult refreshResult)
+    {
+        _logger.LogInformation(
+            "StockCopilotMcp refresh symbol={Symbol} scope={Scope} taskId={TaskId} mode={Mode} cacheState={CacheState} waitElapsedMs={WaitElapsedMs} refreshElapsedMs={RefreshElapsedMs}",
+            symbol,
+            scopeKey ?? "none",
+            taskId ?? "none",
+            refreshResult.Mode,
+            reused ? "reused" : "new",
+            waitElapsedMs,
+            refreshResult.ElapsedMs);
+    }
+
+    private void LogBundleFetch(
+        string symbol,
+        string interval,
+        int count,
+        string? source,
+        string? scopeKey,
+        string? taskId,
+        bool reused,
+        long waitElapsedMs,
+        long bundleElapsedMs,
+        SymbolDataBundle bundle)
+    {
+        _logger.LogInformation(
+            "StockCopilotMcp bundle symbol={Symbol} interval={Interval} count={Count} source={Source} scope={Scope} taskId={TaskId} cacheState={CacheState} waitElapsedMs={WaitElapsedMs} bundleElapsedMs={BundleElapsedMs} kLineCount={KLineCount} minuteCount={MinuteCount} messageCount={MessageCount}",
+            symbol,
+            interval,
+            count,
+            NormalizeNullableText(source) ?? "auto",
+            scopeKey ?? "none",
+            taskId ?? "none",
+            reused ? "reused" : "new",
+            waitElapsedMs,
+            bundleElapsedMs,
+            bundle.KLines.Count,
+            bundle.MinuteLines.Count,
+            bundle.Messages.Count);
     }
 
     private async Task EnsureMarketFactsRefreshedAsync(CancellationToken cancellationToken)

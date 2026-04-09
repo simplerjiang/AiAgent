@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import RecommendReportCard from './recommend/RecommendReportCard.vue'
 import RecommendFeed from './recommend/RecommendFeed.vue'
 import RecommendProgress from './recommend/RecommendProgress.vue'
@@ -28,22 +28,206 @@ const elapsedSeconds = ref(0)
 let elapsedTimer = null
 
 let eventSource = null
+let eventSourceSessionId = null
 let sseRetryCount = 0
 let seenSseEventIds = new Map()
 const SSE_MAX_RETRIES = 3
 let componentAlive = true
+let failedSseSessionId = null
+let activeSessionLoadToken = 0
 
-const startElapsedTimer = () => {
-  submitStartTime.value = Date.now()
-  elapsedSeconds.value = 0
+const TURN_LIVE_STATUSES = new Set(['Pending', 'Queued', 'Running'])
+const TURN_RUNNING_STATUSES = new Set(['Queued', 'Running'])
+const TURN_TERMINAL_STATUSES = new Set(['Completed', 'Failed', 'Cancelled'])
+const SESSION_TERMINAL_STATUSES = new Set(['Completed', 'Degraded', 'Failed', 'Closed', 'TimedOut'])
+
+const parseDateMs = value => {
+  if (!value) return null
+  const parsed = Date.parse(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+const startElapsedTimer = (startedAt = Date.now()) => {
+  const startMs = typeof startedAt === 'number'
+    ? startedAt
+    : (parseDateMs(startedAt) ?? Date.now())
+  submitStartTime.value = startMs
+  elapsedSeconds.value = Math.max(0, Math.floor((Date.now() - startMs) / 1000))
   if (elapsedTimer) clearInterval(elapsedTimer)
   elapsedTimer = setInterval(() => {
-    elapsedSeconds.value = Math.floor((Date.now() - submitStartTime.value) / 1000)
+    elapsedSeconds.value = Math.max(0, Math.floor((Date.now() - submitStartTime.value) / 1000))
   }, 1000)
 }
 
 const stopElapsedTimer = () => {
   if (elapsedTimer) { clearInterval(elapsedTimer); elapsedTimer = null }
+}
+
+const getSessionStatusValue = session => session?.status ?? session?.Status ?? ''
+const getTurnStatusValue = turn => turn?.status ?? turn?.Status ?? ''
+const getTurnRequestedAt = turn => turn?.requestedAt ?? turn?.RequestedAt ?? null
+const getTurnStartedAt = turn => turn?.startedAt ?? turn?.StartedAt ?? null
+const getTurnCompletedAt = turn => turn?.completedAt ?? turn?.CompletedAt ?? null
+const getTurnStageSnapshots = turn => Array.isArray(turn?.stageSnapshots)
+  ? turn.stageSnapshots
+  : Array.isArray(turn?.StageSnapshots)
+    ? turn.StageSnapshots
+    : []
+
+const getTurnSortValue = turn => {
+  const turnIndex = Number(turn?.turnIndex ?? turn?.TurnIndex)
+  if (Number.isFinite(turnIndex)) return turnIndex
+
+  const requestedAt = parseDateMs(getTurnRequestedAt(turn))
+  if (Number.isFinite(requestedAt)) return requestedAt
+
+  const turnId = Number(turn?.id ?? turn?.Id)
+  return Number.isFinite(turnId) ? turnId : -1
+}
+
+const getActiveSessionTurn = session => {
+  const turns = getSessionTurns(session)
+    .slice()
+    .sort((left, right) => getTurnSortValue(left) - getTurnSortValue(right))
+  if (!turns.length) return null
+
+  const activeTurnId = session?.activeTurnId ?? session?.ActiveTurnId ?? null
+  const activeTurn = turns.find(turn => (turn.id ?? turn.Id) === activeTurnId) ?? null
+  const latestLiveTurn = [...turns].reverse().find(turn => TURN_LIVE_STATUSES.has(getTurnStatusValue(turn))) ?? null
+
+  if (latestLiveTurn && !TURN_LIVE_STATUSES.has(getTurnStatusValue(activeTurn))) {
+    return latestLiveTurn
+  }
+
+  return activeTurn ?? turns[turns.length - 1]
+}
+
+const buildDurationSeconds = (startedAt, completedAt) => {
+  const startMs = parseDateMs(startedAt)
+  if (!Number.isFinite(startMs)) return null
+  const endMs = parseDateMs(completedAt) ?? Date.now()
+  return Math.max(0, Math.floor((endMs - startMs) / 1000))
+}
+
+const buildTerminalStatusMessage = ({ sessionStatus, turnStatus, durationSeconds, hasDegradedStage }) => {
+  const suffix = durationSeconds != null ? `，耗时 ${durationSeconds} 秒` : ''
+  if (sessionStatus === 'TimedOut') return `分析超时结束${suffix}`
+  if (turnStatus === 'Cancelled') return `分析已取消${suffix}`
+  if (turnStatus === 'Failed' || sessionStatus === 'Failed') return `分析流程失败${suffix}`
+
+  const degraded = sessionStatus === 'Degraded' || hasDegradedStage
+  if (degraded) {
+    return durationSeconds != null ? `分析完成（部分降级），耗时 ${durationSeconds} 秒` : '分析完成（部分降级）'
+  }
+
+  return durationSeconds != null ? `分析完成！耗时 ${durationSeconds} 秒` : '分析完成'
+}
+
+const describeLoadedSessionRuntime = session => {
+  if (!session) return null
+
+  const sessionId = session.id ?? session.Id ?? null
+  const sessionStatus = getSessionStatusValue(session)
+  const activeTurn = getActiveSessionTurn(session)
+  const turnStatus = getTurnStatusValue(activeTurn)
+  const stageSnapshots = getTurnStageSnapshots(activeTurn)
+  const hasDegradedStage = stageSnapshots.some(snapshot => (snapshot?.status ?? snapshot?.Status) === 'Degraded')
+  const startedAt = getTurnStartedAt(activeTurn) ?? getTurnRequestedAt(activeTurn)
+  const completedAt = getTurnCompletedAt(activeTurn) ?? session?.updatedAt ?? session?.UpdatedAt ?? null
+  const durationSeconds = buildDurationSeconds(startedAt, completedAt)
+
+  if (TURN_TERMINAL_STATUSES.has(turnStatus)) {
+    return {
+      sessionId,
+      isRunning: false,
+      phase: turnStatus === 'Completed' ? 'completed' : 'failed',
+      message: buildTerminalStatusMessage({ sessionStatus, turnStatus, durationSeconds, hasDegradedStage }),
+      durationSeconds,
+      startedAt,
+      shouldConnect: false
+    }
+  }
+
+  if (TURN_RUNNING_STATUSES.has(turnStatus) || sessionStatus === 'Running') {
+    return {
+      sessionId,
+      isRunning: true,
+      phase: eventSourceSessionId === sessionId ? 'running' : 'connecting',
+      message: eventSourceSessionId === sessionId
+        ? '分析进行中，团队正在讨论...'
+        : '检测到会话仍在执行，正在连接分析流...',
+      durationSeconds,
+      startedAt,
+      shouldConnect: sessionId != null && failedSseSessionId !== sessionId
+    }
+  }
+
+  if (SESSION_TERMINAL_STATUSES.has(sessionStatus)) {
+    return {
+      sessionId,
+      isRunning: false,
+      phase: sessionStatus === 'Failed' || sessionStatus === 'TimedOut' ? 'failed' : 'completed',
+      message: buildTerminalStatusMessage({ sessionStatus, turnStatus, durationSeconds, hasDegradedStage }),
+      durationSeconds,
+      startedAt,
+      shouldConnect: false
+    }
+  }
+
+  return {
+    sessionId,
+    isRunning: false,
+    phase: 'idle',
+    message: '',
+    durationSeconds,
+    startedAt,
+    shouldConnect: false
+  }
+}
+
+const syncRuntimeFromLoadedSession = session => {
+  const runtime = describeLoadedSessionRuntime(session)
+  if (!runtime) return
+
+  if (runtime.isRunning) {
+    if (failedSseSessionId === runtime.sessionId && statusPhase.value === 'failed') {
+      stopElapsedTimer()
+      isRunning.value = false
+      return
+    }
+
+    startElapsedTimer(runtime.startedAt ?? Date.now())
+    isRunning.value = true
+
+    const hasLiveBanner = runtime.sessionId != null
+      && eventSourceSessionId === runtime.sessionId
+      && ['submitting', 'connecting', 'running'].includes(statusPhase.value)
+
+    if (runtime.shouldConnect && runtime.sessionId != null && eventSourceSessionId !== runtime.sessionId) {
+      statusPhase.value = 'connecting'
+      statusMessage.value = runtime.message
+      connectSse(runtime.sessionId)
+      return
+    }
+
+    if (!hasLiveBanner) {
+      statusPhase.value = runtime.phase
+      statusMessage.value = runtime.message
+    }
+    return
+  }
+
+  closeSse()
+  failedSseSessionId = null
+  stopElapsedTimer()
+  isRunning.value = false
+
+  if (runtime.durationSeconds != null) {
+    elapsedSeconds.value = runtime.durationSeconds
+  }
+
+  statusPhase.value = runtime.phase
+  statusMessage.value = runtime.message
 }
 
 const topSectors = computed(() => realtimeSectors.value.slice(0, 6))
@@ -156,6 +340,11 @@ const fetchJson = async (url, options) => {
   return JSON.parse(text)
 }
 
+const clearActiveSessionView = () => {
+  activeSessionLoadToken += 1
+  activeSession.value = null
+}
+
 const fetchMarketContext = async () => {
   if (!realtimeContextEnabled.value || typeof fetch !== 'function') {
     realtimeOverview.value = null
@@ -195,31 +384,35 @@ const loadSessionHistory = async () => {
 }
 
 const loadSessionDetail = async (id) => {
+  const loadToken = ++activeSessionLoadToken
   try {
-    activeSession.value = await fetchJson(`/api/recommend/sessions/${id}`)
-  } catch (err) {
+    const detail = await fetchJson(`/api/recommend/sessions/${id}`)
+    if (!componentAlive || loadToken !== activeSessionLoadToken) return null
+    activeSession.value = detail
+    syncRuntimeFromLoadedSession(detail)
+    return detail
+  } catch {
+    if (!componentAlive || loadToken !== activeSessionLoadToken) return null
     activeSession.value = null
+    return null
   }
 }
 
 const selectSession = async (session) => {
+  failedSseSessionId = null
   closeSse()
   sseEvents.value = []
   followUpText.value = ''
+  followUpError.value = ''
   const id = session.id ?? session.Id
   await loadSessionDetail(id)
-  const status = activeSession.value?.status ?? activeSession.value?.Status
-  if (status === 'Running') {
-    connectSse(id)
-  } else {
-    isRunning.value = false
-  }
 }
 
 // ---------- Create new recommendation ----------
 const handleNewRecommend = async (userPrompt) => {
   if (!userPrompt?.trim()) return
   const prompt = userPrompt.trim()
+  failedSseSessionId = null
   isRunning.value = true
   statusPhase.value = 'submitting'
   statusMessage.value = '正在创建推荐会话...'
@@ -234,12 +427,12 @@ const handleNewRecommend = async (userPrompt) => {
     })
     const sessionId = result.id ?? result.Id
     if (!componentAlive) return
+    clearActiveSessionView()
     statusPhase.value = 'connecting'
     statusMessage.value = '会话已创建，正在连接分析流...'
     await loadSessionDetail(sessionId)
     await loadSessionHistory()
     if (!componentAlive) return
-    connectSse(sessionId)
     activeTab.value = 'progress'
     followUpText.value = ''
   } catch (err) {
@@ -254,14 +447,19 @@ const handleNewRecommend = async (userPrompt) => {
 // ---------- SSE ----------
 const connectSse = (sessionId) => {
   closeSse()
+  failedSseSessionId = null
   sseRetryCount = 0
   seenSseEventIds = new Map()
   isRunning.value = true
+  eventSourceSessionId = sessionId
+  statusPhase.value = 'connecting'
+  statusMessage.value = '检测到会话仍在执行，正在连接分析流...'
   const url = `/api/recommend/sessions/${sessionId}/events`
   eventSource = new EventSource(url)
 
   eventSource.onopen = () => {
     sseRetryCount = 0
+    failedSseSessionId = null
     statusPhase.value = 'running'
     statusMessage.value = '分析进行中，团队正在讨论...'
   }
@@ -272,9 +470,10 @@ const connectSse = (sessionId) => {
       statusMessage.value = `分析完成！耗时 ${elapsedSeconds.value} 秒`
       stopElapsedTimer()
       isRunning.value = false
+      failedSseSessionId = null
       closeSse()
-      loadSessionDetail(sessionId)
-      loadSessionHistory()
+      void loadSessionDetail(sessionId)
+      void loadSessionHistory()
       return
     }
 
@@ -292,7 +491,7 @@ const connectSse = (sessionId) => {
     try {
       const evt = JSON.parse(e.data)
       if (evt.eventType === 'TurnSwitched') {
-        loadSessionDetail(sessionId)
+        void loadSessionDetail(sessionId)
         statusMessage.value = '已切换到新的追问轮次，继续分析中...'
         return
       }
@@ -302,17 +501,19 @@ const connectSse = (sessionId) => {
         statusMessage.value = `分析完成！耗时 ${elapsedSeconds.value} 秒`
         stopElapsedTimer()
         isRunning.value = false
+        failedSseSessionId = null
         closeSse()
-        loadSessionDetail(sessionId)
-        loadSessionHistory()
+        void loadSessionDetail(sessionId)
+        void loadSessionHistory()
       } else if (evt.eventType === 'TurnFailed' || evt.eventType === 'ErrorOccurred') {
         statusPhase.value = 'failed'
         statusMessage.value = evt.summary || '分析流程失败'
         stopElapsedTimer()
         isRunning.value = false
+        failedSseSessionId = null
         closeSse()
-        loadSessionDetail(sessionId)
-        loadSessionHistory()
+        void loadSessionDetail(sessionId)
+        void loadSessionHistory()
       } else {
         // Update status with latest event summary
         if (evt.summary) {
@@ -329,12 +530,13 @@ const connectSse = (sessionId) => {
   eventSource.onerror = () => {
     sseRetryCount++
     if (sseRetryCount >= SSE_MAX_RETRIES) {
+      failedSseSessionId = sessionId
       statusPhase.value = 'failed'
       statusMessage.value = 'SSE 连接失败，请刷新页面重试'
       stopElapsedTimer()
       isRunning.value = false
       closeSse()
-      loadSessionDetail(sessionId)
+      void loadSessionDetail(sessionId)
     }
   }
 }
@@ -344,16 +546,19 @@ const closeSse = () => {
     eventSource.close()
     eventSource = null
   }
+  eventSourceSessionId = null
 }
 
 const reconnectSse = () => {
+  if (!activeSession.value) return
+  failedSseSessionId = null
   sseRetryCount = 0
-  statusPhase.value = ''
-  statusMessage.value = ''
-  if (activeSession.value) {
-    const sessionId = activeSession.value.id ?? activeSession.value.Id
-    connectSse(sessionId)
-  }
+  statusPhase.value = 'connecting'
+  statusMessage.value = '正在重新连接分析流...'
+  const activeTurn = getActiveSessionTurn(activeSession.value)
+  startElapsedTimer(getTurnStartedAt(activeTurn) ?? getTurnRequestedAt(activeTurn) ?? Date.now())
+  const sessionId = activeSession.value.id ?? activeSession.value.Id
+  connectSse(sessionId)
 }
 
 const getSessionTurns = session => Array.isArray(session?.turns)
@@ -488,6 +693,7 @@ const handleFollowUp = async (prompt) => {
   const normalizedPrompt = prompt.trim()
   const sessionId = activeSession.value.id ?? activeSession.value.Id
   const pendingTurn = appendPendingFollowUpTurn(normalizedPrompt)
+  failedSseSessionId = null
   followUpSending.value = true
   followUpError.value = ''
   sseEvents.value = []
@@ -567,7 +773,6 @@ const handleFollowUp = async (prompt) => {
       await loadSessionHistory()
       if (!componentAlive) return
       activeTab.value = 'progress'
-      connectSse(sessionId)
     }
   } catch (err) {
     removePendingFollowUpTurn(pendingTurn)
@@ -609,6 +814,7 @@ const handleFollowUpSubmit = () => {
 const handleRetryFromStage = async (fromStageIndex) => {
   if (!activeSession.value || isRunning.value) return
   const sessionId = activeSession.value.id ?? activeSession.value.Id
+  failedSseSessionId = null
   isRunning.value = true
   statusPhase.value = 'connecting'
   statusMessage.value = `正在从阶段 ${fromStageIndex} 重新执行...`
@@ -622,7 +828,6 @@ const handleRetryFromStage = async (fromStageIndex) => {
     })
     await loadSessionDetail(sessionId)
     activeTab.value = 'progress'
-    connectSse(sessionId)
   } catch (err) {
     statusPhase.value = 'failed'
     statusMessage.value = err.message || '重试失败'
@@ -632,8 +837,9 @@ const handleRetryFromStage = async (fromStageIndex) => {
 }
 
 const handleClearSession = () => {
+  failedSseSessionId = null
   closeSse()
-  activeSession.value = null
+  clearActiveSessionView()
   sseEvents.value = []
   followUpError.value = ''
   statusPhase.value = 'idle'

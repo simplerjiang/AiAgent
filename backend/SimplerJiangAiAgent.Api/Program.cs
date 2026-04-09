@@ -90,6 +90,8 @@ builder.Services.AddHostedService<StockSyncWorker>();
 builder.Services.AddHostedService<HighFrequencyQuoteService>();
 builder.Services.AddHostedService<LocalFactIngestionWorker>();
 builder.Services.AddHostedService<SourceGovernanceWorker>();
+builder.Services.AddScoped<ResearchZombieCleanupService>();
+builder.Services.AddHostedService<ResearchZombieCleanupWorker>();
 builder.Services.AddHostedService<RecommendZombieCleanupWorker>();
 
 builder.Services.AddScoped<ITradeAccountingService, TradeAccountingService>();

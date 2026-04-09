@@ -506,7 +506,7 @@ watch(() => props.items.length, () => {
 .feed-bubble-content :deep(p) { margin: 0 0 4px; }
 .feed-bubble-content :deep(ul), .feed-bubble-content :deep(ol) { margin: 4px 0; padding-left: 16px; }
 .feed-bubble-content :deep(li) { margin: 2px 0; }
-.feed-bubble-content :deep(strong) { color: #fff; }
+.feed-bubble-content :deep(strong) { color: var(--color-accent); }
 .feed-bubble-content :deep(code) { background: var(--color-bg-surface-alt); padding: 1px 4px; border-radius: 3px; font-size: 14px; }
 
 .feed-bubble-time { font-size: 12px; color: var(--color-text-tertiary); margin-top: 4px; text-align: right; }

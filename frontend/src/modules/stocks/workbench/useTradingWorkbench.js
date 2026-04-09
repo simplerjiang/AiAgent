@@ -94,7 +94,7 @@ export function useTradingWorkbench(symbolRef) {
   loadTranslations()
 
   // ── Core state ─────────────────────────────────────
-  const session = ref(null)
+  const liveSession = ref(null)
   const sessionDetail = ref(null)
   const activeTurn = ref(null)
   const reportBlocks = ref([])
@@ -106,15 +106,27 @@ export function useTradingWorkbench(symbolRef) {
 
   // Replay state
   const replayTurnId = ref(null)
+  const replaySessionId = ref(null)
+  const replaySession = ref(null)
   const sessions = ref([])
   const expandedHistorySessionId = ref(null)
   const expandedTurns = ref([])
+  const historyLoadingSessionId = ref(null)
+  const historySessionErrorId = ref(null)
+  const historySessionErrorMessage = ref('')
 
   // Polling
   let pollTimer = null
   let abortCtrl = null
+  let viewGeneration = 0
+  let historyViewGeneration = 0
 
   // ── Derived state ──────────────────────────────────
+
+  const session = computed(() => {
+    if (replayTurnId.value != null) return replaySession.value
+    return liveSession.value
+  })
 
   const stageSnapshots = computed(() => {
     if (!sessionDetail.value?.stageSnapshots) return []
@@ -158,6 +170,84 @@ export function useTradingWorkbench(symbolRef) {
 
   const nextActions = computed(() => decision.value?.nextActions ?? [])
 
+  function createReplaySessionSummary(detail, sessionId) {
+    const resolvedId = detail?.id ?? detail?.sessionId ?? sessionId ?? null
+    if (resolvedId == null) return null
+    return {
+      id: resolvedId,
+      sessionId: resolvedId,
+      name: detail?.name ?? detail?.sessionName ?? null,
+      status: detail?.status ?? 'Idle'
+    }
+  }
+
+  function mergeLiveSessionDetail(detail, sessionId) {
+    const resolvedId = detail?.id ?? detail?.sessionId ?? sessionId ?? null
+    if (resolvedId == null && !liveSession.value) return
+    liveSession.value = {
+      ...liveSession.value,
+      id: resolvedId ?? liveSession.value?.id ?? null,
+      sessionId: liveSession.value?.sessionId ?? resolvedId ?? null,
+      name: detail?.name ?? detail?.sessionName ?? liveSession.value?.name ?? null,
+      status: detail?.status ?? liveSession.value?.status ?? 'Idle'
+    }
+  }
+
+  function preserveOptimisticFeedItems() {
+    return feedItems.value.filter(item => item?._optimistic)
+  }
+
+  function nextViewGeneration() {
+    viewGeneration += 1
+    return viewGeneration
+  }
+
+  function nextHistoryViewGeneration() {
+    historyViewGeneration += 1
+    return historyViewGeneration
+  }
+
+  function isCurrentViewGeneration(generation, signal) {
+    return generation === viewGeneration && !signal?.aborted
+  }
+
+  function resetExpandedHistoryState() {
+    nextHistoryViewGeneration()
+    expandedHistorySessionId.value = null
+    expandedTurns.value = []
+    historyLoadingSessionId.value = null
+    historySessionErrorId.value = null
+    historySessionErrorMessage.value = ''
+  }
+
+  function beginExpandedHistoryLoad(sessionId) {
+    const generation = nextHistoryViewGeneration()
+    expandedHistorySessionId.value = sessionId
+    expandedTurns.value = []
+    historyLoadingSessionId.value = sessionId
+    historySessionErrorId.value = null
+    historySessionErrorMessage.value = ''
+    return generation
+  }
+
+  function clearDisplayedTurnState(nextFeedItems = []) {
+    sessionDetail.value = null
+    activeTurn.value = null
+    reportBlocks.value = []
+    decision.value = null
+    feedItems.value = nextFeedItems
+  }
+
+  function beginTurnTransition(nextFeedItems = []) {
+    nextViewGeneration()
+    cancelPending()
+    replayTurnId.value = null
+    replaySessionId.value = null
+    replaySession.value = null
+    clearDisplayedTurnState(nextFeedItems)
+    return viewGeneration
+  }
+
   // ── API Actions ────────────────────────────────────
 
   function cancelPending() {
@@ -166,7 +256,7 @@ export function useTradingWorkbench(symbolRef) {
     return abortCtrl.signal
   }
 
-  async function loadActiveSession() {
+  async function loadActiveSession(generation = viewGeneration) {
     const sym = symbolRef.value
     if (!sym) return
     loading.value = true
@@ -174,27 +264,26 @@ export function useTradingWorkbench(symbolRef) {
     const signal = cancelPending()
     try {
       const data = await apiGet(`/active-session?symbol=${encodeURIComponent(sym)}`, signal)
-      session.value = data ? { ...data, id: data.sessionId } : null
-      if (session.value?.id) {
-        await loadSessionDetail(session.value.id, signal)
+      if (!isCurrentViewGeneration(generation, signal)) return
+      liveSession.value = data ? { ...data, id: data.sessionId } : null
+      if (liveSession.value?.id) {
+        await loadSessionDetail(liveSession.value.id, signal, generation)
       } else {
-        sessionDetail.value = null
-        activeTurn.value = null
-        reportBlocks.value = []
-        decision.value = null
-        feedItems.value = []
+        clearDisplayedTurnState()
       }
     } catch (e) {
-      if (e.name !== 'AbortError') error.value = e.message
+      if (e.name !== 'AbortError' && generation === viewGeneration) error.value = e.message
     } finally {
       loading.value = false
     }
   }
 
-  async function loadSessionDetail(sessionId, signal) {
+  async function loadSessionDetail(sessionId, signal, generation = viewGeneration) {
     signal = signal ?? cancelPending()
     try {
       const data = await apiGet(`/sessions/${sessionId}`, signal)
+      if (!isCurrentViewGeneration(generation, signal)) return
+      const isReplayDetail = replayTurnId.value != null && replaySessionId.value === sessionId
       sessionDetail.value = data
       const serverItems = data?.feedItems ?? []
       // Preserve optimistic follow-up items whose text is not yet in server data
@@ -209,33 +298,48 @@ export function useTradingWorkbench(symbolRef) {
       })
       feedItems.value = [...serverItems, ...kept]
 
-      // Sync session status from detail response so isRunning updates correctly
-      if (data?.status && session.value) {
-        session.value = { ...session.value, status: data.status }
+      if (isReplayDetail) {
+        replaySession.value = createReplaySessionSummary(data, sessionId)
+      } else {
+        mergeLiveSessionDetail(data, sessionId)
       }
 
       // Find active or latest turn
       const turns = data?.turns ?? []
-      const active = turns.find(t => t.status === 'Running' || t.status === 'Queued')
+      const active = (replayTurnId.value
+        ? turns.find(t => t.id === replayTurnId.value)
+        : null)
+        ?? turns.find(t => t.status === 'Running' || t.status === 'Queued')
         ?? turns[turns.length - 1]
       activeTurn.value = active ?? null
 
       if (active?.id) {
-        await loadTurnReport(active.id, signal)
+        await loadTurnReport(active.id, signal, generation)
+      } else {
+        reportBlocks.value = []
+        decision.value = null
       }
     } catch (e) {
-      if (e.name !== 'AbortError') error.value = e.message
+      if (e.name !== 'AbortError' && generation === viewGeneration) {
+        error.value = e.message
+        clearDisplayedTurnState(preserveOptimisticFeedItems())
+      }
     }
   }
 
-  async function loadTurnReport(turnId, signal) {
+  async function loadTurnReport(turnId, signal, generation = viewGeneration) {
     signal = signal ?? cancelPending()
     try {
       const data = await apiGet(`/turns/${turnId}/report`, signal)
+      if (!isCurrentViewGeneration(generation, signal)) return
       reportBlocks.value = data?.blocks ?? []
       decision.value = data?.finalDecision ?? null
     } catch (e) {
-      if (e.name !== 'AbortError') error.value = e.message
+      if (e.name !== 'AbortError' && generation === viewGeneration) {
+        error.value = e.message
+        reportBlocks.value = []
+        decision.value = null
+      }
     }
   }
 
@@ -261,14 +365,16 @@ export function useTradingWorkbench(symbolRef) {
         symbol: sym,
         userPrompt: trimmedPrompt,
         continuationMode: options.continuationMode ?? 'ContinueSession',
-        sessionKey: session.value?.sessionKey || undefined
+        sessionKey: liveSession.value?.sessionKey || undefined
       }
       const result = await apiPost('/turns', body)
       // Refresh session after submission
       if (result?.sessionId) {
-        session.value = { ...session.value, id: result.sessionId, status: 'Running' }
+        const optimisticItems = feedItems.value.filter(i => i._optimistic)
+        const generation = beginTurnTransition(optimisticItems)
+        liveSession.value = { ...liveSession.value, id: result.sessionId, status: 'Running' }
         startPolling()
-        await loadSessionDetail(result.sessionId)
+        await loadSessionDetail(result.sessionId, undefined, generation)
       }
       return result
     } catch (e) {
@@ -298,33 +404,47 @@ export function useTradingWorkbench(symbolRef) {
   }
 
   async function expandHistorySession(sessionId) {
-    if (expandedHistorySessionId.value === sessionId) {
-      expandedHistorySessionId.value = null
-      expandedTurns.value = []
+    const isSameExpandedSession = expandedHistorySessionId.value === sessionId
+    const shouldRetryExpandedError = isSameExpandedSession && historySessionErrorId.value === sessionId
+
+    if (isSameExpandedSession && !shouldRetryExpandedError) {
+      resetExpandedHistoryState()
       return
     }
-    expandedHistorySessionId.value = sessionId
+
+    const generation = beginExpandedHistoryLoad(sessionId)
     try {
       const detail = await apiGet(`/sessions/${sessionId}`)
+      if (generation !== historyViewGeneration || expandedHistorySessionId.value !== sessionId) return
       expandedTurns.value = detail?.turns ?? []
+      historyLoadingSessionId.value = null
     } catch (e) {
-      if (e.name !== 'AbortError') expandedTurns.value = []
+      if (e.name !== 'AbortError' && generation === historyViewGeneration && expandedHistorySessionId.value === sessionId) {
+        expandedTurns.value = []
+        historyLoadingSessionId.value = null
+        historySessionErrorId.value = sessionId
+        historySessionErrorMessage.value = '历史记录加载失败，请重试。'
+      }
     }
   }
 
   async function enterReplay(sessionId, turnId) {
     stopPolling()
+    error.value = null
+    const generation = nextViewGeneration()
+    cancelPending()
     replayTurnId.value = turnId
-    await loadSessionDetail(sessionId)
-    await loadTurnReport(turnId)
+    replaySessionId.value = sessionId
+    replaySession.value = null
+    await loadSessionDetail(sessionId, undefined, generation)
     activeTab.value = 'report'
   }
 
   function exitReplay() {
-    replayTurnId.value = null
-    expandedHistorySessionId.value = null
-    expandedTurns.value = []
-    loadActiveSession()
+    const generation = beginTurnTransition()
+    liveSession.value = null
+    resetExpandedHistoryState()
+    loadActiveSession(generation)
   }
 
   async function rerunFromStage(stageIndex) {
@@ -335,16 +455,17 @@ export function useTradingWorkbench(symbolRef) {
       const body = {
         symbol: sym,
         userPrompt: activeTurn.value?.userPrompt || '重新分析',
-        sessionKey: session.value?.sessionKey || undefined,
+        sessionKey: liveSession.value?.sessionKey || undefined,
         continuationMode: 'PartialRerun',
         fromStageIndex: stageIndex
       }
       const result = await apiPost('/turns', body)
       if (result?.sessionId) {
-        session.value = { ...session.value, id: result.sessionId, status: 'Running' }
+        const generation = beginTurnTransition()
+        liveSession.value = { ...liveSession.value, id: result.sessionId, status: 'Running' }
         startPolling()
         activeTab.value = 'feed'
-        await loadSessionDetail(result.sessionId)
+        await loadSessionDetail(result.sessionId, undefined, generation)
       }
       return result
     } catch (e) {
@@ -355,15 +476,22 @@ export function useTradingWorkbench(symbolRef) {
 
   // ── Polling ────────────────────────────────────────
 
+  let pollInFlight = false
+
   function startPolling() {
     stopPolling()
     pollTimer = setInterval(async () => {
-      if (!session.value?.id) return
+      if (!liveSession.value?.id || pollInFlight) return
+      pollInFlight = true
+      const ctrl = new AbortController()
       try {
-        await loadSessionDetail(session.value.id)
-        // Stop polling when no longer running
+        await loadSessionDetail(liveSession.value.id, ctrl.signal)
         if (!isRunning.value) stopPolling()
-      } catch (e) { if (e?.name !== 'AbortError') console.warn('[workbench] poll error:', e) }
+      } catch (e) {
+        if (e?.name !== 'AbortError') console.warn('[workbench] poll error:', e)
+      } finally {
+        pollInFlight = false
+      }
     }, 1500)
   }
 
@@ -372,19 +500,21 @@ export function useTradingWorkbench(symbolRef) {
       clearInterval(pollTimer)
       pollTimer = null
     }
+    pollInFlight = false
   }
 
   // ── Symbol watcher ─────────────────────────────────
 
   watch(symbolRef, (newSym) => {
     stopPolling()
-    session.value = null
-    sessionDetail.value = null
-    activeTurn.value = null
-    reportBlocks.value = []
-    decision.value = null
-    feedItems.value = []
+    nextViewGeneration()
+    cancelPending()
+    liveSession.value = null
+    clearDisplayedTurnState()
+    resetExpandedHistoryState()
     replayTurnId.value = null
+    replaySessionId.value = null
+    replaySession.value = null
     error.value = null
     if (newSym) loadActiveSession()
   }, { immediate: true })
@@ -408,6 +538,9 @@ export function useTradingWorkbench(symbolRef) {
     sessions,
     expandedHistorySessionId,
     expandedTurns,
+    historyLoadingSessionId,
+    historySessionErrorId,
+    historySessionErrorMessage,
     replayTurnId,
 
     // Derived

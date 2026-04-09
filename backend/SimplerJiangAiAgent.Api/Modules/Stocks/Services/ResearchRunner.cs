@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using SimplerJiangAiAgent.Api.Data;
 using SimplerJiangAiAgent.Api.Data.Entities;
+using SimplerJiangAiAgent.Api.Infrastructure.Llm;
 
 namespace SimplerJiangAiAgent.Api.Modules.Stocks.Services;
 
@@ -14,14 +15,22 @@ public sealed class ResearchRunner : IResearchRunner
 {
     private const int MaxDebateRounds = 3;
 
+    private static readonly IReadOnlyList<string> FullAnalystTeamRoleIds =
+    [
+        StockAgentRoleIds.MarketAnalyst,
+        StockAgentRoleIds.SocialSentimentAnalyst,
+        StockAgentRoleIds.NewsAnalyst,
+        StockAgentRoleIds.FundamentalsAnalyst,
+        StockAgentRoleIds.ShareholderAnalyst,
+        StockAgentRoleIds.ProductAnalyst
+    ];
+
     private static readonly IReadOnlyList<StageDefinition> Pipeline =
     [
         new(ResearchStageType.CompanyOverviewPreflight, ResearchStageExecutionMode.Sequential,
             [StockAgentRoleIds.CompanyOverviewAnalyst]),
         new(ResearchStageType.AnalystTeam, ResearchStageExecutionMode.Parallel,
-            [StockAgentRoleIds.MarketAnalyst, StockAgentRoleIds.SocialSentimentAnalyst,
-             StockAgentRoleIds.NewsAnalyst, StockAgentRoleIds.FundamentalsAnalyst,
-             StockAgentRoleIds.ShareholderAnalyst, StockAgentRoleIds.ProductAnalyst]),
+            FullAnalystTeamRoleIds),
         new(ResearchStageType.ResearchDebate, ResearchStageExecutionMode.Debate,
             [StockAgentRoleIds.BullResearcher, StockAgentRoleIds.BearResearcher,
              StockAgentRoleIds.ResearchManager]),
@@ -40,6 +49,7 @@ public sealed class ResearchRunner : IResearchRunner
     private readonly IResearchReportService _reportService;
     private readonly IResearchFollowUpRoutingService _followUpRoutingService;
     private readonly ILogger<ResearchRunner> _logger;
+    private readonly ILlmSettingsStore? _llmSettingsStore;
     private string? _positionContext;
 
     public ResearchRunner(
@@ -49,6 +59,18 @@ public sealed class ResearchRunner : IResearchRunner
         IResearchReportService reportService,
         IResearchFollowUpRoutingService followUpRoutingService,
         ILogger<ResearchRunner> logger)
+        : this(dbContext, roleExecutor, eventBus, reportService, followUpRoutingService, logger, null)
+    {
+    }
+
+    public ResearchRunner(
+        AppDbContext dbContext,
+        IResearchRoleExecutor roleExecutor,
+        IResearchEventBus eventBus,
+        IResearchReportService reportService,
+        IResearchFollowUpRoutingService followUpRoutingService,
+        ILogger<ResearchRunner> logger,
+        ILlmSettingsStore? llmSettingsStore)
     {
         _dbContext = dbContext;
         _roleExecutor = roleExecutor;
@@ -56,6 +78,7 @@ public sealed class ResearchRunner : IResearchRunner
         _reportService = reportService;
         _followUpRoutingService = followUpRoutingService;
         _logger = logger;
+        _llmSettingsStore = llmSettingsStore;
     }
 
     public async Task RunTurnAsync(long turnId, CancellationToken cancellationToken = default)
@@ -317,6 +340,8 @@ public sealed class ResearchRunner : IResearchRunner
         IReadOnlyList<string> upstreamArtifacts,
         CancellationToken cancellationToken)
     {
+        var effectiveRoleIds = await ResolveEffectiveRoleIdsAsync(stageDef, cancellationToken);
+
         var stage = new ResearchStageSnapshot
         {
             TurnId = turn.Id,
@@ -324,7 +349,7 @@ public sealed class ResearchRunner : IResearchRunner
             StageRunIndex = stageRunIndex,
             ExecutionMode = stageDef.ExecutionMode,
             Status = ResearchStageStatus.Running,
-            ActiveRoleIdsJson = JsonSerializer.Serialize(stageDef.RoleIds),
+            ActiveRoleIdsJson = JsonSerializer.Serialize(effectiveRoleIds),
             StartedAt = DateTime.UtcNow
         };
         _dbContext.ResearchStageSnapshots.Add(stage);
@@ -347,14 +372,14 @@ public sealed class ResearchRunner : IResearchRunner
         }
         else if (stageDef.ExecutionMode == ResearchStageExecutionMode.Parallel)
         {
-            var pr = await RunParallelAsync(session, turn, stage, stageDef.RoleIds, 0, upstreamArtifacts, cancellationToken);
+            var pr = await RunParallelAsync(session, turn, stage, effectiveRoleIds, 0, upstreamArtifacts, cancellationToken);
             outputs.AddRange(pr.Outputs);
             degradedFlags.AddRange(pr.DegradedFlags);
             failed = pr.Failed;
         }
         else
         {
-            foreach (var roleId in stageDef.RoleIds)
+            foreach (var roleId in effectiveRoleIds)
             {
                 var r = await ExecuteAndPersistRoleAsync(session, turn, stage, roleId, 0, upstreamArtifacts, cancellationToken);
                 if (r.Status == ResearchRoleStatus.Failed) { failed = true; break; }
@@ -380,6 +405,46 @@ public sealed class ResearchRunner : IResearchRunner
         return new StageResult(stage.Status, outputs, degradedFlags);
     }
 
+    private async Task<IReadOnlyList<string>> ResolveEffectiveRoleIdsAsync(
+        StageDefinition stageDef,
+        CancellationToken cancellationToken)
+    {
+        if (stageDef.StageType != ResearchStageType.AnalystTeam || _llmSettingsStore is null)
+        {
+            return stageDef.RoleIds;
+        }
+
+        try
+        {
+            var activeProviderKey = await _llmSettingsStore.GetActiveProviderKeyAsync(cancellationToken);
+            if (string.IsNullOrWhiteSpace(activeProviderKey))
+            {
+                return stageDef.RoleIds;
+            }
+
+            var settings = await _llmSettingsStore.GetProviderAsync(activeProviderKey, cancellationToken);
+            if (!OllamaRuntimeDefaults.IsOllamaProvider(activeProviderKey, settings?.ProviderType))
+            {
+                return stageDef.RoleIds;
+            }
+
+            _logger.LogInformation(
+                "Using full AnalystTeam profile for local Ollama provider {Provider}",
+                activeProviderKey);
+
+            return stageDef.RoleIds;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to resolve active provider for AnalystTeam profile selection; using full analyst team");
+            return stageDef.RoleIds;
+        }
+    }
+
     private async Task<DebateResult> RunDebateAsync(
         ResearchSession session, ResearchTurn turn, ResearchStageSnapshot stage,
         StageDefinition stageDef, IReadOnlyList<string> upstreamArtifacts,
@@ -387,6 +452,8 @@ public sealed class ResearchRunner : IResearchRunner
     {
         var allOutputs = new List<string>();
         var degradedFlags = new List<string>();
+        ResearchDebateRoundSignal? previousResearchRound = null;
+        RiskDebateRoundSignal? previousRiskRound = null;
 
         for (var round = 0; round < MaxDebateRounds; round++)
         {
@@ -399,22 +466,56 @@ public sealed class ResearchRunner : IResearchRunner
             degradedFlags.AddRange(rr.DegradedFlags);
             allOutputs.AddRange(rr.Outputs);
 
+            var currentResearchRound = stageDef.StageType == ResearchStageType.ResearchDebate
+                ? TryParseResearchDebateRoundSignal(rr.Outputs)
+                : null;
+            var currentRiskRound = stageDef.StageType == ResearchStageType.RiskDebate
+                ? TryParseRiskDebateRoundSignal(rr.Outputs)
+                : null;
+
             if (round > 0 && rr.Outputs.Count > 0)
             {
-                var converged = rr.Outputs.Any(o =>
-                    o.Contains("CONVERGED", StringComparison.OrdinalIgnoreCase) ||
-                    o.Contains("收敛", StringComparison.Ordinal) ||
-                    o.Contains("\"converged\":true", StringComparison.OrdinalIgnoreCase) ||
-                    o.Contains("\"converged\": true", StringComparison.OrdinalIgnoreCase));
-                if (converged)
+                if (HasExplicitConvergenceSignal(rr.Outputs))
                 {
                     _logger.LogInformation("Debate {StageType} converged at round {Round}", stageDef.StageType, round + 1);
                     break;
                 }
+
+                var repetitiveLowValue = round == 1 && stageDef.StageType switch
+                {
+                    ResearchStageType.ResearchDebate => previousResearchRound is not null
+                        && currentResearchRound is not null
+                        && ShouldEarlyStopResearchDebate(previousResearchRound, currentResearchRound),
+                    ResearchStageType.RiskDebate => previousRiskRound is not null
+                        && currentRiskRound is not null
+                        && ShouldEarlyStopRiskDebate(previousRiskRound, currentRiskRound),
+                    _ => false
+                };
+
+                if (repetitiveLowValue)
+                {
+                    _logger.LogInformation(
+                        "Debate {StageType} early-stopped after round {Round} due to repetitive low-value outputs",
+                        stageDef.StageType,
+                        round + 1);
+                    break;
+                }
             }
+
+            previousResearchRound = currentResearchRound;
+            previousRiskRound = currentRiskRound;
         }
 
         return new DebateResult(allOutputs, degradedFlags, false);
+    }
+
+    private static bool HasExplicitConvergenceSignal(IReadOnlyList<string> outputs)
+    {
+        return outputs.Any(o =>
+            o.Contains("CONVERGED", StringComparison.OrdinalIgnoreCase) ||
+            o.Contains("收敛", StringComparison.Ordinal) ||
+            o.Contains("\"converged\":true", StringComparison.OrdinalIgnoreCase) ||
+            o.Contains("\"converged\": true", StringComparison.OrdinalIgnoreCase));
     }
 
     private async Task<ParallelResult> RunParallelAsync(
@@ -837,6 +938,49 @@ public sealed class ResearchRunner : IResearchRunner
         catch { return (content, null, null, null, null, null); }
     }
 
+    private static ResearchDebateRoundSignal? TryParseResearchDebateRoundSignal(IReadOnlyList<string> outputs)
+    {
+        foreach (var output in outputs)
+        {
+            var (roleId, content) = SplitRoleOutput(output);
+            if (roleId != StockAgentRoleIds.ResearchManager)
+                continue;
+
+            try
+            {
+                var jsonStart = content.IndexOf('{');
+                if (jsonStart < 0) return null;
+
+                var jsonText = UnwrapContentWrapper(content[jsonStart..]);
+                using var doc = JsonDocument.Parse(jsonText);
+                var root = doc.RootElement;
+
+                return new ResearchDebateRoundSignal(
+                    NormalizeResearchDecision(TryGetStringProperty(root, "decision") ?? TryGetStringProperty(root, "research_conclusion")),
+                    NormalizeConfidence(TryGetStringProperty(root, "decisionConfidence") ?? TryGetStringProperty(root, "confidence")),
+                    NormalizeRecommendation(TryGetStringProperty(root, "recommendation")));
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        return null;
+    }
+
+    private static bool ShouldEarlyStopResearchDebate(ResearchDebateRoundSignal previous, ResearchDebateRoundSignal current)
+    {
+        return previous.Decision == ResearchDecisionSignal.Hold
+            && current.Decision == ResearchDecisionSignal.Hold
+            && previous.Confidence == ResearchConfidenceSignal.Low
+            && current.Confidence == ResearchConfidenceSignal.Low
+            && previous.Recommendation == current.Recommendation
+            && current.Recommendation is ResearchRecommendationSignal.WaitForData
+                or ResearchRecommendationSignal.Observe
+                or ResearchRecommendationSignal.Unknown;
+    }
+
     /// <summary>Best-effort parse of manager verdict from JSON.</summary>
     private static ((string? bull, string? bear)? Adopted, string? Shelved, string? Conclusion, string? PlanDraft, bool IsConverged, string? TraceId) ParseManagerVerdict(string content)
     {
@@ -904,6 +1048,180 @@ public sealed class ResearchRunner : IResearchRunner
         catch { return (null, null, null, content, null); }
     }
 
+    private static RiskDebateRoundSignal? TryParseRiskDebateRoundSignal(IReadOnlyList<string> outputs)
+    {
+        var roleSignals = new Dictionary<string, RiskDebateRoleSignal>(StringComparer.Ordinal);
+
+        foreach (var output in outputs)
+        {
+            var (roleId, content) = SplitRoleOutput(output);
+            if (roleId is null || !RiskDebateRoleIds.Contains(roleId))
+                continue;
+
+            try
+            {
+                var jsonStart = content.IndexOf('{');
+                if (jsonStart < 0)
+                    continue;
+
+                var jsonText = UnwrapContentWrapper(content[jsonStart..]);
+                using var doc = JsonDocument.Parse(jsonText);
+                var root = doc.RootElement;
+
+                roleSignals[roleId] = new RiskDebateRoleSignal(
+                    NormalizeRiskStance(TryGetStringProperty(root, "riskStance")),
+                    NormalizeRecommendation(TryGetStringProperty(root, "recommendation")),
+                    NormalizeRiskAssessment(
+                        TryGetStringProperty(root, "proposal_assessment"),
+                        TryGetStringProperty(root, "riskAssessment") ?? TryGetStringProperty(root, "proposalAssessment")));
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        return roleSignals.Count > 0 ? new RiskDebateRoundSignal(roleSignals) : null;
+    }
+
+    private static bool ShouldEarlyStopRiskDebate(RiskDebateRoundSignal previous, RiskDebateRoundSignal current)
+    {
+        if (!IsLowValueRiskRound(previous) || !IsLowValueRiskRound(current))
+            return false;
+
+        foreach (var roleId in RiskDebateRoleIds)
+        {
+            if (!previous.RoleSignals.TryGetValue(roleId, out var previousRole)
+                || !current.RoleSignals.TryGetValue(roleId, out var currentRole))
+            {
+                return false;
+            }
+
+            if (previousRole.Stance != currentRole.Stance || previousRole.Assessment != currentRole.Assessment)
+                return false;
+
+            if (previousRole.Recommendation != ResearchRecommendationSignal.Unknown
+                && currentRole.Recommendation != ResearchRecommendationSignal.Unknown
+                && previousRole.Recommendation != currentRole.Recommendation)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool IsLowValueRiskRound(RiskDebateRoundSignal signal)
+    {
+        return RiskDebateRoleIds.All(roleId =>
+            signal.RoleSignals.TryGetValue(roleId, out var roleSignal)
+            && roleSignal.Stance != RiskStanceSignal.Unknown
+            && roleSignal.Assessment == RiskAssessmentSignal.DataInsufficient
+            && roleSignal.Recommendation is ResearchRecommendationSignal.WaitForData
+                or ResearchRecommendationSignal.Observe
+                or ResearchRecommendationSignal.Unknown);
+    }
+
+    private static string? TryGetStringProperty(JsonElement root, string propertyName)
+    {
+        if (!root.TryGetProperty(propertyName, out var property))
+            return null;
+
+        return property.ValueKind switch
+        {
+            JsonValueKind.String => property.GetString(),
+            JsonValueKind.Number or JsonValueKind.True or JsonValueKind.False => property.GetRawText(),
+            _ => null
+        };
+    }
+
+    private static ResearchDecisionSignal NormalizeResearchDecision(string? decision)
+    {
+        var normalized = NormalizeText(decision);
+        if (string.IsNullOrEmpty(normalized)) return ResearchDecisionSignal.Unknown;
+        if (normalized.Contains("观望") || normalized.Contains("hold") || normalized.Contains("observe")) return ResearchDecisionSignal.Hold;
+        if (normalized.Contains("看多") || normalized.Contains("bull") || normalized == "buy") return ResearchDecisionSignal.Bullish;
+        if (normalized.Contains("看空") || normalized.Contains("bear") || normalized == "sell") return ResearchDecisionSignal.Bearish;
+        return ResearchDecisionSignal.Unknown;
+    }
+
+    private static ResearchConfidenceSignal NormalizeConfidence(string? confidence)
+    {
+        var normalized = NormalizeText(confidence);
+        if (string.IsNullOrEmpty(normalized)) return ResearchConfidenceSignal.Unknown;
+        if (normalized.Contains("低") || normalized.Contains("low")) return ResearchConfidenceSignal.Low;
+        if (normalized.Contains("高") || normalized.Contains("high")) return ResearchConfidenceSignal.High;
+        if (normalized.Contains("中") || normalized.Contains("medium")) return ResearchConfidenceSignal.Medium;
+        return ResearchConfidenceSignal.Unknown;
+    }
+
+    private static ResearchRecommendationSignal NormalizeRecommendation(string? recommendation)
+    {
+        var normalized = NormalizeText(recommendation);
+        if (string.IsNullOrEmpty(normalized)) return ResearchRecommendationSignal.Unknown;
+
+        var waitTerms = new[] { "等待", "wait", "获取", "补充", "更多", "再进行", "之后再" };
+        var dataTerms = new[] { "数据", "财务", "指标", "报表", "量化", "market", "price", "report", "information" };
+        if (ContainsAny(normalized, waitTerms) && ContainsAny(normalized, dataTerms)) return ResearchRecommendationSignal.WaitForData;
+        if (normalized.Contains("观望") || normalized.Contains("hold") || normalized.Contains("观察")) return ResearchRecommendationSignal.Observe;
+        if (ContainsAny(normalized, ["买", "卖", "配置", "执行", "介入", "buy", "sell", "allocate", "execute"])) return ResearchRecommendationSignal.Act;
+        return ResearchRecommendationSignal.Unknown;
+    }
+
+    private static RiskStanceSignal NormalizeRiskStance(string? riskStance)
+    {
+        var normalized = NormalizeText(riskStance);
+        if (string.IsNullOrEmpty(normalized)) return RiskStanceSignal.Unknown;
+        if (normalized.Contains("激进") || normalized.Contains("aggressive")) return RiskStanceSignal.Aggressive;
+        if (normalized.Contains("中性") || normalized.Contains("neutral")) return RiskStanceSignal.Neutral;
+        if (normalized.Contains("保守") || normalized.Contains("conservative")) return RiskStanceSignal.Conservative;
+        return RiskStanceSignal.Unknown;
+    }
+
+    private static RiskAssessmentSignal NormalizeRiskAssessment(string? proposalAssessment, string? riskAssessment)
+    {
+        var proposalNormalized = NormalizeText(proposalAssessment);
+        if (!string.IsNullOrEmpty(proposalNormalized))
+        {
+            if (ContainsAny(proposalNormalized, ["reject", "拒绝", "否决", "不建议", "暂停"])) return RiskAssessmentSignal.Reject;
+            if (ContainsAny(proposalNormalized, ["accept", "通过", "接受", "modify", "调整", "修改"])) return RiskAssessmentSignal.Guarded;
+        }
+
+        var assessmentNormalized = NormalizeText(riskAssessment);
+        if (string.IsNullOrEmpty(assessmentNormalized)) return RiskAssessmentSignal.Unknown;
+
+        if (ContainsAny(assessmentNormalized, ["缺乏", "无法", "不足", "missing", "lack", "insufficient"])
+            && ContainsAny(assessmentNormalized, ["数据", "量化", "信息", "data", "information", "quant"]))
+        {
+            return RiskAssessmentSignal.DataInsufficient;
+        }
+
+        if (ContainsAny(assessmentNormalized, ["不建议", "暂停", "拒绝", "avoid", "reject", "donot"]))
+            return RiskAssessmentSignal.Reject;
+
+        if (ContainsAny(assessmentNormalized, ["可控", "可接受", "接受", "controlled", "acceptable"]))
+            return RiskAssessmentSignal.Guarded;
+
+        return RiskAssessmentSignal.Unknown;
+    }
+
+    private static string NormalizeText(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return string.Empty;
+        return string.Concat(value.Where(ch => !char.IsWhiteSpace(ch))).ToLowerInvariant();
+    }
+
+    private static bool ContainsAny(string value, IEnumerable<string> terms)
+    {
+        foreach (var term in terms)
+        {
+            if (value.Contains(term, StringComparison.Ordinal))
+                return true;
+        }
+
+        return false;
+    }
+
     /// <summary>If the raw JSON has a {"content":"..."} wrapper, extract the inner JSON string. No leaked JsonDocument.</summary>
     internal static string UnwrapContentWrapper(string rawJson)
     {
@@ -926,8 +1244,68 @@ public sealed class ResearchRunner : IResearchRunner
         return rawJson;
     }
 
+    private static readonly string[] RiskDebateRoleIds =
+    [
+        StockAgentRoleIds.AggressiveRiskAnalyst,
+        StockAgentRoleIds.NeutralRiskAnalyst,
+        StockAgentRoleIds.ConservativeRiskAnalyst
+    ];
+
     private const int DebateParticipantsPerRound = 3;
     private const int RiskAnalystsPerRound = 3;
+
+    private sealed record ResearchDebateRoundSignal(
+        ResearchDecisionSignal Decision,
+        ResearchConfidenceSignal Confidence,
+        ResearchRecommendationSignal Recommendation);
+
+    private sealed record RiskDebateRoundSignal(
+        IReadOnlyDictionary<string, RiskDebateRoleSignal> RoleSignals);
+
+    private sealed record RiskDebateRoleSignal(
+        RiskStanceSignal Stance,
+        ResearchRecommendationSignal Recommendation,
+        RiskAssessmentSignal Assessment);
+
+    private enum ResearchDecisionSignal
+    {
+        Unknown,
+        Bullish,
+        Bearish,
+        Hold
+    }
+
+    private enum ResearchConfidenceSignal
+    {
+        Unknown,
+        Low,
+        Medium,
+        High
+    }
+
+    private enum ResearchRecommendationSignal
+    {
+        Unknown,
+        WaitForData,
+        Observe,
+        Act
+    }
+
+    private enum RiskStanceSignal
+    {
+        Unknown,
+        Aggressive,
+        Neutral,
+        Conservative
+    }
+
+    private enum RiskAssessmentSignal
+    {
+        Unknown,
+        DataInsufficient,
+        Guarded,
+        Reject
+    }
 
     private async Task PersistFeedItemsAsync(long turnId, CancellationToken cancellationToken)
     {

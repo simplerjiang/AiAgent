@@ -74,6 +74,8 @@ export const createTradingPlanForm = item => ({
   sourceAgent: item?.sourceAgent ?? 'commander',
   userNote: item?.userNote ?? '',
   marketContext: normalizeMarketContext(item?.marketContext ?? item?.marketContextAtCreation ?? item?.currentMarketContext ?? null),
+  marketContextLoading: Boolean(item?.marketContextLoading ?? false),
+  marketContextMessage: item?.marketContextMessage ?? '',
   signalMetrics: item?.signalMetrics ?? null,
   realTradeMetrics: item?.realTradeMetrics ?? null,
   executionMode: item?.executionMode ?? null,

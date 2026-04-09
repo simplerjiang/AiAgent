@@ -8,7 +8,8 @@ const props = defineProps({
   blocks: { type: Array, default: () => [] },
   decision: { type: Object, default: null },
   nextActions: { type: Array, default: () => [] },
-  loading: { type: Boolean, default: false }
+  loading: { type: Boolean, default: false },
+  error: { type: String, default: null }
 })
 defineEmits(['action'])
 
@@ -144,6 +145,11 @@ const evidenceLabel = ev => {
       <span>加载研究报告…</span>
     </div>
 
+    <div v-else-if="props.error && blocks.length === 0 && !decision" class="wb-report-empty wb-report-failure">
+      <p>研究报告加载失败</p>
+      <p class="wb-report-empty-hint">当前会话报告暂时不可用，请点击顶部刷新后重试</p>
+    </div>
+
     <!-- Decision summary (always on top when available) -->
     <div v-if="decision" class="wb-decision">
       <div class="wb-decision-header">
@@ -251,7 +257,7 @@ const evidenceLabel = ev => {
     </div>
 
     <!-- Empty state -->
-    <div v-if="!loading && blocks.length === 0 && !decision" class="wb-report-empty">
+    <div v-if="!loading && !props.error && blocks.length === 0 && !decision" class="wb-report-empty">
       <p>暂无研究报告</p>
       <p class="wb-report-empty-hint">发起研究后，多角色分析结果将在此呈现</p>
     </div>
@@ -476,4 +482,5 @@ const evidenceLabel = ev => {
 }
 .wb-report-empty p { font-size: 14px; margin: 0 0 4px; }
 .wb-report-empty-hint { font-size: 13px; }
+.wb-report-failure { color: var(--color-danger); }
 </style>

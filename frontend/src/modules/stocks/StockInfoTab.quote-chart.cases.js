@@ -408,7 +408,11 @@ export const stockInfoTabQuoteChartCases = ({
     await flushPromises()
 
     const requestedUrls = fetchMock.mock.calls.map(args => String(args[0]))
-    expect(requestedUrls.some(url => url.startsWith('/api/stocks/chart?') && url.includes('interval=month') && url.includes('includeQuote=false') && url.includes('includeMinute=false'))).toBe(true)
+    const monthChartRequest = requestedUrls.find(url => url.startsWith('/api/stocks/chart?') && url.includes('interval=month'))
+    expect(monthChartRequest).toBeTruthy()
+    expect(monthChartRequest).toContain('includeQuote=false')
+    expect(monthChartRequest).toContain('includeMinute=false')
+    expect(monthChartRequest).not.toContain('count=240')
     expect(requestedUrls.some(url => url.startsWith('/api/stocks/detail/cache?'))).toBe(false)
     expect(requestedUrls.some(url => url.startsWith('/api/stocks/messages?'))).toBe(false)
     expect(requestedUrls.some(url => url.startsWith('/api/stocks/fundamental-snapshot?'))).toBe(false)
@@ -477,6 +481,7 @@ export const stockInfoTabQuoteChartCases = ({
 
     const chartCall = fetchMock.mock.calls.find(args => String(args[0]).startsWith('/api/stocks/chart?'))
     expect(chartCall).toBeTruthy()
+    expect(String(chartCall[0])).toContain('count=240')
     expect(String(chartCall[0])).toContain('includeQuote=false')
     expect(String(chartCall[0])).toContain('includeMinute=true')
   }
@@ -579,6 +584,7 @@ export const stockInfoTabQuoteChartCases = ({
 
     const chartCall = fetchMock.mock.calls.find(args => String(args[0]).startsWith('/api/stocks/chart?'))
     expect(chartCall).toBeTruthy()
+    expect(String(chartCall[0])).toContain('count=240')
     expect(String(chartCall[0])).toContain('includeQuote=true')
     expect(wrapper.vm.detail?.quote?.symbol).toBe('sh600000')
     expect(wrapper.text()).toContain('浦发银行')

@@ -1,4 +1,5 @@
 using LiteDB;
+using SimplerJiangAiAgent.Api.Infrastructure.Storage;
 
 namespace SimplerJiangAiAgent.Api.Modules.Stocks.Services;
 
@@ -8,7 +9,7 @@ public interface IFinancialDataReadService : IDisposable
     List<Dictionary<string, object?>> GetIndicators(string symbol, int limit = 20);
     List<Dictionary<string, object?>> GetDividends(string symbol);
     List<Dictionary<string, object?>> GetMarginTrading(string symbol, int limit = 100);
-    List<Dictionary<string, object?>> GetCollectionLogs(string? symbol = null, int limit = 50);
+    List<FinancialCollectionLogEntry> GetCollectionLogs(string? symbol = null, int limit = 50);
     Dictionary<string, object?>? GetConfig();
     FinancialReportSummary? GetReportSummary(string symbol, int periods = 4);
     FinancialTrendSummary? GetTrendSummary(string symbol, int periods = 8);
@@ -20,11 +21,10 @@ public class FinancialDataReadService : IFinancialDataReadService
     private readonly ILogger<FinancialDataReadService> _logger;
     private readonly bool _available;
 
-    public FinancialDataReadService(ILogger<FinancialDataReadService> logger)
+    public FinancialDataReadService(AppRuntimePaths runtimePaths, ILogger<FinancialDataReadService> logger)
     {
         _logger = logger;
-        var repoRoot = FindRepoRoot();
-        var dbPath = Path.Combine(repoRoot, "App_Data", "financial-data.db");
+        var dbPath = Path.Combine(runtimePaths.AppDataPath, "financial-data.db");
 
         if (!File.Exists(dbPath))
         {
@@ -49,9 +49,8 @@ public class FinancialDataReadService : IFinancialDataReadService
     public List<Dictionary<string, object?>> GetReports(string symbol, int limit = 20)
     {
         if (!_available) return [];
-        return _db!.GetCollection("financial_reports")
-            .Find(Query.EQ("Symbol", symbol))
-            .OrderByDescending(d => d["ReportDate"].AsString)
+        return FindBySymbol("financial_reports", symbol)
+            .OrderByDescending(d => SafeString(d, "ReportDate"))
             .Take(limit)
             .Select(BsonToDict)
             .ToList();
@@ -60,9 +59,8 @@ public class FinancialDataReadService : IFinancialDataReadService
     public List<Dictionary<string, object?>> GetIndicators(string symbol, int limit = 20)
     {
         if (!_available) return [];
-        return _db!.GetCollection("financial_indicators")
-            .Find(Query.EQ("Symbol", symbol))
-            .OrderByDescending(d => d["ReportDate"].AsString)
+        return FindBySymbol("financial_indicators", symbol)
+            .OrderByDescending(d => SafeString(d, "ReportDate"))
             .Take(limit)
             .Select(BsonToDict)
             .ToList();
@@ -71,9 +69,8 @@ public class FinancialDataReadService : IFinancialDataReadService
     public List<Dictionary<string, object?>> GetDividends(string symbol)
     {
         if (!_available) return [];
-        return _db!.GetCollection("dividends")
-            .Find(Query.EQ("Symbol", symbol))
-            .OrderByDescending(d => d["RecordDate"].AsString)
+        return FindBySymbol("dividends", symbol)
+            .OrderByDescending(d => SafeString(d, "RecordDate"))
             .Select(BsonToDict)
             .ToList();
     }
@@ -81,25 +78,23 @@ public class FinancialDataReadService : IFinancialDataReadService
     public List<Dictionary<string, object?>> GetMarginTrading(string symbol, int limit = 100)
     {
         if (!_available) return [];
-        return _db!.GetCollection("margin_trading")
-            .Find(Query.EQ("Symbol", symbol))
-            .OrderByDescending(d => d["TradeDate"].AsString)
+        return FindBySymbol("margin_trading", symbol)
+            .OrderByDescending(d => SafeString(d, "TradeDate"))
             .Take(limit)
             .Select(BsonToDict)
             .ToList();
     }
 
-    public List<Dictionary<string, object?>> GetCollectionLogs(string? symbol = null, int limit = 50)
+    public List<FinancialCollectionLogEntry> GetCollectionLogs(string? symbol = null, int limit = 50)
     {
         if (!_available) return [];
-        var col = _db!.GetCollection("collection_logs");
-        var query = symbol is not null
-            ? col.Find(Query.EQ("Symbol", symbol))
-            : col.FindAll();
+        var query = string.IsNullOrWhiteSpace(symbol)
+            ? _db!.GetCollection("collection_logs").FindAll()
+            : FindBySymbol("collection_logs", symbol);
         return query
-            .OrderByDescending(d => d["Timestamp"].AsDateTime)
+            .OrderByDescending(d => SafeDateTime(d, "Timestamp") ?? DateTime.MinValue)
             .Take(limit)
-            .Select(BsonToDict)
+            .Select(MapCollectionLog)
             .ToList();
     }
 
@@ -113,9 +108,8 @@ public class FinancialDataReadService : IFinancialDataReadService
     public FinancialReportSummary? GetReportSummary(string symbol, int periods = 4)
     {
         if (!_available) return null;
-        var docs = _db!.GetCollection("financial_reports")
-            .Find(Query.EQ("Symbol", symbol))
-            .OrderByDescending(d => d["ReportDate"].AsString)
+        var docs = FindBySymbol("financial_reports", symbol)
+            .OrderByDescending(d => SafeString(d, "ReportDate"))
             .Take(periods)
             .ToList();
 
@@ -185,9 +179,8 @@ public class FinancialDataReadService : IFinancialDataReadService
     public FinancialTrendSummary? GetTrendSummary(string symbol, int periods = 8)
     {
         if (!_available) return null;
-        var docs = _db!.GetCollection("financial_reports")
-            .Find(Query.EQ("Symbol", symbol))
-            .OrderByDescending(d => d["ReportDate"].AsString)
+        var docs = FindBySymbol("financial_reports", symbol)
+            .OrderByDescending(d => SafeString(d, "ReportDate"))
             .Take(periods)
             .Reverse()
             .ToList();
@@ -233,9 +226,8 @@ public class FinancialDataReadService : IFinancialDataReadService
         }
 
         // Recent dividends
-        var divDocs = _db!.GetCollection("dividends")
-            .Find(Query.EQ("Symbol", symbol))
-            .OrderByDescending(d => d["RecordDate"].AsString)
+        var divDocs = FindBySymbol("dividends", symbol)
+            .OrderByDescending(d => SafeString(d, "RecordDate"))
             .Take(5)
             .ToList();
 
@@ -257,6 +249,78 @@ public class FinancialDataReadService : IFinancialDataReadService
     }
 
     // ── Helpers ──
+
+    internal static IReadOnlyCollection<string> BuildSymbolAliases(string symbol)
+    {
+        var aliases = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (string.IsNullOrWhiteSpace(symbol))
+        {
+            return aliases;
+        }
+
+        var trimmed = symbol.Trim();
+        aliases.Add(trimmed);
+
+        var normalized = StockSymbolNormalizer.Normalize(trimmed);
+        if (!string.IsNullOrWhiteSpace(normalized))
+        {
+            aliases.Add(normalized);
+            aliases.Add(normalized.ToUpperInvariant());
+        }
+
+        if (normalized.Length == 8
+            && (normalized.StartsWith("sh", StringComparison.OrdinalIgnoreCase)
+                || normalized.StartsWith("sz", StringComparison.OrdinalIgnoreCase)))
+        {
+            aliases.Add(normalized[2..]);
+        }
+
+        if (trimmed.Length == 6 && trimmed.All(char.IsDigit))
+        {
+            var prefixed = StockSymbolNormalizer.Normalize(trimmed);
+            aliases.Add(prefixed);
+            aliases.Add(prefixed.ToUpperInvariant());
+        }
+
+        return aliases;
+    }
+
+    private IEnumerable<BsonDocument> FindBySymbol(string collectionName, string symbol)
+    {
+        var aliases = BuildSymbolAliases(symbol);
+        return _db!.GetCollection(collectionName)
+            .FindAll()
+            .Where(doc => aliases.Contains(SafeString(doc, "Symbol")));
+    }
+
+    private static FinancialCollectionLogEntry MapCollectionLog(BsonDocument doc)
+    {
+        var timestamp = SafeDateTime(doc, "Timestamp");
+        var fallbackId = string.Join(
+            ':',
+            new[]
+            {
+                SafeString(doc, "Symbol"),
+                SafeString(doc, "CollectionType"),
+                SafeString(doc, "Channel"),
+                timestamp?.ToString("O") ?? string.Empty
+            }.Where(value => !string.IsNullOrWhiteSpace(value)));
+
+        return new FinancialCollectionLogEntry
+        {
+            Id = SafeId(doc) ?? fallbackId,
+            Symbol = SafeString(doc, "Symbol"),
+            CollectionType = SafeString(doc, "CollectionType"),
+            Channel = SafeString(doc, "Channel"),
+            IsDegraded = SafeBoolean(doc, "IsDegraded"),
+            DegradeReason = SafeNullableString(doc, "DegradeReason"),
+            Success = SafeBoolean(doc, "Success"),
+            ErrorMessage = SafeNullableString(doc, "ErrorMessage"),
+            DurationMs = SafeInt64(doc, "DurationMs"),
+            RecordCount = SafeInt32(doc, "RecordCount"),
+            Timestamp = timestamp
+        };
+    }
 
     private static Dictionary<string, object?> BsonToDict(BsonDocument doc)
     {
@@ -291,23 +355,17 @@ public class FinancialDataReadService : IFinancialDataReadService
         return val.ToString();
     }
 
-    private static string FindRepoRoot()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir != null)
-        {
-            if (dir.GetFiles("SimplerJiangAiAgent.sln").Length > 0 ||
-                Directory.Exists(Path.Combine(dir.FullName, ".git")))
-                return dir.FullName;
-            dir = dir.Parent;
-        }
-        return Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", ".."));
-    }
-
     private static string SafeString(BsonDocument doc, string key)
     {
         if (doc.ContainsKey(key) && doc[key].IsString) return doc[key].AsString;
         return "";
+    }
+
+    private static string? SafeNullableString(BsonDocument doc, string key)
+    {
+        if (!doc.ContainsKey(key) || doc[key].IsNull) return null;
+        if (doc[key].IsString) return doc[key].AsString;
+        return BsonToObject(doc[key])?.ToString();
     }
 
     private static BsonDocument SafeDoc(BsonDocument doc, string key)
@@ -336,6 +394,63 @@ public class FinancialDataReadService : IFinancialDataReadService
         if (v.IsInt32) return v.AsInt32;
         if (v.IsInt64) return v.AsInt64;
         return null;
+    }
+
+    private static bool SafeBoolean(BsonDocument doc, string key)
+    {
+        if (!doc.ContainsKey(key)) return false;
+        var value = doc[key];
+        if (value.IsBoolean) return value.AsBoolean;
+        if (value.IsString && bool.TryParse(value.AsString, out var parsed)) return parsed;
+        if (value.IsInt32) return value.AsInt32 != 0;
+        if (value.IsInt64) return value.AsInt64 != 0;
+        return false;
+    }
+
+    private static int SafeInt32(BsonDocument doc, string key)
+    {
+        if (!doc.ContainsKey(key)) return 0;
+        var value = doc[key];
+        if (value.IsInt32) return value.AsInt32;
+        if (value.IsInt64) return (int)Math.Clamp(value.AsInt64, int.MinValue, int.MaxValue);
+        if (value.IsDouble) return (int)Math.Round(value.AsDouble);
+        if (value.IsDecimal) return decimal.ToInt32(decimal.Round(value.AsDecimal, 0, MidpointRounding.AwayFromZero));
+        return 0;
+    }
+
+    private static long SafeInt64(BsonDocument doc, string key)
+    {
+        if (!doc.ContainsKey(key)) return 0;
+        var value = doc[key];
+        if (value.IsInt64) return value.AsInt64;
+        if (value.IsInt32) return value.AsInt32;
+        if (value.IsDouble) return (long)Math.Round(value.AsDouble);
+        if (value.IsDecimal) return decimal.ToInt64(decimal.Round(value.AsDecimal, 0, MidpointRounding.AwayFromZero));
+        return 0;
+    }
+
+    private static DateTime? SafeDateTime(BsonDocument doc, string key)
+    {
+        if (!doc.ContainsKey(key) || doc[key].IsNull) return null;
+        var value = doc[key];
+        if (value.IsDateTime) return value.AsDateTime;
+        if (value.IsString && DateTime.TryParse(value.AsString, out var parsed)) return parsed;
+        return null;
+    }
+
+    private static string? SafeId(BsonDocument doc)
+    {
+        if (!doc.TryGetValue("_id", out var idValue) || idValue.IsNull)
+        {
+            return null;
+        }
+
+        if (idValue.IsObjectId)
+        {
+            return idValue.AsObjectId.ToString();
+        }
+
+        return BsonToObject(idValue)?.ToString();
     }
 
     private static void TryAdd(Dictionary<string, object?> metrics, string outKey, BsonDocument source, string sourceKey)
@@ -371,6 +486,21 @@ public class FinancialDataReadService : IFinancialDataReadService
 }
 
 // ── DTOs for MCP structured summaries ──
+
+public sealed class FinancialCollectionLogEntry
+{
+    public string Id { get; init; } = string.Empty;
+    public string Symbol { get; init; } = string.Empty;
+    public string CollectionType { get; init; } = string.Empty;
+    public string Channel { get; init; } = string.Empty;
+    public bool IsDegraded { get; init; }
+    public string? DegradeReason { get; init; }
+    public bool Success { get; init; }
+    public string? ErrorMessage { get; init; }
+    public long DurationMs { get; init; }
+    public int RecordCount { get; init; }
+    public DateTime? Timestamp { get; init; }
+}
 
 public class FinancialReportSummary
 {

@@ -23,7 +23,9 @@ public sealed record MarketSentimentSummaryDto(
     decimal Top3SectorTurnoverShare5dAvg,
     decimal Top10SectorTurnoverShare5dAvg,
     decimal LimitUpCount5dAvg,
-    decimal BrokenBoardRate5dAvg);
+    decimal BrokenBoardRate5dAvg,
+    bool IsDegraded = false,
+    string? DegradeReason = null);
 
 public sealed record MarketSentimentHistoryPointDto(
     DateTime TradingDate,
@@ -72,7 +74,9 @@ public sealed record SectorRotationPageDto(
     int Total,
     string Sort,
     DateTime? SnapshotTime,
-    IReadOnlyList<SectorRotationListItemDto> Items);
+    IReadOnlyList<SectorRotationListItemDto> Items,
+    bool IsDegraded = false,
+    string? DegradeReason = null);
 
 public sealed record RealtimeSectorBoardItemDto(
     string BoardType,

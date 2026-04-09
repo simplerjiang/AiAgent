@@ -23,7 +23,7 @@ const providerPresets = {
   ollama: {
     label: 'Ollama 本地模型',
     baseUrl: 'http://localhost:11434',
-    model: 'gemma4:e4b',
+    model: '',
     providerType: 'ollama'
   }
 }
@@ -32,6 +32,18 @@ const providerOptions = Object.entries(providerPresets).map(([value, preset]) =>
   value,
   label: preset.label
 }))
+
+const ollamaRuntimeDefaults = Object.freeze({
+  numCtx: 2048,
+  keepAlive: '5m',
+  numPredict: 256,
+  temperature: 0.3,
+  topK: 64,
+  topP: 0.95,
+  minP: 0,
+  stop: [],
+  think: false
+})
 
 const username = ref('')
 const password = ref('')
@@ -57,6 +69,15 @@ const settingsError = ref('')
 const saveMessage = ref('')
 const systemPrompt = ref('')
 const forceChinese = ref(false)
+const ollamaNumCtx = ref('')
+const ollamaRequestKeepAlive = ref('')
+const ollamaNumPredict = ref('')
+const ollamaTemperature = ref('')
+const ollamaTopK = ref('')
+const ollamaTopP = ref('')
+const ollamaMinP = ref('')
+const ollamaStopText = ref('')
+const ollamaThink = ref(ollamaRuntimeDefaults.think)
 
 // Antigravity OAuth 状态
 const antigravityModels = ref([])
@@ -78,8 +99,255 @@ let keepAliveTimer = null
 const isLoggedIn = computed(() => Boolean(token.value))
 const isAntigravity = computed(() => provider.value === 'antigravity')
 const isOllamaProvider = computed(() => provider.value === 'ollama')
-const modelPlaceholder = computed(() => isOllamaProvider.value ? '例如: gemma4:latest' : 'gpt-4o-mini')
+const modelPlaceholder = computed(() => 'gpt-4o-mini')
+const installedOllamaModelNames = computed(() => ollamaModels.value
+  .map(item => typeof item?.name === 'string' ? item.name.trim() : '')
+  .filter(Boolean))
+const hasInstalledOllamaModels = computed(() => installedOllamaModelNames.value.length > 0)
+const isProviderOllamaBlocked = computed(() => isOllamaProvider.value && !hasInstalledOllamaModels.value)
 const providerKeys = Object.keys(providerPresets)
+const providerLabel = providerKey => providerPresets[providerKey]?.label || providerKey
+const providerOllamaModelOptionLabel = computed(() => buildUnavailableOllamaModelLabel(model.value))
+const newsOllamaModelOptionLabel = computed(() => buildUnavailableOllamaModelLabel(newsModel.value))
+const ollamaRuntimeHint = computed(() => '这里保存的是单次请求参数，已按这台机器提供默认值。keep_alive 默认 5m，填 0 表示请求结束后立即卸载模型；think 默认关闭，避免 Gemma 4 一类模型显著放大延迟；Flash Attention、KV cache 和并发数仍属于本机 Ollama 服务级设置。')
+const ollamaModelSelectionHint = computed(() => {
+  if (hasInstalledOllamaModels.value) {
+    return '仅可选择已安装的 Ollama 模型；缺失或空白配置会自动切换到第一个已安装模型。'
+  }
+
+  if (ollamaStatus.value === 'not_installed') {
+    return '当前机器未安装 Ollama，请先到上方「🦙 Ollama 本地模型管理」查看安装提示，并拉取至少一个模型。'
+  }
+
+  if (ollamaStatus.value === 'running') {
+    return '服务已运行，但当前未检测到已拉取模型，请先到上方「🦙 Ollama 本地模型管理」拉取至少一个模型。'
+  }
+
+  return '请先到上方「🦙 Ollama 本地模型管理」启动并刷新 Ollama，以读取已安装模型。'
+})
+const ollamaRunningModelNotice = computed(() => {
+  if (ollamaStatus.value !== 'running' || hasInstalledOllamaModels.value) {
+    return ''
+  }
+
+  return '服务已运行，但当前未检测到已拉取模型，请先在下方「拉取模型」区域拉取至少一个模型。'
+})
+
+function buildOllamaActionHint(currentValue, scopeLabel) {
+  const blockedStateLabel = buildUnavailableOllamaModelLabel(currentValue)
+
+  if (ollamaStatus.value === 'not_installed') {
+    return `${scopeLabel}当前不可保存或测试。${blockedStateLabel}。请先到上方「🦙 Ollama 本地模型管理」完成安装，再拉取至少一个模型。`
+  }
+
+  if (ollamaStatus.value === 'running') {
+    return `${scopeLabel}当前不可保存或测试。${blockedStateLabel}。请先到上方「🦙 Ollama 本地模型管理」拉取至少一个模型。`
+  }
+
+  return `${scopeLabel}当前不可保存或测试。${blockedStateLabel}。请先到上方「🦙 Ollama 本地模型管理」启动并刷新 Ollama，再拉取至少一个模型。`
+}
+
+const providerOllamaActionHint = computed(() => buildOllamaActionHint(model.value, '主渠道'))
+
+function normalizeModelName(value) {
+  return value?.trim() || ''
+}
+
+function formatOptionalSetting(value) {
+  return value == null || value === '' ? '' : String(value)
+}
+
+function formatRuntimeSetting(value, fallback) {
+  return value == null || value === '' ? String(fallback) : String(value)
+}
+
+function formatRuntimeStopSequences(value) {
+  if (!Array.isArray(value) || value.length === 0) {
+    return ''
+  }
+
+  return value.join('\n')
+}
+
+function parseOptionalInteger(value, { allowNegativeOne = false } = {}) {
+  const normalized = typeof value === 'string' ? value.trim() : String(value ?? '').trim()
+  if (!normalized) {
+    return null
+  }
+
+  const parsed = Number.parseInt(normalized, 10)
+  if (!Number.isFinite(parsed)) {
+    return null
+  }
+
+  if (allowNegativeOne && parsed === -1) {
+    return -1
+  }
+
+  return parsed > 0 ? parsed : null
+}
+
+function parseOptionalFloat(value) {
+  const normalized = typeof value === 'string' ? value.trim() : String(value ?? '').trim()
+  if (!normalized) {
+    return null
+  }
+
+  const parsed = Number.parseFloat(normalized)
+  if (!Number.isFinite(parsed)) {
+    return null
+  }
+
+  return parsed > 0 && parsed <= 1 ? parsed : null
+}
+
+function parsePositiveIntegerWithFallback(value, fallback) {
+  return parseOptionalInteger(value) ?? fallback
+}
+
+function parsePredictWithFallback(value, fallback) {
+  return parseOptionalInteger(value, { allowNegativeOne: true }) ?? fallback
+}
+
+function parseNonNegativeFloatWithFallback(value, fallback) {
+  const normalized = typeof value === 'string' ? value.trim() : String(value ?? '').trim()
+  if (!normalized) {
+    return fallback
+  }
+
+  const parsed = Number.parseFloat(normalized)
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return fallback
+  }
+
+  return parsed
+}
+
+function parseZeroToOneFloatWithFallback(value, fallback, { allowZero = false } = {}) {
+  const normalized = typeof value === 'string' ? value.trim() : String(value ?? '').trim()
+  if (!normalized) {
+    return fallback
+  }
+
+  const parsed = Number.parseFloat(normalized)
+  if (!Number.isFinite(parsed) || parsed > 1) {
+    return fallback
+  }
+
+  if ((!allowZero && parsed <= 0) || (allowZero && parsed < 0)) {
+    return fallback
+  }
+
+  return parsed
+}
+
+function parseStopSequences(value) {
+  return String(value || '')
+    .split(/\r?\n/)
+    .map(item => item.trim())
+    .filter(Boolean)
+}
+
+function resetOllamaRuntimeSettings() {
+  ollamaNumCtx.value = String(ollamaRuntimeDefaults.numCtx)
+  ollamaRequestKeepAlive.value = ollamaRuntimeDefaults.keepAlive
+  ollamaNumPredict.value = String(ollamaRuntimeDefaults.numPredict)
+  ollamaTemperature.value = String(ollamaRuntimeDefaults.temperature)
+  ollamaTopK.value = String(ollamaRuntimeDefaults.topK)
+  ollamaTopP.value = String(ollamaRuntimeDefaults.topP)
+  ollamaMinP.value = String(ollamaRuntimeDefaults.minP)
+  ollamaStopText.value = ''
+  ollamaThink.value = ollamaRuntimeDefaults.think
+}
+
+function applyOllamaRuntimeSettings(data = {}) {
+  ollamaNumCtx.value = formatRuntimeSetting(data.ollamaNumCtx, ollamaRuntimeDefaults.numCtx)
+  ollamaRequestKeepAlive.value = data.ollamaKeepAlive || ollamaRuntimeDefaults.keepAlive
+  ollamaNumPredict.value = formatRuntimeSetting(data.ollamaNumPredict, ollamaRuntimeDefaults.numPredict)
+  ollamaTemperature.value = formatRuntimeSetting(data.ollamaTemperature, ollamaRuntimeDefaults.temperature)
+  ollamaTopK.value = formatRuntimeSetting(data.ollamaTopK, ollamaRuntimeDefaults.topK)
+  ollamaTopP.value = formatRuntimeSetting(data.ollamaTopP, ollamaRuntimeDefaults.topP)
+  ollamaMinP.value = formatRuntimeSetting(data.ollamaMinP, ollamaRuntimeDefaults.minP)
+  ollamaStopText.value = formatRuntimeStopSequences(data.ollamaStop)
+  ollamaThink.value = data.ollamaThink ?? ollamaRuntimeDefaults.think
+}
+
+function buildOllamaRuntimePayload() {
+  return {
+    ollamaNumCtx: parsePositiveIntegerWithFallback(ollamaNumCtx.value, ollamaRuntimeDefaults.numCtx),
+    ollamaKeepAlive: (ollamaRequestKeepAlive.value || ollamaRuntimeDefaults.keepAlive).trim() || ollamaRuntimeDefaults.keepAlive,
+    ollamaNumPredict: parsePredictWithFallback(ollamaNumPredict.value, ollamaRuntimeDefaults.numPredict),
+    ollamaTemperature: parseNonNegativeFloatWithFallback(ollamaTemperature.value, ollamaRuntimeDefaults.temperature),
+    ollamaTopK: parsePositiveIntegerWithFallback(ollamaTopK.value, ollamaRuntimeDefaults.topK),
+    ollamaTopP: parseZeroToOneFloatWithFallback(ollamaTopP.value, ollamaRuntimeDefaults.topP),
+    ollamaMinP: parseZeroToOneFloatWithFallback(ollamaMinP.value, ollamaRuntimeDefaults.minP, { allowZero: true }),
+    ollamaStop: parseStopSequences(ollamaStopText.value),
+    ollamaThink: Boolean(ollamaThink.value)
+  }
+}
+
+function getPreferredInstalledOllamaModel(currentValue) {
+  if (!hasInstalledOllamaModels.value) {
+    return ''
+  }
+
+  const normalized = normalizeModelName(currentValue)
+  if (normalized && installedOllamaModelNames.value.includes(normalized)) {
+    return normalized
+  }
+
+  return installedOllamaModelNames.value[0]
+}
+
+function buildUnavailableOllamaModelLabel(currentValue) {
+  const normalized = normalizeModelName(currentValue)
+  if (ollamaStatus.value === 'not_installed') {
+    return normalized
+      ? `当前保存模型：${normalized}（Ollama 未安装）`
+      : 'Ollama 未安装'
+  }
+
+  if (ollamaStatus.value !== 'running') {
+    return normalized
+      ? `当前保存模型：${normalized}（启动并刷新后校验）`
+      : '启动 Ollama 并刷新后读取已安装模型'
+  }
+
+  return normalized
+    ? `当前保存模型：${normalized}（当前机器未拉取）`
+    : '当前未检测到已拉取模型'
+}
+
+function ensureInstalledOllamaModel(currentValue, actionText) {
+  const nextModel = getPreferredInstalledOllamaModel(currentValue)
+  if (nextModel) {
+    return nextModel
+  }
+
+  throw new Error(`无法${actionText}：${ollamaModelSelectionHint.value}`)
+}
+
+function syncProviderOllamaModelSelection() {
+  if (!isOllamaProvider.value) {
+    return
+  }
+
+  const nextModel = getPreferredInstalledOllamaModel(model.value)
+  if (nextModel && model.value !== nextModel) {
+    model.value = nextModel
+  }
+}
+
+function syncNewsOllamaModelSelection() {
+  if (newsProvider.value !== 'ollama') {
+    return
+  }
+
+  const nextModel = getPreferredInstalledOllamaModel(newsModel.value)
+  if (nextModel && newsModel.value !== nextModel) {
+    newsModel.value = nextModel
+  }
+}
 
 const authHeaders = () => ({
   Authorization: `Bearer ${token.value}`
@@ -199,6 +467,7 @@ const applyProviderPreset = selectedProvider => {
   enabled.value = true
   apiKeyMasked.value = ''
   hasApiKey.value = false
+  resetOllamaRuntimeSettings()
   // Tavily API Key is global — do not clear on provider switch
 
   if (selectedProvider === 'antigravity') {
@@ -227,8 +496,11 @@ async function checkOllama() {
     } else {
       ollamaModels.value = []
     }
+    syncProviderOllamaModelSelection()
+    syncNewsOllamaModelSelection()
   } catch (e) {
     ollamaStatus.value = 'error'
+    ollamaModels.value = []
     ollamaMsg.value = e.message
   }
 }
@@ -342,7 +614,7 @@ const loadActiveProvider = async () => {
 
   if (!response.ok) {
     const message = await response.text()
-    throw new Error(message || '获取激活通道失败')
+    throw new Error(message || '获取主渠道失败')
   }
 
   const data = await response.json()
@@ -368,6 +640,7 @@ const loadSettings = async () => {
 
     if (response.status === 404) {
       applyProviderPreset(provider.value)
+      syncProviderOllamaModelSelection()
       settingsLoading.value = false
       return
     }
@@ -384,6 +657,7 @@ const loadSettings = async () => {
     forceChinese.value = data.forceChinese ?? false
     organization.value = data.organization || ''
     project.value = data.project || ''
+    applyOllamaRuntimeSettings(data)
     enabled.value = data.enabled ?? true
     apiKeyMasked.value = data.apiKeyMasked || ''
     hasApiKey.value = data.hasApiKey || false
@@ -399,6 +673,8 @@ const loadSettings = async () => {
         antigravityEmail.value = data.organization
       }
     }
+
+    syncProviderOllamaModelSelection()
   } catch (error) {
     settingsError.value = error.message || '获取配置失败'
   } finally {
@@ -413,6 +689,10 @@ const saveSettings = async () => {
   saveMessage.value = ''
 
   try {
+    if (isOllamaProvider.value) {
+      model.value = ensureInstalledOllamaModel(model.value, '保存 Ollama 配置')
+    }
+
     const response = await fetch(`/api/admin/llm/settings/${provider.value}`, {
       method: 'PUT',
       headers: {
@@ -429,6 +709,7 @@ const saveSettings = async () => {
         organization: organization.value,
         project: project.value,
         enabled: enabled.value,
+        ...buildOllamaRuntimePayload(),
         providerType: providerPresets[provider.value]?.providerType || undefined
       })
     })
@@ -451,13 +732,12 @@ const saveSettings = async () => {
     apiKey.value = ''
     tavilyApiKey.value = ''
 
-    // 自动激活刚保存的通道（如果与当前激活通道不同）
+    // 保存 Provider 配置后，自动把全局主渠道切到当前编辑的通道。
     if (provider.value !== activeProviderKey.value) {
-      activeProviderKey.value = provider.value
-      await saveActiveProvider()
-      saveMessage.value = `✅ 配置已保存并已切换激活通道为「${providerPresets[provider.value]?.label || provider.value}」`
+      await saveActiveProvider(provider.value)
+      saveMessage.value = `✅ 通道配置已保存，并已自动切换主渠道为「${providerLabel(provider.value)}」`
     } else {
-      saveMessage.value = '✅ 配置已保存'
+      saveMessage.value = `✅ 通道配置已保存，当前主渠道「${providerLabel(provider.value)}」已立即生效`
     }
     emit('settings-saved', data)
   } catch (error) {
@@ -467,41 +747,31 @@ const saveSettings = async () => {
   }
 }
 
-const saveActiveProvider = async () => {
+const saveActiveProvider = async (providerKey = activeProviderKey.value) => {
   if (!token.value) return
 
-  settingsLoading.value = true
-  settingsError.value = ''
-  saveMessage.value = ''
+  const response = await fetch('/api/admin/llm/settings/active', {
+    method: 'PUT',
+    headers: {
+      ...authHeaders(),
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ activeProviderKey: providerKey })
+  })
 
-  try {
-    const response = await fetch('/api/admin/llm/settings/active', {
-      method: 'PUT',
-      headers: {
-        ...authHeaders(),
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ activeProviderKey: activeProviderKey.value })
-    })
-
-    if (response.status === 401 || response.status === 403) {
-      handleUnauthorized()
-      return
-    }
-
-    if (!response.ok) {
-      const message = await response.text()
-      throw new Error(message || '切换激活通道失败')
-    }
-
-    const data = await response.json()
-    activeProviderKey.value = data.activeProviderKey || activeProviderKey.value
-    saveMessage.value = '激活通道已切换'
-  } catch (error) {
-    settingsError.value = error.message || '切换激活通道失败'
-  } finally {
-    settingsLoading.value = false
+  if (response.status === 401 || response.status === 403) {
+    handleUnauthorized('登录已过期，请重新登录')
+    throw new Error('登录已过期，请重新登录')
   }
+
+  if (!response.ok) {
+    const message = await response.text()
+    throw new Error(message || '切换主渠道失败')
+  }
+
+  const data = await response.json()
+  activeProviderKey.value = data.activeProviderKey || providerKey
+  return activeProviderKey.value
 }
 
 const testLoading = ref(false)
@@ -515,12 +785,18 @@ const testConnection = async () => {
   testResult.value = ''
   testError.value = ''
 
-  const controller = new AbortController()
-  testAbortController.value = controller
-  const timeoutMs = isOllamaProvider.value ? 60000 : 30000
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+  let timeoutId = null
 
   try {
+    if (isOllamaProvider.value) {
+      model.value = ensureInstalledOllamaModel(model.value, '测试 Ollama 连接')
+    }
+
+    const controller = new AbortController()
+    testAbortController.value = controller
+    const timeoutMs = isOllamaProvider.value ? 60000 : 30000
+    timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+
     const testProvider = provider.value === activeProviderKey.value ? 'active' : provider.value
     const response = await fetch(`/api/admin/llm/test/${testProvider}`, {
       method: 'POST',
@@ -529,11 +805,11 @@ const testConnection = async () => {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        prompt: '你好，请用一句话回复确认连接正常。'
+        prompt: '你好，请用一句话回复确认连接正常。',
+        model: model.value || undefined
       }),
       signal: controller.signal
     })
-    clearTimeout(timeoutId)
 
     if (response.status === 401 || response.status === 403) {
       handleUnauthorized()
@@ -548,7 +824,6 @@ const testConnection = async () => {
     const data = await response.json()
     testResult.value = data.content || '连接成功，但未返回内容'
   } catch (error) {
-    clearTimeout(timeoutId)
     if (error.name === 'AbortError') {
       testError.value = isOllamaProvider.value
         ? '⏳ 请求超时 — 本地模型首次加载可能需要数分钟，请确认 Ollama 已运行'
@@ -557,6 +832,9 @@ const testConnection = async () => {
       testError.value = error.message || '连接测试失败'
     }
   } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId)
+    }
     testAbortController.value = null
     testLoading.value = false
   }
@@ -575,6 +853,8 @@ const newsSaveMsg = ref('')
 const newsTestMsg = ref('')
 const newsTesting = ref(false)
 const newsTestAbortController = ref(null)
+const isNewsOllamaBlocked = computed(() => newsProvider.value === 'ollama' && !hasInstalledOllamaModels.value)
+const newsOllamaActionHint = computed(() => buildOllamaActionHint(newsModel.value, '新闻清洗'))
 
 async function loadNewsCleansing() {
   try {
@@ -586,6 +866,7 @@ async function loadNewsCleansing() {
       newsProvider.value = data.provider || 'active'
       newsModel.value = data.model || ''
       newsBatchSize.value = data.batchSize || 12
+      syncNewsOllamaModelSelection()
     }
   } catch (e) { /* ignore load errors */ }
 }
@@ -594,6 +875,10 @@ async function saveNewsCleansing() {
   newsLoading.value = true
   newsSaveMsg.value = ''
   try {
+    if (newsProvider.value === 'ollama') {
+      newsModel.value = ensureInstalledOllamaModel(newsModel.value, '保存新闻清洗 Ollama 配置')
+    }
+
     const res = await fetch('/api/admin/llm/news-cleansing', {
       method: 'PUT',
       headers: {
@@ -611,12 +896,16 @@ async function saveNewsCleansing() {
       newsProvider.value = data.provider
       newsModel.value = data.model
       newsBatchSize.value = data.batchSize
-      newsSaveMsg.value = '保存成功'
+      if (newsProvider.value === 'active') {
+        newsSaveMsg.value = `✅ 新闻清洗已改为跟随主渠道「${providerLabel(activeProviderKey.value)}」，并立即生效（不影响主渠道）`
+      } else {
+        newsSaveMsg.value = `✅ 新闻清洗渠道已切换为「${providerLabel(newsProvider.value)}」，并立即生效（不影响主渠道）`
+      }
     } else {
-      newsSaveMsg.value = '保存失败'
+      newsSaveMsg.value = '❌ 保存失败'
     }
   } catch (e) {
-    newsSaveMsg.value = '保存失败: ' + e.message
+    newsSaveMsg.value = '❌ 保存失败: ' + e.message
   } finally {
     newsLoading.value = false
     setTimeout(() => { newsSaveMsg.value = '' }, 3000)
@@ -631,13 +920,19 @@ async function testNewsCleansing() {
   newsTesting.value = true
   newsTestMsg.value = ''
 
-  const controller = new AbortController()
-  newsTestAbortController.value = controller
   const isLocalModel = newsProvider.value === 'ollama'
-  const timeoutMs = isLocalModel ? 60000 : 30000
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+  let timeoutId = null
 
   try {
+    if (isLocalModel) {
+      newsModel.value = ensureInstalledOllamaModel(newsModel.value, '测试新闻清洗 Ollama 连接')
+    }
+
+    const controller = new AbortController()
+    newsTestAbortController.value = controller
+    const timeoutMs = isLocalModel ? 60000 : 30000
+    timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+
     const res = await fetch(`/api/admin/llm/test/${newsProvider.value}`, {
       method: 'POST',
       headers: {
@@ -647,7 +942,6 @@ async function testNewsCleansing() {
       body: JSON.stringify({ prompt: '你好，请用一句话回复' }),
       signal: controller.signal
     })
-    clearTimeout(timeoutId)
     if (res.ok) {
       newsTestMsg.value = '✅ 连接正常'
     } else {
@@ -655,7 +949,6 @@ async function testNewsCleansing() {
       newsTestMsg.value = '❌ ' + (data?.message || `HTTP ${res.status}`)
     }
   } catch (e) {
-    clearTimeout(timeoutId)
     if (e.name === 'AbortError') {
       newsTestMsg.value = isLocalModel
         ? '⏳ 请求超时 — 本地模型首次加载可能需要数分钟，请确认 Ollama 已运行'
@@ -664,6 +957,9 @@ async function testNewsCleansing() {
       newsTestMsg.value = '❌ ' + e.message
     }
   } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId)
+    }
     newsTestAbortController.value = null
     newsTesting.value = false
     setTimeout(() => { newsTestMsg.value = '' }, 8000)
@@ -677,7 +973,17 @@ function cancelNewsTest() {
 watch(newsProvider, (val) => {
   if (val === 'active') {
     newsModel.value = ''
+  } else if (val === 'ollama') {
+    syncNewsOllamaModelSelection()
   }
+})
+
+watch([provider, () => installedOllamaModelNames.value.join('|')], () => {
+  syncProviderOllamaModelSelection()
+})
+
+watch([newsProvider, () => installedOllamaModelNames.value.join('|')], () => {
+  syncNewsOllamaModelSelection()
 })
 if (token.value) {
   loadActiveProvider().then(loaded => {
@@ -773,6 +1079,10 @@ onUnmounted(() => {
         </div>
       </div>
 
+      <div v-if="ollamaRunningModelNotice" class="ollama-running-hint">
+        {{ ollamaRunningModelNotice }}
+      </div>
+
       <!-- 未安装提示 -->
       <div v-if="ollamaStatus === 'not_installed'" class="install-hint">
         <p>Ollama 未安装。请先安装：</p>
@@ -819,29 +1129,24 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- 激活通道卡片 -->
-    <div class="settings-card">
-      <div class="card-section-title">
-        <span class="section-dot section-dot--active"></span>
-        激活通道
-      </div>
-      <div class="row-fields">
-        <div class="form-field grow">
-          <select class="form-input" v-model="activeProviderKey">
-            <option v-for="option in providerOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
-          </select>
-        </div>
-        <button class="btn-secondary" @click="saveActiveProvider" :disabled="settingsLoading">
-          {{ settingsLoading ? '切换中...' : '切换激活通道' }}
-        </button>
-      </div>
-    </div>
-
     <!-- 配置编辑卡片 -->
     <div class="settings-card">
       <div class="card-section-title">
         <span class="section-dot section-dot--edit"></span>
         通道配置
+      </div>
+
+      <div class="field-group">
+        <div class="field-group-header">主渠道状态</div>
+        <div class="antigravity-status">
+          <span class="status-dot status-dot--ok"></span>
+          当前主渠道：{{ providerLabel(activeProviderKey) }}
+        </div>
+        <p class="form-hint" style="margin-top: 8px;">
+          {{ provider === activeProviderKey
+            ? `你正在编辑当前主渠道「${providerLabel(provider)}」，保存后会立即生效。`
+            : `你正在编辑「${providerLabel(provider)}」。保存后会自动切换主渠道为该通道。` }}
+        </p>
       </div>
 
       <div class="form-field">
@@ -908,6 +1213,14 @@ onUnmounted(() => {
           <select v-if="isAntigravity && antigravityModels.length > 0" class="form-input" v-model="model">
             <option v-for="m in antigravityModels" :key="m" :value="m">{{ m }}</option>
           </select>
+          <template v-else-if="isOllamaProvider">
+            <select class="form-input" v-model="model" :disabled="!hasInstalledOllamaModels">
+              <option v-if="!hasInstalledOllamaModels" :value="model">{{ providerOllamaModelOptionLabel }}</option>
+              <option v-for="name in installedOllamaModelNames" :key="name" :value="name">{{ name }}</option>
+            </select>
+            <p v-if="hasInstalledOllamaModels" class="form-hint">{{ ollamaModelSelectionHint }}</p>
+            <p v-else class="form-error">{{ ollamaModelSelectionHint }}</p>
+          </template>
           <input v-else class="form-input" v-model="model" :placeholder="modelPlaceholder" />
         </div>
         <div class="form-field">
@@ -932,7 +1245,43 @@ onUnmounted(() => {
             <input class="form-input" v-model="project" placeholder="可选" />
           </div>
         </div>
+        <div v-if="isOllamaProvider" class="ollama-runtime-grid">
+          <div class="form-field">
+            <label class="form-label">上下文窗口 (num_ctx)</label>
+            <input class="form-input" v-model="ollamaNumCtx" inputmode="numeric" placeholder="默认 2048" />
+          </div>
+          <div class="form-field">
+            <label class="form-label">模型常驻 (keep_alive)</label>
+            <input class="form-input" v-model="ollamaRequestKeepAlive" placeholder="默认 5m，0 表示立即卸载" />
+          </div>
+          <div class="form-field">
+            <label class="form-label">最大输出 (num_predict)</label>
+            <input class="form-input" v-model="ollamaNumPredict" inputmode="numeric" placeholder="默认 256，-1 表示不限" />
+          </div>
+          <div class="form-field">
+            <label class="form-label">Temperature</label>
+            <input class="form-input" v-model="ollamaTemperature" inputmode="decimal" placeholder="默认 0.3，越低越稳" />
+          </div>
+          <div class="form-field">
+            <label class="form-label">Top K</label>
+            <input class="form-input" v-model="ollamaTopK" inputmode="numeric" placeholder="默认 64" />
+          </div>
+          <div class="form-field">
+            <label class="form-label">Top P</label>
+            <input class="form-input" v-model="ollamaTopP" inputmode="decimal" placeholder="默认 0.95" />
+          </div>
+          <div class="form-field">
+            <label class="form-label">Min P</label>
+            <input class="form-input" v-model="ollamaMinP" inputmode="decimal" placeholder="默认 0，0-1 之间" />
+          </div>
+          <div class="form-field form-field-full-span">
+            <label class="form-label">Stop Sequences (stop)</label>
+            <textarea class="form-input form-textarea" data-testid="ollama-stop" v-model="ollamaStopText" rows="3" placeholder="默认无额外 stop；每行一个序列"></textarea>
+          </div>
+        </div>
+        <p v-if="isOllamaProvider" class="form-hint">{{ ollamaRuntimeHint }}</p>
         <div class="toggle-row">
+          <label v-if="isOllamaProvider" class="toggle-label"><input data-testid="ollama-think" type="checkbox" v-model="ollamaThink" /> 启用思维链输出 (think)</label>
           <label class="toggle-label"><input type="checkbox" v-model="forceChinese" /> 强制中文回复</label>
           <label class="toggle-label"><input type="checkbox" v-model="enabled" /> 启用该 Provider</label>
         </div>
@@ -941,14 +1290,17 @@ onUnmounted(() => {
       <!-- 操作栏 -->
       <div class="form-actions">
         <div class="action-buttons">
-          <button class="btn-primary-lg" @click="saveSettings" :disabled="settingsLoading" style="flex:1;">
+          <button class="btn-primary-lg" @click="saveSettings" :disabled="settingsLoading || isProviderOllamaBlocked" style="flex:1;">
             {{ settingsLoading ? '保存中...' : '保存设置' }}
           </button>
-          <button class="btn-secondary" @click="testConnection" :disabled="testLoading" style="margin-left: 8px; height: 44px;">
+          <button class="btn-secondary" @click="testConnection" :disabled="testLoading || isProviderOllamaBlocked" style="margin-left: 8px; height: 44px;">
             {{ testLoading ? '测试中...' : '🔗 测试连接' }}
           </button>
           <span v-if="testLoading" @click="cancelTest" style="margin-left: 8px; color: #ff9800; cursor: pointer; font-size: 12px; text-decoration: underline;">取消</span>
         </div>
+        <p v-if="isProviderOllamaBlocked" class="form-hint" style="margin-top: 8px;">
+          {{ providerOllamaActionHint }}
+        </p>
         <div v-if="testResult" class="form-success" style="margin-top: 8px;">✅ {{ testResult }}</div>
         <div v-if="testError" class="form-error" style="margin-top: 8px;">❌ {{ testError }}</div>
         <p v-if="saveMessage" class="form-success">{{ saveMessage }}</p>
@@ -963,7 +1315,7 @@ onUnmounted(() => {
         新闻清洗渠道设置
       </div>
       <p class="form-hint" style="margin-bottom: var(--space-4);">
-        新闻清洗可以使用独立渠道（如本地 Ollama），不影响其他 LLM 功能
+        新闻清洗可以使用独立渠道（如本地 Ollama）。保存后会立即对新闻清洗生效，不会改动主渠道。
       </p>
 
       <div class="form-field">
@@ -975,8 +1327,16 @@ onUnmounted(() => {
       </div>
 
       <div class="form-field">
-        <label class="form-label">模型 (留空则跟随渠道默认)</label>
-        <input class="form-input" v-model="newsModel" type="text" placeholder="例如: gemma4:e4b"
+        <label class="form-label">{{ newsProvider === 'ollama' ? '模型' : '模型 (留空则跟随渠道默认)' }}</label>
+        <template v-if="newsProvider === 'ollama'">
+          <select class="form-input" v-model="newsModel" :disabled="!hasInstalledOllamaModels">
+            <option v-if="!hasInstalledOllamaModels" :value="newsModel">{{ newsOllamaModelOptionLabel }}</option>
+            <option v-for="name in installedOllamaModelNames" :key="name" :value="name">{{ name }}</option>
+          </select>
+          <p v-if="hasInstalledOllamaModels" class="form-hint">{{ ollamaModelSelectionHint }}</p>
+          <p v-else class="form-error">{{ ollamaModelSelectionHint }}</p>
+        </template>
+        <input v-else class="form-input" v-model="newsModel" type="text" placeholder="留空则跟随渠道默认"
                :disabled="newsProvider === 'active'"
                :style="{ opacity: newsProvider === 'active' ? 0.5 : 1 }" />
       </div>
@@ -986,22 +1346,27 @@ onUnmounted(() => {
         <input class="form-input" v-model.number="newsBatchSize" type="number" min="5" max="20"
                :disabled="newsProvider === 'active'"
                :style="{ width: '120px', opacity: newsProvider === 'active' ? 0.5 : 1 }" />
+        <p class="form-hint">Ollama 本地模型和云端渠道都支持 5-20；超出范围时会自动归一化到 5 或 20。</p>
       </div>
 
       <div style="display: flex; align-items: center; gap: var(--space-3); margin-top: var(--space-3); flex-wrap: wrap;">
-        <button class="btn-secondary" @click="saveNewsCleansing" :disabled="newsLoading">
+        <button class="btn-secondary" @click="saveNewsCleansing" :disabled="newsLoading || isNewsOllamaBlocked">
           {{ newsLoading ? '保存中...' : '保存' }}
         </button>
-        <button class="btn-secondary" @click="testNewsCleansing" :disabled="newsTesting || newsProvider === 'active'">
+        <button class="btn-secondary" @click="testNewsCleansing" :disabled="newsTesting || newsProvider === 'active' || isNewsOllamaBlocked">
           {{ newsTesting ? '测试中...' : '🔗 测试连接' }}
         </button>
         <span v-if="newsTesting" @click="cancelNewsTest" style="color: #ff9800; cursor: pointer; font-size: 12px; text-decoration: underline;">取消</span>
-        <span v-if="newsSaveMsg" style="font-size: var(--text-sm); color: var(--color-success);">{{ newsSaveMsg }}</span>
+          <span v-if="newsSaveMsg" style="font-size: var(--text-sm);"
+            :style="{ color: newsSaveMsg.startsWith('❌') ? 'var(--color-danger)' : 'var(--color-success)' }">{{ newsSaveMsg }}</span>
         <span v-if="newsTestMsg" style="font-size: var(--text-sm);"
               :style="{ color: newsTestMsg.startsWith('✅') ? 'var(--color-success)' : newsTestMsg.startsWith('❌') ? 'var(--color-danger)' : '#ff9800' }">
           {{ newsTestMsg }}
         </span>
       </div>
+      <p v-if="isNewsOllamaBlocked" class="form-hint" style="margin-top: 8px;">
+        {{ newsOllamaActionHint }}
+      </p>
     </div>
   </div>
 </template>
@@ -1057,6 +1422,17 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: var(--space-5);
+}
+
+.ollama-running-hint {
+  margin-top: var(--space-3);
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 152, 0, 0.35);
+  background: rgba(255, 152, 0, 0.12);
+  color: #9a5a00;
+  font-size: var(--text-sm);
+  line-height: 1.5;
 }
 
 /* ── 页面头 ── */
@@ -1184,6 +1560,14 @@ onUnmounted(() => {
   display: flex;
   gap: var(--space-3);
   align-items: flex-end;
+}
+.ollama-runtime-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+.form-field-full-span {
+  grid-column: 1 / -1;
 }
 .grow { flex: 1; }
 
@@ -1388,4 +1772,10 @@ onUnmounted(() => {
   color: var(--color-text-primary); font-size: var(--text-sm);
 }
 .pull-msg { font-size: var(--text-sm); color: var(--color-text-secondary); margin-top: 6px; }
+
+@media (max-width: 768px) {
+  .ollama-runtime-grid {
+    grid-template-columns: 1fr;
+  }
+}
 </style>

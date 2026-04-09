@@ -11,14 +11,14 @@ namespace SimplerJiangAiAgent.Api.Tests;
 public sealed class SectorRotationQueryServiceTests
 {
     [Fact]
-    public async Task GetLatestSummaryAsync_PrefersLatestUsableSnapshotOverNewerBrokenRow()
+    public async Task GetLatestSummaryAsync_ReturnsFreshPartialSnapshotInsteadOfOlderUsableRow()
     {
         await using var dbContext = CreateDbContext();
         dbContext.MarketSentimentSnapshots.AddRange(
             new MarketSentimentSnapshot
             {
-                TradingDate = new DateTime(2026, 3, 15),
-                SnapshotTime = new DateTime(2026, 3, 15, 6, 35, 0, DateTimeKind.Utc),
+                TradingDate = new DateTime(2026, 4, 2),
+                SnapshotTime = new DateTime(2026, 4, 2, 6, 35, 0, DateTimeKind.Utc),
                 SessionPhase = "盘中",
                 StageLabel = "主升",
                 StageScore = 78.6m,
@@ -38,11 +38,11 @@ public sealed class SectorRotationQueryServiceTests
             },
             new MarketSentimentSnapshot
             {
-                TradingDate = new DateTime(2026, 3, 15),
-                SnapshotTime = new DateTime(2026, 3, 15, 6, 36, 0, DateTimeKind.Utc),
+                TradingDate = new DateTime(2026, 4, 7),
+                SnapshotTime = new DateTime(2026, 4, 7, 6, 36, 0, DateTimeKind.Utc),
                 SessionPhase = "盘中",
                 StageLabel = "主升",
-                StageScore = 77.2m,
+                StageScore = 0m,
                 MaxLimitUpStreak = 0,
                 LimitUpCount = 0,
                 LimitDownCount = 1,
@@ -54,7 +54,9 @@ public sealed class SectorRotationQueryServiceTests
                 TotalTurnover = 0m,
                 Top3SectorTurnoverShare = 0m,
                 Top10SectorTurnoverShare = 0m,
-                SourceTag = "test",
+                StageLabelV2 = "同步不完整",
+                SourceTag = "eastmoney_partial",
+                RawJson = "{\"status\":{\"isDegraded\":true,\"isCriticalSummaryIncomplete\":true,\"degradeReason\":\"market_breadth_unavailable\"}}",
                 CreatedAt = DateTime.UtcNow
             });
         await dbContext.SaveChangesAsync();
@@ -64,10 +66,10 @@ public sealed class SectorRotationQueryServiceTests
         var result = await service.GetLatestSummaryAsync();
 
         Assert.NotNull(result);
-        Assert.Equal(153, result!.LimitUpCount);
-        Assert.Equal(4992, result.Advancers);
-        Assert.Equal(26.4m, result.Top3SectorTurnoverShare);
-        Assert.Equal(new DateTime(2026, 3, 15, 6, 35, 0, DateTimeKind.Utc), result.SnapshotTime);
+        Assert.Equal(new DateTime(2026, 4, 7, 6, 36, 0, DateTimeKind.Utc), result!.SnapshotTime);
+        Assert.Equal("同步不完整", result.StageLabelV2);
+        Assert.True(result.IsDegraded);
+        Assert.Equal("market_breadth_unavailable", result.DegradeReason);
     }
 
     [Fact]
@@ -119,7 +121,7 @@ public sealed class SectorRotationQueryServiceTests
                 SnapshotTime = new DateTime(2026, 3, 15, 6, 36, 0, DateTimeKind.Utc),
                 SessionPhase = "盘中",
                 StageLabel = "主升",
-                StageScore = 77.2m,
+                StageScore = 0m,
                 LimitUpCount = 0,
                 LimitDownCount = 1,
                 BrokenBoardCount = 0,
@@ -129,7 +131,9 @@ public sealed class SectorRotationQueryServiceTests
                 TotalTurnover = 0m,
                 Top3SectorTurnoverShare = 0m,
                 Top10SectorTurnoverShare = 0m,
-                SourceTag = "test",
+                StageLabelV2 = "同步不完整",
+                SourceTag = "eastmoney_partial",
+                RawJson = "{\"status\":{\"isDegraded\":true,\"isCriticalSummaryIncomplete\":true,\"degradeReason\":\"market_breadth_unavailable\"}}",
                 CreatedAt = DateTime.UtcNow
             });
         await dbContext.SaveChangesAsync();
@@ -143,6 +147,51 @@ public sealed class SectorRotationQueryServiceTests
         Assert.Equal(153, result[1].LimitUpCount);
         Assert.Equal(3, result[1].LimitDownCount);
         Assert.Equal(21, result[1].BrokenBoardCount);
+    }
+
+    [Fact]
+    public async Task GetSectorPageAsync_DoesNotExposeOlderBoardSnapshotAfterFreshDegradedSync()
+    {
+        await using var dbContext = CreateDbContext();
+        dbContext.MarketSentimentSnapshots.Add(new MarketSentimentSnapshot
+        {
+            TradingDate = new DateTime(2026, 4, 7),
+            SnapshotTime = new DateTime(2026, 4, 7, 6, 40, 0, DateTimeKind.Utc),
+            SessionPhase = "盘中",
+            StageLabel = "混沌",
+            StageScore = 0m,
+            StageLabelV2 = "同步不完整",
+            SourceTag = "eastmoney_partial",
+            RawJson = "{\"status\":{\"isDegraded\":true,\"isCriticalSummaryIncomplete\":true,\"degradeReason\":\"sector_rankings_concept_unavailable\"}}",
+            CreatedAt = DateTime.UtcNow
+        });
+        dbContext.SectorRotationSnapshots.Add(new SectorRotationSnapshot
+        {
+            TradingDate = new DateTime(2026, 4, 2),
+            SnapshotTime = new DateTime(2026, 4, 2, 6, 35, 0, DateTimeKind.Utc),
+            BoardType = SectorBoardTypes.Concept,
+            SectorCode = "BK001",
+            SectorName = "机器人",
+            ChangePercent = 4.2m,
+            MainNetInflow = 120m,
+            BreadthScore = 80,
+            ContinuityScore = 70,
+            StrengthScore = 85,
+            NewsSentiment = "利好",
+            RankNo = 2,
+            SourceTag = "test",
+            CreatedAt = DateTime.UtcNow
+        });
+        await dbContext.SaveChangesAsync();
+
+        var service = new SectorRotationQueryService(dbContext, Options.Create(new SectorRotationOptions()));
+
+        var result = await service.GetSectorPageAsync(SectorBoardTypes.Concept, 1, 20, "change");
+
+        Assert.Equal(0, result.Total);
+        Assert.Empty(result.Items);
+        Assert.True(result.IsDegraded);
+        Assert.Equal(new DateTime(2026, 4, 7, 6, 40, 0, DateTimeKind.Utc), result.SnapshotTime);
     }
 
     [Fact]

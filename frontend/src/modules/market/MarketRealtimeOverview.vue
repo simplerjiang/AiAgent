@@ -4,6 +4,8 @@ import { computed } from 'vue'
 const props = defineProps({
   overview: { type: Object, default: null },
   loading: { type: Boolean, default: false },
+  pageLoading: { type: Boolean, default: false },
+  degraded: { type: Boolean, default: false },
   error: { type: String, default: '' },
   formatDate: { type: Function, required: true },
   formatMoney: { type: Function, required: true },
@@ -11,10 +13,69 @@ const props = defineProps({
   formatSignedAmount: { type: Function, required: true }
 })
 
+const hasNumericValue = value => typeof value === 'number' && Number.isFinite(value)
+const isPositiveNumber = value => hasNumericValue(value) && value >= 0
+const isNegativeNumber = value => hasNumericValue(value) && value < 0
+const isGuardedRealtimeState = computed(() => props.loading || props.pageLoading || props.degraded)
+const needsGuardedPlaceholder = value => isGuardedRealtimeState.value && !hasNumericValue(value)
+const needsGuardedTurnoverPlaceholder = value => isGuardedRealtimeState.value && (!hasNumericValue(value) || value <= 0)
+const formatValue = (value, formatter, fallback = '--') => (hasNumericValue(value) ? formatter(value) : fallback)
+const formatIndexPrice = value => formatValue(value, current => current.toFixed(2))
+const formatIndexChangePercent = value => (
+  needsGuardedPlaceholder(value)
+    ? '--'
+    : formatValue(value, current => props.formatSignedPercent(current))
+)
+const formatTurnoverText = value => (
+  needsGuardedTurnoverPlaceholder(value)
+    ? '成交额 实时补充中'
+    : `成交额 ${formatValue(value, current => props.formatMoney(current))}`
+)
+const formatSignedAmountText = (value, placeholder = '待补齐') => (
+  needsGuardedPlaceholder(value)
+    ? placeholder
+    : formatValue(value, current => props.formatSignedAmount(current))
+)
+const formatLabeledSignedAmount = (label, value, placeholder = '实时补充中') => (
+  `${label} ${needsGuardedPlaceholder(value) ? placeholder : formatValue(value, current => props.formatSignedAmount(current))}`
+)
+const formatLabeledCount = (label, value, placeholder = '暂不展示') => (
+  `${label} ${needsGuardedPlaceholder(value) ? placeholder : formatValue(value, current => String(current))}`
+)
+
 const realtimeIndices = computed(() => props.overview?.indices ?? [])
 const realtimeBreadthBuckets = computed(() => {
   const buckets = props.overview?.breadth?.buckets ?? []
-  return buckets.filter(item => Number(item?.count ?? 0) > 0)
+  return buckets.filter(item => hasNumericValue(item?.count) && item.count > 0)
+})
+const mainFlowSecondaryText = computed(() => formatLabeledSignedAmount('超大单', props.overview?.mainCapitalFlow?.superLargeOrderNetInflow))
+const northboundBreakdownText = computed(() => ([
+  formatLabeledSignedAmount('沪股通', props.overview?.northboundFlow?.shanghaiNetInflow, '待补齐'),
+  formatLabeledSignedAmount('深股通', props.overview?.northboundFlow?.shenzhenNetInflow, '待补齐')
+].join(' / ')))
+const breadthSummaryText = computed(() => {
+  const advancers = props.overview?.breadth?.advancers
+  const decliners = props.overview?.breadth?.decliners
+
+  if (needsGuardedPlaceholder(advancers) || needsGuardedPlaceholder(decliners)) {
+    return '待补齐'
+  }
+
+  return `${formatValue(advancers, current => String(current))} / ${formatValue(decliners, current => String(current))}`
+})
+const breadthDetailText = computed(() => ([
+  formatLabeledCount('涨停', props.overview?.breadth?.limitUpCount),
+  formatLabeledCount('跌停', props.overview?.breadth?.limitDownCount),
+  formatLabeledCount('平盘', props.overview?.breadth?.flatCount)
+].join(' / ')))
+const indexEmptyFeedback = computed(() => {
+  if (props.loading || props.pageLoading) return '实时总览加载中...'
+  if (props.degraded) return '实时补充中'
+  return '暂无指数快照。'
+})
+const breadthEmptyFeedback = computed(() => {
+  if (isGuardedRealtimeState.value) return '实时补充中'
+  return '暂无涨跌分布数据。'
 })
 
 const formatBucketWidth = count => {
@@ -35,13 +96,13 @@ const formatBucketWidth = count => {
         <small>{{ props.formatDate(props.overview?.snapshotTime) }}</small>
       </div>
       <p v-if="props.error" class="feedback error compact">{{ props.error }}</p>
-      <p v-else-if="props.loading && !realtimeIndices.length" class="feedback compact">实时总览加载中...</p>
+      <p v-else-if="!realtimeIndices.length" class="feedback compact">{{ indexEmptyFeedback }}</p>
       <div v-else class="ticker-grid">
         <article v-for="item in realtimeIndices" :key="item.symbol" class="ticker-card">
           <span>{{ item.name }}</span>
-          <strong>{{ item.price.toFixed(2) }}</strong>
-          <small :class="{ positive: item.changePercent >= 0, negative: item.changePercent < 0 }">{{ props.formatSignedPercent(item.changePercent) }}</small>
-          <small>成交额 {{ props.formatMoney(item.turnoverAmount) }}</small>
+          <strong>{{ formatIndexPrice(item.price) }}</strong>
+          <small :class="{ positive: isPositiveNumber(item.changePercent), negative: isNegativeNumber(item.changePercent) }">{{ formatIndexChangePercent(item.changePercent) }}</small>
+          <small>{{ formatTurnoverText(item.turnoverAmount) }}</small>
         </article>
       </div>
     </article>
@@ -57,22 +118,22 @@ const formatBucketWidth = count => {
       <div class="flow-grid">
         <div class="flow-metric">
           <span>主力净流入</span>
-          <strong :class="{ positive: (props.overview?.mainCapitalFlow?.mainNetInflow ?? 0) >= 0, negative: (props.overview?.mainCapitalFlow?.mainNetInflow ?? 0) < 0 }">
-            {{ props.formatSignedAmount(props.overview?.mainCapitalFlow?.mainNetInflow) }}
+          <strong :class="{ positive: isPositiveNumber(props.overview?.mainCapitalFlow?.mainNetInflow), negative: isNegativeNumber(props.overview?.mainCapitalFlow?.mainNetInflow) }">
+            {{ formatSignedAmountText(props.overview?.mainCapitalFlow?.mainNetInflow) }}
           </strong>
-          <small>超大单 {{ props.formatSignedAmount(props.overview?.mainCapitalFlow?.superLargeOrderNetInflow) }}</small>
+          <small>{{ mainFlowSecondaryText }}</small>
         </div>
         <div class="flow-metric">
           <span>北向总净流入</span>
-          <strong :class="{ positive: (props.overview?.northboundFlow?.totalNetInflow ?? 0) >= 0, negative: (props.overview?.northboundFlow?.totalNetInflow ?? 0) < 0 }">
-            {{ props.formatSignedAmount(props.overview?.northboundFlow?.totalNetInflow) }}
+          <strong :class="{ positive: isPositiveNumber(props.overview?.northboundFlow?.totalNetInflow), negative: isNegativeNumber(props.overview?.northboundFlow?.totalNetInflow) }">
+            {{ formatSignedAmountText(props.overview?.northboundFlow?.totalNetInflow) }}
           </strong>
-          <small>沪股通 {{ props.formatSignedAmount(props.overview?.northboundFlow?.shanghaiNetInflow) }} / 深股通 {{ props.formatSignedAmount(props.overview?.northboundFlow?.shenzhenNetInflow) }}</small>
+          <small>{{ northboundBreakdownText }}</small>
         </div>
         <div class="flow-metric">
           <span>涨跌分布</span>
-          <strong>{{ props.overview?.breadth?.advancers ?? 0 }} / {{ props.overview?.breadth?.decliners ?? 0 }}</strong>
-          <small>涨停 {{ props.overview?.breadth?.limitUpCount ?? 0 }} / 跌停 {{ props.overview?.breadth?.limitDownCount ?? 0 }} / 平盘 {{ props.overview?.breadth?.flatCount ?? 0 }}</small>
+          <strong>{{ breadthSummaryText }}</strong>
+          <small>{{ breadthDetailText }}</small>
         </div>
       </div>
     </article>
@@ -94,7 +155,7 @@ const formatBucketWidth = count => {
           <strong>{{ item.count }}</strong>
         </div>
       </div>
-      <p v-else class="feedback compact">暂无涨跌分布数据。</p>
+      <p v-else class="feedback compact">{{ breadthEmptyFeedback }}</p>
     </article>
   </section>
 </template>

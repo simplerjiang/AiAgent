@@ -10,6 +10,7 @@ $ErrorActionPreference = "Stop"
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $packageRoot = Join-Path $root $OutputDir
 $backendOutput = Join-Path $packageRoot "Backend"
+$financialWorkerOutput = Join-Path $packageRoot "FinancialWorker"
 
 if (Test-Path $packageRoot) {
     Remove-Item $packageRoot -Recurse -Force
@@ -43,6 +44,13 @@ $backendAppDataDir = Join-Path $backendOutput "App_Data"
 New-Item -ItemType Directory -Force -Path $backendAppDataDir | Out-Null
 Copy-Item (Join-Path $root "backend/SimplerJiangAiAgent.Api/App_Data/llm-settings.json") $backendAppDataDir -Force
 Remove-Item (Join-Path $backendAppDataDir "llm-settings.local.json") -Force -ErrorAction SilentlyContinue
+
+Write-Host "Publishing financial worker..."
+dotnet publish (Join-Path $root "backend/SimplerJiangAiAgent.FinancialWorker/SimplerJiangAiAgent.FinancialWorker.csproj") `
+    -c $Configuration `
+    -r $RuntimeIdentifier `
+    --self-contained $SelfContained `
+    -o $financialWorkerOutput
 
 Write-Host "Publishing desktop host..."
 dotnet publish (Join-Path $root "desktop/SimplerJiangAiAgent.Desktop/SimplerJiangAiAgent.Desktop.csproj") `

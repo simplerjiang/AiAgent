@@ -10,8 +10,10 @@ namespace SimplerJiangAiAgent.Desktop;
 public partial class Form1 : Form
 {
     private const int PreferredBackendPort = 5119;
+    private const int PreferredFinancialWorkerPort = 5120;
     private const int BackendHealthFailureThreshold = 3;
     private static readonly TimeSpan BackendStartupTimeout = TimeSpan.FromSeconds(90);
+    private static readonly TimeSpan FinancialWorkerStartupTimeout = TimeSpan.FromSeconds(60);
     private static readonly TimeSpan BackendHealthProbeInterval = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan BackendHealthProbeTimeout = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan BackendHealthRecoveryGracePeriod = TimeSpan.FromSeconds(20);
@@ -21,9 +23,12 @@ public partial class Form1 : Form
     private readonly System.Windows.Forms.Timer _backendHealthTimer;
     private readonly object _backendLogSync = new();
     private Process? _backendProcess;
+    private Process? _financialWorkerProcess;
     private BackendLaunchCommand? _backendLaunchCommand;
+    private BackendLaunchCommand? _financialWorkerLaunchCommand;
     private string? _backendBaseUrl;
     private string? _backendDataRoot;
+    private string? _financialWorkerBaseUrl;
     private bool _ownsBackendProcess;
     private bool _backendReady;
     private bool _isRecoveringBackend;
@@ -137,12 +142,17 @@ public partial class Form1 : Form
     {
         var existingUrl = $"http://localhost:{PreferredBackendPort}";
         _backendBaseUrl = existingUrl;
+        _backendDataRoot = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "SimplerJiangAiAgent");
+        Directory.CreateDirectory(_backendDataRoot);
 
         if (await IsHealthyAsync(existingUrl))
         {
             _ownsBackendProcess = false;
             _backendReady = true;
             _lastBackendHealthyAtUtc = DateTime.UtcNow;
+            await EnsureFinancialWorkerAsync(_backendDataRoot);
             AppendDebug($"复用已运行后端: {existingUrl}");
             return existingUrl;
         }
@@ -153,11 +163,7 @@ public partial class Form1 : Form
             throw new InvalidOperationException("未找到可启动的后端程序。请使用打包后的发布目录运行桌面程序，或先手工启动本地后端。");
         }
 
-        _backendDataRoot = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "SimplerJiangAiAgent");
-        Directory.CreateDirectory(_backendDataRoot);
-
+        await EnsureFinancialWorkerAsync(_backendDataRoot);
         await StartManagedBackendAsync(existingUrl, _backendDataRoot);
         StartBackendHealthMonitoring();
         return existingUrl;
@@ -167,6 +173,7 @@ public partial class Form1 : Form
     {
         _isClosing = true;
         _backendHealthTimer.Stop();
+        StopOwnedFinancialWorkerProcess();
         StopOwnedBackendProcess();
     }
 
@@ -188,7 +195,25 @@ public partial class Form1 : Form
         return null;
     }
 
-    private static async Task<bool> WaitForHealthyAsync(string baseUrl, Process process, TimeSpan timeout)
+    private static BackendLaunchCommand? FindPackagedFinancialWorkerLaunchCommand()
+    {
+        var workerDir = Path.Combine(AppContext.BaseDirectory, "FinancialWorker");
+        var workerExePath = Path.Combine(workerDir, "SimplerJiangAiAgent.FinancialWorker.exe");
+        if (File.Exists(workerExePath))
+        {
+            return new BackendLaunchCommand(workerExePath, string.Empty, workerDir);
+        }
+
+        var workerDllPath = Path.Combine(workerDir, "SimplerJiangAiAgent.FinancialWorker.dll");
+        if (File.Exists(workerDllPath))
+        {
+            return new BackendLaunchCommand("dotnet", $"\"{workerDllPath}\"", workerDir);
+        }
+
+        return null;
+    }
+
+    private static async Task<bool> WaitForHealthyAsync(string baseUrl, Process process, TimeSpan timeout, string healthPath = "/api/health")
     {
         var deadline = DateTime.UtcNow.Add(timeout);
         while (DateTime.UtcNow < deadline)
@@ -198,7 +223,7 @@ public partial class Form1 : Form
                 return false;
             }
 
-            if (await IsHealthyAsync(baseUrl))
+            if (await IsHealthyAsync(baseUrl, healthPath))
             {
                 return true;
             }
@@ -207,6 +232,35 @@ public partial class Form1 : Form
         }
 
         return false;
+    }
+
+    private async Task EnsureFinancialWorkerAsync(string dataRoot)
+    {
+        var existingUrl = $"http://localhost:{PreferredFinancialWorkerPort}";
+        _financialWorkerBaseUrl = existingUrl;
+
+        if (await IsHealthyAsync(existingUrl, "/health"))
+        {
+            AppendDebug($"复用已运行财务 Worker: {existingUrl}");
+            return;
+        }
+
+        _financialWorkerLaunchCommand = FindPackagedFinancialWorkerLaunchCommand();
+        if (_financialWorkerLaunchCommand is null)
+        {
+            AppendDebug("未找到打包后的 FinancialWorker，财务采集功能将依赖外部已启动的 Worker。");
+            return;
+        }
+
+        try
+        {
+            await StartManagedFinancialWorkerAsync(existingUrl, dataRoot);
+        }
+        catch (Exception ex)
+        {
+            AppendDebug($"FinancialWorker 启动失败: {ex.Message}");
+            StopOwnedFinancialWorkerProcess();
+        }
     }
 
     private async void OnBackendHealthTimerTickAsync(object? sender, EventArgs e)
@@ -305,8 +359,8 @@ public partial class Form1 : Form
         _backendProcess = process;
         _ownsBackendProcess = true;
         _backendConsecutiveHealthFailures = 0;
-    _lastBackendLaunchAtUtc = DateTime.UtcNow;
-    _lastBackendHealthyAtUtc = DateTime.MinValue;
+        _lastBackendLaunchAtUtc = DateTime.UtcNow;
+        _lastBackendHealthyAtUtc = DateTime.MinValue;
         AttachBackendProcessDiagnostics(process, dataRoot);
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
@@ -321,6 +375,34 @@ public partial class Form1 : Form
 
         _backendReady = true;
         _lastBackendHealthyAtUtc = DateTime.UtcNow;
+    }
+
+    private async Task StartManagedFinancialWorkerAsync(string baseUrl, string dataRoot)
+    {
+        if (_financialWorkerLaunchCommand is null)
+        {
+            throw new InvalidOperationException("未找到 FinancialWorker 启动命令。请检查打包后的 FinancialWorker 目录。");
+        }
+
+        var process = CreateBackendProcess(_financialWorkerLaunchCommand, baseUrl, dataRoot);
+        if (!process.Start())
+        {
+            process.Dispose();
+            throw new InvalidOperationException("FinancialWorker 启动失败，未能创建进程。");
+        }
+
+        _financialWorkerProcess = process;
+        AttachFinancialWorkerProcessDiagnostics(process, dataRoot);
+        process.BeginOutputReadLine();
+        process.BeginErrorReadLine();
+
+        AppendDebug($"已启动财务 Worker 进程: {process.Id}, 地址: {baseUrl}");
+        if (!await WaitForHealthyAsync(baseUrl, process, FinancialWorkerStartupTimeout, "/health"))
+        {
+            var exitCode = TryGetProcessExitCode(process);
+            StopOwnedFinancialWorkerProcess();
+            throw new InvalidOperationException($"FinancialWorker 启动超时，请检查 {Path.Combine(dataRoot, "logs")}。{(exitCode is null ? string.Empty : $" 进程退出码: {exitCode}.")}".Trim());
+        }
     }
 
     private async Task HandleNavigationFailureAsync(CoreWebView2WebErrorStatus webErrorStatus)
@@ -384,6 +466,22 @@ public partial class Form1 : Form
             }
 
             await RecoverBackendAsync("后端进程异常退出");
+        };
+    }
+
+    private void AttachFinancialWorkerProcessDiagnostics(Process process, string dataRoot)
+    {
+        var logDirectory = Path.Combine(dataRoot, "logs");
+        Directory.CreateDirectory(logDirectory);
+        var stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
+        var stdoutPath = Path.Combine(logDirectory, $"desktop-financial-worker-{stamp}.stdout.log");
+        var stderrPath = Path.Combine(logDirectory, $"desktop-financial-worker-{stamp}.stderr.log");
+
+        process.OutputDataReceived += (_, args) => AppendBackendLogLine(stdoutPath, args.Data);
+        process.ErrorDataReceived += (_, args) => AppendBackendLogLine(stderrPath, args.Data);
+        process.Exited += (_, _) =>
+        {
+            AppendBackendLogLine(stderrPath, $"[host] financial worker exited with code {TryGetProcessExitCode(process)?.ToString() ?? "unknown"}");
         };
     }
 
@@ -467,6 +565,33 @@ public partial class Form1 : Form
         }
     }
 
+    private void StopOwnedFinancialWorkerProcess()
+    {
+        var process = _financialWorkerProcess;
+        _financialWorkerProcess = null;
+
+        if (process is null)
+        {
+            return;
+        }
+
+        try
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+                process.WaitForExit(3000);
+            }
+        }
+        catch
+        {
+        }
+        finally
+        {
+            process.Dispose();
+        }
+    }
+
     private static int? TryGetProcessExitCode(Process process)
     {
         try
@@ -479,11 +604,11 @@ public partial class Form1 : Form
         }
     }
 
-    private static async Task<bool> IsHealthyAsync(string baseUrl)
+    private static async Task<bool> IsHealthyAsync(string baseUrl, string healthPath = "/api/health")
     {
         try
         {
-            using var response = await HealthClient.GetAsync($"{baseUrl}/api/health");
+            using var response = await HealthClient.GetAsync($"{baseUrl}{healthPath}");
             return response.IsSuccessStatusCode;
         }
         catch

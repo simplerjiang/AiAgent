@@ -9,12 +9,10 @@ var builder = WebApplication.CreateBuilder(args);
 // Kestrel 监听 5120 端口（不与主 API 5119 冲突）
 builder.WebHost.UseUrls("http://localhost:5120");
 
-// LiteDB 数据库路径 — 向上查找 repo 根目录（含 .sln 或 .git）
-var repoRoot = FindRepoRoot();
-var dbPath = Path.Combine(repoRoot, "App_Data", "financial-data.db");
-var dbDir = Path.GetDirectoryName(dbPath)!;
-if (!Directory.Exists(dbDir))
-    Directory.CreateDirectory(dbDir);
+var dataRoot = FinancialWorkerRuntimePaths.ResolveDataRoot();
+var appDataPath = FinancialWorkerRuntimePaths.ResolveAppDataPath();
+var dbPath = FinancialWorkerRuntimePaths.ResolveFinancialDatabasePath();
+Directory.CreateDirectory(appDataPath);
 
 builder.Services.AddSingleton(new FinancialDbContext($"Filename={dbPath};Connection=shared"));
 
@@ -67,7 +65,16 @@ var app = builder.Build();
 app.UseCors(c => c.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
 
 // === 健康检查 ===
-app.MapGet("/health", () => Results.Ok(new { status = "healthy", timestamp = DateTime.UtcNow }));
+app.MapGet("/health", () => Results.Ok(new
+{
+    service = "financial-worker",
+    status = "healthy",
+    reachable = true,
+    baseUrl = "http://localhost:5120",
+    dataRoot,
+    dbPath,
+    timestamp = DateTime.UtcNow
+}));
 
 // === 配置 API ===
 app.MapGet("/api/config", (FinancialDbContext db) =>
@@ -148,19 +155,3 @@ app.MapGet("/api/logs", (string? symbol, int? limit, FinancialDbContext db) =>
 });
 
 app.Run();
-
-static string FindRepoRoot()
-{
-    var dir = new DirectoryInfo(AppContext.BaseDirectory);
-    while (dir != null)
-    {
-        if (dir.GetFiles("SimplerJiangAiAgent.sln").Length > 0 ||
-            Directory.Exists(Path.Combine(dir.FullName, ".git")))
-        {
-            return dir.FullName;
-        }
-        dir = dir.Parent;
-    }
-    // Fallback: 5 levels up from bin/Debug/net8.0/
-    return Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
-}

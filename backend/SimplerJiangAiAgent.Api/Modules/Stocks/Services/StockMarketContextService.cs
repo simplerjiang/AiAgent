@@ -12,25 +12,28 @@ public interface IStockMarketContextService
 
 public sealed class StockMarketContextService : IStockMarketContextService
 {
-    private readonly AppDbContext _dbContext;
+    private readonly DbContextOptions<AppDbContext> _dbContextOptions;
 
-    public StockMarketContextService(AppDbContext dbContext)
+    public StockMarketContextService(DbContextOptions<AppDbContext> dbContextOptions)
     {
-        _dbContext = dbContext;
+        _dbContextOptions = dbContextOptions;
     }
+
+    private AppDbContext CreateDbContext() => new(_dbContextOptions);
 
     public Task<StockMarketContextDto?> GetLatestAsync(string symbol, CancellationToken cancellationToken = default)
         => GetLatestAsync(symbol, null, cancellationToken);
 
     public async Task<StockMarketContextDto?> GetLatestAsync(string symbol, string? sectorNameHint, CancellationToken cancellationToken = default)
     {
+        await using var dbContext = CreateDbContext();
         var normalizedSymbol = StockSymbolNormalizer.Normalize(symbol);
         if (string.IsNullOrWhiteSpace(normalizedSymbol))
         {
             return null;
         }
 
-        var latestSentiment = await _dbContext.MarketSentimentSnapshots
+        var latestSentiment = await dbContext.MarketSentimentSnapshots
             .AsNoTracking()
             .OrderByDescending(item => item.SnapshotTime)
             .FirstOrDefaultAsync(cancellationToken);
@@ -39,13 +42,13 @@ public sealed class StockMarketContextService : IStockMarketContextService
             return null;
         }
 
-        var stockSectorName = await _dbContext.StockQuoteSnapshots
+        var stockSectorName = await dbContext.StockQuoteSnapshots
             .AsNoTracking()
             .Where(item => item.Symbol == normalizedSymbol && item.SectorName != null && item.SectorName != string.Empty)
             .OrderByDescending(item => item.Timestamp)
             .Select(item => item.SectorName)
             .FirstOrDefaultAsync(cancellationToken)
-            ?? await _dbContext.StockCompanyProfiles
+            ?? await dbContext.StockCompanyProfiles
                 .AsNoTracking()
                 .Where(item => item.Symbol == normalizedSymbol && item.SectorName != null && item.SectorName != string.Empty)
                 .OrderByDescending(item => item.UpdatedAt)
@@ -53,7 +56,7 @@ public sealed class StockMarketContextService : IStockMarketContextService
                 .FirstOrDefaultAsync(cancellationToken)
             ?? (string.IsNullOrWhiteSpace(sectorNameHint) ? null : sectorNameHint.Trim());
 
-        var latestSectorSnapshotTime = await _dbContext.SectorRotationSnapshots
+        var latestSectorSnapshotTime = await dbContext.SectorRotationSnapshots
             .AsNoTracking()
             .MaxAsync(item => (DateTime?)item.SnapshotTime, cancellationToken);
 
@@ -62,7 +65,7 @@ public sealed class StockMarketContextService : IStockMarketContextService
             return BuildNeutral(latestSentiment, stockSectorName);
         }
 
-        var latestSectorCandidates = await _dbContext.SectorRotationSnapshots
+        var latestSectorCandidates = await dbContext.SectorRotationSnapshots
             .AsNoTracking()
             .Where(item => item.SnapshotTime == latestSectorSnapshotTime.Value)
             .ToListAsync(cancellationToken);

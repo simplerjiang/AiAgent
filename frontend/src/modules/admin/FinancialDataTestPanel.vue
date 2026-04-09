@@ -28,6 +28,8 @@ const logsLoading = ref(false)
 
 // Worker health
 const workerHealthy = ref(null)
+const workerStatusText = ref('检测中...')
+const workerStatusDetail = ref('')
 
 const authHeaders = computed(() => ({
   'Authorization': `Bearer ${token.value}`,
@@ -43,6 +45,48 @@ function formatTime(ts) {
   } catch {
     return ts
   }
+}
+
+async function readResponsePayload(res) {
+  const contentType = res.headers.get('content-type') || ''
+  if (contentType.includes('application/json')) {
+    return await res.json().catch(() => null)
+  }
+
+  const text = await res.text().catch(() => '')
+  if (!text) return null
+
+  try {
+    return JSON.parse(text)
+  } catch {
+    return { message: text }
+  }
+}
+
+function buildErrorMessage(prefix, status, payload) {
+  const message = payload?.error || payload?.message || prefix
+  const detail = payload?.detail ? ` | ${payload.detail}` : ''
+  return `${prefix} (${status}): ${message}${detail}`
+}
+
+function normalizeDateInput(value) {
+  if (!value || typeof value !== 'string') return ''
+
+  const matched = value.match(/^\d{4}-\d{2}-\d{2}/)
+  if (matched) return matched[0]
+
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return ''
+
+  return parsed.toISOString().slice(0, 10)
+}
+
+function formatLogNote(log) {
+  if (log?.isDegraded && log?.degradeReason) {
+    return `降级: ${log.degradeReason}`
+  }
+
+  return log?.errorMessage || '-'
 }
 
 // ---- Auth ----
@@ -74,7 +118,10 @@ async function loadConfig() {
     const res = await fetch('/api/stocks/financial/config', { headers: authHeaders.value })
     if (res.ok) {
       const data = await res.json()
-      config.value = data
+      config.value = {
+        ...data,
+        startDate: normalizeDateInput(data?.startDate)
+      }
     }
   } catch (e) {
     configMsg.value = '加载配置失败: ' + e.message
@@ -91,7 +138,12 @@ async function saveConfig() {
       headers: authHeaders.value,
       body: JSON.stringify(config.value)
     })
-    configMsg.value = res.ok ? '配置已保存' : '保存失败'
+    if (res.ok) {
+      configMsg.value = '配置已保存'
+    } else {
+      const payload = await readResponsePayload(res)
+      configMsg.value = buildErrorMessage('保存失败', res.status, payload)
+    }
   } catch (e) {
     configMsg.value = '保存失败: ' + e.message
   }
@@ -110,9 +162,12 @@ async function testCollect() {
     })
     if (res.ok) {
       collectResult.value = await res.json()
+      if (collectResult.value?.success) {
+        await loadLogs()
+      }
     } else {
-      const text = await res.text()
-      collectError.value = `采集失败 (${res.status}): ${text}`
+      const payload = await readResponsePayload(res)
+      collectError.value = buildErrorMessage('采集失败', res.status, payload)
     }
   } catch (e) {
     collectError.value = '采集请求失败: ' + e.message
@@ -139,10 +194,26 @@ async function loadLogs() {
 // ---- Worker Health ----
 async function checkWorkerHealth() {
   try {
-    const res = await fetch('http://localhost:5120/health', { signal: AbortSignal.timeout(3000) })
-    workerHealthy.value = res.ok
-  } catch {
+    const res = await fetch('/api/stocks/financial/worker/status', {
+      headers: authHeaders.value,
+      signal: AbortSignal.timeout(3000)
+    })
+    const payload = await readResponsePayload(res)
+
+    if (res.ok && payload?.reachable !== false) {
+      workerHealthy.value = true
+      workerStatusText.value = '运行中'
+      workerStatusDetail.value = payload?.baseUrl ? `经主 API 代理 -> ${payload.baseUrl}` : ''
+      return
+    }
+
     workerHealthy.value = false
+    workerStatusText.value = payload?.status === 'timeout' ? '连接超时' : '未启动'
+    workerStatusDetail.value = [payload?.error, payload?.detail].filter(Boolean).join(' | ') || `状态码 ${res.status}`
+  } catch (e) {
+    workerHealthy.value = false
+    workerStatusText.value = '检测失败'
+    workerStatusDetail.value = e.message || ''
   }
 }
 
@@ -161,7 +232,8 @@ onMounted(() => {
       <!-- Worker Status -->
       <div class="status-bar">
         <span class="status-dot" :class="workerHealthy === true ? 'healthy' : workerHealthy === false ? 'unhealthy' : 'unknown'"></span>
-        <span>Worker 状态: {{ workerHealthy === true ? '运行中 (5120)' : workerHealthy === false ? '未启动' : '检测中...' }}</span>
+        <span>Worker 状态: {{ workerStatusText }}</span>
+        <span v-if="workerStatusDetail" class="status-detail">{{ workerStatusDetail }}</span>
         <button class="btn-small" @click="checkWorkerHealth">刷新</button>
       </div>
 
@@ -208,7 +280,7 @@ onMounted(() => {
         <div v-if="collectResult" class="collect-result">
           <div class="result-header" :class="collectResult.success ? 'success' : 'error'">
             {{ collectResult.success ? '✅ 采集成功' : '❌ 采集失败' }}
-            <span v-if="collectResult.channel"> | 渠道: {{ collectResult.channel }}</span>
+            <span v-if="collectResult.channel"> | 主渠道: {{ collectResult.channel }}</span>
             <span v-if="collectResult.durationMs"> | 耗时: {{ collectResult.durationMs }}ms</span>
           </div>
           <div class="result-detail" v-if="collectResult.success">
@@ -256,7 +328,7 @@ onMounted(() => {
                 </td>
                 <td>{{ log.recordCount ?? '-' }}</td>
                 <td>{{ log.durationMs ? log.durationMs + 'ms' : '-' }}</td>
-                <td class="log-note">{{ log.isDegraded ? '降级: ' + log.degradeReason : log.errorMessage || '' }}</td>
+                <td class="log-note">{{ formatLogNote(log) }}</td>
               </tr>
             </tbody>
           </table>
@@ -282,13 +354,14 @@ onMounted(() => {
 h3 { font-size: 15px; margin: 0 0 10px; color: #ccc; }
 
 .status-bar {
-  display: flex; align-items: center; gap: 8px;
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
   padding: 8px 12px; background: #1a2535; border-radius: 6px; margin-bottom: 16px;
 }
 .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
 .status-dot.healthy { background: #2ecc71; }
 .status-dot.unhealthy { background: #e74c3c; }
 .status-dot.unknown { background: #888; }
+.status-detail { color: #91a6bc; font-size: 12px; }
 
 .panel-section {
   background: #1e2a3a; border-radius: 6px; padding: 14px; margin-bottom: 14px;

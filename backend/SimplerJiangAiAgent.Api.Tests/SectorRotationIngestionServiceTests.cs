@@ -93,6 +93,7 @@ public sealed class SectorRotationIngestionServiceTests
 		await service.SyncAsync();
 
 		var sentiment = await dbContext.MarketSentimentSnapshots.SingleAsync();
+		Assert.Equal("eastmoney_partial", sentiment.SourceTag);
 		Assert.Equal(0, sentiment.LimitUpCount);
 		Assert.Equal(6, sentiment.LimitDownCount);
 		Assert.Equal(8, sentiment.BrokenBoardCount);
@@ -101,6 +102,50 @@ public sealed class SectorRotationIngestionServiceTests
 		Assert.Equal(1800, sentiment.Decliners);
 		Assert.Single(await dbContext.SectorRotationSnapshots.ToListAsync());
 		Assert.Single(await dbContext.SectorRotationLeaderSnapshots.ToListAsync());
+	}
+
+	[Fact]
+	public async Task SyncAsync_PersistsFreshPartialSnapshot_WhenCoreMarketSummaryIsIncomplete()
+	{
+		await using var dbContext = CreateDbContext();
+		var client = new FakeSectorRotationClient
+		{
+			BoardRankings = new Dictionary<string, IReadOnlyList<EastmoneySectorBoardRow>>(StringComparer.OrdinalIgnoreCase)
+			{
+				[SectorBoardTypes.Industry] =
+				[
+					new EastmoneySectorBoardRow(SectorBoardTypes.Industry, "BK1001", "半导体", 2.8m, 120m, 40m, 30m, 20m, 30m, 300m, 12m, 1, "{}")
+				]
+			},
+			Leaders = new Dictionary<string, IReadOnlyList<EastmoneySectorLeaderRow>>(StringComparer.OrdinalIgnoreCase)
+			{
+				["BK1001"] =
+				[
+					new EastmoneySectorLeaderRow(1, "688001", "华芯", 7.8m, 90m, false, false)
+				]
+			},
+			ThrowMarketBreadth = true,
+			LimitUpCount = 42,
+			LimitDownCount = 6,
+			BrokenBoardCount = 8,
+			MaxLimitUpStreak = 4
+		};
+
+		var service = new SectorRotationIngestionService(
+			dbContext,
+			client,
+			Options.Create(new SectorRotationOptions { BoardPageSize = 20, LeaderTake = 5 }),
+			NullLogger<SectorRotationIngestionService>.Instance);
+
+		await service.SyncAsync();
+
+		var sentiment = await dbContext.MarketSentimentSnapshots.SingleAsync();
+		Assert.Equal("eastmoney_partial", sentiment.SourceTag);
+		Assert.Equal("同步不完整", sentiment.StageLabelV2);
+		Assert.Equal(0m, sentiment.StageConfidence);
+		Assert.Equal(0m, sentiment.StageScore);
+		Assert.Contains("market_breadth_unavailable", sentiment.RawJson);
+		Assert.Single(await dbContext.SectorRotationSnapshots.ToListAsync());
 	}
 
 	[Fact]

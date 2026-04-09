@@ -14,6 +14,73 @@ export const stockInfoTabTradingPlanCases = ({
   vi,
 }) => [
   {
+    title: "loads market context for new manual trading plans without blocking the modal",
+    run: async () => {
+    const marketContextDeferred = createDeferred()
+
+    const { fetchMock } = createChatFetchMock({
+      handle: async (url, options = {}) => {
+        if (url.startsWith('/api/stocks/market-context?symbol=sz000021')) {
+          return createAbortableResponse(
+            marketContextDeferred,
+            () => makeResponse({
+              ok: true,
+              status: 200,
+              json: async () => ({
+                stageLabel: '主升',
+                stageConfidence: 78,
+                mainlineSectorName: 'AI 算力',
+                suggestedPositionScale: 0.6,
+                executionFrequencyLabel: '积极',
+                counterTrendWarning: false,
+                isMainlineAligned: true
+              })
+            }),
+            options.signal
+          )
+        }
+
+        return null
+      }
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    const wrapper = mount(StockInfoTab)
+    wrapper.vm.detail = {
+      quote: { name: '深科技', symbol: 'sz000021', price: 31.1, change: 0, changePercent: 0 },
+      kLines: [],
+      minuteLines: [],
+      messages: []
+    }
+
+    await wrapper.vm.$nextTick()
+    await flushPromises()
+    await flushPromises()
+
+    const createButton = wrapper.findAll('.plan-header-actions .market-news-button').find(button => button.text() === '新建计划')
+    expect(createButton).toBeTruthy()
+
+    await createButton.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('.plan-modal').exists()).toBe(true)
+    expect(wrapper.find('.plan-market-box').text()).toContain('市场上下文')
+    expect(wrapper.find('.plan-market-box').text()).toContain('正在获取当前市场上下文，不影响保存计划。')
+
+    marketContextDeferred.resolve()
+    await flushPromises()
+    await flushPromises()
+
+    const marketBox = wrapper.find('.plan-market-box')
+    expect(marketBox.text()).toContain('阶段 主升')
+    expect(marketBox.text()).toContain('主线 AI 算力')
+    expect(marketBox.text()).toContain('建议仓位')
+    expect(marketBox.text()).not.toContain('正在获取当前市场上下文，不影响保存计划。')
+    expect(fetchMock.mock.calls.some(args => String(args[0]).startsWith('/api/stocks/market-context?symbol=sz000021'))).toBe(true)
+  }
+  },
+  {
     title: "supports editing and cancelling pending trading plans",
     run: async () => {
     let stockPlanListCalls = 0
@@ -211,6 +278,89 @@ export const stockInfoTabTradingPlanCases = ({
 
     expect(fetchMock.mock.calls.some(args => args[0] === '/api/stocks/plans/7/cancel' && args[1]?.method === 'POST')).toBe(true)
     expect(wrapper.text()).toContain('已取消')
+  }
+  },
+  {
+    title: "shows fallback for manual plan market context and ignores stale responses after reopen",
+    run: async () => {
+    const firstMarketContextDeferred = createDeferred()
+    let marketContextCallCount = 0
+
+    const { fetchMock } = createChatFetchMock({
+      handle: async (url, options = {}) => {
+        if (url.startsWith('/api/stocks/market-context?symbol=sz000021')) {
+          marketContextCallCount += 1
+
+          if (marketContextCallCount === 1) {
+            return createAbortableResponse(
+              firstMarketContextDeferred,
+              () => makeResponse({
+                ok: true,
+                status: 200,
+                json: async () => ({
+                  stageLabel: '过期结果',
+                  stageConfidence: 35,
+                  mainlineSectorName: '旧主线',
+                  suggestedPositionScale: 0.2,
+                  executionFrequencyLabel: '谨慎',
+                  counterTrendWarning: true,
+                  isMainlineAligned: false
+                })
+              }),
+              options.signal
+            )
+          }
+
+          return makeResponse({
+            ok: false,
+            status: 404,
+            json: async () => ({ message: 'not found' })
+          })
+        }
+
+        return null
+      }
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    const wrapper = mount(StockInfoTab)
+    wrapper.vm.detail = {
+      quote: { name: '深科技', symbol: 'sz000021', price: 31.1, change: 0, changePercent: 0 },
+      kLines: [],
+      minuteLines: [],
+      messages: []
+    }
+
+    await wrapper.vm.$nextTick()
+    await flushPromises()
+    await flushPromises()
+
+    const createButton = wrapper.findAll('.plan-header-actions .market-news-button').find(button => button.text() === '新建计划')
+    expect(createButton).toBeTruthy()
+
+    await createButton.trigger('click')
+    await flushPromises()
+    expect(wrapper.find('.plan-market-box').text()).toContain('正在获取当前市场上下文，不影响保存计划。')
+
+    await wrapper.find('.search-modal-header .market-news-button').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('.plan-modal').exists()).toBe(false)
+
+    await createButton.trigger('click')
+    await flushPromises()
+    await flushPromises()
+
+    firstMarketContextDeferred.resolve()
+    await flushPromises()
+    await flushPromises()
+
+    const marketBox = wrapper.find('.plan-market-box')
+    expect(marketContextCallCount).toBe(2)
+    expect(wrapper.find('.plan-modal').exists()).toBe(true)
+    expect(marketBox.text()).toContain('暂未获取到市场上下文，可继续保存计划。')
+    expect(marketBox.text()).not.toContain('过期结果')
+    expect(marketBox.text()).not.toContain('旧主线')
   }
   },
   {

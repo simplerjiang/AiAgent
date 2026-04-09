@@ -43,19 +43,75 @@ const mockSummaryData = {
   ]
 }
 
-function setupFetchMock(trendOk = true, summaryOk = true) {
+const emptyTrendData = {
+  symbol: 'SZ000001',
+  revenue: [],
+  netProfit: [],
+  totalAssets: [],
+  recentDividends: []
+}
+
+const emptySummaryData = {
+  symbol: 'SZ000001',
+  periods: []
+}
+
+const sparsePdfSummaryData = {
+  symbol: 'SZ000001',
+  periods: [
+    {
+      reportDate: '2024-09-30',
+      reportType: 'Quarterly',
+      sourceChannel: 'pdf',
+      keyMetrics: {}
+    },
+    {
+      reportDate: '2024-06-30',
+      reportType: 'Quarterly',
+      sourceChannel: 'pdf',
+      keyMetrics: null
+    }
+  ]
+}
+
+const camelCaseSuccessCollectResult = {
+  success: true,
+  channel: 'emweb',
+  reportCount: 4,
+  durationMs: 3500,
+  isDegraded: true,
+  degradeReason: 'emweb empty data'
+}
+
+const pascalCaseSuccessCollectResult = {
+  Success: true,
+  Channel: 'emweb',
+  ReportCount: 4,
+  DurationMs: 3500
+}
+
+function createJsonResponse(data, ok = true, status = ok ? 200 : 500) {
+  return {
+    ok,
+    status,
+    json: () => Promise.resolve(data)
+  }
+}
+
+function setupFetchMock(options = {}) {
+  const {
+    trendData = mockTrendData,
+    summaryData = mockSummaryData,
+    trendOk = true,
+    summaryOk = true
+  } = options
+
   mockFetch.mockImplementation((url) => {
     if (url.includes('/trend/')) {
-      return Promise.resolve({
-        ok: trendOk,
-        json: () => Promise.resolve(mockTrendData)
-      })
+      return Promise.resolve(createJsonResponse(trendData, trendOk))
     }
     if (url.includes('/summary/')) {
-      return Promise.resolve({
-        ok: summaryOk,
-        json: () => Promise.resolve(mockSummaryData)
-      })
+      return Promise.resolve(createJsonResponse(summaryData, summaryOk))
     }
     return Promise.resolve({ ok: false })
   })
@@ -137,27 +193,27 @@ describe('FinancialReportTab', () => {
     expect(wrapper.text()).toContain('加载失败')
   })
 
-  it('shows collect button when no data', async () => {
-    mockFetch.mockResolvedValue({ ok: false })
+  it('shows collect button when endpoints return empty payloads', async () => {
+    setupFetchMock({ trendData: emptyTrendData, summaryData: emptySummaryData })
     const wrapper = mount(FinancialReportTab, { props: { symbol: 'SZ000001', active: true } })
     await flushPromises()
     expect(wrapper.find('.collect-btn').exists()).toBe(true)
     expect(wrapper.find('.collect-btn').text()).toContain('获取财务数据')
+    expect(wrapper.find('.refresh-btn').exists()).toBe(false)
   })
 
-  it('calls collect endpoint and refreshes data', async () => {
-    // First load: no data
+  it('refreshes data from a camelCase collect success response and keeps the success banner', async () => {
     mockFetch
-      .mockResolvedValueOnce({ ok: false })
-      .mockResolvedValueOnce({ ok: false })
-    // Collect POST call
-      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ Success: true, Channel: 'emweb', ReportCount: 4, DurationMs: 3500 }) })
-    // Refresh after collect: trend + summary
-      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockTrendData) })
-      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockSummaryData) })
+      .mockResolvedValueOnce(createJsonResponse(emptyTrendData))
+      .mockResolvedValueOnce(createJsonResponse(emptySummaryData))
+      .mockResolvedValueOnce(createJsonResponse(camelCaseSuccessCollectResult))
+      .mockResolvedValueOnce(createJsonResponse(mockTrendData))
+      .mockResolvedValueOnce(createJsonResponse(mockSummaryData))
 
     const wrapper = mount(FinancialReportTab, { props: { symbol: 'SZ000001', active: true } })
     await flushPromises()
+
+    expect(wrapper.find('.collect-btn').exists()).toBe(true)
 
     await wrapper.find('.collect-btn').trigger('click')
     await flushPromises()
@@ -165,6 +221,122 @@ describe('FinancialReportTab', () => {
     const postCall = mockFetch.mock.calls.find(c => c[1]?.method === 'POST')
     expect(postCall).toBeTruthy()
     expect(postCall[0]).toContain('/api/stocks/financial/collect/SZ000001')
+    expect(wrapper.find('.refresh-btn').exists()).toBe(true)
+    expect(wrapper.find('.collect-btn').exists()).toBe(false)
+    expect(wrapper.text()).toContain('营业收入')
+    expect(wrapper.find('.collect-info').exists()).toBe(true)
+    expect(wrapper.find('.collect-info').text()).toContain('已通过 emweb 获取 4 期报表')
+    expect(wrapper.find('.collect-info').text()).toContain('提示：采集渠道未返回有效数据。')
+  })
+
+  it('localizes a live-style English collect error message for the empty state', async () => {
+    mockFetch
+      .mockResolvedValueOnce(createJsonResponse(emptyTrendData))
+      .mockResolvedValueOnce(createJsonResponse(emptySummaryData))
+      .mockResolvedValueOnce(createJsonResponse({ success: false, errorMessage: 'All channels (API + PDF) failed or returned empty data', isDegraded: true, degradeReason: 'emweb empty data' }))
+
+    const wrapper = mount(FinancialReportTab, { props: { symbol: 'SZ000001', active: true } })
+    await flushPromises()
+
+    await wrapper.find('.collect-btn').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('.error-msg').exists()).toBe(true)
+    expect(wrapper.find('.error-msg').classes()).toContain('error-msg-prominent')
+    expect(wrapper.find('.error-msg').text()).toContain('所有采集渠道都未返回有效财务数据，请稍后重试或更换股票。')
+  })
+
+  it('falls back to the camelCase degradeReason when collect errorMessage is missing', async () => {
+    mockFetch
+      .mockResolvedValueOnce(createJsonResponse(emptyTrendData))
+      .mockResolvedValueOnce(createJsonResponse(emptySummaryData))
+      .mockResolvedValueOnce(createJsonResponse({ success: false, isDegraded: true, degradeReason: 'emweb empty data' }))
+
+    const wrapper = mount(FinancialReportTab, { props: { symbol: 'SZ000001', active: true } })
+    await flushPromises()
+
+    await wrapper.find('.collect-btn').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('.error-msg').exists()).toBe(true)
+    expect(wrapper.find('.error-msg').text()).toContain('采集渠道未返回有效数据。')
+  })
+
+  it('accepts a PascalCase collect success response for compatibility', async () => {
+    mockFetch
+      .mockResolvedValueOnce(createJsonResponse(emptyTrendData))
+      .mockResolvedValueOnce(createJsonResponse(emptySummaryData))
+      .mockResolvedValueOnce(createJsonResponse(pascalCaseSuccessCollectResult))
+      .mockResolvedValueOnce(createJsonResponse(mockTrendData))
+      .mockResolvedValueOnce(createJsonResponse(mockSummaryData))
+
+    const wrapper = mount(FinancialReportTab, { props: { symbol: 'SZ000001', active: true } })
+    await flushPromises()
+
+    await wrapper.find('.collect-btn').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('.collect-info').exists()).toBe(true)
+    expect(wrapper.find('.collect-info').text()).toContain('已通过 emweb 获取 4 期报表')
+    expect(wrapper.text()).toContain('营业收入')
+  })
+
+  it('shows an explicit partial-data message when collect succeeds with only sparse report periods', async () => {
+    mockFetch
+      .mockResolvedValueOnce(createJsonResponse(emptyTrendData))
+      .mockResolvedValueOnce(createJsonResponse(emptySummaryData))
+      .mockResolvedValueOnce(createJsonResponse({ success: true, channel: 'pdf', reportCount: 2, durationMs: 1800 }))
+      .mockResolvedValueOnce(createJsonResponse(emptyTrendData))
+      .mockResolvedValueOnce(createJsonResponse(sparsePdfSummaryData))
+
+    const wrapper = mount(FinancialReportTab, { props: { symbol: 'SZ000001', active: true } })
+    await flushPromises()
+
+    await wrapper.find('.collect-btn').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('.refresh-btn').exists()).toBe(true)
+    expect(wrapper.find('.collect-info').exists()).toBe(false)
+    expect(wrapper.find('.partial-data-message').exists()).toBe(true)
+    expect(wrapper.find('.partial-data-message').text()).toContain('已通过 pdf 获取 2 期报表')
+    expect(wrapper.find('.partial-data-message').text()).toContain('暂无可展示的结构化财务指标')
+    expect(wrapper.find('.partial-data-message').text()).toContain('2024-09-30')
+    expect(wrapper.find('.partial-data-message').text()).toContain('来源：pdf')
+    expect(wrapper.find('.summary-table').exists()).toBe(false)
+    expect(wrapper.find('.trend-table').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('营业收入')
+  })
+
+  it('clears previous symbol data when the next symbol returns empty payloads', async () => {
+    mockFetch.mockImplementation((url) => {
+      if (url.includes('/trend/600519')) {
+        return Promise.resolve(createJsonResponse(mockTrendData))
+      }
+      if (url.includes('/summary/600519')) {
+        return Promise.resolve(createJsonResponse(mockSummaryData))
+      }
+      if (url.includes('/trend/SZ000001')) {
+        return Promise.resolve(createJsonResponse(emptyTrendData))
+      }
+      if (url.includes('/summary/SZ000001')) {
+        return Promise.resolve(createJsonResponse(emptySummaryData))
+      }
+      return Promise.resolve({ ok: false })
+    })
+
+    const wrapper = mount(FinancialReportTab, { props: { symbol: '600519', active: true } })
+    await flushPromises()
+
+    expect(wrapper.find('.refresh-btn').exists()).toBe(true)
+    expect(wrapper.text()).toContain('营业收入')
+
+    await wrapper.setProps({ symbol: 'SZ000001' })
+    await flushPromises()
+
+    expect(wrapper.find('.collect-btn').exists()).toBe(true)
+    expect(wrapper.find('.refresh-btn').exists()).toBe(false)
+    expect(wrapper.text()).toContain('暂无财务数据')
+    expect(wrapper.text()).not.toContain('营业收入')
   })
 
   it('shows refresh button when data exists', async () => {
@@ -177,9 +349,9 @@ describe('FinancialReportTab', () => {
 
   it('shows error when collect fails', async () => {
     mockFetch
-      .mockResolvedValueOnce({ ok: false })
-      .mockResolvedValueOnce({ ok: false })
-      .mockResolvedValueOnce({ ok: false, status: 503 })
+      .mockResolvedValueOnce(createJsonResponse(emptyTrendData))
+      .mockResolvedValueOnce(createJsonResponse(emptySummaryData))
+      .mockResolvedValueOnce(createJsonResponse({ error: '采集失败 (503)' }, false, 503))
 
     const wrapper = mount(FinancialReportTab, { props: { symbol: 'SZ000001', active: true } })
     await flushPromises()
@@ -188,5 +360,6 @@ describe('FinancialReportTab', () => {
     await flushPromises()
 
     expect(wrapper.find('.error-msg').exists()).toBe(true)
+    expect(wrapper.find('.error-msg').text()).toContain('采集失败')
   })
 })

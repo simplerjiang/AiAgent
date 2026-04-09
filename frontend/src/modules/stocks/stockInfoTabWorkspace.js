@@ -102,6 +102,8 @@ export const createStockWorkspace = symbolKey => reactive({
   planError: '',
   planModalOpen: false,
   planForm: null,
+  planMarketContextRequestToken: 0,
+  planMarketContextAbortController: null,
   planList: [],
   planAlerts: [],
   planListLoading: false,

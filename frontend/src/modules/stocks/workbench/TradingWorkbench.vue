@@ -94,6 +94,7 @@ function handleNextAction(action) {
           <TradingWorkbenchProgress
             :stages="wb.stageSnapshots.value"
             :is-running="wb.isRunning.value"
+            :error="wb.error.value"
             @rerun-from-stage="wb.rerunFromStage($event)"
           />
         </div>
@@ -115,6 +116,7 @@ function handleNextAction(action) {
               :decision="wb.decision.value"
               :next-actions="wb.nextActions.value"
               :loading="wb.loading.value"
+              :error="wb.error.value"
               @action="handleNextAction"
             />
           </div>
@@ -156,12 +158,14 @@ function handleNextAction(action) {
           :decision="wb.decision.value"
           :next-actions="wb.nextActions.value"
           :loading="wb.loading.value"
+          :error="wb.error.value"
           @action="handleNextAction"
         />
         <TradingWorkbenchProgress
           v-show="wb.activeTab.value === 'progress'"
           :stages="wb.stageSnapshots.value"
           :is-running="wb.isRunning.value"
+          :error="wb.error.value"
           @rerun-from-stage="wb.rerunFromStage($event)"
         />
         <TradingWorkbenchFeed
@@ -179,6 +183,9 @@ function handleNextAction(action) {
           :replay-turn-id="wb.replayTurnId.value"
           :expanded-session-id="wb.expandedHistorySessionId.value"
           :expanded-turns="wb.expandedTurns.value"
+          :history-loading-session-id="wb.historyLoadingSessionId.value"
+          :history-session-error-id="wb.historySessionErrorId.value"
+          :history-session-error-message="wb.historySessionErrorMessage.value"
           :loading="wb.loading.value"
           @select-session="wb.expandHistorySession($event)"
           @select-turn="wb.enterReplay($event.sessionId, $event.turnId)"

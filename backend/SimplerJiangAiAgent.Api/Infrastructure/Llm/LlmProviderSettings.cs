@@ -12,6 +12,16 @@ public sealed class LlmProviderSettings
     public bool ForceChinese { get; set; }
     public string Organization { get; set; } = string.Empty;
     public string Project { get; set; } = string.Empty;
+    public int? OllamaNumCtx { get; set; }
+    public int? OllamaNumGpu { get; set; }
+    public string OllamaKeepAlive { get; set; } = string.Empty;
+    public int? OllamaNumPredict { get; set; }
+    public double? OllamaTemperature { get; set; }
+    public int? OllamaTopK { get; set; }
+    public double? OllamaTopP { get; set; }
+    public double? OllamaMinP { get; set; }
+    public string[] OllamaStop { get; set; } = Array.Empty<string>();
+    public bool? OllamaThink { get; set; }
     public bool Enabled { get; set; } = true;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 }

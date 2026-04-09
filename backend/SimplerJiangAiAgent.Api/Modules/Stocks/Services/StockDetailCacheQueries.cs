@@ -46,12 +46,15 @@ internal static class StockDetailCacheQueries
             return Array.Empty<MinuteLinePointDto>();
         }
 
-        return await dbContext.MinuteLinePoints
+        var latestDayPoints = await dbContext.MinuteLinePoints
             .AsNoTracking()
             .Where(x => x.Symbol == symbol && x.Date == latestDate.Value)
-            .OrderBy(x => x.Time)
-            .Take(take)
             .Select(x => new MinuteLinePointDto(x.Date, x.Time, x.Price, x.AveragePrice, x.Volume))
             .ToListAsync(cancellationToken);
+
+        return latestDayPoints
+            .OrderBy(x => x.Time)
+            .Take(take)
+            .ToArray();
     }
 }

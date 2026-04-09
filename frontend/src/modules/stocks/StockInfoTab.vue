@@ -362,11 +362,18 @@ const buildDetailQuery = targetSymbol => {
   return params
 }
 
+const DEFAULT_DAY_KLINE_COUNT = 240
+
 const buildChartQuery = (targetSymbol, options = {}) => {
   const params = new URLSearchParams({
     symbol: targetSymbol,
     interval: interval.value
   })
+  if (options.count != null) {
+    params.set('count', String(options.count))
+  } else if (interval.value === 'day') {
+    params.set('count', String(DEFAULT_DAY_KLINE_COUNT))
+  }
   const shouldIncludeMinute = options.includeMinute ?? (interval.value === 'day' || chartActiveView.value === 'minute')
   params.set('includeQuote', options.includeQuote ? 'true' : 'false')
   params.set('includeMinute', shouldIncludeMinute ? 'true' : 'false')
@@ -441,11 +448,107 @@ const openExternal = url => {
   window.open(url, '_blank', 'noopener,noreferrer')
 }
 
+const PLAN_MARKET_CONTEXT_FALLBACK_MESSAGE = '暂未获取到市场上下文，可继续保存计划。'
+const PLAN_MARKET_CONTEXT_MISSING_SYMBOL_MESSAGE = '缺少股票代码，暂无法获取市场上下文。'
+
+const resetPlanMarketContextRequest = workspace => {
+  if (!workspace) {
+    return
+  }
+
+  workspace.planMarketContextRequestToken += 1
+  workspace.planMarketContextAbortController?.abort()
+  workspace.planMarketContextAbortController = null
+}
+
+const updatePlanMarketContextForm = (workspace, requestToken, form, updater) => {
+  if (!workspace || requestToken !== workspace.planMarketContextRequestToken) {
+    return false
+  }
+
+  if (workspace.planForm !== form || !workspace.planModalOpen) {
+    return false
+  }
+
+  updater(form)
+  return true
+}
+
+const fetchManualTradingPlanMarketContext = async (workspace, form = workspace?.planForm) => {
+  if (!workspace || !form || form.sourceAgent !== 'manual') {
+    return
+  }
+
+  const symbolValue = normalizeStockSymbol(form.symbol) || String(form.symbol || '').trim()
+  const requestToken = ++workspace.planMarketContextRequestToken
+  const controller = replaceAbortController(workspace.planMarketContextAbortController)
+  workspace.planMarketContextAbortController = controller
+
+  updatePlanMarketContextForm(workspace, requestToken, form, targetForm => {
+    targetForm.marketContext = null
+    targetForm.marketContextLoading = true
+    targetForm.marketContextMessage = ''
+  })
+
+  if (!symbolValue) {
+    updatePlanMarketContextForm(workspace, requestToken, form, targetForm => {
+      targetForm.marketContextLoading = false
+      targetForm.marketContextMessage = PLAN_MARKET_CONTEXT_MISSING_SYMBOL_MESSAGE
+    })
+    if (workspace.planMarketContextAbortController === controller) {
+      workspace.planMarketContextAbortController = null
+    }
+    return
+  }
+
+  try {
+    const params = new URLSearchParams({ symbol: symbolValue })
+    const response = await fetchBackendGet(`/api/stocks/market-context?${params.toString()}`, {
+      signal: controller.signal
+    })
+
+    if (!response.ok) {
+      const fallbackMessage = response.status === 400
+        ? PLAN_MARKET_CONTEXT_MISSING_SYMBOL_MESSAGE
+        : PLAN_MARKET_CONTEXT_FALLBACK_MESSAGE
+
+      updatePlanMarketContextForm(workspace, requestToken, form, targetForm => {
+        targetForm.marketContext = null
+        targetForm.marketContextLoading = false
+        targetForm.marketContextMessage = fallbackMessage
+      })
+      return
+    }
+
+    const payload = normalizeMarketContext(await response.json())
+    updatePlanMarketContextForm(workspace, requestToken, form, targetForm => {
+      targetForm.marketContext = payload
+      targetForm.marketContextLoading = false
+      targetForm.marketContextMessage = payload ? '' : PLAN_MARKET_CONTEXT_FALLBACK_MESSAGE
+    })
+  } catch (err) {
+    if (isAbortError(err)) {
+      return
+    }
+
+    updatePlanMarketContextForm(workspace, requestToken, form, targetForm => {
+      targetForm.marketContext = null
+      targetForm.marketContextLoading = false
+      targetForm.marketContextMessage = PLAN_MARKET_CONTEXT_FALLBACK_MESSAGE
+    })
+  } finally {
+    if (requestToken === workspace.planMarketContextRequestToken && workspace.planMarketContextAbortController === controller) {
+      workspace.planMarketContextAbortController = null
+    }
+  }
+}
+
 const closeTradingPlanModal = symbolKey => {
   const workspace = getWorkspace(symbolKey)
   if (!workspace) {
     return
   }
+  resetPlanMarketContextRequest(workspace)
   workspace.planModalOpen = false
 }
 
@@ -475,6 +578,7 @@ const editTradingPlan = (symbolKey, item) => {
     return
   }
 
+  resetPlanMarketContextRequest(workspace)
   workspace.planError = ''
   workspace.planForm = createTradingPlanForm(item)
   workspace.planModalOpen = true
@@ -535,6 +639,7 @@ const saveTradingPlan = async (symbolKey = currentStockKey.value) => {
     }
 
     const saved = normalizeTradingPlan(await response.json())
+    resetPlanMarketContextRequest(workspace)
     workspace.planModalOpen = false
     workspace.planForm = createTradingPlanForm({
       symbol: workspace.detail?.quote?.symbol ?? '',
@@ -634,13 +739,16 @@ const cancelTradingPlan = async (symbolKey, item) => {
 const openCreatePlan = symbolKey => {
   const workspace = getWorkspace(symbolKey)
   if (!workspace) return
+  resetPlanMarketContextRequest(workspace)
   workspace.planError = ''
   workspace.planForm = createTradingPlanForm({
     symbol: workspace.detail?.quote?.symbol ?? '',
     name: workspace.detail?.quote?.name ?? '',
-    sourceAgent: 'manual'
+    sourceAgent: 'manual',
+    marketContextLoading: true
   })
   workspace.planModalOpen = true
+  fetchManualTradingPlanMarketContext(workspace, workspace.planForm)
 }
 
 const handleRecordTrade = (plan) => {
@@ -1002,6 +1110,7 @@ const handleWorkbenchNavigateChart = action => {
 const handleWorkbenchNavigatePlan = () => {
   const workspace = currentWorkspace.value
   if (!workspace) return
+  resetPlanMarketContextRequest(workspace)
   workspace.planForm = createTradingPlanForm({
     symbol: workspace.detail?.quote?.symbol ?? '',
     name: workspace.detail?.quote?.name ?? ''
@@ -1127,6 +1236,7 @@ onUnmounted(() => {
     workspace.localNewsAbortController?.abort()
     workspace.chatSessionsAbortController?.abort()
     workspace.agentHistoryAbortController?.abort()
+    workspace.planMarketContextAbortController?.abort()
     workspace.planListAbortController?.abort()
     workspace.planAlertsAbortController?.abort()
     workspace.copilotDraftAbortController?.abort()
@@ -1137,6 +1247,7 @@ onUnmounted(() => {
   rootWorkspace.localNewsAbortController?.abort()
   rootWorkspace.chatSessionsAbortController?.abort()
   rootWorkspace.agentHistoryAbortController?.abort()
+  rootWorkspace.planMarketContextAbortController?.abort()
   rootWorkspace.planListAbortController?.abort()
   rootWorkspace.planAlertsAbortController?.abort()
   stockRealtimeAbortController?.abort()

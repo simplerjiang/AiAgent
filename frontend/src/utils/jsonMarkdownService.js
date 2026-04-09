@@ -424,11 +424,40 @@ export const jsonToMarkdown = input => {
   return typeof parsed === 'string' ? parsed : formatScalar(parsed)
 }
 
+function looksLikeJson(str) {
+  const trimmed = str.trim()
+  return (trimmed.startsWith('{') || trimmed.startsWith('[')) && trimmed.length > 2
+}
+
+function cleanJsonLikeString(str) {
+  try {
+    let fixed = str.trim()
+    const openBraces = (fixed.match(/{/g) || []).length
+    const closeBraces = (fixed.match(/}/g) || []).length
+    const openBrackets = (fixed.match(/\[/g) || []).length
+    const closeBrackets = (fixed.match(/]/g) || []).length
+    for (let i = 0; i < openBrackets - closeBrackets; i++) fixed += ']'
+    for (let i = 0; i < openBraces - closeBraces; i++) fixed += '}'
+    const reparsed = JSON.parse(fixed)
+    return jsonToMarkdown(reparsed)
+  } catch {
+    return str
+      .replace(/[{}\[\]"]/g, '')
+      .replace(/,\s*/g, '\n')
+      .replace(/:\s*/g, ': ')
+      .trim()
+  }
+}
+
 export const ensureMarkdown = input => {
   if (input === null || input === undefined) return ''
   if (typeof input === 'string') {
     const parsed = parseJsonIfPossible(input)
-    return typeof parsed === 'string' ? parsed : jsonToMarkdown(parsed)
+    if (typeof parsed === 'string') {
+      if (looksLikeJson(input)) return cleanJsonLikeString(input)
+      return parsed
+    }
+    return jsonToMarkdown(parsed)
   }
   return jsonToMarkdown(input)
 }

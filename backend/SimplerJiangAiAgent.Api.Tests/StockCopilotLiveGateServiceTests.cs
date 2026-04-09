@@ -44,13 +44,141 @@ public sealed class StockCopilotLiveGateServiceTests
 
         Assert.Equal("llm-trace-001", result.LlmTraceId);
         Assert.Equal("llm-trace-001", result.Session.Turns[0].LlmTraceId);
-        Assert.Contains("toolAccessMode=local_required", result.Prompt, StringComparison.Ordinal);
-        Assert.Contains("toolName=StockSearchMcp; policyClass=external_gated", result.Prompt, StringComparison.Ordinal);
-        Assert.Contains("roleId=portfolio_manager", result.Prompt, StringComparison.Ordinal);
-        Assert.Contains("allowsDirectQueryTools=False", result.Prompt, StringComparison.Ordinal);
+        Assert.Contains("当前请求：", result.Prompt, StringComparison.Ordinal);
+        Assert.Contains("symbol=sh600000", result.Prompt, StringComparison.Ordinal);
+        Assert.Contains("question=看下浦发银行的本地新闻证据", result.Prompt, StringComparison.Ordinal);
         Assert.Contains("allowExternalSearch=False", result.Prompt, StringComparison.Ordinal);
+        Assert.Contains("工具注册表：", result.Prompt, StringComparison.Ordinal);
+        Assert.Contains("local_required=CompanyOverviewMcp", result.Prompt, StringComparison.Ordinal);
+        Assert.Contains("external_gated=StockSearchMcp", result.Prompt, StringComparison.Ordinal);
+        Assert.Contains("company_overview_analyst: direct=true; access=local_required", result.Prompt, StringComparison.Ordinal);
+        Assert.Contains("portfolio_manager", result.Prompt, StringComparison.Ordinal);
+        Assert.Contains("direct=false; access=disabled; preferred=none", result.Prompt, StringComparison.Ordinal);
         Assert.Contains("evidenceSkip/evidenceTake", result.Prompt, StringComparison.Ordinal);
+        Assert.DoesNotContain("roleClass=", result.Prompt, StringComparison.Ordinal);
+        Assert.DoesNotContain("allowsDirectQueryTools=", result.Prompt, StringComparison.Ordinal);
+        Assert.DoesNotContain("minimumEvidenceCount=", result.Prompt, StringComparison.Ordinal);
         Assert.DoesNotContain("counterTrendWarning", result.Prompt, StringComparison.Ordinal);
+        Assert.True(
+            result.Prompt.IndexOf("question=看下浦发银行的本地新闻证据", StringComparison.Ordinal)
+            < result.Prompt.IndexOf("工具注册表：", StringComparison.Ordinal));
+        Assert.Equal(LlmResponseFormats.Json, llm.LastRequest?.ResponseFormat);
+    }
+
+    [Fact]
+    public async Task RunAsync_ShouldRepairSingleProseResponseIntoValidJsonPlan()
+    {
+        var llm = new FakeLlmService(
+            [
+                "好的，请提供您需要我处理的请求。",
+                """
+                {
+                  "plannerSummary": "先走本地新闻链路。",
+                  "governorSummary": "不需要外部搜索。",
+                  "finalAnswerDraft": "这是 live gate 计划草案，后续以 tool result 为准。",
+                  "toolCalls": [
+                    {
+                      "roleId": "news_analyst",
+                      "toolName": "StockNewsMcp",
+                      "purpose": "先收集本地新闻证据",
+                      "inputSummary": "level=stock"
+                    }
+                  ]
+                }
+                """
+            ],
+            ["llm-trace-initial", "llm-trace-repair"]);
+        var service = CreateService(llm, new FakeMcpToolGateway());
+
+        var result = await service.RunAsync(new StockCopilotLiveGateRequestDto(
+            Symbol: "sh600000",
+            Question: "看下浦发银行的本地新闻证据",
+            SessionKey: null,
+            SessionTitle: null,
+            TaskId: "phase-f-r1",
+            AllowExternalSearch: false,
+            Provider: "active",
+            Model: "gpt-test",
+            Temperature: 0.1));
+
+        var turn = Assert.Single(result.Session.Turns);
+        Assert.Equal("done", turn.FinalAnswer.Status);
+        Assert.Single(turn.ToolResults);
+        Assert.Equal(2, llm.CallCount);
+        Assert.Equal("llm-trace-repair", result.LlmTraceId);
+        Assert.All(llm.Requests, request => Assert.Equal(LlmResponseFormats.Json, request.ResponseFormat));
+        Assert.Contains("上次输出不是有效 JSON，现在只做一次 JSON repair。", llm.Requests[1].Prompt, StringComparison.Ordinal);
+        Assert.Contains("必须字段：plannerSummary, governorSummary, finalAnswerDraft, toolCalls", llm.Requests[1].Prompt, StringComparison.Ordinal);
+        Assert.Contains("上一次无效输出片段：", llm.Requests[1].Prompt, StringComparison.Ordinal);
+        Assert.Contains("不要输出“好的，请提供您需要我处理的请求。”之类的对话文本。", llm.Requests[1].Prompt, StringComparison.Ordinal);
+        Assert.DoesNotContain(llm.Requests[0].Prompt, llm.Requests[1].Prompt, StringComparison.Ordinal);
+        Assert.True(llm.Requests[1].Prompt.Length < llm.Requests[0].Prompt.Length);
+    }
+
+    [Fact]
+    public async Task RunAsync_ShouldTruncateLongInvalidOutputInRepairPrompt()
+    {
+        var invalidResponse = "bad-json:" + new string('x', 900);
+        var llm = new FakeLlmService(
+            [
+                invalidResponse,
+                """
+                {
+                  "plannerSummary": "先走本地新闻链路。",
+                  "governorSummary": "不需要外部搜索。",
+                  "finalAnswerDraft": "这是 live gate 计划草案，后续以 tool result 为准。",
+                  "toolCalls": []
+                }
+                """
+            ],
+            ["llm-trace-initial", "llm-trace-repair"]);
+        var service = CreateService(llm, new FakeMcpToolGateway());
+
+        var result = await service.RunAsync(new StockCopilotLiveGateRequestDto(
+            Symbol: "sh600000",
+            Question: "看下浦发银行的本地新闻证据",
+            SessionKey: null,
+            SessionTitle: null,
+            TaskId: "phase-f-r1",
+            AllowExternalSearch: false,
+            Provider: "active",
+            Model: "gpt-test",
+            Temperature: 0.1));
+
+        Assert.Equal("llm_plan_with_tool_receipts", result.Session.Turns[0].FinalAnswer.GroundingMode);
+        Assert.Contains("...[truncated ", llm.Requests[1].Prompt, StringComparison.Ordinal);
+        Assert.DoesNotContain(invalidResponse, llm.Requests[1].Prompt, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task RunAsync_ShouldStopAfterSingleRepairWhenStillNotJson()
+    {
+        var llm = new FakeLlmService(
+            [
+                "好的，请提供您需要我处理的请求。",
+                "还是先告诉我你想做什么。"
+            ],
+            ["llm-trace-initial", "llm-trace-repair"]);
+        var service = CreateService(llm, new FakeMcpToolGateway());
+
+        var result = await service.RunAsync(new StockCopilotLiveGateRequestDto(
+            Symbol: "sh600000",
+            Question: "看下浦发银行的本地新闻证据",
+            SessionKey: null,
+            SessionTitle: null,
+            TaskId: "phase-f-r1",
+            AllowExternalSearch: false,
+            Provider: "active",
+            Model: "gpt-test",
+            Temperature: 0.1));
+
+        var turn = Assert.Single(result.Session.Turns);
+        Assert.Equal("failed", turn.FinalAnswer.Status);
+        Assert.Equal("llm_plan_parse_failed", turn.FinalAnswer.GroundingMode);
+        Assert.Equal(2, llm.CallCount);
+        Assert.Equal("llm-trace-repair", result.LlmTraceId);
+        Assert.Empty(turn.ToolCalls);
+        Assert.Contains("repair 后仍不是有效 JSON", turn.FinalAnswer.Summary, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -211,21 +339,34 @@ public sealed class StockCopilotLiveGateServiceTests
 
     private sealed class FakeLlmService : ILlmService
     {
-        private readonly string _content;
-        private readonly string _traceId;
+        private readonly IReadOnlyList<string> _contents;
+        private readonly IReadOnlyList<string> _traceIds;
+        private readonly List<LlmChatRequest> _requests = new();
 
         public FakeLlmService(string content, string traceId)
+            : this([content], [traceId])
         {
-            _content = content;
-            _traceId = traceId;
+        }
+
+        public FakeLlmService(IReadOnlyList<string> contents, IReadOnlyList<string> traceIds)
+        {
+            _contents = contents;
+            _traceIds = traceIds;
         }
 
         public string? LastPrompt { get; private set; }
+        public LlmChatRequest? LastRequest { get; private set; }
+        public int CallCount { get; private set; }
+        public IReadOnlyList<LlmChatRequest> Requests => _requests;
 
         public Task<LlmChatResult> ChatAsync(string provider, LlmChatRequest request, CancellationToken cancellationToken = default)
         {
+            var index = Math.Min(CallCount, _contents.Count - 1);
+            CallCount += 1;
+            LastRequest = request;
             LastPrompt = request.Prompt;
-            return Task.FromResult(new LlmChatResult(_content, _traceId));
+            _requests.Add(request);
+            return Task.FromResult(new LlmChatResult(_contents[index], _traceIds[Math.Min(index, _traceIds.Count - 1)]));
         }
     }
 

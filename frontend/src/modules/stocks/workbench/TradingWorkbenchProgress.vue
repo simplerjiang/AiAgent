@@ -1,7 +1,8 @@
 <script setup>
 const props = defineProps({
   stages: { type: Array, default: () => [] },
-  isRunning: { type: Boolean, default: false }
+  isRunning: { type: Boolean, default: false },
+  error: { type: String, default: null }
 })
 const emit = defineEmits(['rerun-from-stage'])
 
@@ -99,7 +100,12 @@ const translateFlag = flag => {
     </div>
 
     <!-- Empty state -->
-    <div v-if="stages.length === 0" class="wb-progress-empty">
+    <div v-if="props.error && stages.length === 0" class="wb-progress-empty wb-progress-failure">
+      <p>研究进度加载失败</p>
+      <p class="wb-progress-empty-hint">当前会话详情暂时不可用，请点击顶部刷新后重试</p>
+    </div>
+
+    <div v-else-if="stages.length === 0" class="wb-progress-empty">
       <p>等待研究会话启动…</p>
     </div>
   </div>
@@ -219,5 +225,12 @@ const translateFlag = flag => {
   padding: 24px 12px;
   color: var(--color-text-secondary);
   font-size: 14px;
+}
+.wb-progress-empty-hint {
+  margin-top: 6px;
+  font-size: 13px;
+}
+.wb-progress-failure {
+  color: var(--color-danger);
 }
 </style>

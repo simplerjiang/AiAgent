@@ -121,6 +121,8 @@ public class RecommendRoleContractAndDispatchTests
         Assert.Equal(finalJson, result.OutputJson);
         Assert.Single(dispatcher.Calls);
         Assert.Equal("web_search", dispatcher.Calls[0].ToolName);
+        Assert.Equal(2, llmService.CallCount);
+        Assert.All(llmService.Requests, request => Assert.Equal(LlmResponseFormats.Json, request.ResponseFormat));
     }
 
     [Fact]
@@ -146,6 +148,8 @@ public class RecommendRoleContractAndDispatchTests
         Assert.Equal(0, result.ToolCallCount);
         Assert.Equal(finalJson, result.OutputJson);
         Assert.Empty(dispatcher.Calls);
+        Assert.Contains("## 最终输出 JSON schema", llmService.Requests[0].Prompt, StringComparison.Ordinal);
+        Assert.Contains("不要输出解释、Markdown、代码块、自然语言", llmService.Requests[0].Prompt, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -174,7 +178,7 @@ public class RecommendRoleContractAndDispatchTests
     }
 
     [Fact]
-    public async Task ExecuteAsync_MalformedToolCall_TreatsAsFinalOutput()
+    public async Task ExecuteAsync_MalformedToolCall_FailsAfterBoundedCorrections()
     {
         var brokenJson = """{"tool_call":{"name":"web_search","args":{"query":""";
         var llmService = new SequentialLlmService([brokenJson]);
@@ -192,9 +196,12 @@ public class RecommendRoleContractAndDispatchTests
 
         var result = await executor.ExecuteAsync(ctx);
 
-        Assert.True(result.Success);
+        Assert.False(result.Success);
         Assert.Equal(0, result.ToolCallCount);
-        Assert.Equal(brokenJson, result.OutputJson);
+        Assert.Null(result.OutputJson);
+        Assert.Equal("LLM_INVALID_JSON_RESPONSE", result.ErrorCode);
+        Assert.Contains("连续 2 次返回非 JSON / 非法响应", result.ErrorMessage, StringComparison.Ordinal);
+        Assert.Equal(2, llmService.CallCount);
         Assert.Empty(dispatcher.Calls);
     }
 
@@ -372,6 +379,9 @@ public class RecommendRoleContractAndDispatchTests
     {
         private readonly IReadOnlyList<string> _responses;
         private int _callIndex;
+        public List<LlmChatRequest> Requests { get; } = new();
+
+        public int CallCount => _callIndex;
 
         public SequentialLlmService(IReadOnlyList<string> responses) => _responses = responses;
 
@@ -379,6 +389,7 @@ public class RecommendRoleContractAndDispatchTests
         {
             var idx = _callIndex < _responses.Count ? _callIndex : _responses.Count - 1;
             _callIndex++;
+            Requests.Add(request);
             return Task.FromResult(new LlmChatResult(_responses[idx], $"trace-{_callIndex}"));
         }
     }

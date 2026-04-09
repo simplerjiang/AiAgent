@@ -5,6 +5,9 @@ const props = defineProps({
   replayTurnId: { type: Number, default: null },
   expandedSessionId: { type: Number, default: null },
   expandedTurns: { type: Array, default: () => [] },
+  historyLoadingSessionId: { type: Number, default: null },
+  historySessionErrorId: { type: Number, default: null },
+  historySessionErrorMessage: { type: String, default: '' },
   loading: { type: Boolean, default: false }
 })
 
@@ -33,6 +36,14 @@ const fmtDate = ts => {
 }
 
 const truncate = (s, n = 40) => s && s.length > n ? s.slice(0, n) + '…' : (s || '')
+
+const isExpandedSession = sessionId => props.expandedSessionId === sessionId
+const isExpandedLoading = sessionId => isExpandedSession(sessionId) && props.historyLoadingSessionId === sessionId
+const isExpandedError = sessionId => isExpandedSession(sessionId) && props.historySessionErrorId === sessionId
+const expandedHistoryErrorMessage = sessionId => {
+  if (!isExpandedError(sessionId)) return ''
+  return props.historySessionErrorMessage || '历史记录加载失败，请重试。'
+}
 </script>
 
 <template>
@@ -66,7 +77,7 @@ const truncate = (s, n = 40) => s && s.length > n ? s.slice(0, n) + '…' : (s |
       </div>
 
       <!-- Expanded turns -->
-      <div v-if="expandedSessionId === sess.id && expandedTurns.length" class="history-turns">
+      <div v-if="isExpandedSession(sess.id) && expandedTurns.length" class="history-turns">
         <div v-for="turn in expandedTurns" :key="turn.id"
              :class="['history-turn', { 'is-replay': turn.id === replayTurnId }]"
              @click.stop="$emit('select-turn', { sessionId: sess.id, turnId: turn.id })">
@@ -77,8 +88,15 @@ const truncate = (s, n = 40) => s && s.length > n ? s.slice(0, n) + '…' : (s |
           </span>
         </div>
       </div>
-      <div v-if="expandedSessionId === sess.id && !expandedTurns.length" class="history-turns-empty">
+      <div v-else-if="isExpandedLoading(sess.id)" class="history-turns-empty">
         加载中…
+      </div>
+      <div v-else-if="isExpandedError(sess.id)" class="history-turns-error">
+        <span class="history-turns-error-text">{{ expandedHistoryErrorMessage(sess.id) }}</span>
+        <button class="history-turns-retry" @click.stop="$emit('select-session', sess.id)">重试</button>
+      </div>
+      <div v-else-if="isExpandedSession(sess.id)" class="history-turns-empty">
+        暂无 turns 记录
       </div>
     </div>
 
@@ -188,6 +206,32 @@ const truncate = (s, n = 40) => s && s.length > n ? s.slice(0, n) + '…' : (s |
 .history-turns-empty {
   padding: 8px 10px 8px 32px; font-size: 12px;
   color: var(--color-text-secondary);
+  border-top: 1px solid var(--color-border-light);
+}
+
+.history-turns-error {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px 8px 32px;
+  border-top: 1px solid var(--color-border-light);
+  background: color-mix(in srgb, var(--color-danger) 6%, transparent);
+  color: var(--color-danger);
+  font-size: 12px;
+}
+
+.history-turns-error-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.history-turns-retry {
+  border: 1px solid color-mix(in srgb, var(--color-danger) 55%, var(--color-border-light));
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  flex-shrink: 0;
+  font-size: 12px;
+  padding: 2px 8px;
 }
 
 .history-loading {

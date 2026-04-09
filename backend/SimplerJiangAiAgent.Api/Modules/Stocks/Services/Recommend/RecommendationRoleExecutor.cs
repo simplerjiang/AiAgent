@@ -31,6 +31,8 @@ public interface IRecommendationRoleExecutor
 
 public sealed class RecommendationRoleExecutor : IRecommendationRoleExecutor
 {
+    private const int MaxInvalidFinalResponses = 2;
+
     private readonly ILlmService _llmService;
     private readonly IRecommendEventBus _eventBus;
     private readonly IRecommendRoleContractRegistry _contractRegistry;
@@ -66,18 +68,22 @@ public sealed class RecommendationRoleExecutor : IRecommendationRoleExecutor
             string? lastTraceId = null;
             int toolCallCount = 0;
             int maxCalls = contract.MaxToolCalls;
+            int invalidFinalResponseCount = 0;
 
             while (true)
             {
                 ct.ThrowIfCancellationRequested();
 
-                var request = new LlmChatRequest(prompt, null, 0.3);
+                var request = new LlmChatRequest(prompt, null, 0.3, false, ResponseFormat: LlmResponseFormats.Json);
                 var llmResult = await CallLlmWithRetryAsync(context, request, ct);
                 lastTraceId = llmResult.TraceId;
                 var content = llmResult.Content?.Trim() ?? "";
+                var hasToolCall = TryParseToolCall(content, out var toolName, out var toolArgs);
 
-                if (toolCallCount < maxCalls && TryParseToolCall(content, out var toolName, out var toolArgs))
+                if (toolCallCount < maxCalls && hasToolCall)
                 {
+                    invalidFinalResponseCount = 0;
+
                     _eventBus.Publish(new RecommendEvent(
                         RecommendEventType.ToolDispatched, context.SessionId, context.TurnId,
                         context.StageId, context.StageType, context.RoleId, lastTraceId,
@@ -107,23 +113,51 @@ public sealed class RecommendationRoleExecutor : IRecommendationRoleExecutor
                     continue;
                 }
 
-                _eventBus.Publish(new RecommendEvent(
-                    RecommendEventType.RoleSummaryReady, context.SessionId, context.TurnId,
-                    context.StageId, context.StageType, context.RoleId, lastTraceId,
-                    content, null, DateTime.UtcNow));
+                if (TryExtractFinalJsonObject(content, out var cleanedContent))
+                {
+                    _eventBus.Publish(new RecommendEvent(
+                        RecommendEventType.RoleSummaryReady, context.SessionId, context.TurnId,
+                        context.StageId, context.StageType, context.RoleId, lastTraceId,
+                        cleanedContent, null, DateTime.UtcNow));
+
+                    _eventBus.Publish(new RecommendEvent(
+                        RecommendEventType.RoleCompleted, context.SessionId, context.TurnId,
+                        context.StageId, context.StageType, context.RoleId, lastTraceId,
+                        $"角色 {context.RoleId} 执行完成 (工具调用 {toolCallCount} 次)", null, DateTime.UtcNow));
+
+                    return new RecommendRoleExecutionResult(
+                        context.RoleId, Success: true, OutputJson: cleanedContent,
+                        ErrorCode: null, ErrorMessage: null, LlmTraceId: lastTraceId,
+                        ToolCallCount: toolCallCount);
+                }
+
+                invalidFinalResponseCount += 1;
+                var invalidReason = hasToolCall
+                    ? $"已达到工具调用上限 {maxCalls}，不能继续输出 tool_call。"
+                    : "输出不是有效 JSON object。";
+
+                if (invalidFinalResponseCount >= MaxInvalidFinalResponses)
+                {
+                    var errorMessage = $"角色 {context.RoleId} 连续 {invalidFinalResponseCount} 次返回非 JSON / 非法响应，已终止。最后原因：{invalidReason}";
+
+                    _eventBus.Publish(new RecommendEvent(
+                        RecommendEventType.RoleFailed, context.SessionId, context.TurnId,
+                        context.StageId, context.StageType, context.RoleId, lastTraceId,
+                        errorMessage, null, DateTime.UtcNow));
+
+                    return new RecommendRoleExecutionResult(
+                        context.RoleId, Success: false, OutputJson: null,
+                        ErrorCode: "LLM_INVALID_JSON_RESPONSE", ErrorMessage: errorMessage,
+                        LlmTraceId: lastTraceId, ToolCallCount: toolCallCount);
+                }
 
                 _eventBus.Publish(new RecommendEvent(
-                    RecommendEventType.RoleCompleted, context.SessionId, context.TurnId,
+                    RecommendEventType.SystemNotice, context.SessionId, context.TurnId,
                     context.StageId, context.StageType, context.RoleId, lastTraceId,
-                    $"角色 {context.RoleId} 执行完成 (工具调用 {toolCallCount} 次)", null, DateTime.UtcNow));
+                    $"角色 {context.RoleId} 输出不是有效 JSON，正在执行有界纠正 ({invalidFinalResponseCount}/{MaxInvalidFinalResponses - 1})...",
+                    null, DateTime.UtcNow));
 
-                // Clean up LLM output: extract JSON from markdown code blocks or surrounding text
-                var cleanedContent = TryCleanJsonOutput(content);
-
-                return new RecommendRoleExecutionResult(
-                    context.RoleId, Success: true, OutputJson: cleanedContent,
-                    ErrorCode: null, ErrorMessage: null, LlmTraceId: lastTraceId,
-                    ToolCallCount: toolCallCount);
+                prompt += BuildInvalidJsonCorrectionBlock(contract, content, invalidReason, toolCallCount < maxCalls);
             }
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -222,7 +256,44 @@ public sealed class RecommendationRoleExecutor : IRecommendationRoleExecutor
 
         sb.AppendLine("## 用户指令");
         sb.AppendLine(context.UserInput);
+        sb.AppendLine();
+        sb.AppendLine("## 最终输出 JSON schema");
+        sb.AppendLine(contract.OutputSchemaDescription);
+        sb.AppendLine();
+        sb.AppendLine("## 输出硬约束");
+        sb.AppendLine("- 如果还需要工具，一次只能输出一个 tool_call JSON，不要混入解释。");
+        sb.AppendLine("- 如果分析结束，只能输出一个 JSON object，必须匹配上面的 schema。");
+        sb.AppendLine("- 不要输出解释、Markdown、代码块、自然语言、反问、致歉，或“好的，请提供您需要我处理的请求。”之类的对话文本。");
+        sb.AppendLine("- 信息不足时也必须按 schema 输出字段完整的 JSON object，不要等待用户继续补充。");
 
+        return sb.ToString();
+    }
+
+    private static string BuildInvalidJsonCorrectionBlock(
+        RecommendRoleContract contract,
+        string content,
+        string invalidReason,
+        bool toolCallsAllowed)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine();
+        sb.AppendLine("## 输出纠正");
+        sb.AppendLine($"上一条输出未通过协议校验：{invalidReason}");
+        sb.AppendLine("上一条输出摘要：");
+        sb.AppendLine(Truncate(content, 1200));
+        if (toolCallsAllowed)
+        {
+            sb.AppendLine("如果仍需工具，只能输出单个 JSON：{\"tool_call\":{\"name\":\"工具名\",\"args\":{参数}}}");
+        }
+        else
+        {
+            sb.AppendLine("你已经达到工具调用上限，禁止再输出 tool_call。");
+        }
+
+        sb.AppendLine("如果不再需要工具，只能输出一个与以下 schema 匹配的 JSON object：");
+        sb.AppendLine(contract.OutputSchemaDescription);
+        sb.AppendLine("不要输出解释、Markdown、代码块、自然语言、反问、致歉，或“好的，请提供您需要我处理的请求。”之类的对话文本。");
+        sb.AppendLine("如果信息不足，也必须按 schema 输出字段完整的 JSON object。");
         return sb.ToString();
     }
 
@@ -334,5 +405,28 @@ public sealed class RecommendationRoleExecutor : IRecommendationRoleExecutor
 
         // No JSON found, return original
         return trimmed;
+    }
+
+    internal static bool TryExtractFinalJsonObject(string content, out string json)
+    {
+        json = "";
+
+        var cleaned = TryCleanJsonOutput(content);
+        if (string.IsNullOrWhiteSpace(cleaned))
+            return false;
+
+        try
+        {
+            using var doc = JsonDocument.Parse(cleaned);
+            if (doc.RootElement.ValueKind != JsonValueKind.Object)
+                return false;
+
+            json = doc.RootElement.GetRawText();
+            return true;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
     }
 }

@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -25,6 +26,9 @@ public sealed class LocalFactIngestionService : ILocalFactIngestionService
     private static readonly ConcurrentDictionary<string, DateTime> SymbolCrawlTimestamps = new(StringComparer.OrdinalIgnoreCase);
     private static long _lastMarketCrawlTicks = DateTime.MinValue.Ticks;
     private static readonly TimeSpan CrawlSkipWindow = TimeSpan.FromMinutes(2);
+    private static readonly TimeSpan DefaultMarketCoreSourceTimeout = TimeSpan.FromSeconds(6);
+    private static readonly TimeSpan DefaultMarketOptionalSourceTimeout = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan DefaultMarketOptionalBatchTimeout = TimeSpan.FromSeconds(3);
     private static readonly (string Url, string Source, string SourceTag)[] MarketRssFeeds =
     {
         // ── Tier 1: Google News RSS – universal aggregator (requires international network) ──
@@ -97,19 +101,28 @@ public sealed class LocalFactIngestionService : ILocalFactIngestionService
     private readonly StockSyncOptions _options;
     private readonly ILocalFactAiEnrichmentService _aiEnrichmentService;
     private readonly ILogger<LocalFactIngestionService> _logger;
+    private readonly TimeSpan _marketCoreSourceTimeout;
+    private readonly TimeSpan _marketOptionalSourceTimeout;
+    private readonly TimeSpan _marketOptionalBatchTimeout;
 
     public LocalFactIngestionService(
         AppDbContext dbContext,
         HttpClient httpClient,
         IOptions<StockSyncOptions> options,
         ILocalFactAiEnrichmentService aiEnrichmentService,
-        ILogger<LocalFactIngestionService> logger)
+        ILogger<LocalFactIngestionService> logger,
+        TimeSpan? marketCoreSourceTimeout = null,
+        TimeSpan? marketOptionalSourceTimeout = null,
+        TimeSpan? marketOptionalBatchTimeout = null)
     {
         _dbContext = dbContext;
         _httpClient = httpClient;
         _options = options.Value;
         _aiEnrichmentService = aiEnrichmentService;
         _logger = logger;
+        _marketCoreSourceTimeout = NormalizeTimeout(marketCoreSourceTimeout, DefaultMarketCoreSourceTimeout);
+        _marketOptionalSourceTimeout = NormalizeTimeout(marketOptionalSourceTimeout, DefaultMarketOptionalSourceTimeout);
+        _marketOptionalBatchTimeout = NormalizeTimeout(marketOptionalBatchTimeout, DefaultMarketOptionalBatchTimeout);
     }
 
     public async Task SyncAsync(CancellationToken cancellationToken = default)
@@ -163,12 +176,12 @@ public sealed class LocalFactIngestionService : ILocalFactIngestionService
     public async Task EnsureFreshAsync(string symbol, CancellationToken cancellationToken = default)
     {
         var normalized = StockSymbolNormalizer.Normalize(symbol);
-        await EnsureMarketFreshAsync(cancellationToken);
 
         var symbolGate = GetSymbolGate(normalized);
         await symbolGate.WaitAsync(cancellationToken);
         try
         {
+            // Symbol refresh stays symbol-scoped; market consumers refresh market facts explicitly.
             // Skip the network crawl if we synced this symbol recently,
             // but always process pending AI enrichment rows below.
             var skipCrawl = SymbolCrawlTimestamps.TryGetValue(normalized, out var lastCrawl)
@@ -210,7 +223,9 @@ public sealed class LocalFactIngestionService : ILocalFactIngestionService
             if (DateTime.UtcNow - lastCrawl < CrawlSkipWindow)
             {
                 // Skip crawl but still process pending AI enrichment
-                await _aiEnrichmentService.ProcessMarketPendingAsync(cancellationToken);
+                await _aiEnrichmentService.ProcessMarketPendingAsync(
+                    cancellationToken: cancellationToken,
+                    mode: LocalFactMarketPendingMode.RequestPath);
                 return;
             }
 
@@ -218,7 +233,9 @@ public sealed class LocalFactIngestionService : ILocalFactIngestionService
             var marketReports = await FetchMarketReportsAsync(crawledAt, cancellationToken);
             await UpsertMarketReportsAsync(marketReports, cancellationToken);
             await _dbContext.SaveChangesAsync(cancellationToken);
-            await _aiEnrichmentService.ProcessMarketPendingAsync(cancellationToken);
+            await _aiEnrichmentService.ProcessMarketPendingAsync(
+                cancellationToken: cancellationToken,
+                mode: LocalFactMarketPendingMode.RequestPath);
             Interlocked.Exchange(ref _lastMarketCrawlTicks, DateTime.UtcNow.Ticks);
         }
         finally
@@ -358,17 +375,40 @@ public sealed class LocalFactIngestionService : ILocalFactIngestionService
         DateTime crawledAt,
         CancellationToken cancellationToken)
     {
-        var domesticTask = FetchRollMessagesSafeAsync(cancellationToken);
-        var eastmoneyTask = FetchEastmoneyMarketNewsAsync(crawledAt, cancellationToken);
-        var clsTask = FetchClsTelegraphAsync(crawledAt, cancellationToken);
+        var domesticTask = RunMarketSourceWithSoftTimeoutAsync(
+            sourceName: "sina-roll-market",
+            tier: "core",
+            timeout: _marketCoreSourceTimeout,
+            fetch: FetchRollMessagesSafeAsync,
+            cancellationToken);
+        var eastmoneyTask = RunMarketSourceWithSoftTimeoutAsync(
+            sourceName: "eastmoney-market-news",
+            tier: "core",
+            timeout: _marketCoreSourceTimeout,
+            fetch: innerCt => FetchEastmoneyMarketNewsAsync(crawledAt, innerCt),
+            cancellationToken);
+        var clsTask = RunMarketSourceWithSoftTimeoutAsync(
+            sourceName: "cls-telegraph",
+            tier: "core",
+            timeout: _marketCoreSourceTimeout,
+            fetch: innerCt => FetchClsTelegraphAsync(crawledAt, innerCt),
+            cancellationToken);
+
+        using var optionalBatchCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        optionalBatchCts.CancelAfter(_marketOptionalBatchTimeout);
         var rssTasks = MarketRssFeeds
-            .Select(feed => FetchMarketFeedAsync(feed.Url, feed.Source, feed.SourceTag, crawledAt, cancellationToken))
+            .Select(feed => RunMarketSourceWithSoftTimeoutAsync(
+                sourceName: feed.SourceTag,
+                tier: "optional",
+                timeout: _marketOptionalSourceTimeout,
+                fetch: innerCt => FetchMarketFeedAsync(feed.Url, feed.Source, feed.SourceTag, crawledAt, innerCt),
+                optionalBatchCts.Token))
             .ToArray();
 
-        var rssResults = await Task.WhenAll(rssTasks);
         var domesticReports = BuildDomesticMarketReports(await domesticTask, crawledAt);
         var eastmoneyReports = await eastmoneyTask;
         var clsReports = await clsTask;
+        var rssResults = await Task.WhenAll(rssTasks);
         var allItems = rssResults
             .SelectMany(items => items)
             .Concat(domesticReports)
@@ -461,30 +501,65 @@ public sealed class LocalFactIngestionService : ILocalFactIngestionService
         DateTime crawledAt,
         CancellationToken cancellationToken)
     {
-        var allItems = new List<LocalSectorReportSeed>();
-        foreach (var (column, sourceTag) in EastmoneyMarketColumns)
+        var tasks = EastmoneyMarketColumns
+            .Select(column => FetchEastmoneyMarketColumnAsync(column.Column, column.SourceTag, crawledAt, cancellationToken))
+            .ToArray();
+
+        var results = await Task.WhenAll(tasks);
+        return results
+            .SelectMany(items => items)
+            .ToArray();
+    }
+
+    private async Task<IReadOnlyList<LocalSectorReportSeed>> FetchEastmoneyMarketColumnAsync(
+        int column,
+        string sourceTag,
+        DateTime crawledAt,
+        CancellationToken cancellationToken)
+    {
+        try
         {
-            try
-            {
-                var traceId = Guid.NewGuid().ToString("N");
-                var url = string.Format(EastmoneyMarketNewsUrlTemplate, column) + traceId;
-                var json = await _httpClient.GetStringAsync(url, cancellationToken);
-                var items = EastmoneyMarketNewsParser.Parse(json, sourceTag, crawledAt)
-                    .Where(item => IsFinanceRelevant(item.Title))
-                    .ToArray();
-                allItems.AddRange(items);
-            }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                return allItems;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "抓取东方财富大盘资讯失败: column={Column}", column);
-            }
+            var traceId = Guid.NewGuid().ToString("N");
+            var url = string.Format(EastmoneyMarketNewsUrlTemplate, column) + traceId;
+            var json = await _httpClient.GetStringAsync(url, cancellationToken);
+            return EastmoneyMarketNewsParser.Parse(json, sourceTag, crawledAt)
+                .Where(item => IsFinanceRelevant(item.Title))
+                .ToArray();
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return Array.Empty<LocalSectorReportSeed>();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "抓取东方财富大盘资讯失败: column={Column}", column);
+            return Array.Empty<LocalSectorReportSeed>();
+        }
+    }
+
+    private async Task<T> RunMarketSourceWithSoftTimeoutAsync<T>(
+        string sourceName,
+        string tier,
+        TimeSpan timeout,
+        Func<CancellationToken, Task<T>> fetch,
+        CancellationToken cancellationToken)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutCts.CancelAfter(timeout);
+
+        var result = await fetch(timeoutCts.Token);
+        if (!cancellationToken.IsCancellationRequested && timeoutCts.IsCancellationRequested)
+        {
+            _logger.LogInformation(
+                "市场资讯刷新对 {Tier} 源触发软超时: {Source} timeoutMs={TimeoutMs} elapsedMs={ElapsedMs}",
+                tier,
+                sourceName,
+                (int)timeout.TotalMilliseconds,
+                stopwatch.ElapsedMilliseconds);
         }
 
-        return allItems;
+        return result;
     }
 
     private async Task<IReadOnlyList<LocalSectorReportSeed>> FetchClsTelegraphAsync(
@@ -564,13 +639,14 @@ public sealed class LocalFactIngestionService : ILocalFactIngestionService
         var existing = await _dbContext.LocalSectorReports
             .Where(item => item.Level == "market")
             .ToListAsync(cancellationToken);
+        var normalizedReports = DeduplicateSectorReportSeeds(reports);
 
         // Additive merge: add new items and update existing, but never delete
         // items not in the incoming set. This prevents data from intermittent
         // sources (e.g. CLS, Sina) from being removed between refresh cycles.
-        var existingLookup = existing.ToDictionary(BuildSectorReportKey, StringComparer.OrdinalIgnoreCase);
+        var (existingLookup, duplicateRows) = BuildSectorReportLookup(existing);
 
-        foreach (var item in reports)
+        foreach (var item in normalizedReports)
         {
             var key = BuildSectorReportKey(item);
 
@@ -608,10 +684,15 @@ public sealed class LocalFactIngestionService : ILocalFactIngestionService
 
         // Time-based cleanup: remove stale market items older than 7 days
         var staleThreshold = DateTime.UtcNow.AddDays(-7);
-        var staleItems = existing.Where(item => item.PublishTime < staleThreshold).ToArray();
-        if (staleItems.Length > 0)
+        var rowsToRemove = duplicateRows.ToHashSet();
+        foreach (var item in existing.Where(item => item.PublishTime < staleThreshold))
         {
-            _dbContext.LocalSectorReports.RemoveRange(staleItems);
+            rowsToRemove.Add(item);
+        }
+
+        if (rowsToRemove.Count > 0)
+        {
+            _dbContext.LocalSectorReports.RemoveRange(rowsToRemove);
         }
     }
 
@@ -677,10 +758,11 @@ public sealed class LocalFactIngestionService : ILocalFactIngestionService
         IReadOnlyList<LocalSectorReportSeed> incoming,
         DbSet<LocalSectorReport> dbSet)
     {
-        var existingLookup = existing.ToDictionary(BuildSectorReportKey, StringComparer.OrdinalIgnoreCase);
+        var normalizedIncoming = DeduplicateSectorReportSeeds(incoming);
+        var (existingLookup, duplicateRows) = BuildSectorReportLookup(existing);
         var retainedKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var item in incoming)
+        foreach (var item in normalizedIncoming)
         {
             var key = BuildSectorReportKey(item);
             retainedKeys.Add(key);
@@ -717,14 +799,179 @@ public sealed class LocalFactIngestionService : ILocalFactIngestionService
             });
         }
 
-        var toRemove = existing
-            .Where(item => !retainedKeys.Contains(BuildSectorReportKey(item)))
-            .ToArray();
+        var toRemove = duplicateRows.ToHashSet();
+        foreach (var item in existing.Where(item => !retainedKeys.Contains(BuildSectorReportKey(item))))
+        {
+            toRemove.Add(item);
+        }
 
-        if (toRemove.Length > 0)
+        if (toRemove.Count > 0)
         {
             dbSet.RemoveRange(toRemove);
         }
+    }
+
+    private static (Dictionary<string, LocalSectorReport> Lookup, List<LocalSectorReport> Duplicates) BuildSectorReportLookup(
+        IReadOnlyList<LocalSectorReport> existing)
+    {
+        var lookup = new Dictionary<string, LocalSectorReport>(StringComparer.OrdinalIgnoreCase);
+        var duplicates = new List<LocalSectorReport>();
+
+        foreach (var item in existing)
+        {
+            var key = BuildSectorReportKey(item);
+            if (!lookup.TryGetValue(key, out var current))
+            {
+                lookup[key] = item;
+                continue;
+            }
+
+            var preferred = ChoosePreferredSectorReport(current, item);
+            if (ReferenceEquals(preferred, current))
+            {
+                duplicates.Add(item);
+                continue;
+            }
+
+            duplicates.Add(current);
+            lookup[key] = preferred;
+        }
+
+        return (lookup, duplicates);
+    }
+
+    private static IReadOnlyList<LocalSectorReportSeed> DeduplicateSectorReportSeeds(IReadOnlyList<LocalSectorReportSeed> incoming)
+    {
+        if (incoming.Count <= 1)
+        {
+            return incoming;
+        }
+
+        var lookup = new Dictionary<string, LocalSectorReportSeed>(StringComparer.OrdinalIgnoreCase);
+        foreach (var item in incoming)
+        {
+            var key = BuildSectorReportKey(item);
+            if (!lookup.TryGetValue(key, out var current))
+            {
+                lookup[key] = item;
+                continue;
+            }
+
+            lookup[key] = ChoosePreferredSectorReportSeed(current, item);
+        }
+
+        return lookup.Values.ToArray();
+    }
+
+    private static LocalSectorReport ChoosePreferredSectorReport(LocalSectorReport current, LocalSectorReport candidate)
+    {
+        var currentScore = GetSectorReportRetentionScore(current);
+        var candidateScore = GetSectorReportRetentionScore(candidate);
+        if (candidateScore != currentScore)
+        {
+            return candidateScore > currentScore ? candidate : current;
+        }
+
+        if (candidate.PublishTime != current.PublishTime)
+        {
+            return candidate.PublishTime > current.PublishTime ? candidate : current;
+        }
+
+        if (candidate.CrawledAt != current.CrawledAt)
+        {
+            return candidate.CrawledAt > current.CrawledAt ? candidate : current;
+        }
+
+        return candidate.Id > current.Id ? candidate : current;
+    }
+
+    private static int GetSectorReportRetentionScore(LocalSectorReport item)
+    {
+        var score = 0;
+        if (item.IsAiProcessed)
+        {
+            score += 32;
+        }
+
+        if (!string.IsNullOrWhiteSpace(item.TranslatedTitle))
+        {
+            score += 16;
+        }
+
+        if (!string.IsNullOrWhiteSpace(item.AiTarget))
+        {
+            score += 8;
+        }
+
+        if (!string.IsNullOrWhiteSpace(item.AiTags))
+        {
+            score += 4;
+        }
+
+        if (!string.IsNullOrWhiteSpace(item.ArticleSummary))
+        {
+            score += 2;
+        }
+
+        if (!string.IsNullOrWhiteSpace(item.ArticleExcerpt))
+        {
+            score += 1;
+        }
+
+        if (item.IngestedAt.HasValue)
+        {
+            score += 1;
+        }
+
+        return score;
+    }
+
+    private static LocalSectorReportSeed ChoosePreferredSectorReportSeed(LocalSectorReportSeed current, LocalSectorReportSeed candidate)
+    {
+        var currentScore = GetSectorReportSeedRetentionScore(current);
+        var candidateScore = GetSectorReportSeedRetentionScore(candidate);
+        if (candidateScore != currentScore)
+        {
+            return candidateScore > currentScore ? candidate : current;
+        }
+
+        if (candidate.PublishTime != current.PublishTime)
+        {
+            return candidate.PublishTime > current.PublishTime ? candidate : current;
+        }
+
+        if (candidate.CrawledAt != current.CrawledAt)
+        {
+            return candidate.CrawledAt > current.CrawledAt ? candidate : current;
+        }
+
+        return candidate;
+    }
+
+    private static int GetSectorReportSeedRetentionScore(LocalSectorReportSeed item)
+    {
+        var score = 0;
+        if (!string.IsNullOrWhiteSpace(item.ExternalId))
+        {
+            score += 4;
+        }
+
+        if (!string.IsNullOrWhiteSpace(item.Url))
+        {
+            score += 2;
+        }
+
+        if (!string.IsNullOrWhiteSpace(item.Symbol))
+        {
+            score += 1;
+        }
+
+        if (!string.IsNullOrWhiteSpace(item.SectorName))
+        {
+            score += 1;
+        }
+
+        return score;
     }
 
     private static string BuildStockNewsKey(LocalStockNewsSeed item)
@@ -859,5 +1106,12 @@ public sealed class LocalFactIngestionService : ILocalFactIngestionService
             DateTimeKind.Local => value.ToUniversalTime(),
             _ => DateTime.SpecifyKind(value, DateTimeKind.Utc)
         };
+    }
+
+    private static TimeSpan NormalizeTimeout(TimeSpan? candidate, TimeSpan fallback)
+    {
+        return candidate.HasValue && candidate.Value > TimeSpan.Zero
+            ? candidate.Value
+            : fallback;
     }
 }

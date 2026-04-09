@@ -1,3 +1,4 @@
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using SimplerJiangAiAgent.Api.Data;
 using SimplerJiangAiAgent.Api.Data.Entities;
@@ -54,5 +55,39 @@ public sealed class StockDetailCacheQueriesTests
             result,
             item => Assert.Equal(new TimeSpan(9, 30, 0), item.Time),
             item => Assert.Equal(new TimeSpan(9, 31, 0), item.Time));
+    }
+
+    [Fact]
+    public async Task GetLatestMinuteLinesAsync_WorksWithSqliteAndAppliesTakeInAscendingOrder()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var dbContext = CreateSqliteDbContext(connection);
+        dbContext.MinuteLinePoints.AddRange(
+            new MinuteLinePointEntity { Symbol = "sh600000", Date = new DateOnly(2026, 3, 12), Time = new TimeSpan(9, 30, 0), Price = 10, AveragePrice = 10, Volume = 10 },
+            new MinuteLinePointEntity { Symbol = "sh600000", Date = new DateOnly(2026, 3, 13), Time = new TimeSpan(10, 0, 0), Price = 13, AveragePrice = 12.5m, Volume = 13 },
+            new MinuteLinePointEntity { Symbol = "sh600000", Date = new DateOnly(2026, 3, 13), Time = new TimeSpan(9, 31, 0), Price = 12, AveragePrice = 11.5m, Volume = 12 },
+            new MinuteLinePointEntity { Symbol = "sh600000", Date = new DateOnly(2026, 3, 13), Time = new TimeSpan(9, 30, 0), Price = 11, AveragePrice = 11, Volume = 11 });
+        await dbContext.SaveChangesAsync();
+
+        var result = await StockDetailCacheQueries.GetLatestMinuteLinesAsync(dbContext, "sh600000", 2);
+
+        Assert.Equal(2, result.Count);
+        Assert.All(result, item => Assert.Equal(new DateOnly(2026, 3, 13), item.Date));
+        Assert.Collection(
+            result,
+            item => Assert.Equal(new TimeSpan(9, 30, 0), item.Time),
+            item => Assert.Equal(new TimeSpan(9, 31, 0), item.Time));
+    }
+
+    private static AppDbContext CreateSqliteDbContext(SqliteConnection connection)
+    {
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseSqlite(connection)
+            .Options;
+
+        var dbContext = new AppDbContext(options);
+        dbContext.Database.EnsureCreated();
+        return dbContext;
     }
 }

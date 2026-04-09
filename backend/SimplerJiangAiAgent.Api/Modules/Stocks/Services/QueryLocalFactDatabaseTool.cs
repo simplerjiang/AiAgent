@@ -15,19 +15,24 @@ public interface IQueryLocalFactDatabaseTool
 
 public sealed class QueryLocalFactDatabaseTool : IQueryLocalFactDatabaseTool
 {
-    private readonly AppDbContext _dbContext;
+    private readonly DbContextOptions<AppDbContext> _dbContextOptions;
     private readonly ILocalFactArticleReadService _articleReadService;
 
-    public QueryLocalFactDatabaseTool(AppDbContext dbContext, ILocalFactArticleReadService articleReadService)
+    public QueryLocalFactDatabaseTool(
+        DbContextOptions<AppDbContext> dbContextOptions,
+        ILocalFactArticleReadService articleReadService)
     {
-        _dbContext = dbContext;
+        _dbContextOptions = dbContextOptions;
         _articleReadService = articleReadService;
     }
 
+    private AppDbContext CreateDbContext() => new(_dbContextOptions);
+
     public async Task<LocalFactPackageDto> QueryAsync(string symbol, CancellationToken cancellationToken = default)
     {
+        await using var dbContext = CreateDbContext();
         var normalized = StockSymbolNormalizer.Normalize(symbol);
-        var companyProfile = await _dbContext.StockCompanyProfiles
+        var companyProfile = await dbContext.StockCompanyProfiles
             .AsNoTracking()
             .Where(item => item.Symbol == normalized)
             .OrderByDescending(item => item.FundamentalUpdatedAt ?? item.UpdatedAt)
@@ -41,7 +46,7 @@ public sealed class QueryLocalFactDatabaseTool : IQueryLocalFactDatabaseTool
             .FirstOrDefaultAsync(cancellationToken);
         var stockName = companyProfile?.Name;
 
-        var stockNewsRows = await _dbContext.LocalStockNews
+        var stockNewsRows = await dbContext.LocalStockNews
             .Where(item => item.Symbol == normalized)
             .OrderByDescending(item => item.PublishTime)
             .Take(40)
@@ -84,7 +89,7 @@ public sealed class QueryLocalFactDatabaseTool : IQueryLocalFactDatabaseTool
             })
             .ToList();
 
-        var sectorReportRows = await _dbContext.LocalSectorReports
+        var sectorReportRows = await dbContext.LocalSectorReports
             .Where(item => item.Symbol == normalized && item.Level == "sector")
             .OrderByDescending(item => item.PublishTime)
             .Take(12)
@@ -126,7 +131,7 @@ public sealed class QueryLocalFactDatabaseTool : IQueryLocalFactDatabaseTool
 
         if (sectorReports.Count == 0 && !string.IsNullOrWhiteSpace(fallbackSectorName))
         {
-            sectorReports = (await BuildSectorFallbackReportsAsync(normalized, fallbackSectorName!, cancellationToken))
+            sectorReports = (await BuildSectorFallbackReportsAsync(dbContext, normalized, fallbackSectorName!, cancellationToken))
                 .Select(item => new
                 {
                     SectorName = (string?)fallbackSectorName,
@@ -135,7 +140,7 @@ public sealed class QueryLocalFactDatabaseTool : IQueryLocalFactDatabaseTool
                 .ToList();
         }
 
-        var marketReportRows = await _dbContext.LocalSectorReports
+        var marketReportRows = await dbContext.LocalSectorReports
             .Where(item => item.Level == "market")
             .OrderByDescending(item => item.PublishTime)
             .Take(12)
@@ -143,9 +148,9 @@ public sealed class QueryLocalFactDatabaseTool : IQueryLocalFactDatabaseTool
 
         await _articleReadService.PrepareAsync(marketReportRows, cancellationToken);
 
-        if (_dbContext.ChangeTracker.HasChanges())
+        if (dbContext.ChangeTracker.HasChanges())
         {
-            await _dbContext.SaveChangesAsync(cancellationToken);
+            await dbContext.SaveChangesAsync(cancellationToken);
         }
 
         var marketReports = marketReportRows
@@ -190,6 +195,7 @@ public sealed class QueryLocalFactDatabaseTool : IQueryLocalFactDatabaseTool
     }
 
     private async Task<IReadOnlyList<LocalNewsItemDto>> BuildSectorFallbackReportsAsync(
+        AppDbContext dbContext,
         string symbol,
         string sectorName,
         CancellationToken cancellationToken)
@@ -197,7 +203,7 @@ public sealed class QueryLocalFactDatabaseTool : IQueryLocalFactDatabaseTool
         var normalizedSymbol = StockSymbolNormalizer.Normalize(symbol);
         var bareSymbol = StripExchangePrefix(normalizedSymbol);
 
-        var sectorCandidates = await _dbContext.SectorRotationSnapshots
+        var sectorCandidates = await dbContext.SectorRotationSnapshots
             .AsNoTracking()
             .Where(item =>
                 item.SectorName == sectorName
@@ -214,11 +220,11 @@ public sealed class QueryLocalFactDatabaseTool : IQueryLocalFactDatabaseTool
 
         if (snapshot is null)
         {
-            var leaderCandidates = await _dbContext.SectorRotationLeaderSnapshots
+            var leaderCandidates = await dbContext.SectorRotationLeaderSnapshots
                 .AsNoTracking()
                 .Where(item => item.Symbol == bareSymbol || item.Symbol == normalizedSymbol)
                 .Join(
-                    _dbContext.SectorRotationSnapshots.AsNoTracking(),
+                    dbContext.SectorRotationSnapshots.AsNoTracking(),
                     leader => leader.SectorRotationSnapshotId,
                     sector => sector.Id,
                     (_, sector) => sector)
@@ -234,10 +240,10 @@ public sealed class QueryLocalFactDatabaseTool : IQueryLocalFactDatabaseTool
 
         if (snapshot is null)
         {
-            return await BuildMarketContextFallbackReportsAsync(sectorName, cancellationToken);
+            return await BuildMarketContextFallbackReportsAsync(dbContext, sectorName, cancellationToken);
         }
 
-        var leaders = await _dbContext.SectorRotationLeaderSnapshots
+        var leaders = await dbContext.SectorRotationLeaderSnapshots
             .AsNoTracking()
             .Where(item => item.SectorRotationSnapshotId == snapshot.Id)
             .OrderBy(item => item.RankInSector)
@@ -298,10 +304,11 @@ public sealed class QueryLocalFactDatabaseTool : IQueryLocalFactDatabaseTool
     }
 
     private async Task<IReadOnlyList<LocalNewsItemDto>> BuildMarketContextFallbackReportsAsync(
+        AppDbContext dbContext,
         string sectorName,
         CancellationToken cancellationToken)
     {
-        var marketRows = await _dbContext.LocalSectorReports
+        var marketRows = await dbContext.LocalSectorReports
             .AsNoTracking()
             .Where(item => item.Level == "market")
             .OrderByDescending(item => item.PublishTime)
@@ -456,13 +463,14 @@ public sealed class QueryLocalFactDatabaseTool : IQueryLocalFactDatabaseTool
 
     public async Task<LocalNewsBucketDto> QueryMarketAsync(CancellationToken cancellationToken = default)
     {
+        await using var dbContext = CreateDbContext();
         // Load a broader candidate set, then apply diversity-aware selection in memory
         // so that multiple sources are represented rather than one source dominating.
         const int candidatePoolSize = 200;
         const int displayLimit = 30;
         var freshnessThreshold = DateTime.UtcNow.AddDays(-7);
 
-        var candidates = await _dbContext.LocalSectorReports
+        var candidates = await dbContext.LocalSectorReports
             .Where(item => item.Level == "market")
             .Where(item => item.PublishTime >= freshnessThreshold)
             .OrderByDescending(item => item.PublishTime)
@@ -555,12 +563,13 @@ public sealed class QueryLocalFactDatabaseTool : IQueryLocalFactDatabaseTool
         var normalizedLevel = NormalizeArchiveLevel(level);
         var normalizedSentiment = NormalizeArchiveSentiment(sentiment);
         var normalizedKeyword = string.IsNullOrWhiteSpace(keyword) ? null : keyword.Trim();
+        await using var dbContext = CreateDbContext();
 
         var archiveItems = new List<LocalNewsArchiveItemDto>();
 
         if (normalizedLevel is null or "stock")
         {
-            var stockQuery = _dbContext.LocalStockNews.AsNoTracking().AsQueryable();
+            var stockQuery = dbContext.LocalStockNews.AsNoTracking().AsQueryable();
 
             if (normalizedSentiment is not null)
             {
@@ -609,7 +618,7 @@ public sealed class QueryLocalFactDatabaseTool : IQueryLocalFactDatabaseTool
 
         if (normalizedLevel != "stock")
         {
-            var reportQuery = _dbContext.LocalSectorReports.AsNoTracking().AsQueryable();
+            var reportQuery = dbContext.LocalSectorReports.AsNoTracking().AsQueryable();
 
             if (normalizedLevel is not null)
             {

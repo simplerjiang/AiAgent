@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using System.Runtime.CompilerServices;
 using SimplerJiangAiAgent.Api.Data;
 using SimplerJiangAiAgent.Api.Data.Entities;
 using SimplerJiangAiAgent.Api.Infrastructure.Jobs;
@@ -9,6 +10,8 @@ namespace SimplerJiangAiAgent.Api.Tests;
 
 public sealed class TradingPlanServicesTests
 {
+    private static readonly ConditionalWeakTable<AppDbContext, DbContextOptions<AppDbContext>> ContextOptionsMap = new();
+
     [Fact]
     public async Task BuildDraftAsync_MapsCommanderFieldsAndDeterministicPrices()
     {
@@ -122,7 +125,7 @@ public sealed class TradingPlanServicesTests
         await dbContext.SaveChangesAsync();
 
         var historyService = new StockAgentHistoryService(dbContext);
-        var service = new TradingPlanDraftService(historyService, new StockMarketContextService(dbContext));
+        var service = new TradingPlanDraftService(historyService, CreateMarketContextService(dbContext));
 
         var draft = await service.BuildDraftAsync("sz000021", history.Id);
 
@@ -143,6 +146,85 @@ public sealed class TradingPlanServicesTests
         Assert.NotNull(draft.MarketContext);
         Assert.Equal("主升", draft.MarketContext!.StageLabel);
         Assert.True(draft.MarketContext.IsMainlineAligned);
+    }
+
+    [Fact]
+    public async Task GetLatestAsync_ReturnsAlignedMainlineContext()
+    {
+        await using var dbContext = CreateDbContext();
+        dbContext.StockQuoteSnapshots.Add(new StockQuoteSnapshot
+        {
+          Symbol = "sz000021",
+          Name = "深科技",
+          Price = 12.5m,
+          Change = 0.1m,
+          ChangePercent = 0.8m,
+          SectorName = "机器人",
+          Timestamp = DateTime.UtcNow
+        });
+        dbContext.MarketSentimentSnapshots.Add(new MarketSentimentSnapshot
+        {
+          TradingDate = new DateTime(2026, 3, 15),
+          SnapshotTime = new DateTime(2026, 3, 15, 7, 0, 0, DateTimeKind.Utc),
+          SessionPhase = "盘后",
+          StageLabel = "主升",
+          StageLabelV2 = "主升",
+          StageScore = 78m,
+          StageConfidence = 82m,
+          CreatedAt = DateTime.UtcNow,
+          SourceTag = "test"
+        });
+        dbContext.SectorRotationSnapshots.AddRange(
+            new SectorRotationSnapshot
+            {
+              TradingDate = new DateTime(2026, 3, 15),
+              SnapshotTime = new DateTime(2026, 3, 15, 7, 0, 0, DateTimeKind.Utc),
+              BoardType = "concept",
+              SectorCode = "BK001",
+              SectorName = "机器人",
+              RankNo = 1,
+              StrengthScore = 82m,
+              StrengthAvg5d = 76m,
+              StrengthAvg10d = 72m,
+              DiffusionRate = 80m,
+              MainlineScore = 78m,
+              IsMainline = true,
+              NewsSentiment = "利好",
+              SourceTag = "test",
+              CreatedAt = DateTime.UtcNow
+            },
+            new SectorRotationSnapshot
+            {
+              TradingDate = new DateTime(2026, 3, 15),
+              SnapshotTime = new DateTime(2026, 3, 15, 7, 0, 0, DateTimeKind.Utc),
+              BoardType = "concept",
+              SectorCode = "BK002",
+              SectorName = "半导体",
+              RankNo = 2,
+              StrengthScore = 75m,
+              StrengthAvg5d = 70m,
+              StrengthAvg10d = 68m,
+              DiffusionRate = 66m,
+              MainlineScore = 70m,
+              IsMainline = false,
+              NewsSentiment = "中性",
+              SourceTag = "test",
+              CreatedAt = DateTime.UtcNow
+            });
+        await dbContext.SaveChangesAsync();
+
+        var result = await CreateMarketContextService(dbContext).GetLatestAsync("000021");
+
+        Assert.NotNull(result);
+        Assert.Equal("主升", result!.StageLabel);
+        Assert.Equal(82m, result.StageConfidence);
+        Assert.Equal("机器人", result.StockSectorName);
+        Assert.Equal("机器人", result.MainlineSectorName);
+        Assert.Equal("BK001", result.SectorCode);
+        Assert.Equal(78m, result.MainlineScore);
+        Assert.Equal("积极执行", result.ExecutionFrequencyLabel);
+        Assert.False(result.CounterTrendWarning);
+        Assert.True(result.IsMainlineAligned);
     }
 
     [Fact]
@@ -230,7 +312,7 @@ public sealed class TradingPlanServicesTests
         });
         await dbContext.SaveChangesAsync();
 
-        var service = new TradingPlanDraftService(new StockAgentHistoryService(dbContext), new StockMarketContextService(dbContext));
+        var service = new TradingPlanDraftService(new StockAgentHistoryService(dbContext), CreateMarketContextService(dbContext));
 
         var draft = await service.BuildDraftAsync("sz000001", history.Id);
 
@@ -332,7 +414,7 @@ public sealed class TradingPlanServicesTests
         });
         await dbContext.SaveChangesAsync();
 
-        var service = new TradingPlanDraftService(new StockAgentHistoryService(dbContext), new StockMarketContextService(dbContext));
+        var service = new TradingPlanDraftService(new StockAgentHistoryService(dbContext), CreateMarketContextService(dbContext));
 
         var draft = await service.BuildDraftAsync("sz000021", history.Id);
 
@@ -368,7 +450,7 @@ public sealed class TradingPlanServicesTests
         dbContext.StockAgentAnalysisHistories.Add(history);
         await dbContext.SaveChangesAsync();
 
-        var service = new TradingPlanDraftService(new StockAgentHistoryService(dbContext), new StockMarketContextService(dbContext));
+        var service = new TradingPlanDraftService(new StockAgentHistoryService(dbContext), CreateMarketContextService(dbContext));
 
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() => service.BuildDraftAsync("sh600000", history.Id));
 
@@ -434,7 +516,7 @@ public sealed class TradingPlanServicesTests
         await dbContext.SaveChangesAsync();
 
         var watchlistService = new ActiveWatchlistService(dbContext);
-        var service = new TradingPlanService(dbContext, watchlistService, new StockMarketContextService(dbContext));
+        var service = new TradingPlanService(dbContext, watchlistService, CreateMarketContextService(dbContext));
 
         var result = await service.CreateAsync(new TradingPlanCreateDto(
             "sh600000",
@@ -491,7 +573,7 @@ public sealed class TradingPlanServicesTests
         dbContext.TradingPlans.Add(plan);
         await dbContext.SaveChangesAsync();
 
-        var service = new TradingPlanService(dbContext, new ActiveWatchlistService(dbContext), new StockMarketContextService(dbContext));
+        var service = new TradingPlanService(dbContext, new ActiveWatchlistService(dbContext), CreateMarketContextService(dbContext));
 
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() => service.UpdateAsync(
             plan.Id,
@@ -533,7 +615,7 @@ public sealed class TradingPlanServicesTests
         dbContext.TradingPlans.Add(plan);
         await dbContext.SaveChangesAsync();
 
-        var service = new TradingPlanService(dbContext, new ActiveWatchlistService(dbContext), new StockMarketContextService(dbContext));
+        var service = new TradingPlanService(dbContext, new ActiveWatchlistService(dbContext), CreateMarketContextService(dbContext));
 
         var updated = await service.UpdateAsync(
           plan.Id,
@@ -577,7 +659,7 @@ public sealed class TradingPlanServicesTests
         dbContext.TradingPlans.Add(plan);
         await dbContext.SaveChangesAsync();
 
-        var service = new TradingPlanService(dbContext, new ActiveWatchlistService(dbContext), new StockMarketContextService(dbContext));
+        var service = new TradingPlanService(dbContext, new ActiveWatchlistService(dbContext), CreateMarketContextService(dbContext));
 
         var resumed = await service.ResumeAsync(plan.Id);
 
@@ -593,8 +675,22 @@ public sealed class TradingPlanServicesTests
             .UseInMemoryDatabase(Guid.NewGuid().ToString("N"))
             .Options;
 
-        return new AppDbContext(options);
+      var context = new AppDbContext(options);
+      ContextOptionsMap.Add(context, options);
+      return context;
     }
+
+      private static StockMarketContextService CreateMarketContextService(AppDbContext dbContext)
+      {
+      return new StockMarketContextService(GetOptions(dbContext));
+    }
+
+    private static DbContextOptions<AppDbContext> GetOptions(AppDbContext dbContext)
+    {
+      return ContextOptionsMap.TryGetValue(dbContext, out var options)
+        ? options
+        : throw new InvalidOperationException("Missing AppDbContext options for test instance.");
+      }
 
     [Fact]
     public async Task DeleteAsync_RemovesPlan()
@@ -614,7 +710,7 @@ public sealed class TradingPlanServicesTests
         await dbContext.SaveChangesAsync();
 
         var planId = await dbContext.TradingPlans.Select(item => item.Id).SingleAsync();
-        var service = new TradingPlanService(dbContext, new ActiveWatchlistService(dbContext), new StockMarketContextService(dbContext));
+        var service = new TradingPlanService(dbContext, new ActiveWatchlistService(dbContext), CreateMarketContextService(dbContext));
 
         var removed = await service.DeleteAsync(planId);
 
@@ -661,7 +757,7 @@ public sealed class TradingPlanServicesTests
         });
         await dbContext.SaveChangesAsync();
 
-        var service = new TradingPlanService(dbContext, new ActiveWatchlistService(dbContext), new StockMarketContextService(dbContext));
+        var service = new TradingPlanService(dbContext, new ActiveWatchlistService(dbContext), CreateMarketContextService(dbContext));
 
         var items = await service.GetListAsync(null, 20);
 
@@ -709,7 +805,7 @@ public sealed class TradingPlanServicesTests
           });
         await dbContext.SaveChangesAsync();
 
-        var service = new TradingPlanService(dbContext, new ActiveWatchlistService(dbContext), new StockMarketContextService(dbContext));
+          var service = new TradingPlanService(dbContext, new ActiveWatchlistService(dbContext), CreateMarketContextService(dbContext));
 
         var items = await service.GetListAsync(null, 20);
 

@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using SimplerJiangAiAgent.Api.Data;
@@ -57,14 +58,36 @@ public sealed class SectorRotationQueryService : ISectorRotationQueryService
     public async Task<SectorRotationPageDto> GetSectorPageAsync(string boardType, int page, int pageSize, string sort, CancellationToken cancellationToken = default)
     {
         var normalizedBoardType = NormalizeBoardType(boardType);
+        var safePageSize = Math.Clamp(pageSize, 1, 50);
+        var safePage = Math.Max(1, page);
+        var latestMarketSnapshot = await _dbContext.MarketSentimentSnapshots
+            .AsNoTracking()
+            .OrderByDescending(x => x.SnapshotTime)
+            .Select(x => new LatestMarketSnapshotMarker(x.SnapshotTime, x.SourceTag, x.RawJson))
+            .FirstOrDefaultAsync(cancellationToken);
         var latestSnapshotTime = await _dbContext.SectorRotationSnapshots
             .AsNoTracking()
             .Where(x => x.BoardType == normalizedBoardType)
             .MaxAsync(x => (DateTime?)x.SnapshotTime, cancellationToken);
 
+        if (ShouldSuppressStaleSectorPage(latestMarketSnapshot, latestSnapshotTime))
+        {
+            var latestStatus = ReadSnapshotStatus(latestMarketSnapshot!.SourceTag, latestMarketSnapshot.RawJson);
+            return new SectorRotationPageDto(
+                normalizedBoardType,
+                safePage,
+                safePageSize,
+                0,
+                NormalizeSort(sort),
+                latestMarketSnapshot.SnapshotTime,
+                Array.Empty<SectorRotationListItemDto>(),
+                latestStatus.IsDegraded,
+                latestStatus.DegradeReason);
+        }
+
         if (latestSnapshotTime is null)
         {
-            return new SectorRotationPageDto(normalizedBoardType, 1, pageSize, 0, NormalizeSort(sort), null, Array.Empty<SectorRotationListItemDto>());
+            return new SectorRotationPageDto(normalizedBoardType, safePage, safePageSize, 0, NormalizeSort(sort), null, Array.Empty<SectorRotationListItemDto>());
         }
 
         var latestRows = await _dbContext.SectorRotationSnapshots
@@ -74,8 +97,6 @@ public sealed class SectorRotationQueryService : ISectorRotationQueryService
 
         var orderedRows = ApplySort(latestRows, sort).ToArray();
         var total = orderedRows.Length;
-        var safePageSize = Math.Clamp(pageSize, 1, 50);
-        var safePage = Math.Max(1, page);
         var items = orderedRows
             .Skip((safePage - 1) * safePageSize)
             .Take(safePageSize)
@@ -216,6 +237,8 @@ public sealed class SectorRotationQueryService : ISectorRotationQueryService
 
     private static MarketSentimentSummaryDto MapSummary(Data.Entities.MarketSentimentSnapshot item)
     {
+        var status = ReadSnapshotStatus(item);
+
         return new MarketSentimentSummaryDto(
             item.SnapshotTime,
             item.SessionPhase,
@@ -239,7 +262,9 @@ public sealed class SectorRotationQueryService : ISectorRotationQueryService
             item.Top3SectorTurnoverShare5dAvg,
             item.Top10SectorTurnoverShare5dAvg,
             item.LimitUpCount5dAvg,
-            item.BrokenBoardRate5dAvg);
+            item.BrokenBoardRate5dAvg,
+            status.IsDegraded,
+            status.DegradeReason);
     }
 
     private static Data.Entities.MarketSentimentSnapshot? SelectBestLatestSummarySnapshot(
@@ -255,20 +280,9 @@ public sealed class SectorRotationQueryService : ISectorRotationQueryService
             .Where(item => item.TradingDate.Date == latestTradingDate)
             .ToArray();
 
-        var latestBest = SelectBestSummarySnapshot(latestTradingDateRows);
-        if (latestBest is not null && GetSummaryIntegrityScore(latestBest) >= 4)
-        {
-            return latestBest;
-        }
-
-        return rows
-            .Where(item => GetSummaryIntegrityScore(item) >= 4)
-            .OrderByDescending(item => item.TradingDate)
-            .ThenByDescending(GetSummaryIntegrityScore)
-            .ThenByDescending(item => item.SnapshotTime)
-            .FirstOrDefault()
-            ?? latestBest
-            ?? rows.OrderByDescending(item => item.SnapshotTime).First();
+        return latestTradingDateRows
+            .OrderByDescending(item => item.SnapshotTime)
+            .FirstOrDefault();
     }
 
     private static Data.Entities.MarketSentimentSnapshot? SelectBestSummarySnapshot(
@@ -282,6 +296,12 @@ public sealed class SectorRotationQueryService : ISectorRotationQueryService
 
     private static int GetSummaryIntegrityScore(Data.Entities.MarketSentimentSnapshot item)
     {
+        var status = ReadSnapshotStatus(item);
+        if (status.IsCriticalSummaryIncomplete)
+        {
+            return 0;
+        }
+
         var score = 0;
         var breadthTotal = item.Advancers + item.Decliners + item.FlatCount;
         if (breadthTotal > 0)
@@ -306,6 +326,71 @@ public sealed class SectorRotationQueryService : ISectorRotationQueryService
 
         return score;
     }
+
+    private static bool ShouldSuppressStaleSectorPage(LatestMarketSnapshotMarker? latestMarketSnapshot, DateTime? latestSectorSnapshotTime)
+    {
+        if (latestMarketSnapshot is null)
+        {
+            return false;
+        }
+
+        var status = ReadSnapshotStatus(latestMarketSnapshot.SourceTag, latestMarketSnapshot.RawJson);
+        if (!status.IsDegraded)
+        {
+            return false;
+        }
+
+        return latestSectorSnapshotTime is null || latestSectorSnapshotTime.Value < latestMarketSnapshot.SnapshotTime;
+    }
+
+    private static MarketSnapshotStatus ReadSnapshotStatus(Data.Entities.MarketSentimentSnapshot item)
+        => ReadSnapshotStatus(item.SourceTag, item.RawJson);
+
+    private static MarketSnapshotStatus ReadSnapshotStatus(string? sourceTag, string? rawJson)
+    {
+        var isDegraded = !string.IsNullOrWhiteSpace(sourceTag)
+            && sourceTag.Contains("partial", StringComparison.OrdinalIgnoreCase);
+        var isCriticalSummaryIncomplete = false;
+        string? degradeReason = isDegraded ? "sync_incomplete" : null;
+
+        if (!string.IsNullOrWhiteSpace(rawJson))
+        {
+            try
+            {
+                using var document = JsonDocument.Parse(rawJson);
+                if (document.RootElement.TryGetProperty("status", out var statusElement))
+                {
+                    if (statusElement.TryGetProperty("isDegraded", out var isDegradedElement)
+                        && isDegradedElement.ValueKind is JsonValueKind.True or JsonValueKind.False)
+                    {
+                        isDegraded = isDegradedElement.GetBoolean();
+                    }
+
+                    if (statusElement.TryGetProperty("isCriticalSummaryIncomplete", out var isCriticalElement)
+                        && isCriticalElement.ValueKind is JsonValueKind.True or JsonValueKind.False)
+                    {
+                        isCriticalSummaryIncomplete = isCriticalElement.GetBoolean();
+                    }
+
+                    if (statusElement.TryGetProperty("degradeReason", out var degradeReasonElement)
+                        && degradeReasonElement.ValueKind == JsonValueKind.String)
+                    {
+                        degradeReason = degradeReasonElement.GetString();
+                    }
+                }
+            }
+            catch (JsonException)
+            {
+                // Ignore malformed legacy payloads and fall back to source tag based status.
+            }
+        }
+
+        return new MarketSnapshotStatus(isDegraded, isCriticalSummaryIncomplete, string.IsNullOrWhiteSpace(degradeReason) ? null : degradeReason);
+    }
+
+    private sealed record LatestMarketSnapshotMarker(DateTime SnapshotTime, string SourceTag, string? RawJson);
+
+    private sealed record MarketSnapshotStatus(bool IsDegraded, bool IsCriticalSummaryIncomplete, string? DegradeReason);
 
     private static SectorRotationListItemDto MapSectorItem(Data.Entities.SectorRotationSnapshot item)
     {

@@ -172,6 +172,7 @@ public sealed class JsonFileLlmSettingsStore : ILlmSettingsStore
                 : NormalizeProviderType(settings.ProviderType);
             existingSecrets.Provider = providerKey;
             existingSecrets.ProviderType = existingDefaults.ProviderType;
+            var isOllamaProvider = OllamaRuntimeDefaults.IsOllamaProvider(providerKey, existingDefaults.ProviderType);
 
             existingDefaults.BaseUrl = settings.BaseUrl?.Trim() ?? string.Empty;
 
@@ -184,6 +185,37 @@ public sealed class JsonFileLlmSettingsStore : ILlmSettingsStore
             existingDefaults.Organization = settings.Organization?.Trim() ?? string.Empty;
 
             existingDefaults.Project = settings.Project?.Trim() ?? string.Empty;
+
+            existingDefaults.OllamaNumCtx = isOllamaProvider
+                ? OllamaRuntimeDefaults.ResolveNumCtx(settings.OllamaNumCtx)
+                : NormalizePositiveInteger(settings.OllamaNumCtx);
+            existingDefaults.OllamaNumGpu = isOllamaProvider
+                ? OllamaRuntimeDefaults.ResolveNumGpu(settings.OllamaNumGpu)
+                : settings.OllamaNumGpu;
+            existingDefaults.OllamaKeepAlive = isOllamaProvider
+                ? OllamaRuntimeDefaults.ResolveKeepAlive(settings.OllamaKeepAlive)
+                : NormalizeOptionalText(settings.OllamaKeepAlive);
+            existingDefaults.OllamaNumPredict = isOllamaProvider
+                ? OllamaRuntimeDefaults.ResolveNumPredict(settings.OllamaNumPredict)
+                : NormalizeNumPredict(settings.OllamaNumPredict);
+            existingDefaults.OllamaTemperature = isOllamaProvider
+                ? OllamaRuntimeDefaults.ResolveTemperature(settings.OllamaTemperature)
+                : NormalizeNonNegativeNumber(settings.OllamaTemperature);
+            existingDefaults.OllamaTopK = isOllamaProvider
+                ? OllamaRuntimeDefaults.ResolveTopK(settings.OllamaTopK)
+                : NormalizePositiveInteger(settings.OllamaTopK);
+            existingDefaults.OllamaTopP = isOllamaProvider
+                ? OllamaRuntimeDefaults.ResolveTopP(settings.OllamaTopP)
+                : NormalizeProbability(settings.OllamaTopP);
+            existingDefaults.OllamaMinP = isOllamaProvider
+                ? OllamaRuntimeDefaults.ResolveMinP(settings.OllamaMinP)
+                : NormalizeZeroToOneNumber(settings.OllamaMinP);
+            existingDefaults.OllamaStop = isOllamaProvider
+                ? OllamaRuntimeDefaults.ResolveStop(settings.OllamaStop)
+                : NormalizeStopSequences(settings.OllamaStop);
+            existingDefaults.OllamaThink = isOllamaProvider
+                ? OllamaRuntimeDefaults.ResolveThink(settings.OllamaThink)
+                : settings.OllamaThink;
 
             existingDefaults.Enabled = settings.Enabled;
             existingDefaults.UpdatedAt = DateTimeOffset.UtcNow;
@@ -237,11 +269,12 @@ public sealed class JsonFileLlmSettingsStore : ILlmSettingsStore
         try
         {
             var document = await LoadDocumentAsync(_defaultsFilePath, cancellationToken, requireLock: false);
+            var normalizedProvider = string.IsNullOrWhiteSpace(provider) ? ActiveProviderAlias : provider.Trim();
             document.NewsCleansing = new NewsCleansingDocument
             {
-                Provider = string.IsNullOrWhiteSpace(provider) ? "active" : provider.Trim(),
+                Provider = normalizedProvider,
                 Model = model?.Trim() ?? "",
-                BatchSize = Math.Clamp(batchSize, 5, 20)
+                BatchSize = NormalizeNewsCleansingBatchSize(batchSize)
             };
             await SaveDocumentAsync(_defaultsFilePath, document, cancellationToken);
         }
@@ -396,6 +429,16 @@ public sealed class JsonFileLlmSettingsStore : ILlmSettingsStore
             ForceChinese = source.ForceChinese,
             Organization = source.Organization,
             Project = source.Project,
+            OllamaNumCtx = source.OllamaNumCtx,
+            OllamaNumGpu = source.OllamaNumGpu,
+            OllamaKeepAlive = source.OllamaKeepAlive,
+            OllamaNumPredict = source.OllamaNumPredict,
+            OllamaTemperature = source.OllamaTemperature,
+            OllamaTopK = source.OllamaTopK,
+            OllamaTopP = source.OllamaTopP,
+            OllamaMinP = source.OllamaMinP,
+            OllamaStop = source.OllamaStop,
+            OllamaThink = source.OllamaThink,
             Enabled = source.Enabled,
             UpdatedAt = source.UpdatedAt
         };
@@ -513,9 +556,78 @@ public sealed class JsonFileLlmSettingsStore : ILlmSettingsStore
             ForceChinese = source.ForceChinese,
             Organization = source.Organization,
             Project = source.Project,
+            OllamaNumCtx = source.OllamaNumCtx,
+            OllamaNumGpu = source.OllamaNumGpu,
+            OllamaKeepAlive = source.OllamaKeepAlive,
+            OllamaNumPredict = source.OllamaNumPredict,
+            OllamaTemperature = source.OllamaTemperature,
+            OllamaTopK = source.OllamaTopK,
+            OllamaTopP = source.OllamaTopP,
+            OllamaMinP = source.OllamaMinP,
+            OllamaStop = source.OllamaStop,
+            OllamaThink = source.OllamaThink,
             Enabled = source.Enabled,
             UpdatedAt = source.UpdatedAt
         };
+    }
+
+    private static int? NormalizePositiveInteger(int? value)
+    {
+        return value is > 0 ? value : null;
+    }
+
+    private static int? NormalizeNumPredict(int? value)
+    {
+        return value is >= -1 ? value : null;
+    }
+
+    private static double? NormalizeProbability(double? value)
+    {
+        if (!value.HasValue)
+        {
+            return null;
+        }
+
+        return value.Value is > 0 and <= 1 ? value : null;
+    }
+
+    private static double? NormalizeNonNegativeNumber(double? value)
+    {
+        if (!value.HasValue)
+        {
+            return null;
+        }
+
+        return value.Value >= 0 ? value : null;
+    }
+
+    private static double? NormalizeZeroToOneNumber(double? value)
+    {
+        if (!value.HasValue)
+        {
+            return null;
+        }
+
+        return value.Value is >= 0 and <= 1 ? value : null;
+    }
+
+    private static string[] NormalizeStopSequences(string[]? values)
+    {
+        if (values is null || values.Length == 0)
+        {
+            return Array.Empty<string>();
+        }
+
+        return values
+            .Select(value => value?.Trim() ?? string.Empty)
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static string NormalizeOptionalText(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim();
     }
 
     private static string NormalizeProviderKey(string provider)
@@ -539,6 +651,11 @@ public sealed class JsonFileLlmSettingsStore : ILlmSettingsStore
         return string.IsNullOrWhiteSpace(providerType)
             ? "openai"
             : providerType.Trim().ToLowerInvariant();
+    }
+
+    private static int NormalizeNewsCleansingBatchSize(int batchSize)
+    {
+        return Math.Clamp(batchSize, 5, 20);
     }
 
     private static string ResolveProviderKey(string? provider, LlmSettingsDocument document)

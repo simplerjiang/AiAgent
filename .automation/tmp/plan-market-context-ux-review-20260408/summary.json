@@ -1,0 +1,168 @@
+{
+  "generatedAt": "2026-04-07T16:27:26.407Z",
+  "baseUrl": "http://localhost:5119",
+  "searchSymbol": "600519",
+  "artifactDir": "C:\\Users\\kong\\AiAgent\\.automation\\tmp\\plan-market-context-ux-review-20260408",
+  "loading": {
+    "name": "loading",
+    "imagePath": "C:\\Users\\kong\\AiAgent\\.automation\\tmp\\plan-market-context-ux-review-20260408\\loading.png",
+    "headerTitle": "手动新建计划",
+    "headerSubtitle": "手动录入，确认后保存为 Pending 状态。",
+    "modalText": "手动新建计划手动录入，确认后保存为 Pending 状态。关闭股票名称方向LongShort触发价失效价止损价止盈价目标价预期催化失效条件风险上限分析摘要用户备注手动新建取消保存为 Pending 计划",
+    "marketHeading": "",
+    "marketStatus": "",
+    "marketCopy": "",
+    "marketPills": [],
+    "helperText": "",
+    "modalRect": {
+      "top": 745.4,
+      "left": 340,
+      "width": 920,
+      "height": 752.5,
+      "bottom": 1497.9
+    },
+    "marketRect": null,
+    "formRect": {
+      "top": 815.3,
+      "left": 357.8,
+      "width": 884.4,
+      "height": 616.4,
+      "bottom": 1431.7
+    },
+    "viewport": {
+      "width": 1600,
+      "height": 1200
+    },
+    "scroller": {
+      "scrollTop": 0,
+      "clientHeight": 750,
+      "scrollHeight": 750
+    },
+    "marketBeforeForm": false,
+    "marketVisibleInViewport": false
+  },
+  "success": {
+    "name": "success",
+    "imagePath": "C:\\Users\\kong\\AiAgent\\.automation\\tmp\\plan-market-context-ux-review-20260408\\success.png",
+    "headerTitle": "手动新建计划",
+    "headerSubtitle": "手动录入，确认后保存为 Pending 状态。",
+    "modalText": "手动新建计划手动录入，确认后保存为 Pending 状态。关闭股票名称方向LongShort触发价失效价止损价止盈价目标价预期催化失效条件风险上限分析摘要用户备注手动新建取消保存为 Pending 计划",
+    "marketHeading": "",
+    "marketStatus": "",
+    "marketCopy": "",
+    "marketPills": [],
+    "helperText": "",
+    "modalRect": {
+      "top": 745.4,
+      "left": 340,
+      "width": 920,
+      "height": 752.5,
+      "bottom": 1497.9
+    },
+    "marketRect": null,
+    "formRect": {
+      "top": 815.3,
+      "left": 357.8,
+      "width": 884.4,
+      "height": 616.4,
+      "bottom": 1431.7
+    },
+    "viewport": {
+      "width": 1600,
+      "height": 1200
+    },
+    "scroller": {
+      "scrollTop": 0,
+      "clientHeight": 750,
+      "scrollHeight": 750
+    },
+    "marketBeforeForm": false,
+    "marketVisibleInViewport": false
+  },
+  "fallback": {
+    "name": "fallback",
+    "imagePath": "C:\\Users\\kong\\AiAgent\\.automation\\tmp\\plan-market-context-ux-review-20260408\\fallback.png",
+    "headerTitle": "手动新建计划",
+    "headerSubtitle": "手动录入，确认后保存为 Pending 状态。",
+    "modalText": "手动新建计划手动录入，确认后保存为 Pending 状态。关闭股票名称方向LongShort触发价失效价止损价止盈价目标价预期催化失效条件风险上限分析摘要用户备注手动新建取消保存为 Pending 计划",
+    "marketHeading": "",
+    "marketStatus": "",
+    "marketCopy": "",
+    "marketPills": [],
+    "helperText": "",
+    "modalRect": {
+      "top": 745.4,
+      "left": 340,
+      "width": 920,
+      "height": 752.5,
+      "bottom": 1497.9
+    },
+    "marketRect": null,
+    "formRect": {
+      "top": 815.3,
+      "left": 357.8,
+      "width": 884.4,
+      "height": 616.4,
+      "bottom": 1431.7
+    },
+    "viewport": {
+      "width": 1600,
+      "height": 1200
+    },
+    "scroller": {
+      "scrollTop": 0,
+      "clientHeight": 750,
+      "scrollHeight": 750
+    },
+    "marketBeforeForm": false,
+    "marketVisibleInViewport": false,
+    "consoleMessages": [],
+    "pageErrors": []
+  },
+  "degraded": {
+    "name": "degraded-success",
+    "imagePath": "C:\\Users\\kong\\AiAgent\\.automation\\tmp\\plan-market-context-ux-review-20260408\\degraded-success.png",
+    "headerTitle": "手动新建计划",
+    "headerSubtitle": "手动录入，确认后保存为 Pending 状态。",
+    "modalText": "手动新建计划手动录入，确认后保存为 Pending 状态。关闭股票名称方向LongShort触发价失效价止损价止盈价目标价预期催化失效条件风险上限分析摘要用户备注手动新建取消保存为 Pending 计划",
+    "marketHeading": "",
+    "marketStatus": "",
+    "marketCopy": "",
+    "marketPills": [],
+    "helperText": "",
+    "modalRect": {
+      "top": 745.4,
+      "left": 340,
+      "width": 920,
+      "height": 752.5,
+      "bottom": 1497.9
+    },
+    "marketRect": null,
+    "formRect": {
+      "top": 815.3,
+      "left": 357.8,
+      "width": 884.4,
+      "height": 616.4,
+      "bottom": 1431.7
+    },
+    "viewport": {
+      "width": 1600,
+      "height": 1200
+    },
+    "scroller": {
+      "scrollTop": 0,
+      "clientHeight": 750,
+      "scrollHeight": 750
+    },
+    "marketBeforeForm": false,
+    "marketVisibleInViewport": false,
+    "consoleMessages": [],
+    "pageErrors": []
+  },
+  "runtime": {
+    "loadingAndSuccess": {
+      "consoleMessages": [],
+      "pageErrors": []
+    }
+  }
+}

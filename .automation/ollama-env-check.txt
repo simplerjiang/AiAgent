@@ -1,0 +1,28 @@
+USER_OLLAMA_MODELS=D:\ollama-models MACHINE_OLLAMA_MODELS=D:\ollama-models MODEL_DIR_EXISTS=True E_DIR_EXISTS=True
+
+   Id ProcessName Path                                                      
+   -- ----------- ----                                                      
+34708 ollama      C:\Users\kong\AppData\Local\Programs\Ollama\ollama.exe    
+37296 ollama      C:\Users\kong\AppData\Local\Programs\Ollama\ollama.exe    
+ 9272 ollama app  C:\Users\kong\AppData\Local\Programs\Ollama\ollama app.exe
+
+
+
+
+Name      Mode   LastWriteTime    
+----      ----   -------------    
+blobs     d----- 2026/4/6 16:27:43
+manifests d----- 2026/4/6 17:57:15
+
+
+
+
+
+Name : E
+Free : 293457485824
+Used : 499759845376
+Root : E:\
+
+
+
+

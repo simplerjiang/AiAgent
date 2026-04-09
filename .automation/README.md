@@ -27,6 +27,13 @@ prepare the workspace and record state so Copilot can follow the prompts reliabl
 4) Rollback if needed:
    - .\ .automation\scripts\rollback.ps1 -Force
 
+## Windows Runtime Quick Path
+- Choose one Windows runtime mode before launch and keep it fixed for the whole validation round.
+- Source validation: launch the current source/backend-served app directly, read the active port from the source startup log, validate against `http://localhost:<port>`, do not assume `5119`, and do not use `start-all.bat`.
+- Packaged desktop validation: run `.\start-all.bat`. It stops repo-owned processes, runs `scripts\publish-windows-package.ps1`, launches `artifacts\windows-package\SimplerJiangAiAgent.Desktop.exe`, and waits for `http://localhost:5119/api/health`.
+- If you switch modes, stop old repo-owned processes first and re-read the active port from the new startup log before continuing.
+- If packaging fails because files are locked, stop any process under `artifacts\windows-package` before rerunning `scripts\publish-windows-package.ps1`.
+
 ## Browser MCP
 Use CopilotBrowser MCP as the default UI validation tool against the backend-served frontend.
 It provides structured page snapshots, targeted clicks, console logs, and network request evidence with less setup than the Playwright Edge flow.
