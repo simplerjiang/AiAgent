@@ -1392,6 +1392,7 @@ watch(currentStockKey, (newKey) => {
                   :k-lines="detail.kLines"
                   :minute-lines="detail.minuteLines"
                   :base-price="Number(detail.quote.price) - Number(detail.quote.change)"
+                  :volume-ratio="detail.quote.volumeRatio"
                   :interval="interval"
                   :focused-view="chartActiveView"
                   @update:interval="interval = $event"

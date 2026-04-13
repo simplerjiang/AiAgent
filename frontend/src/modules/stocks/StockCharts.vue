@@ -28,6 +28,10 @@ const props = defineProps({
   aiLevels: {
     type: Object,
     default: null
+  },
+  volumeRatio: {
+    type: Number,
+    default: null
   }
 })
 

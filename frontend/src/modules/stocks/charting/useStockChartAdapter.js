@@ -137,8 +137,8 @@ const formatNumber = value => (Number.isFinite(Number(value)) ? Number(value) : 
 const formatSignedNumber = value => {
   const number = Number(value)
   if (!Number.isFinite(number)) return '-'
-  if (number === 0) return '0'
-  return `${number > 0 ? '+' : ''}${formatNumber(number)}`
+  if (number === 0) return '0.00'
+  return `${number > 0 ? '+' : ''}${number.toFixed(2)}`
 }
 
 const detectPrecision = values => {
@@ -478,12 +478,34 @@ export function useStockChartAdapter({ props, klineRef, minuteRef, featureVisibi
       })
 
       actionHandler = payload => {
-        if (!payload || !Number.isFinite(payload.timestamp) || !payload.kLineData || !containerRef.value) {
+        if (!payload || !containerRef.value || !chart) {
           hideHover()
           return
         }
 
-        const record = recordMap.get(payload.timestamp)
+        // klinecharts v10: payload only has {x, y, paneId}, derive data from coordinates
+        const x = payload.x ?? payload.realX
+        const y = payload.y
+        if (!Number.isFinite(x) || !Number.isFinite(y)) {
+          hideHover()
+          return
+        }
+
+        const points = chart.convertFromPixel([{ x, y }])
+        const point = Array.isArray(points) ? points[0] : points
+        if (!point || !Number.isFinite(point.dataIndex)) {
+          hideHover()
+          return
+        }
+
+        const allData = chart.getDataList()
+        const kLineData = allData[point.dataIndex]
+        if (!kLineData) {
+          hideHover()
+          return
+        }
+
+        const record = recordMap.get(kLineData.timestamp)
         if (!record) {
           hideHover()
           return
@@ -499,6 +521,9 @@ export function useStockChartAdapter({ props, klineRef, minuteRef, featureVisibi
             ? (((record.close - minuteBasePrice.value) / minuteBasePrice.value) * 100).toFixed(2)
             : '-'
 
+          const vr = props.volumeRatio
+          const vrText = Number.isFinite(vr) && vr > 0 ? `量比: ${Number(vr).toFixed(2)}` : null
+
           hoverRef.value = {
             visible: true,
             x: pointX,
@@ -507,7 +532,8 @@ export function useStockChartAdapter({ props, klineRef, minuteRef, featureVisibi
               record.label,
               `${formatNumber(record.close)}`,
               `成交量: ${formatHands(record.volume ?? 0)}`,
-              `涨跌幅: ${changePercent}%`
+              ...(vrText ? [vrText] : []),
+              `涨跌幅: ${Number(changePercent) > 0 ? '+' : ''}${changePercent}%`
             ]
           }
           return
@@ -534,12 +560,13 @@ export function useStockChartAdapter({ props, klineRef, minuteRef, featureVisibi
             `MA5: ${Number.isFinite(record.ma5) ? record.ma5 : '-'}`,
             `MA10: ${Number.isFinite(record.ma10) ? record.ma10 : '-'}`,
             `涨跌: ${formatSignedNumber(priceChange)}`,
-            `涨跌幅: ${changePercent}%`
+            `涨跌幅: ${Number(changePercent) > 0 ? '+' : ''}${changePercent}%`
           ]
         }
       }
 
       chart.subscribeAction('onCrosshairChange', actionHandler)
+
       return chart
     }
 
