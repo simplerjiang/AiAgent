@@ -111,8 +111,9 @@ docs/      截图与补充文档
 - 财务数据中心与独立 Financial Worker
 - Ollama 本地模型启停、模型拉取、keepAlive 管理，以及 `num_ctx / keep_alive / num_predict / temperature / top_k / top_p / min_p / stop / think` 等请求级高级参数
 - **v0.3.0**：修复本地模型完整 AI 分析卡住问题（NumPredict 256→2048、Research 场景 MaxOutputTokens=4096 + ResponseFormat=Json + 180s 超时保护）；修复前端轮询取消风暴；Research 实体 Unicode 支持 CJK；JSON 渲染容错
+- **v0.3.1**：修复图表 hover tooltip 不显示的问题（适配 klinecharts v10 API），K 线蜡烛悬浮显示完整 OHLC + 涨跌幅 + 最高最低价；分时图悬浮显示价格 + 涨跌幅 + 量比
 
-当前最新发布版本为 **v0.3.0**（2026-04-09），详见 [GitHub Releases](https://github.com/simplerjiang/StockCopilot/releases)。
+当前最新发布版本为 **v0.3.1**（2026-04-11），详见 [GitHub Releases](https://github.com/simplerjiang/StockCopilot/releases)。
 
 ## 安装
 
