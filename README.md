@@ -115,8 +115,21 @@ docs/      截图与补充文档
 - **v0.3.2**：散户热度反向指标——基于东方财富/新浪/淘股吧三平台论坛帖量计算散户关注热度，K 线图子窗格展示热度曲线与信号标注；支持 60 个交易日历史回填与零填充；实时进度条显示回填状态
 - **v0.3.3**：SocialSentimentMcp 增强——ForumPostCount/HeatRatio/HeatSignal/PlatformCount 四维特征输出至 LLM，交易提示模板添加散户情绪反向参考步骤
 - **v0.3.4**：FinancialWorker 进程监控——主程序自动检测并管理 Worker 进程生命周期（心跳 10s、崩溃自动重启）；管理面板增加「工作者」标签，支持启动/停止/重启控制与运行时长显示；新增运行时日志控制台（内存环形缓冲区 + 增量轮询 + 级别筛选 + 自动滚动）
+- **v0.3.5**：市场数据恢复与审计透明化——板块排行切换 bkzj 双键（f3+f62）；maxStreak 切换 THS 主路径（保留回退）；totalTurnover 切换至 eastmoney_market_fs_sh_sz（ulist secids 聚合）；成交额链路与广度链路解耦；`/api/market/audit` 扩展 reasons 与来源状态；前端补齐降级文案快照时间、BK 代码展示、龙头跳转、交易计划快照时间；smoke 5 源验证通过
 
-当前最新发布版本为 **v0.3.4**（2026-04-14），详见 [GitHub Releases](https://github.com/simplerjiang/StockCopilot/releases)。
+### 市场数据恢复任务状态（2026-04-17）
+
+- [x] 已完成：板块排行切到 bkzj 双键（f3+f62）
+- [x] 已完成：maxStreak 切到 ths_continuous_limit_up（保留回退）
+- [x] 已完成：totalTurnover 切到 eastmoney_market_fs_sh_sz（ulist secids 聚合）
+- [x] 已完成：`/api/market/audit` 扩展 sources/bySource/recentSyncs/reasons
+- [x] 已完成：前端降级文案与快照时间显示、BK代码展示、龙头跳转、交易计划弹窗快照时间
+- [x] 已完成：smoke 脚本已补齐并能产生日志
+- [ ] 待完成：盘中 3 轮全绿验收（4/21-4/23）
+
+当前状态：代码与离线验收已就绪，待盘中最终放行。
+
+当前最新发布版本为 **v0.3.5**（2026-04-17），详见 [GitHub Releases](https://github.com/simplerjiang/StockCopilot/releases)。
 
 ## 安装
 

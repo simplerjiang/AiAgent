@@ -1,4 +1,5 @@
 using System.Net.Http;
+using System.Collections.Concurrent;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -256,11 +257,17 @@ public sealed class MarketModule : IModule
                 {
                     "market_breadth_unavailable" => "市场涨跌与涨跌停统计不可用（market breadth source unavailable）",
                     "market_turnover_unavailable" => "市场总成交额不可用（market turnover source unavailable）",
+                    "eastmoney_market_fs_sh_sz" => "市场总成交额源（eastmoney_market_fs_sh_sz）不可用",
                     "limit_up_unavailable" => "涨停家数统计不可用",
                     "limit_down_unavailable" => "跌停家数统计不可用",
                     "broken_board_unavailable" => "炸板统计不可用",
                     "max_streak_unavailable" => "连板高度统计不可用",
+                    "ths_continuous_limit_up" => "同花顺连板高度源（ths_continuous_limit_up）不可用",
                     "sector_rankings_unavailable" => "板块排行总源不可用",
+                    "bkzj_board_rankings" => "板块排行总源（bkzj_board_rankings）不可用",
+                    "bkzj_board_rankings_concept" => "概念板块排行源（bkzj_board_rankings_concept）不可用",
+                    "bkzj_board_rankings_industry" => "行业板块排行源（bkzj_board_rankings_industry）不可用",
+                    "bkzj_board_rankings_style" => "风格板块排行源（bkzj_board_rankings_style）不可用",
                     "sector_rankings_concept_unavailable" => "概念板块排行源不可用",
                     "sector_rankings_industry_unavailable" => "行业板块排行源不可用",
                     "sector_rankings_style_unavailable" => "风格板块排行源不可用",
@@ -374,13 +381,201 @@ public sealed class MarketModule : IModule
 
 internal static class DataSourceTracker
 {
-    public static IReadOnlyList<DataSourceStatusSnapshot> GetAll() => Array.Empty<DataSourceStatusSnapshot>();
+    private const int MaxRecentSyncs = 20;
+    private static readonly ConcurrentDictionary<string, SourceState> Sources = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly ConcurrentDictionary<string, BoardState> BoardStates = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly object RecentSyncsLock = new();
+    private static readonly Queue<RecentSyncSnapshot> RecentSyncs = new();
+    private static ComputationSnapshot? _lastComputation;
 
-    public static IReadOnlyList<BoardStatsSnapshot> GetBoardStats() => Array.Empty<BoardStatsSnapshot>();
+    public static IReadOnlyList<DataSourceStatusSnapshot> GetAll()
+    {
+        return Sources
+            .OrderBy(item => item.Key, StringComparer.OrdinalIgnoreCase)
+            .Select(item => new DataSourceStatusSnapshot(
+                item.Key,
+                item.Value.Status,
+                item.Value.LastSuccess,
+                item.Value.LastError,
+                item.Value.ConsecutiveFailures,
+                item.Value.AverageLatencyMs ?? 0d))
+            .ToArray();
+    }
 
-    public static IReadOnlyList<RecentSyncSnapshot> GetRecentSyncs() => Array.Empty<RecentSyncSnapshot>();
+    public static IReadOnlyList<BoardStatsSnapshot> GetBoardStats()
+    {
+        return BoardStates
+            .OrderBy(item => item.Key, StringComparer.OrdinalIgnoreCase)
+            .Select(item =>
+            {
+                var state = item.Value;
+                var successRate = state.TotalAttempts > 0 ? state.SuccessCount / (double)state.TotalAttempts : 0d;
+                var emptyRate = state.TotalAttempts > 0 ? state.EmptyCount / (double)state.TotalAttempts : 0d;
+                return new BoardStatsSnapshot(
+                    item.Key,
+                    state.TotalAttempts,
+                    state.SuccessCount,
+                    state.EmptyCount,
+                    successRate,
+                    emptyRate,
+                    state.ConsecutiveFailureCount,
+                    state.LastSuccessAt,
+                    state.LastUpdated);
+            })
+            .ToArray();
+    }
 
-    public static ComputationSnapshot? LastComputation => null;
+    public static IReadOnlyList<RecentSyncSnapshot> GetRecentSyncs()
+    {
+        lock (RecentSyncsLock)
+        {
+            return RecentSyncs.Reverse().ToArray();
+        }
+    }
+
+    public static ComputationSnapshot? LastComputation => _lastComputation;
+
+    public static void RecordSourceSuccess(string sourceKey, double? latencyMs = null)
+    {
+        if (string.IsNullOrWhiteSpace(sourceKey))
+        {
+            return;
+        }
+
+        Sources.AddOrUpdate(
+            sourceKey,
+            _ => new SourceState("ok", DateTimeOffset.UtcNow, null, 0, latencyMs),
+            (_, existing) => existing with
+            {
+                Status = "ok",
+                LastSuccess = DateTimeOffset.UtcNow,
+                LastError = null,
+                ConsecutiveFailures = 0,
+                AverageLatencyMs = UpdateLatency(existing.AverageLatencyMs, latencyMs)
+            });
+    }
+
+    public static void RecordSourceFailure(string sourceKey, Exception exception, double? latencyMs = null)
+    {
+        if (string.IsNullOrWhiteSpace(sourceKey))
+        {
+            return;
+        }
+
+        var message = exception is null
+            ? "Unknown error"
+            : $"{exception.GetType().Name}: {exception.Message}";
+        Sources.AddOrUpdate(
+            sourceKey,
+            _ => new SourceState("error", null, message, 1, latencyMs),
+            (_, existing) => existing with
+            {
+                Status = "error",
+                LastError = message,
+                ConsecutiveFailures = existing.ConsecutiveFailures + 1,
+                AverageLatencyMs = UpdateLatency(existing.AverageLatencyMs, latencyMs)
+            });
+    }
+
+    public static void RecordBoardFetch(string boardType, bool succeeded, bool isEmpty)
+    {
+        if (string.IsNullOrWhiteSpace(boardType))
+        {
+            return;
+        }
+
+        BoardStates.AddOrUpdate(
+            boardType,
+            _ => CreateInitialBoardState(succeeded, isEmpty),
+            (_, existing) => existing with
+            {
+                TotalAttempts = existing.TotalAttempts + 1,
+                SuccessCount = existing.SuccessCount + (succeeded ? 1 : 0),
+                EmptyCount = existing.EmptyCount + (isEmpty ? 1 : 0),
+                ConsecutiveFailureCount = succeeded ? 0 : existing.ConsecutiveFailureCount + 1,
+                LastSuccessAt = succeeded ? DateTimeOffset.UtcNow : existing.LastSuccessAt,
+                LastUpdated = DateTimeOffset.UtcNow
+            });
+    }
+
+    public static void RecordSync(
+        DateTimeOffset timestamp,
+        long durationMs,
+        DateTimeOffset tradingDate,
+        bool wasComplete,
+        IReadOnlyList<string> degradedSources,
+        int sectorRowCount,
+        decimal totalTurnover)
+    {
+        var snapshot = new RecentSyncSnapshot(
+            timestamp,
+            durationMs,
+            tradingDate,
+            wasComplete,
+            degradedSources,
+            sectorRowCount,
+            totalTurnover);
+
+        lock (RecentSyncsLock)
+        {
+            RecentSyncs.Enqueue(snapshot);
+            while (RecentSyncs.Count > MaxRecentSyncs)
+            {
+                _ = RecentSyncs.Dequeue();
+            }
+        }
+    }
+
+    public static void RecordComputation(
+        DateTimeOffset timestamp,
+        long durationMs,
+        DateTimeOffset tradingDate,
+        bool wasComplete,
+        IReadOnlyList<string> degradedSources)
+    {
+        _lastComputation = new ComputationSnapshot(timestamp, durationMs, tradingDate, wasComplete, degradedSources);
+    }
+
+    private static double? UpdateLatency(double? current, double? latencyMs)
+    {
+        if (latencyMs is null)
+        {
+            return current;
+        }
+
+        if (current is null)
+        {
+            return latencyMs;
+        }
+
+        return Math.Round(current.Value * 0.8d + latencyMs.Value * 0.2d, 3);
+    }
+
+    private static BoardState CreateInitialBoardState(bool succeeded, bool isEmpty)
+    {
+        return new BoardState(
+            1,
+            succeeded ? 1 : 0,
+            isEmpty ? 1 : 0,
+            succeeded ? 0 : 1,
+            succeeded ? DateTimeOffset.UtcNow : null,
+            DateTimeOffset.UtcNow);
+    }
+
+    private sealed record SourceState(
+        string Status,
+        DateTimeOffset? LastSuccess,
+        string? LastError,
+        int ConsecutiveFailures,
+        double? AverageLatencyMs);
+
+    private sealed record BoardState(
+        int TotalAttempts,
+        int SuccessCount,
+        int EmptyCount,
+        int ConsecutiveFailureCount,
+        DateTimeOffset? LastSuccessAt,
+        DateTimeOffset LastUpdated);
 }
 
 internal sealed record DataSourceStatusSnapshot(
