@@ -6,7 +6,7 @@ Targets (20 rounds by default):
 - bkzj_concept (mapped to source key bkzj_board_rankings_concept)
 - bkzj_style (mapped to source key bkzj_board_rankings_style)
 - ths_continuous_limit_up
-- eastmoney_market_fs_sh_sz
+- eastmoney_market_fs_sh_sz (audit recorded, final pass uses direct probe B)
 
 The script triggers `/api/market/sync` and inspects `/api/market/audit` for source status,
 then prints per-source stats and writes a timestamped JSON report under `logs/`.
@@ -48,6 +48,13 @@ TARGETS: Dict[str, str] = {
     "eastmoney_market_fs_sh_sz": "eastmoney_market_fs_sh_sz",
 }
 
+DIRECT_PROBE_TARGET = "eastmoney_market_fs_sh_sz"
+DIRECT_PROBE_URL = (
+    "https://push2.eastmoney.com/api/qt/ulist.np/get?"
+    "fltt=2&fields=f12,f13,f14,f2,f3,f4,f5,f6,f8,f9,f10,f15,f16,f124,f152&"
+    "secids=1.000001,0.399001"
+)
+
 
 @dataclass
 class RoundResult:
@@ -55,6 +62,7 @@ class RoundResult:
     timestamp_utc: str
     sync_ok: bool
     source_status: Dict[str, Optional[str]]
+    direct_probe: Dict[str, object]
     error: Optional[str]
 
 
@@ -89,6 +97,51 @@ def request_json(method: str, path: str) -> dict:
         raise HttpError(f"Invalid JSON @ {path}: {exc}") from exc
 
 
+def request_external_json(url: str) -> dict:
+    req = Request(url=url, method="GET")
+    req.add_header("User-Agent", "Mozilla/5.0")
+    req.add_header("Referer", "https://quote.eastmoney.com/")
+
+    try:
+        with urlopen(req, timeout=REQUEST_TIMEOUT_SECONDS) as resp:
+            body = resp.read().decode("utf-8", errors="replace")
+            if not body.strip():
+                return {}
+            return json.loads(body)
+    except HTTPError as exc:
+        raise HttpError(f"HTTP {exc.code} {exc.reason} @ direct probe") from exc
+    except URLError as exc:
+        raise HttpError(f"URL error @ direct probe: {exc.reason}") from exc
+    except json.JSONDecodeError as exc:
+        raise HttpError(f"Invalid JSON @ direct probe: {exc}") from exc
+
+
+def probe_direct_turnover_b() -> Dict[str, object]:
+    payload = request_external_json(DIRECT_PROBE_URL)
+    data = payload.get("data", {}) if isinstance(payload, dict) else {}
+    diff = data.get("diff", []) if isinstance(data, dict) else []
+    if not isinstance(diff, list):
+        raise HttpError("direct probe diff is not an array")
+
+    total_turnover = 0.0
+    valid_rows = 0
+    for item in diff:
+        if not isinstance(item, dict):
+            continue
+        try:
+            total_turnover += max(0.0, float(item.get("f6") or 0.0))
+            valid_rows += 1
+        except (TypeError, ValueError):
+            continue
+
+    return {
+        "ok": valid_rows >= 2 and total_turnover > 0,
+        "rowCount": len(diff),
+        "validRows": valid_rows,
+        "totalTurnover": round(total_turnover, 2),
+    }
+
+
 def api_is_ready() -> bool:
     try:
         request_json("GET", HEALTH_PATH)
@@ -112,8 +165,8 @@ def start_backend_if_needed(repo_root: Path) -> Tuple[Optional[subprocess.Popen]
     process = subprocess.Popen(
         cmd,
         cwd=str(repo_root),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
         stdin=subprocess.DEVNULL,
         text=True,
         encoding="utf-8",
@@ -122,25 +175,16 @@ def start_backend_if_needed(repo_root: Path) -> Tuple[Optional[subprocess.Popen]
     )
 
     deadline = time.time() + BOOT_WAIT_SECONDS
-    boot_lines: List[str] = []
 
     while time.time() < deadline:
         if process.poll() is not None:
-            if process.stdout is not None:
-                boot_lines.extend(process.stdout.readlines()[-40:])
-            snippet = "".join(boot_lines[-20:]).strip()
             raise RuntimeError(
                 "Backend process exited before health became ready. "
-                f"ExitCode={process.returncode}. Output tail:\n{snippet}"
+                f"ExitCode={process.returncode}."
             )
 
         if api_is_ready():
             return process, True
-
-        if process.stdout is not None:
-            line = process.stdout.readline()
-            if line:
-                boot_lines.append(line)
 
         time.sleep(HEALTH_POLL_SECONDS)
 
@@ -171,11 +215,13 @@ def run_probe(round_count: int) -> Tuple[List[RoundResult], Dict[str, dict]]:
         target: {"ok": 0, "fail": 0, "statuses": []}
         for target in TARGETS
     }
+    direct_probe_counter = {"ok": 0, "fail": 0, "results": []}
 
     for idx in range(1, round_count + 1):
         error: Optional[str] = None
         sync_ok = False
         source_status: Dict[str, Optional[str]] = {target: None for target in TARGETS}
+        direct_probe: Dict[str, object] = {"ok": False, "error": None}
 
         try:
             _ = request_json("POST", SYNC_PATH)
@@ -196,11 +242,21 @@ def run_probe(round_count: int) -> Tuple[List[RoundResult], Dict[str, dict]]:
                 else:
                     counters[target_name]["fail"] += 1
                 counters[target_name]["statuses"].append(status)
+
+            direct_probe = probe_direct_turnover_b()
+            if direct_probe.get("ok") is True:
+                direct_probe_counter["ok"] += 1
+            else:
+                direct_probe_counter["fail"] += 1
+            direct_probe_counter["results"].append(direct_probe)
         except Exception as exc:  # noqa: BLE001
             error = str(exc)
             for target_name in TARGETS:
                 counters[target_name]["fail"] += 1
                 counters[target_name]["statuses"].append(None)
+            direct_probe = {"ok": False, "error": error}
+            direct_probe_counter["fail"] += 1
+            direct_probe_counter["results"].append(direct_probe)
 
         rounds.append(
             RoundResult(
@@ -208,6 +264,7 @@ def run_probe(round_count: int) -> Tuple[List[RoundResult], Dict[str, dict]]:
                 timestamp_utc=utc_now_iso(),
                 sync_ok=sync_ok,
                 source_status=source_status,
+                direct_probe=direct_probe,
                 error=error,
             )
         )
@@ -218,6 +275,8 @@ def run_probe(round_count: int) -> Tuple[List[RoundResult], Dict[str, dict]]:
         fail = int(c["fail"])
         ok_rate = (ok / round_count) if round_count else 0.0
         passed = fail == 0 and ok == round_count
+        if target_name == DIRECT_PROBE_TARGET:
+            passed = False
         summary[target_name] = {
             "sourceKey": TARGETS[target_name],
             "ok": ok,
@@ -226,6 +285,17 @@ def run_probe(round_count: int) -> Tuple[List[RoundResult], Dict[str, dict]]:
             "pass": passed,
             "statuses": c["statuses"],
         }
+
+    direct_ok = int(direct_probe_counter["ok"])
+    direct_fail = int(direct_probe_counter["fail"])
+    summary[DIRECT_PROBE_TARGET]["directProbe"] = {
+        "ok": direct_ok,
+        "fail": direct_fail,
+        "okRate": round((direct_ok / round_count) if round_count else 0.0, 4),
+        "pass": direct_fail == 0 and direct_ok == round_count,
+        "results": direct_probe_counter["results"],
+    }
+    summary[DIRECT_PROBE_TARGET]["pass"] = summary[DIRECT_PROBE_TARGET]["directProbe"]["pass"]
 
     return rounds, summary
 
@@ -288,6 +358,7 @@ def main() -> int:
                 "timestampUtc": r.timestamp_utc,
                 "syncOk": r.sync_ok,
                 "sourceStatus": r.source_status,
+                "directProbe": r.direct_probe,
                 "error": r.error,
             }
             for r in rounds
