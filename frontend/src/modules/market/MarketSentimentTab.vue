@@ -531,6 +531,17 @@ const fetchAudit = async () => {
         consecutiveFailures: s.consecutiveFailures,
         latency: s.avgLatencyMs
       })),
+        latestSync: (() => {
+          const s = (raw.recentSyncs ?? [])[0]
+          if (!s) return null
+          return {
+            sourceHealthy: s.sourceHealthy ?? null,
+            businessComplete: s.businessComplete ?? s.wasComplete ?? null,
+            degradedSources: s.degradedSources ?? [],
+            sectorRowCount: s.sectorRowCount ?? null,
+            timestamp: s.timestamp ?? null
+          }
+        })(),
       formula: [
         `阶段评分 = ${raw.algorithm?.stageScore ?? ''}`,
         `扩散评分 = ${raw.algorithm?.diffusionScore ?? ''}`,
@@ -768,6 +779,7 @@ onUnmounted(() => { stopAutoRefresh() })
     <!-- 8. 数据审计面板 -->
     <DataAuditPanel
       :data-sources="auditData?.dataSources ?? []"
+      :latest-sync="auditData?.latestSync ?? null"
       :formula="auditData?.formula ?? ''"
       :computed-at="auditData?.computedAt ?? ''"
       :compute-duration-ms="auditData?.computeDurationMs ?? 0"

@@ -5,7 +5,8 @@ defineProps({
   dataSources: { type: Array, default: () => [] },
   formula: { type: String, default: '' },
   computedAt: { type: String, default: '' },
-  computeDurationMs: { type: Number, default: 0 }
+  computeDurationMs: { type: Number, default: 0 },
+  latestSync: { type: Object, default: null }
 })
 
 const expanded = ref(false)
@@ -60,6 +61,31 @@ const formatDate = value => {
             </tr>
           </tbody>
         </table>
+      </div>
+
+      <!-- 最近同步完整性 -->
+      <div v-if="latestSync" class="audit-section">
+        <h4>最近同步完整性</h4>
+        <div class="audit-sync-row">
+          <span class="sync-label">数据源采集</span>
+          <span :class="['sync-badge', latestSync.sourceHealthy === true ? 'badge-ok' : latestSync.sourceHealthy === false ? 'badge-err' : 'badge-na']">
+            {{ latestSync.sourceHealthy === true ? '✅ 全部成功' : latestSync.sourceHealthy === false ? '❌ 部分失败' : '--' }}
+          </span>
+        </div>
+        <div class="audit-sync-row">
+          <span class="sync-label">业务快照</span>
+          <span :class="['sync-badge', latestSync.businessComplete === true ? 'badge-ok' : latestSync.businessComplete === false ? 'badge-warn' : 'badge-na']">
+            {{ latestSync.businessComplete === true ? '✅ 完整' : latestSync.businessComplete === false ? '⚠️ 降级' : '--' }}
+          </span>
+        </div>
+        <div v-if="latestSync.businessComplete === false && latestSync.degradedSources && latestSync.degradedSources.length" class="audit-sync-degraded">
+          <span class="sync-label">降级原因</span>
+          <span class="sync-reasons">{{ latestSync.degradedSources.join('、') }}</span>
+        </div>
+        <div class="audit-sync-row">
+          <span class="sync-label">板块行数</span>
+          <span class="sync-value mono">{{ latestSync.sectorRowCount != null ? latestSync.sectorRowCount : '--' }}</span>
+        </div>
       </div>
 
       <!-- 算法公式 -->
@@ -165,4 +191,39 @@ const formatDate = value => {
   font-family: Consolas, Monaco, 'Courier New', monospace;
   line-height: 1.3;
 }
+.audit-sync-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+.audit-sync-degraded {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+.sync-label {
+  color: #b2bccf;
+  min-width: 72px;
+  flex-shrink: 0;
+  line-height: 1.3;
+}
+.sync-badge {
+  font-size: 12px;
+  line-height: 1.3;
+}
+.badge-ok { color: #4ade80; }
+.badge-err { color: #ff5c5c; }
+.badge-warn { color: #fbbf24; }
+.badge-na { color: #98a6bf; }
+.sync-reasons {
+  color: #fbbf24;
+  font-size: 11px;
+  line-height: 1.4;
+  word-break: break-all;
+}
+.sync-value { color: #e6eaf2; }
 </style>
