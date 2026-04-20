@@ -19,25 +19,22 @@ public interface IPortfolioSnapshotService
 public sealed class PortfolioSnapshotService : IPortfolioSnapshotService
 {
     private readonly AppDbContext _db;
+    private readonly IStockDataService _stockDataService;
 
-    public PortfolioSnapshotService(AppDbContext db)
+    public PortfolioSnapshotService(AppDbContext db, IStockDataService stockDataService)
     {
         _db = db;
+        _stockDataService = stockDataService;
     }
 
     public async Task<PortfolioSnapshotDto> GetSnapshotAsync()
     {
         var settings = await GetOrCreateSettingsAsync();
-        var positions = await _db.StockPositions
-            .AsNoTracking()
-            .Where(p => p.QuantityLots > 0)
-            .ToListAsync();
-
-        await EnrichMissingNamesAsync(positions);
+        var positions = await LoadActivePositionsAsync();
 
         var totalCapital = settings.TotalCapital;
         var totalCost = positions.Sum(p => p.TotalCost);
-        var totalMarketValue = positions.Sum(p => p.MarketValue ?? p.TotalCost);
+        var totalMarketValue = positions.Sum(GetMarketValueOrCost);
         var totalUnrealizedPnL = positions.Sum(p => p.UnrealizedPnL ?? 0);
         var availableCash = totalCapital - totalCost;
         var totalPositionRatio = totalCapital > 0 ? totalCost / totalCapital : 0;
@@ -67,12 +64,7 @@ public sealed class PortfolioSnapshotService : IPortfolioSnapshotService
     public async Task<IReadOnlyList<PositionItemDto>> GetPositionsAsync()
     {
         var settings = await GetOrCreateSettingsAsync();
-        var positions = await _db.StockPositions
-            .AsNoTracking()
-            .Where(p => p.QuantityLots > 0)
-            .ToListAsync();
-
-        await EnrichMissingNamesAsync(positions);
+        var positions = await LoadActivePositionsAsync();
 
         return positions.Select(p => MapPositionToDto(p, settings.TotalCapital)).ToList();
     }
@@ -86,7 +78,21 @@ public sealed class PortfolioSnapshotService : IPortfolioSnapshotService
 
         if (position is null) return null;
         await EnrichMissingNamesAsync(new List<StockPosition> { position });
+        await RefreshRealtimeMetricsAsync(new List<StockPosition> { position });
         return MapPositionToDto(position, settings.TotalCapital);
+    }
+
+    private async Task<List<StockPosition>> LoadActivePositionsAsync()
+    {
+        var positions = await _db.StockPositions
+            .AsNoTracking()
+            .Where(p => p.QuantityLots > 0)
+            .ToListAsync();
+
+        await EnrichMissingNamesAsync(positions);
+        await RefreshRealtimeMetricsAsync(positions);
+
+        return positions;
     }
 
     private async Task<UserPortfolioSettings> GetOrCreateSettingsAsync()
@@ -111,6 +117,70 @@ public sealed class PortfolioSnapshotService : IPortfolioSnapshotService
             p.Id, p.Symbol, p.Name, p.QuantityLots, p.AverageCostPrice,
             p.TotalCost, p.LatestPrice, p.MarketValue,
             p.UnrealizedPnL, p.UnrealizedReturnRate, positionRatio);
+    }
+
+    private async Task RefreshRealtimeMetricsAsync(List<StockPosition> positions)
+    {
+        if (positions.Count == 0)
+        {
+            return;
+        }
+
+        var quoteTasks = positions
+            .Where(p => !string.IsNullOrWhiteSpace(p.Symbol))
+            .Select(async position =>
+            {
+                try
+                {
+                    var quote = await _stockDataService.GetQuoteAsync(position.Symbol);
+                    return (Position: position, Quote: quote, Succeeded: true);
+                }
+                catch
+                {
+                    return (Position: position, Quote: default(StockQuoteDto), Succeeded: false);
+                }
+            })
+            .ToList();
+
+        if (quoteTasks.Count == 0)
+        {
+            return;
+        }
+
+        var quoteResults = await Task.WhenAll(quoteTasks);
+        foreach (var result in quoteResults)
+        {
+            if (!result.Succeeded || result.Quote is null || result.Quote.Price <= 0)
+            {
+                continue;
+            }
+
+            ApplyRealtimeQuote(result.Position, result.Quote);
+        }
+    }
+
+    private static void ApplyRealtimeQuote(StockPosition position, StockQuoteDto quote)
+    {
+        var latestPrice = decimal.Round(quote.Price, 2, MidpointRounding.AwayFromZero);
+        var marketValue = decimal.Round(latestPrice * position.QuantityLots, 2, MidpointRounding.AwayFromZero);
+        var unrealizedPnL = decimal.Round(marketValue - position.TotalCost, 2, MidpointRounding.AwayFromZero);
+
+        position.LatestPrice = latestPrice;
+        position.MarketValue = marketValue;
+        position.UnrealizedPnL = unrealizedPnL;
+        position.UnrealizedReturnRate = position.TotalCost != 0
+            ? decimal.Round(unrealizedPnL / position.TotalCost, 6, MidpointRounding.AwayFromZero)
+            : position.UnrealizedReturnRate;
+
+        if (string.IsNullOrWhiteSpace(position.Name) && !string.IsNullOrWhiteSpace(quote.Name))
+        {
+            position.Name = quote.Name;
+        }
+    }
+
+    private static decimal GetMarketValueOrCost(StockPosition position)
+    {
+        return position.MarketValue ?? position.TotalCost;
     }
 
     /// <summary>B36: 补全缺失的名称（只读内存补全，不写库）</summary>

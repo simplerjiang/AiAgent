@@ -44,8 +44,8 @@
 - 统一 AI 对话审计日志：所有 AI 请求/响应/错误统一记录到 `backend/SimplerJiangAiAgent.Api/App_Data/logs/llm-requests.txt`（含 traceId、耗时与截断保护）
 
 ### 前端
-- 顶层工作台现已固定为 8 个页签：`股票信息`、`情绪轮动`、`全量资讯库`、`交易日志`、`股票推荐`、`LLM 设置`、`治理开发者模式`、`财务数据测试`
-- LLM 设置页签已支持管理员配置、保存即激活当前 provider、Antigravity 授权，以及 Ollama 安装检测 / 启停 / 模型列表 / 拉取 / keepAlive
+- 顶层工作台当前为 5 个主业务 Tab：`股票信息`、`情绪轮动`、`全量资讯库`、`交易日志`、`股票推荐`；管理页（`LLM 设置`、`治理开发者模式`、`财务数据测试`、`财务工作者监控`）收纳在 settings dropdown，不再作为固定顶层并列页签
+- `settings dropdown -> LLM 设置` 已支持管理员配置、保存即激活当前 provider、Antigravity 授权，以及 Ollama 安装检测 / 启停 / 模型列表 / 拉取 / keepAlive
 - K线/分时图 AI 关键价位叠加（突破线/支撑线，来源于多Agent分析）
 - 专业看盘终端已支持图表区 `全屏 / 退出全屏` 切换，放大后保留原有时间周期、策略按钮与浮动小标交互
 - 股票信息页多Agent面板支持双档位触发：标准分析 / Pro 深度分析
@@ -64,15 +64,23 @@
 - 股票推荐页现已新增“推荐前市场快照”：在触发推荐前先展示实时指数、主力/北向、涨跌家数与概念快榜；当实时板块榜为空时会明确降级提示，继续只使用指数与资金快照
 - 股票推荐页现已稳定支持 SSE 进度、会话历史、追问轮次、辩论 feed 和 feed 项中的 traceId 展示，便于后续进入治理开发者模式回查
 - 交易计划流已接入 GOAL-009 市场上下文：草稿/编辑弹窗、当前计划卡、交易计划总览和仓位建议会展示阶段、置信度、主线对齐、建议仓位比例与执行节奏，但不会自动改写用户确认的计划价格
-- 治理开发者模式：参数说明、治理链路 Trace 查询、以及按 traceId 聚合的 LLM 对话会话前端可视化（请求/返回/异常一一对应，支持 JSON 美化）
+- `settings dropdown -> 治理开发者模式`：参数说明、治理链路 Trace 查询、以及按 traceId 聚合的 LLM 对话会话前端可视化（请求/返回/异常一一对应，支持 JSON 美化）
 - 全量资讯库：支持按关键字、层级（大盘/板块/个股）和情绪筛选本地 AI 清洗资讯，可展示 `已清洗 / 待清洗` 状态，并提供“批量清洗待处理”入口
 - 交易日志页签已落地首层纪律闭环：持仓总览、总本金、胜率、做T 盈亏、交易列表、`DayTrade` badge、AI 复盘面板、复盘历史、风险敞口、交易健康度、双重确认的 `reset-all`
-- 财务数据测试页签已落地：支持 Financial Worker 健康检查、配置读取/更新、手动采集触发与日志查看
+- `settings dropdown -> 财务数据测试` 已落地：支持 Financial Worker 健康检查、配置读取/更新、手动采集触发与日志查看
+- `settings dropdown -> 财务工作者监控` 已落地：支持查看 Worker 运行状态、心跳、PID、日志与启停控制
 
 ### 桌面端
 - WinForms 容器 + WebView2 载入前端
 
-## GOAL-018 当前主分支现实（部分完成）
+## 2026-04-20 复核现实
+
+- 顶层导航现实不是 8 个固定并列页签，而是 5 个主业务 Tab + settings dropdown 中的管理页。
+- `GOAL-AGENT-NEW-001` 已不再是纯 future plan：当前主分支的 `股票信息 -> AI 分析` 已接入 `TradingWorkbench`，后端也已落地 `/api/stocks/research/*` 会话 / turn / report / decision / artifact 等 research pipeline 接口。更准确口径应为“基线已实现、待继续 hardening / UI 联调 / live LLM 复验”，而不是“尚未开发”。
+- `GOAL-015` 当前应视为“基线已落地，待 UI / Browser / 联调收口”：股票信息页、`/api/stocks/detail/cache`、`/api/stocks/fundamental-snapshot` 与交易计划市场上下文都已在主分支存在。
+- `GOAL-018` 当前应视为“基线已落地，整体未完成”：`交易日志` 页面与交易记账 / 合规 / 复盘基础链路已存在，但整个 epic 仍未全部收口。
+
+## GOAL-018 当前主分支现实（基线已落地，整体未完成）
 
 虽然 GOAL-018 尚未整体完成，但主分支已经先落地了第一层可用基线，不能再按“纯未来需求”描述：
 
@@ -275,12 +283,12 @@ opencode
 - [x] GOAL-AGENT-001-R3 回放校准闭环与验收基线（历史回放样本、1/3/5/10 日收益对齐、命中率/Brier score/分组胜率、开发者可观测验收指标）
 - [x] GOAL-AGENT-001-R4 Copilot 风格 MCP 工具运行时基础层（股票 K 线 MCP、分时图 MCP、策略 MCP、新闻 MCP、搜索 MCP/Tavily 受控兜底；统一 tool envelope、governor policy class、trace/cache/degradedFlags/evidence/features 输出，作为后续把多 Agent 改造成类似 Copilot 的直接能力层）
 - [x] GOAL-AGENT-002 股票 Copilot 会话化编排与产品层（历史实现已于 2026-03-25 被用户终止，并已被手动删除默认入口与产品方向。后续文档与开发不得再把 GOAL-AGENT-002 视为当前主线、可复用 UI 模型或必须保留的产品层；相关报告仅保留为历史归档。）
-- [ ] GOAL-015 深度盘面属性扩充与 Agent 指挥体系重构（Step 3 已继续完成“基本面快照富事实 + 数据库缓存优先刷新”增强：`StockCompanyProfiles` 新增 `FundamentalFactsJson/FundamentalUpdatedAt`，详情页先读 `/api/stocks/detail/cache` 的数据库快照，再由 `/api/stocks/detail` 实时抓东财公司概况/股东研究并回写；本轮进一步补上股票信息卡片真实加载进度，将“缓存回显 / 腾讯行情 / 东方财富基本面”拆成可视化阶段，并新增 `/api/stocks/fundamental-snapshot` 轻量接口配合前端独立显示东财刷新状态。剩余主要是 Edge/UI 验收与更大范围联调。）
+- [ ] GOAL-015 深度盘面属性扩充与 Agent 指挥体系重构（主分支基线已落地，待 UI / Browser / 联调收口。Step 3 已继续完成“基本面快照富事实 + 数据库缓存优先刷新”增强：`StockCompanyProfiles` 新增 `FundamentalFactsJson/FundamentalUpdatedAt`，详情页先读 `/api/stocks/detail/cache` 的数据库快照，再由 `/api/stocks/detail` 实时抓东财公司概况/股东研究并回写；本轮进一步补上股票信息卡片真实加载进度，将“缓存回显 / 腾讯行情 / 东方财富基本面”拆成可视化阶段，并新增 `/api/stocks/fundamental-snapshot` 轻量接口配合前端独立显示东财刷新状态。剩余主要是 Edge/UI 验收与更大范围联调。）
 - [ ] GOAL-016 单机可安装版与本地数据底座重构规划（本轮先完成规划，不急于编码；目标是把当前“桌面壳 + 本地后端 + 外部 SQL Server”的开发形态，收敛为可以发给不同 Windows 用户安装使用的单机应用。总体路线采用“桌面宿主 EXE + 后端内嵌启动 + 前端静态资源随包发布 + 主事务库 SQLite + 冷数据 Parquet + 本地分析 DuckDB”的分层架构，兼顾免安装数据库、长期大数据量增长和后续回测/统计能力。规划分 4 个切片：R1 数据库提供者抽象与 SQLite 落地；R2 高频行情/历史事实冷热分层与归档；R3 WinForms/WebView2 桌面宿主化与本地自启动；R4 安装器、升级、数据目录与发布流程收口。）
 - [ ] GOAL-016-R6 单宿主单进程 packaged runtime 收口（2026-03-22 已补充详细设计：接受“一个主 EXE + 应用自带附属文件”的交付形态，不再把“绝对单文件”作为硬目标；真正的硬目标改为“单 EXE 统一控制启动与关闭、用户无需预装 SDK/.NET runtime、后端不再作为独立后台进程存在”。实施路线为：把 ASP.NET Core 从独立 `Backend/` 进程改成由 WinForms 宿主进程内直接启动和停止；保留 localhost + WebView2 的现有前端访问契约；重做 `publish-windows-package` 与安装器链路，使桌面宿主成为唯一主入口，并为 WebView2 Fixed Version Runtime 制定随包发布与升级策略。）
 - [ ] GOAL-017 量化双引擎与 Agent/图表协同规划（本轮先完成规划，不急于编码；目标是在现有分时图、K线图、交易计划与多 Agent 分析之间补上一层统一的量化特征与策略能力。总体路线采用 `Skender primary + Lean shadow`：用轻量 .NET 指标库承担在线主引擎，用 Lean 承担 shadow/replay/calibration；图表、Agent、交易计划默认只消费 primary 结果，shadow 结果主要用于开发者模式、回放、校准与研究。规划分 4 个切片：R1 统一 normalized market-data 输入层与 feature/signal/comparison contract；R2 Skender 主运行时整合；R3 Lean shadow replay/calibration 整合；R4 图表、MCP、Agent、交易计划产品层整合。）
 - [ ] GOAL-017-R1 归一化行情输入层与量化 Contract 设计（先锁定双引擎共享底座，不急于真正接入 Skender 或 Lean。范围包括：统一 `NormalizedBar/NormalizedBarSeries`、定义 `QuantFeatureSnapshotDto/QuantStrategySignalDto/QuantEngineComparisonDto/AgentQuantContextDto`，补齐 `warmupState/degradedFlags/engine role/execution mode` 语义。由于 `Stock Copilot / GOAL-AGENT-002` 已被手动删除，后续不再把 `StockCopilot*Dto` 当成必须兼容的产品层前提；如仓库仍残留同名类型，只按待清理遗留处理。）
-- [ ] **GOAL-018 交易纪律闭环与胜率提升系统**（仍是首要未完成目标，但主分支已先落地基线：交易日志页签、`/api/trades*` 交易记录与重置、`/api/portfolio*` 持仓快照/设置/暴露/上下文、胜率/合规/健康度统计、AI 复盘生成与历史、交易计划弹窗中的双线胜率，以及部分 LLM 持仓上下文/风险暴露联动已可用。当前尚未完成整个 GOAL：市场阶段执行纪律联动仍在延伸，行为模式反馈和更完整的冷静仪表盘仍属后续切片。详细设计见 `docs/GOAL-018-trading-discipline-closed-loop.md`。）
+- [ ] **GOAL-018 交易纪律闭环与胜率提升系统**（基线已落地，整体未完成。主分支已先落地交易日志页签、`/api/trades*` 交易记录与重置、`/api/portfolio*` 持仓快照/设置/暴露/上下文、胜率/合规/健康度统计、AI 复盘生成与历史、交易计划弹窗中的双线胜率，以及部分 LLM 持仓上下文/风险暴露联动。当前尚未完成整个 GOAL：市场阶段执行纪律联动仍在延伸，行为模式反馈和更完整的冷静仪表盘仍属后续切片。详细设计见 `docs/GOAL-018-trading-discipline-closed-loop.md`。）
 - [x] MANUAL-20260319-EXTENSION-INTERFACE `stock-and-fund-chrome-master` 接口吸收规划（已完成 R1-R5 全链路收口：后端新增 `/api/stocks/quotes/batch`、`/api/market/realtime/overview`、`/api/market/sectors/realtime`，接入东财批量行情、主力资金、北向资金、涨跌分布与实时板块榜；默认分时来源已切到东方财富优先；前端已同步落地到 `情绪轮动`、`股票推荐`、`股票信息` 与交易计划总览等高频决策入口，并通过定向单测与浏览器验收。整体策略仍是不做整包替换，而是只吸收扩展里仍有价值的公开端点；作者自建 `110.40.187.161` 云服务继续排除在正式依赖之外。）
 - [x] MANUAL-20260319-EXTENSION-INTERFACE-R1 实时行情后端切片（新增 Eastmoney realtime adapter 与聚合服务，提供批量行情和市场总览 API；验证覆盖批量行情、主力资金、北向资金、涨跌分布解析，以及本地运行时 smoke test。）
 - [x] MANUAL-20260319-CHART-PERF 股票图表刷新性能收口（已定位慢点不在第三方行情源本身，而在前端把图表刷新绑定到 `/api/stocks/detail` 重聚合链路；现已新增 `/api/stocks/chart` 轻量接口，并把 `StockInfoTab` 首屏图表和 `日K/月K/年K` 切换改为只请求图表数据。定向单测 43/43 通过，Browser MCP 已确认切换 `月K图/年K图` 时只出现 `/api/stocks/chart?...interval=month|year`，不再触发 `/api/stocks/detail/cache`、`/api/stocks/messages` 与 `/api/stocks/fundamental-snapshot`。）
