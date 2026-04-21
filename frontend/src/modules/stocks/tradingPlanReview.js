@@ -1,7 +1,13 @@
+export const TRADING_PLAN_STATUS_OPTIONS = [
+  { value: 'Draft', label: '草稿' },
+  { value: 'Pending', label: '观察中' },
+  { value: 'Triggered', label: '已触发' },
+  { value: 'Invalid', label: '已失效' },
+  { value: 'ReviewRequired', label: '待复核' },
+  { value: 'Cancelled', label: '已取消' }
+]
+
 export const normalizeTradingPlanStatus = value => {
-  if (value === 'Draft') {
-    return 'Pending'
-  }
   if (value === 'Archived') {
     return 'Cancelled'
   }
@@ -13,6 +19,8 @@ export const normalizeTradingPlanStatus = value => {
 
 export const formatTradingPlanStatus = status => {
   switch (normalizeTradingPlanStatus(status)) {
+    case 'Draft':
+      return '草稿'
     case 'Pending':
       return '观察中'
     case 'Triggered':
@@ -30,6 +38,8 @@ export const formatTradingPlanStatus = status => {
 
 export const getTradingPlanStatusClass = status => {
   switch (normalizeTradingPlanStatus(status)) {
+    case 'Draft':
+      return 'plan-status-draft'
     case 'Triggered':
       return 'plan-status-triggered'
     case 'Invalid':

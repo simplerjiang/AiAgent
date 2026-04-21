@@ -45,7 +45,20 @@ public static class TradeExecutionSchemaInitializer
             "AnalysisHistoryId BIGINT NULL, " +
             "AgentDirection NVARCHAR(16) NULL, " +
             "AgentConfidence DECIMAL(18,6) NULL, " +
-            "MarketStageAtTrade NVARCHAR(16) NULL" +
+            "MarketStageAtTrade NVARCHAR(16) NULL, " +
+            "PlanSourceAgent NVARCHAR(64) NULL, " +
+            "PlanAction NVARCHAR(32) NULL, " +
+            "ExecutionAction NVARCHAR(32) NULL, " +
+            "DeviationTagsJson NVARCHAR(MAX) NULL, " +
+            "DeviationNote NVARCHAR(MAX) NULL, " +
+            "AbandonReason NVARCHAR(MAX) NULL, " +
+            "ScenarioCode NVARCHAR(32) NULL, " +
+            "ScenarioLabel NVARCHAR(32) NULL, " +
+            "ScenarioReason NVARCHAR(MAX) NULL, " +
+            "ScenarioSnapshotType NVARCHAR(16) NULL, " +
+            "ScenarioSnapshotJson NVARCHAR(MAX) NULL, " +
+            "PositionSnapshotJson NVARCHAR(MAX) NULL, " +
+            "CoachTip NVARCHAR(MAX) NULL" +
             "); " +
             "END; " +
             // Idempotent column adds
@@ -70,6 +83,19 @@ public static class TradeExecutionSchemaInitializer
             "IF COL_LENGTH('dbo.TradeExecutions','AgentConfidence') IS NULL ALTER TABLE dbo.TradeExecutions ADD AgentConfidence DECIMAL(18,6) NULL; " +
             "IF COL_LENGTH('dbo.TradeExecutions','AgentConfidence') IS NOT NULL ALTER TABLE dbo.TradeExecutions ALTER COLUMN AgentConfidence DECIMAL(18,6) NULL; " +
             "IF COL_LENGTH('dbo.TradeExecutions','MarketStageAtTrade') IS NULL ALTER TABLE dbo.TradeExecutions ADD MarketStageAtTrade NVARCHAR(16) NULL; " +
+            "IF COL_LENGTH('dbo.TradeExecutions','PlanSourceAgent') IS NULL ALTER TABLE dbo.TradeExecutions ADD PlanSourceAgent NVARCHAR(64) NULL; " +
+            "IF COL_LENGTH('dbo.TradeExecutions','PlanAction') IS NULL ALTER TABLE dbo.TradeExecutions ADD PlanAction NVARCHAR(32) NULL; " +
+            "IF COL_LENGTH('dbo.TradeExecutions','ExecutionAction') IS NULL ALTER TABLE dbo.TradeExecutions ADD ExecutionAction NVARCHAR(32) NULL; " +
+            "IF COL_LENGTH('dbo.TradeExecutions','DeviationTagsJson') IS NULL ALTER TABLE dbo.TradeExecutions ADD DeviationTagsJson NVARCHAR(MAX) NULL; " +
+            "IF COL_LENGTH('dbo.TradeExecutions','DeviationNote') IS NULL ALTER TABLE dbo.TradeExecutions ADD DeviationNote NVARCHAR(MAX) NULL; " +
+            "IF COL_LENGTH('dbo.TradeExecutions','AbandonReason') IS NULL ALTER TABLE dbo.TradeExecutions ADD AbandonReason NVARCHAR(MAX) NULL; " +
+            "IF COL_LENGTH('dbo.TradeExecutions','ScenarioCode') IS NULL ALTER TABLE dbo.TradeExecutions ADD ScenarioCode NVARCHAR(32) NULL; " +
+            "IF COL_LENGTH('dbo.TradeExecutions','ScenarioLabel') IS NULL ALTER TABLE dbo.TradeExecutions ADD ScenarioLabel NVARCHAR(32) NULL; " +
+            "IF COL_LENGTH('dbo.TradeExecutions','ScenarioReason') IS NULL ALTER TABLE dbo.TradeExecutions ADD ScenarioReason NVARCHAR(MAX) NULL; " +
+            "IF COL_LENGTH('dbo.TradeExecutions','ScenarioSnapshotType') IS NULL ALTER TABLE dbo.TradeExecutions ADD ScenarioSnapshotType NVARCHAR(16) NULL; " +
+            "IF COL_LENGTH('dbo.TradeExecutions','ScenarioSnapshotJson') IS NULL ALTER TABLE dbo.TradeExecutions ADD ScenarioSnapshotJson NVARCHAR(MAX) NULL; " +
+            "IF COL_LENGTH('dbo.TradeExecutions','PositionSnapshotJson') IS NULL ALTER TABLE dbo.TradeExecutions ADD PositionSnapshotJson NVARCHAR(MAX) NULL; " +
+            "IF COL_LENGTH('dbo.TradeExecutions','CoachTip') IS NULL ALTER TABLE dbo.TradeExecutions ADD CoachTip NVARCHAR(MAX) NULL; " +
             // Indexes
             "IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_TradeExecutions_Symbol_ExecutedAt' AND object_id = OBJECT_ID('dbo.TradeExecutions')) " +
             "CREATE INDEX IX_TradeExecutions_Symbol_ExecutedAt ON dbo.TradeExecutions(Symbol, ExecutedAt); " +
@@ -157,8 +183,35 @@ public static class TradeExecutionSchemaInitializer
                 AnalysisHistoryId   INTEGER NULL,
                 AgentDirection      TEXT    NULL,
                 AgentConfidence     REAL    NULL,
-                MarketStageAtTrade  TEXT    NULL
+                MarketStageAtTrade  TEXT    NULL,
+                PlanSourceAgent     TEXT    NULL,
+                PlanAction          TEXT    NULL,
+                ExecutionAction     TEXT    NULL,
+                DeviationTagsJson   TEXT    NULL,
+                DeviationNote       TEXT    NULL,
+                AbandonReason       TEXT    NULL,
+                ScenarioCode        TEXT    NULL,
+                ScenarioLabel       TEXT    NULL,
+                ScenarioReason      TEXT    NULL,
+                ScenarioSnapshotType TEXT   NULL,
+                ScenarioSnapshotJson TEXT   NULL,
+                PositionSnapshotJson TEXT   NULL,
+                CoachTip            TEXT    NULL
             );", cancellationToken);
+
+            await EnsureSqliteColumnAsync(dbContext, "TradeExecutions", "PlanSourceAgent", "TEXT", null, cancellationToken);
+            await EnsureSqliteColumnAsync(dbContext, "TradeExecutions", "PlanAction", "TEXT", null, cancellationToken);
+            await EnsureSqliteColumnAsync(dbContext, "TradeExecutions", "ExecutionAction", "TEXT", null, cancellationToken);
+            await EnsureSqliteColumnAsync(dbContext, "TradeExecutions", "DeviationTagsJson", "TEXT", null, cancellationToken);
+            await EnsureSqliteColumnAsync(dbContext, "TradeExecutions", "DeviationNote", "TEXT", null, cancellationToken);
+            await EnsureSqliteColumnAsync(dbContext, "TradeExecutions", "AbandonReason", "TEXT", null, cancellationToken);
+            await EnsureSqliteColumnAsync(dbContext, "TradeExecutions", "ScenarioCode", "TEXT", null, cancellationToken);
+            await EnsureSqliteColumnAsync(dbContext, "TradeExecutions", "ScenarioLabel", "TEXT", null, cancellationToken);
+            await EnsureSqliteColumnAsync(dbContext, "TradeExecutions", "ScenarioReason", "TEXT", null, cancellationToken);
+            await EnsureSqliteColumnAsync(dbContext, "TradeExecutions", "ScenarioSnapshotType", "TEXT", null, cancellationToken);
+            await EnsureSqliteColumnAsync(dbContext, "TradeExecutions", "ScenarioSnapshotJson", "TEXT", null, cancellationToken);
+            await EnsureSqliteColumnAsync(dbContext, "TradeExecutions", "PositionSnapshotJson", "TEXT", null, cancellationToken);
+            await EnsureSqliteColumnAsync(dbContext, "TradeExecutions", "CoachTip", "TEXT", null, cancellationToken);
 
         await dbContext.Database.ExecuteSqlRawAsync(
             "CREATE INDEX IF NOT EXISTS IX_TradeExecutions_Symbol_ExecutedAt ON TradeExecutions(Symbol, ExecutedAt);", cancellationToken);

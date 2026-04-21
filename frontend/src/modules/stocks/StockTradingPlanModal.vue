@@ -1,4 +1,8 @@
 <script setup>
+import { Teleport } from 'vue'
+import { TRADING_PLAN_SCENARIO_OPTIONS } from './stockInfoTabTradingPlans'
+import { TRADING_PLAN_STATUS_OPTIONS } from './tradingPlanReview'
+
 defineProps({
   workspace: {
     type: Object,
@@ -58,154 +62,200 @@ function formatSnapshotTime(value) {
 </script>
 
 <template>
-  <div v-if="workspace?.planModalOpen && workspace?.planForm" class="plan-modal-backdrop" @click.self="$emit('close')">
-    <section class="plan-modal" role="dialog" aria-modal="true" aria-label="交易计划草稿">
-      <div class="search-modal-header">
-        <div>
-          <strong>{{ workspace.planForm.id ? '编辑交易计划' : (workspace.planForm.sourceAgent === 'manual' ? '手动新建计划' : '交易计划草稿') }}</strong>
-          <p class="muted">{{ workspace.planForm.sourceAgent === 'manual' ? '手动录入，确认后保存为 Pending 状态。' : '后端基于 commander 历史生成，用户确认后才会入库。' }}</p>
-        </div>
-        <button class="market-news-button" @click="$emit('close')">关闭</button>
-      </div>
-
-      <p v-if="workspace.planError" class="muted error">{{ workspace.planError }}</p>
-
-      <section v-if="shouldShowMarketContextSection(workspace.planForm)" class="plan-market-box">
-        <strong>市场上下文</strong>
-        <template v-if="workspace.planForm.marketContext">
-          <div class="plan-pill-row">
-            <span class="plan-pill">快照时间 {{ formatSnapshotTime(workspace.planForm.marketContext.snapshotTime) }}</span>
-            <span class="plan-pill">阶段 {{ workspace.planForm.marketContext.stageLabel }}</span>
-            <span class="plan-pill">置信 {{ Number(workspace.planForm.marketContext.stageConfidence || 0).toFixed(0) }}</span>
-            <span class="plan-pill">主线 {{ workspace.planForm.marketContext.mainlineSectorName || '暂无' }}</span>
-            <span class="plan-pill">建议仓位 {{ formatPlanScale(workspace.planForm.marketContext.suggestedPositionScale) }}</span>
-            <span class="plan-pill">节奏 {{ workspace.planForm.marketContext.executionFrequencyLabel || '中性' }}</span>
+  <Teleport to="body">
+    <div
+      v-if="workspace?.planModalOpen && workspace?.planForm"
+      class="plan-modal-backdrop"
+      data-testid="stock-plan-modal-backdrop"
+      data-modal-layer="global-modal"
+      style="z-index: var(--z-modal);"
+      @click.self="$emit('close')"
+    >
+      <section
+        class="plan-modal"
+        data-testid="stock-plan-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label="交易计划草稿"
+        @click.stop
+      >
+        <div class="search-modal-header">
+          <div>
+            <strong>{{ workspace.planForm.id ? '编辑交易计划' : (workspace.planForm.sourceAgent === 'manual' ? '手动新建计划' : '交易计划草稿') }}</strong>
+            <p class="muted">{{ workspace.planForm.sourceAgent === 'manual' ? '手动录入计划，可按当前状态直接保存。' : '后端基于 commander 历史生成，用户确认后再保存入库。' }}</p>
           </div>
-          <p class="muted">
-            {{ workspace.planForm.marketContext.isMainlineAligned ? '当前股票与主线方向一致。' : '当前股票未明显对齐主线。' }}
-            <span v-if="workspace.planForm.marketContext.counterTrendWarning"> 存在逆势提示，建议降低执行频率。</span>
-          </p>
-        </template>
-        <p v-else-if="workspace.planForm.marketContextLoading" class="muted plan-market-status">正在获取当前市场上下文，不影响保存计划。</p>
-        <p v-else class="muted plan-market-status">{{ workspace.planForm.marketContextMessage || '暂未获取到市场上下文，可继续保存计划。' }}</p>
+          <button class="market-news-button" @click="$emit('close')">关闭</button>
+        </div>
+
+        <p v-if="workspace.planError" class="muted error">{{ workspace.planError }}</p>
+
+        <section v-if="shouldShowMarketContextSection(workspace.planForm)" class="plan-market-box">
+          <strong>市场上下文</strong>
+          <template v-if="workspace.planForm.marketContext">
+            <div class="plan-pill-row">
+              <span class="plan-pill">快照时间 {{ formatSnapshotTime(workspace.planForm.marketContext.snapshotTime) }}</span>
+              <span class="plan-pill">阶段 {{ workspace.planForm.marketContext.stageLabel }}</span>
+              <span class="plan-pill">置信 {{ Number(workspace.planForm.marketContext.stageConfidence || 0).toFixed(0) }}</span>
+              <span class="plan-pill">主线 {{ workspace.planForm.marketContext.mainlineSectorName || '暂无' }}</span>
+              <span class="plan-pill">建议仓位 {{ formatPlanScale(workspace.planForm.marketContext.suggestedPositionScale) }}</span>
+              <span class="plan-pill">节奏 {{ workspace.planForm.marketContext.executionFrequencyLabel || '中性' }}</span>
+            </div>
+            <p class="muted">
+              {{ workspace.planForm.marketContext.isMainlineAligned ? '当前股票与主线方向一致。' : '当前股票未明显对齐主线。' }}
+              <span v-if="workspace.planForm.marketContext.counterTrendWarning"> 存在逆势提示，建议降低执行频率。</span>
+            </p>
+            <p v-if="workspace.planForm.marketContextMissingLabels?.length" class="muted plan-market-status">
+              当前仍缺少 {{ workspace.planForm.marketContextMissingLabels.join('、') }}，不影响保存计划。
+            </p>
+          </template>
+          <p v-else-if="workspace.planForm.marketContextLoading" class="muted plan-market-status">正在获取当前市场上下文，不影响保存计划。</p>
+          <p v-else class="muted plan-market-status">{{ workspace.planForm.marketContextMessage || '当前未获取到市场阶段、主线方向、仓位建议、执行节奏，不影响保存计划。' }}</p>
+        </section>
+
+        <!-- 执行模式提示条 -->
+        <div v-if="workspace.planForm.executionMode" class="execution-mode-bar" :class="'mode-' + workspace.planForm.executionMode.confirmationLevel">
+          <span class="mode-label">{{ workspace.planForm.executionMode.executionMode }}模式</span>
+          <span class="mode-stage">市场阶段：{{ workspace.planForm.executionMode.marketStage }}</span>
+          <span class="mode-scale">建议仓位 × {{ workspace.planForm.executionMode.positionScale }}</span>
+          <span class="mode-warning" v-if="workspace.planForm.executionMode.warningMessage">⚠️ {{ workspace.planForm.executionMode.warningMessage }}</span>
+        </div>
+
+        <div class="plan-form-grid">
+          <label class="plan-field">
+            <span>股票</span>
+            <input v-model="workspace.planForm.symbol" disabled>
+          </label>
+          <label class="plan-field">
+            <span>名称</span>
+            <input v-model="workspace.planForm.name">
+          </label>
+          <label class="plan-field">
+            <span>方向</span>
+            <select v-model="workspace.planForm.direction">
+              <option value="Long">Long</option>
+              <option value="Short">Short</option>
+            </select>
+          </label>
+          <label class="plan-field">
+            <span>当前启用场景</span>
+            <select v-model="workspace.planForm.activeScenario" data-testid="plan-active-scenario-select">
+              <option v-for="item in TRADING_PLAN_SCENARIO_OPTIONS" :key="item.value" :value="item.value">{{ item.label }}</option>
+            </select>
+          </label>
+          <label class="plan-field">
+            <span>计划状态</span>
+            <select v-model="workspace.planForm.status" data-testid="plan-status-select">
+              <option v-for="item in TRADING_PLAN_STATUS_OPTIONS" :key="item.value" :value="item.value">{{ item.label }}</option>
+            </select>
+          </label>
+          <div class="plan-field plan-field-wide">
+            <span>日期范围</span>
+            <div class="plan-date-range">
+              <label class="plan-date-field" for="plan-start-date-input">
+                <span class="plan-date-label">开始日期</span>
+                <input id="plan-start-date-input" v-model="workspace.planForm.planStartDate" data-testid="plan-start-date-input" type="date">
+              </label>
+              <span class="plan-date-separator">至</span>
+              <label class="plan-date-field" for="plan-end-date-input">
+                <span class="plan-date-label">结束日期</span>
+                <input id="plan-end-date-input" v-model="workspace.planForm.planEndDate" data-testid="plan-end-date-input" type="date">
+              </label>
+            </div>
+            <small class="muted plan-field-hint">结束日期到期后将自动转为已失效。</small>
+          </div>
+          <label class="plan-field">
+            <span>触发价</span>
+            <input v-model="workspace.planForm.triggerPrice" type="number" step="0.01" placeholder="可为空，后补录">
+          </label>
+          <label class="plan-field">
+            <span>失效价</span>
+            <input v-model="workspace.planForm.invalidPrice" type="number" step="0.01" placeholder="可为空，后补录">
+          </label>
+          <label class="plan-field">
+            <span>止损价</span>
+            <input v-model="workspace.planForm.stopLossPrice" type="number" step="0.01" placeholder="可为空">
+          </label>
+          <label class="plan-field">
+            <span>止盈价</span>
+            <input v-model="workspace.planForm.takeProfitPrice" type="number" step="0.01" placeholder="优先取指挥/机构目标">
+          </label>
+          <label class="plan-field">
+            <span>目标价</span>
+            <input v-model="workspace.planForm.targetPrice" type="number" step="0.01" placeholder="优先取指挥/趋势目标">
+          </label>
+          <label class="plan-field plan-field-wide">
+            <span>预期催化</span>
+            <textarea v-model="workspace.planForm.expectedCatalyst" rows="2"></textarea>
+          </label>
+          <label class="plan-field plan-field-wide">
+            <span>失效条件</span>
+            <textarea v-model="workspace.planForm.invalidConditions" rows="2"></textarea>
+          </label>
+          <label class="plan-field plan-field-wide">
+            <span>风险上限</span>
+            <textarea v-model="workspace.planForm.riskLimits" rows="2"></textarea>
+          </label>
+          <label class="plan-field plan-field-wide">
+            <span>分析摘要</span>
+            <textarea v-model="workspace.planForm.analysisSummary" rows="3"></textarea>
+          </label>
+          <label class="plan-field plan-field-wide">
+            <span>用户备注</span>
+            <textarea v-model="workspace.planForm.userNote" rows="2" placeholder="可补充执行纪律、仓位、观察点"></textarea>
+          </label>
+        </div>
+
+        <section class="signal-winrate-section" v-if="workspace.planForm.metricsLoading || workspace.planForm.signalMetrics || workspace.planForm.realTradeMetrics">
+          <strong>📊 双线胜率</strong>
+          <p v-if="workspace.planForm.metricsLoading" class="muted">加载中...</p>
+          <div v-else class="winrate-dual">
+            <div class="winrate-card" v-if="workspace.planForm.signalMetrics">
+              <div class="winrate-label">AI 纸面命中率</div>
+              <div class="winrate-value" :class="winRateColorClass(workspace.planForm.signalMetrics.hitRate5Day)">
+                {{ formatPercent(workspace.planForm.signalMetrics.hitRate5Day) }}
+              </div>
+              <div class="winrate-detail">
+                过去 {{ workspace.planForm.signalMetrics.sampleCount }} 次"{{ workspace.planForm.signalMetrics.direction }}"建议，5日命中率
+              </div>
+              <div class="winrate-caveat" v-if="workspace.planForm.signalMetrics.caveat">{{ workspace.planForm.signalMetrics.caveat }}</div>
+            </div>
+            <div class="winrate-card" v-if="workspace.planForm.realTradeMetrics">
+              <div class="winrate-label">你的实盘胜率</div>
+              <div class="winrate-value" :class="winRateColorClass(workspace.planForm.realTradeMetrics.winRate)">
+                {{ formatPercent(workspace.planForm.realTradeMetrics.winRate) }}
+              </div>
+              <div class="winrate-detail">
+                过去 {{ workspace.planForm.realTradeMetrics.totalTrades }} 次交易，盈利 {{ workspace.planForm.realTradeMetrics.winCount }} 次
+              </div>
+              <div class="winrate-caveat" v-if="workspace.planForm.realTradeMetrics.caveat">{{ workspace.planForm.realTradeMetrics.caveat }}</div>
+            </div>
+          </div>
+        </section>
+
+        <div class="plan-modal-actions">
+          <span class="muted">{{ workspace.planForm.id ? `编辑计划 #${workspace.planForm.id}` : (workspace.planForm.analysisHistoryId ? `AnalysisHistory #${workspace.planForm.analysisHistoryId}` : '手动新建') }}</span>
+          <div class="plan-modal-buttons">
+            <button class="market-news-button" @click="$emit('close')">取消</button>
+            <button class="plan-save-button" :class="saveButtonClass(workspace.planForm.executionMode)" @click="$emit('save')" :disabled="workspace.planSaving || workspace.planDraftLoading">
+              {{ workspace.planSaving ? '保存中...' : (workspace.planForm.id ? '保存修改' : '保存计划') }}
+            </button>
+          </div>
+        </div>
       </section>
-
-      <!-- 执行模式提示条 -->
-      <div v-if="workspace.planForm.executionMode" class="execution-mode-bar" :class="'mode-' + workspace.planForm.executionMode.confirmationLevel">
-        <span class="mode-label">{{ workspace.planForm.executionMode.executionMode }}模式</span>
-        <span class="mode-stage">市场阶段：{{ workspace.planForm.executionMode.marketStage }}</span>
-        <span class="mode-scale">建议仓位 × {{ workspace.planForm.executionMode.positionScale }}</span>
-        <span class="mode-warning" v-if="workspace.planForm.executionMode.warningMessage">⚠️ {{ workspace.planForm.executionMode.warningMessage }}</span>
-      </div>
-
-      <div class="plan-form-grid">
-        <label class="plan-field">
-          <span>股票</span>
-          <input v-model="workspace.planForm.symbol" disabled>
-        </label>
-        <label class="plan-field">
-          <span>名称</span>
-          <input v-model="workspace.planForm.name">
-        </label>
-        <label class="plan-field">
-          <span>方向</span>
-          <select v-model="workspace.planForm.direction">
-            <option value="Long">Long</option>
-            <option value="Short">Short</option>
-          </select>
-        </label>
-        <label class="plan-field">
-          <span>触发价</span>
-          <input v-model="workspace.planForm.triggerPrice" type="number" step="0.01" placeholder="可为空，后补录">
-        </label>
-        <label class="plan-field">
-          <span>失效价</span>
-          <input v-model="workspace.planForm.invalidPrice" type="number" step="0.01" placeholder="可为空，后补录">
-        </label>
-        <label class="plan-field">
-          <span>止损价</span>
-          <input v-model="workspace.planForm.stopLossPrice" type="number" step="0.01" placeholder="可为空">
-        </label>
-        <label class="plan-field">
-          <span>止盈价</span>
-          <input v-model="workspace.planForm.takeProfitPrice" type="number" step="0.01" placeholder="优先取指挥/机构目标">
-        </label>
-        <label class="plan-field">
-          <span>目标价</span>
-          <input v-model="workspace.planForm.targetPrice" type="number" step="0.01" placeholder="优先取指挥/趋势目标">
-        </label>
-        <label class="plan-field plan-field-wide">
-          <span>预期催化</span>
-          <textarea v-model="workspace.planForm.expectedCatalyst" rows="2"></textarea>
-        </label>
-        <label class="plan-field plan-field-wide">
-          <span>失效条件</span>
-          <textarea v-model="workspace.planForm.invalidConditions" rows="2"></textarea>
-        </label>
-        <label class="plan-field plan-field-wide">
-          <span>风险上限</span>
-          <textarea v-model="workspace.planForm.riskLimits" rows="2"></textarea>
-        </label>
-        <label class="plan-field plan-field-wide">
-          <span>分析摘要</span>
-          <textarea v-model="workspace.planForm.analysisSummary" rows="3"></textarea>
-        </label>
-        <label class="plan-field plan-field-wide">
-          <span>用户备注</span>
-          <textarea v-model="workspace.planForm.userNote" rows="2" placeholder="可补充执行纪律、仓位、观察点"></textarea>
-        </label>
-      </div>
-
-      <section class="signal-winrate-section" v-if="workspace.planForm.metricsLoading || workspace.planForm.signalMetrics || workspace.planForm.realTradeMetrics">
-        <strong>📊 双线胜率</strong>
-        <p v-if="workspace.planForm.metricsLoading" class="muted">加载中...</p>
-        <div v-else class="winrate-dual">
-          <div class="winrate-card" v-if="workspace.planForm.signalMetrics">
-            <div class="winrate-label">AI 纸面命中率</div>
-            <div class="winrate-value" :class="winRateColorClass(workspace.planForm.signalMetrics.hitRate5Day)">
-              {{ formatPercent(workspace.planForm.signalMetrics.hitRate5Day) }}
-            </div>
-            <div class="winrate-detail">
-              过去 {{ workspace.planForm.signalMetrics.sampleCount }} 次"{{ workspace.planForm.signalMetrics.direction }}"建议，5日命中率
-            </div>
-            <div class="winrate-caveat" v-if="workspace.planForm.signalMetrics.caveat">{{ workspace.planForm.signalMetrics.caveat }}</div>
-          </div>
-          <div class="winrate-card" v-if="workspace.planForm.realTradeMetrics">
-            <div class="winrate-label">你的实盘胜率</div>
-            <div class="winrate-value" :class="winRateColorClass(workspace.planForm.realTradeMetrics.winRate)">
-              {{ formatPercent(workspace.planForm.realTradeMetrics.winRate) }}
-            </div>
-            <div class="winrate-detail">
-              过去 {{ workspace.planForm.realTradeMetrics.totalTrades }} 次交易，盈利 {{ workspace.planForm.realTradeMetrics.winCount }} 次
-            </div>
-            <div class="winrate-caveat" v-if="workspace.planForm.realTradeMetrics.caveat">{{ workspace.planForm.realTradeMetrics.caveat }}</div>
-          </div>
-        </div>
-      </section>
-
-      <div class="plan-modal-actions">
-        <span class="muted">{{ workspace.planForm.id ? `编辑计划 #${workspace.planForm.id}` : (workspace.planForm.analysisHistoryId ? `AnalysisHistory #${workspace.planForm.analysisHistoryId}` : '手动新建') }}</span>
-        <div class="plan-modal-buttons">
-          <button class="market-news-button" @click="$emit('close')">取消</button>
-          <button class="plan-save-button" :class="saveButtonClass(workspace.planForm.executionMode)" @click="$emit('save')" :disabled="workspace.planSaving || workspace.planDraftLoading">
-            {{ workspace.planSaving ? '保存中...' : (workspace.planForm.id ? '保存修改' : '保存为 Pending 计划') }}
-          </button>
-        </div>
-      </div>
-    </section>
-  </div>
+    </div>
+  </Teleport>
 </template>
 
 <style scoped>
 .plan-modal-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 70;
   display: grid;
   place-items: center;
   padding: 1rem;
-  background: rgba(15, 23, 42, 0.58);
+  background: var(--color-bg-overlay, rgba(15, 23, 42, 0.58));
   backdrop-filter: blur(10px);
+  pointer-events: auto;
 }
 
 .plan-modal {
@@ -218,6 +268,7 @@ function formatSnapshotTime(value) {
   border-radius: 24px;
   border: 1px solid rgba(148, 163, 184, 0.18);
   background: linear-gradient(160deg, rgba(255, 255, 255, 0.98), rgba(241, 245, 249, 0.96));
+  box-shadow: var(--shadow-xl, 0 20px 25px -5px rgba(0, 0, 0, 0.10), 0 8px 10px -6px rgba(0, 0, 0, 0.04));
 }
 
 .search-modal-header,
@@ -288,6 +339,33 @@ function formatSnapshotTime(value) {
   color: #0f172a;
 }
 
+.plan-date-range {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 0.55rem;
+  align-items: center;
+}
+
+.plan-date-field {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.plan-date-label {
+  color: #475569;
+  font-size: 0.76rem;
+}
+
+.plan-date-separator {
+  color: #64748b;
+  font-size: 0.8rem;
+}
+
+.plan-field-hint {
+  color: #64748b;
+  font-size: 0.76rem;
+}
+
 .plan-field-wide {
   grid-column: 1 / -1;
 }
@@ -335,6 +413,10 @@ function formatSnapshotTime(value) {
   }
 
   .plan-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .plan-date-range {
     grid-template-columns: 1fr;
   }
 }

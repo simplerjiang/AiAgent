@@ -34,9 +34,12 @@ public sealed class TradingPlan
     public string? InvalidConditions { get; set; }
     public string? RiskLimits { get; set; }
     public string? AnalysisSummary { get; set; }
-    public long AnalysisHistoryId { get; set; }
+    public long? AnalysisHistoryId { get; set; }
     public string SourceAgent { get; set; } = "commander";
     public string? UserNote { get; set; }
+    public string? ActiveScenario { get; set; }
+    public DateOnly? PlanStartDate { get; set; }
+    public DateOnly? PlanEndDate { get; set; }
     public string? MarketStageLabelAtCreation { get; set; }
     public decimal? StageConfidenceAtCreation { get; set; }
     public decimal? SuggestedPositionScale { get; set; }

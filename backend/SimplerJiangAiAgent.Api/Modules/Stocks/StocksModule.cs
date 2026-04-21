@@ -67,6 +67,7 @@ public sealed class StocksModule : IModule
         services.AddScoped<IStockAgentOrchestrator, StockAgentOrchestrator>();
         services.AddScoped<ITradingPlanDraftService, TradingPlanDraftService>();
         services.AddScoped<ITradingPlanService, TradingPlanService>();
+        services.AddScoped<ITradeExecutionInsightService, TradeExecutionInsightService>();
         services.AddScoped<IStockMarketContextService, StockMarketContextService>();
         services.AddScoped<IStockChatHistoryService, StockChatHistoryService>();
         services.AddScoped<IStockCopilotMcpService, StockCopilotMcpService>();
@@ -1068,12 +1069,8 @@ public sealed class StocksModule : IModule
         .WithName("GetStockDetail")
         .WithOpenApi();
 
-        group.MapGet("/plans", async (string? symbol, int? take, ITradingPlanService tradingPlanService, IStockMarketContextService marketContextService) =>
-        {
-            var list = await tradingPlanService.GetListAsync(symbol, take ?? 20);
-            var currentContexts = await Task.WhenAll(list.Select(item => marketContextService.GetLatestAsync(item.Symbol)));
-            return Results.Ok(list.Select((item, index) => MapTradingPlanDto(item, null, currentContexts[index])).ToArray());
-        })
+        group.MapGet("/plans", async (string? symbol, int? take, ITradingPlanService tradingPlanService, IStockMarketContextService marketContextService, ITradeExecutionInsightService tradeExecutionInsightService, ILogger<StocksModule> logger, HttpContext httpContext) =>
+            await GetTradingPlansResultAsync(symbol, take, tradingPlanService, marketContextService, tradeExecutionInsightService, logger, httpContext.RequestAborted))
         .WithName("GetTradingPlans")
         .WithOpenApi();
 
@@ -1085,7 +1082,7 @@ public sealed class StocksModule : IModule
         .WithName("GetTradingPlanAlerts")
         .WithOpenApi();
 
-        group.MapGet("/plans/{id:long}", async (long id, ITradingPlanService tradingPlanService, IStockMarketContextService marketContextService) =>
+        group.MapGet("/plans/{id:long}", async (long id, ITradingPlanService tradingPlanService, IStockMarketContextService marketContextService, ITradeExecutionInsightService tradeExecutionInsightService) =>
         {
             var item = await tradingPlanService.GetByIdAsync(id);
             if (item is null)
@@ -1094,9 +1091,31 @@ public sealed class StocksModule : IModule
             }
 
             var currentContext = await marketContextService.GetLatestAsync(item.Symbol);
-            return Results.Ok(MapTradingPlanDto(item, null, currentContext));
+            var insight = await tradeExecutionInsightService.GetPlanInsightAsync(item);
+            return Results.Ok(MapTradingPlanDto(item, null, currentContext, insight));
         })
         .WithName("GetTradingPlanById")
+        .WithOpenApi();
+
+        group.MapGet("/plans/{id:long}/execution-context", async (long id, ITradingPlanService tradingPlanService, IStockMarketContextService marketContextService, ITradeExecutionInsightService tradeExecutionInsightService) =>
+        {
+            var item = await tradingPlanService.GetByIdAsync(id);
+            if (item is null)
+            {
+                return Results.NotFound();
+            }
+
+            var currentContext = await marketContextService.GetLatestAsync(item.Symbol);
+            var insight = await tradeExecutionInsightService.GetPlanInsightAsync(item, useLiveQuote: true);
+            var portfolioSummary = await tradeExecutionInsightService.GetPortfolioSummaryAsync();
+            return Results.Ok(new TradingPlanExecutionContextDto(
+                MapTradingPlanDto(item, null, currentContext, insight),
+                insight?.CurrentScenarioStatus,
+                insight?.CurrentPositionSnapshot,
+                portfolioSummary,
+                insight?.ExecutionSummary));
+        })
+        .WithName("GetTradingPlanExecutionContext")
         .WithOpenApi();
 
         group.MapPost("/plans/draft", async (
@@ -1106,14 +1125,10 @@ public sealed class StocksModule : IModule
             ITradeAccountingService accountingService,
             AppDbContext db) =>
         {
-            if (string.IsNullOrWhiteSpace(request.Symbol))
+            var validationError = ValidateTradingPlanDraftRequest(request);
+            if (validationError is not null)
             {
-                return Results.BadRequest(new { message = "symbol 不能为空" });
-            }
-
-            if (request.AnalysisHistoryId <= 0)
-            {
-                return Results.BadRequest(new { message = "analysisHistoryId 无效" });
+                return validationError;
             }
 
             try
@@ -1222,7 +1237,7 @@ public sealed class StocksModule : IModule
         .WithName("GetSignalTrackRecord")
         .WithOpenApi();
 
-        group.MapPost("/plans", async (TradingPlanCreateDto request, ITradingPlanService tradingPlanService, IStockMarketContextService marketContextService) =>
+        group.MapPost("/plans", async (TradingPlanCreateDto request, ITradingPlanService tradingPlanService, IStockMarketContextService marketContextService, ITradeExecutionInsightService tradeExecutionInsightService) =>
         {
             if (string.IsNullOrWhiteSpace(request.Symbol))
             {
@@ -1233,7 +1248,8 @@ public sealed class StocksModule : IModule
             {
                 var result = await tradingPlanService.CreateAsync(request);
                 var currentContext = await marketContextService.GetLatestAsync(result.Plan.Symbol);
-                return Results.Ok(MapTradingPlanDto(result.Plan, result.WatchlistEnsured, currentContext));
+                var insight = await tradeExecutionInsightService.GetPlanInsightAsync(result.Plan);
+                return Results.Ok(MapTradingPlanDto(result.Plan, result.WatchlistEnsured, currentContext, insight));
             }
             catch (Exception ex)
             {
@@ -1243,7 +1259,7 @@ public sealed class StocksModule : IModule
         .WithName("CreateTradingPlan")
         .WithOpenApi();
 
-        group.MapPut("/plans/{id:long}", async (long id, TradingPlanUpdateDto request, ITradingPlanService tradingPlanService, IStockMarketContextService marketContextService) =>
+        group.MapPut("/plans/{id:long}", async (long id, TradingPlanUpdateDto request, ITradingPlanService tradingPlanService, IStockMarketContextService marketContextService, ITradeExecutionInsightService tradeExecutionInsightService) =>
         {
             try
             {
@@ -1254,7 +1270,8 @@ public sealed class StocksModule : IModule
                 }
 
                 var currentContext = await marketContextService.GetLatestAsync(item.Symbol);
-                return Results.Ok(MapTradingPlanDto(item, null, currentContext));
+                var insight = await tradeExecutionInsightService.GetPlanInsightAsync(item);
+                return Results.Ok(MapTradingPlanDto(item, null, currentContext, insight));
             }
             catch (Exception ex)
             {
@@ -1264,7 +1281,7 @@ public sealed class StocksModule : IModule
         .WithName("UpdateTradingPlan")
         .WithOpenApi();
 
-        group.MapPost("/plans/{id:long}/cancel", async (long id, ITradingPlanService tradingPlanService, IStockMarketContextService marketContextService) =>
+        group.MapPost("/plans/{id:long}/cancel", async (long id, ITradingPlanService tradingPlanService, IStockMarketContextService marketContextService, ITradeExecutionInsightService tradeExecutionInsightService) =>
         {
             var item = await tradingPlanService.CancelAsync(id);
             if (item is null)
@@ -1273,12 +1290,13 @@ public sealed class StocksModule : IModule
             }
 
             var currentContext = await marketContextService.GetLatestAsync(item.Symbol);
-            return Results.Ok(MapTradingPlanDto(item, null, currentContext));
+            var insight = await tradeExecutionInsightService.GetPlanInsightAsync(item);
+            return Results.Ok(MapTradingPlanDto(item, null, currentContext, insight));
         })
         .WithName("CancelTradingPlan")
         .WithOpenApi();
 
-        group.MapPost("/plans/{id:long}/resume", async (long id, ITradingPlanService tradingPlanService, IStockMarketContextService marketContextService) =>
+        group.MapPost("/plans/{id:long}/resume", async (long id, ITradingPlanService tradingPlanService, IStockMarketContextService marketContextService, ITradeExecutionInsightService tradeExecutionInsightService) =>
         {
             try
             {
@@ -1289,7 +1307,8 @@ public sealed class StocksModule : IModule
                 }
 
                 var currentContext = await marketContextService.GetLatestAsync(item.Symbol);
-                return Results.Ok(MapTradingPlanDto(item, null, currentContext));
+                var insight = await tradeExecutionInsightService.GetPlanInsightAsync(item);
+                return Results.Ok(MapTradingPlanDto(item, null, currentContext, insight));
             }
             catch (Exception ex)
             {
@@ -2379,6 +2398,82 @@ public sealed class StocksModule : IModule
         return marketContext is null ? Results.NotFound() : Results.Ok(marketContext);
     }
 
+    internal static async Task<IResult> GetTradingPlansResultAsync(
+        string? symbol,
+        int? take,
+        ITradingPlanService tradingPlanService,
+        IStockMarketContextService marketContextService,
+        ITradeExecutionInsightService tradeExecutionInsightService,
+        ILogger? logger,
+        CancellationToken cancellationToken)
+    {
+        var list = await tradingPlanService.GetListAsync(symbol, take ?? 20, cancellationToken);
+
+        IReadOnlyDictionary<long, TradingPlanRuntimeInsightDto> insights;
+        try
+        {
+            insights = await tradeExecutionInsightService.GetPlanInsightsAsync(list, cancellationToken: cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger?.LogWarning(ex, "加载交易计划执行洞察失败，将降级返回计划主体列表。symbol={Symbol}, count={Count}", symbol, list.Count);
+            insights = new Dictionary<long, TradingPlanRuntimeInsightDto>();
+        }
+
+        var currentContexts = await LoadLatestMarketContextsSafelyAsync(list, marketContextService, logger, cancellationToken);
+        var payload = list
+            .Select((item, index) => MapTradingPlanDto(item, null, currentContexts[index], insights.GetValueOrDefault(item.Id)))
+            .ToArray();
+
+        return Results.Ok(payload);
+    }
+
+    private static async Task<StockMarketContextDto?[]> LoadLatestMarketContextsSafelyAsync(
+        IReadOnlyList<Data.Entities.TradingPlan> plans,
+        IStockMarketContextService marketContextService,
+        ILogger? logger,
+        CancellationToken cancellationToken)
+    {
+        var contexts = new StockMarketContextDto?[plans.Count];
+        var cache = new Dictionary<string, StockMarketContextDto?>(StringComparer.OrdinalIgnoreCase);
+
+        for (var index = 0; index < plans.Count; index++)
+        {
+            var symbol = plans[index].Symbol;
+            if (string.IsNullOrWhiteSpace(symbol))
+            {
+                continue;
+            }
+
+            if (!cache.TryGetValue(symbol, out var currentContext))
+            {
+                try
+                {
+                    currentContext = await marketContextService.GetLatestAsync(symbol, cancellationToken);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    logger?.LogWarning(ex, "加载交易计划当前市场上下文失败，将跳过该计划的当前上下文。symbol={Symbol}", symbol);
+                    currentContext = null;
+                }
+
+                cache[symbol] = currentContext;
+            }
+
+            contexts[index] = currentContext;
+        }
+
+        return contexts;
+    }
+
     private static async Task<IResult> ProxyFinancialWorkerAsync(
         HttpMethod method,
         string relativePath,
@@ -2651,7 +2746,7 @@ public sealed class StocksModule : IModule
         }
     }
 
-    private static TradingPlanItemDto MapTradingPlanDto(Data.Entities.TradingPlan item, bool? watchlistEnsured = null, StockMarketContextDto? currentMarketContext = null)
+    private static TradingPlanItemDto MapTradingPlanDto(Data.Entities.TradingPlan item, bool? watchlistEnsured = null, StockMarketContextDto? currentMarketContext = null, TradingPlanRuntimeInsightDto? insight = null)
     {
         return new TradingPlanItemDto(
             item.Id,
@@ -2678,7 +2773,28 @@ public sealed class StocksModule : IModule
             item.CancelledAt,
             watchlistEnsured,
             BuildCreationMarketContext(item),
-            currentMarketContext);
+            currentMarketContext,
+            insight?.ExecutionSummary,
+            insight?.CurrentScenarioStatus,
+            insight?.CurrentPositionSnapshot,
+            item.ActiveScenario,
+            item.PlanStartDate,
+            item.PlanEndDate);
+    }
+
+    internal static IResult? ValidateTradingPlanDraftRequest(TradingPlanDraftRequestDto request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Symbol))
+        {
+            return Results.BadRequest(new { message = "symbol 不能为空" });
+        }
+
+        if (request.AnalysisHistoryId <= 0)
+        {
+            return Results.BadRequest(new { message = "analysisHistoryId 无效" });
+        }
+
+        return null;
     }
 
     private static StockMarketContextDto? BuildCreationMarketContext(Data.Entities.TradingPlan item)
@@ -2725,8 +2841,6 @@ public sealed class StocksModule : IModule
 
     private static Data.Entities.TradingPlanStatus NormalizeTradingPlanStatus(Data.Entities.TradingPlanStatus status)
     {
-        return status == Data.Entities.TradingPlanStatus.Draft
-            ? Data.Entities.TradingPlanStatus.Pending
-            : status;
+        return status;
     }
 }

@@ -1,5 +1,10 @@
 <script setup>
 import { ref } from 'vue'
+import {
+  formatTradingPlanDateRange,
+  formatTradingPlanScenario,
+  getTradingPlanExpiryText
+} from './stockInfoTabTradingPlans'
 
 const props = defineProps({
   workspace: {
@@ -84,6 +89,23 @@ const confirmCancel = (item) => {
 const dismissCancel = () => {
   confirmingCancelId.value = null
 }
+
+const hasPlanSymbol = workspace => Boolean(workspace?.detail?.quote?.symbol || workspace?.symbolKey)
+
+const scenarioBadgeClass = code => {
+  if (code === 'Abandon') return 'scenario-danger'
+  if (code === 'Primary') return 'scenario-success'
+  if (code === 'Backup') return 'scenario-warning'
+  return 'scenario-info'
+}
+
+const formatSignedMoney = value => {
+  if (value == null) return '-'
+  const amount = Number(value)
+  return `${amount >= 0 ? '+' : ''}${amount.toFixed(2)}`
+}
+
+const formatExecutionMetric = (value, suffix = '') => `${value ?? 0}${suffix}`
 </script>
 
 <template>
@@ -94,8 +116,8 @@ const dismissCancel = () => {
         <p class="muted">当前股票的全部交易计划都可在这里编辑或删除。</p>
       </div>
       <div class="plan-header-actions">
-        <button class="market-news-button" @click="$emit('create')" :disabled="!workspace.detail">新建计划</button>
-        <button class="market-news-button plan-refresh-button" @click="$emit('refresh')" :disabled="workspace.planListLoading || workspace.planAlertsLoading || !workspace.detail">
+        <button class="market-news-button" @click="$emit('create')" :disabled="!hasPlanSymbol(workspace)">新建计划</button>
+        <button class="market-news-button plan-refresh-button" @click="$emit('refresh')" :disabled="workspace.planListLoading || workspace.planAlertsLoading || !hasPlanSymbol(workspace)">
           刷新
         </button>
       </div>
@@ -145,13 +167,50 @@ const dismissCancel = () => {
         </div>
         <div class="plan-status-row">
           <span class="plan-status-badge" :class="getTradingPlanStatusClass(item.status)">{{ formatTradingPlanStatus(item.status) }}</span>
+          <span v-if="item.activeScenario" class="plan-pill">启用 {{ formatTradingPlanScenario(item.activeScenario) }}</span>
+          <span v-if="formatTradingPlanDateRange(item.planStartDate, item.planEndDate)" class="plan-pill">{{ formatTradingPlanDateRange(item.planStartDate, item.planEndDate) }}</span>
+          <span v-if="getTradingPlanExpiryText(item)" class="plan-pill">{{ getTradingPlanExpiryText(item) }}</span>
           <span v-if="item.marketContextAtCreation" class="plan-pill">建立时 {{ item.marketContextAtCreation.stageLabel }}</span>
           <span v-if="item.currentMarketContext" class="plan-pill">当前 {{ item.currentMarketContext.stageLabel }}</span>
+          <span v-if="item.currentScenarioStatus" class="plan-pill plan-scenario-pill" :class="scenarioBadgeClass(item.currentScenarioStatus.code)">
+            {{ item.currentScenarioStatus.label }}
+          </span>
         </div>
         <p>{{ item.analysisSummary || item.expectedCatalyst || '等待补充计划摘要' }}</p>
         <div v-if="item.marketContextAtCreation || item.currentMarketContext" class="plan-market-context">
           <span v-if="item.marketContextAtCreation">建立时：{{ item.marketContextAtCreation.mainlineSectorName || '无主线' }} / 仓位 {{ formatPlanScale(item.marketContextAtCreation.suggestedPositionScale) }}</span>
           <span v-if="item.currentMarketContext">当前：{{ item.currentMarketContext.executionFrequencyLabel || '中性' }} / {{ item.currentMarketContext.counterTrendWarning ? '逆势提示' : '顺势观察' }}</span>
+        </div>
+        <div v-if="item.currentScenarioStatus" class="plan-scenario-card" :class="{ 'plan-scenario-card-danger': item.currentScenarioStatus.abandonTriggered }">
+          <strong>场景状态</strong>
+          <span>{{ item.currentScenarioStatus.summary || item.currentScenarioStatus.reason }}</span>
+          <small v-if="item.currentScenarioStatus.referencePrice != null">参考价 {{ formatPlanPrice(item.currentScenarioStatus.referencePrice) }}</small>
+        </div>
+        <div v-if="item.currentPositionSnapshot" class="plan-position-summary">
+          <strong>当前持仓快照</strong>
+          <span>{{ item.currentPositionSnapshot.summary || `持仓 ${item.currentPositionSnapshot.quantity} 股 / 仓位 ${((item.currentPositionSnapshot.positionRatio || 0) * 100).toFixed(1)}%` }}</span>
+          <small>浮盈 {{ formatSignedMoney(item.currentPositionSnapshot.unrealizedPnL) }} / 市值 {{ formatPlanPrice(item.currentPositionSnapshot.marketValue) }}</small>
+        </div>
+        <div v-if="item.executionSummary" class="plan-execution-summary">
+          <div class="plan-execution-header">
+            <strong>执行回写</strong>
+            <span class="plan-execution-overview">{{ item.executionSummary.summary || '执行记录已同步回写，可据此快速判断当前节奏。' }}</span>
+          </div>
+          <div class="plan-execution-strip">
+            <div class="plan-execution-metric">
+              <small>已执行</small>
+              <strong>{{ formatExecutionMetric(item.executionSummary.executionCount, ' 次') }}</strong>
+            </div>
+            <div class="plan-execution-metric plan-execution-metric-main">
+              <small>最近动作</small>
+              <strong>{{ item.executionSummary.latestAction || '执行' }}</strong>
+              <span v-if="item.executionSummary.latestExecutedAt">{{ formatDate(item.executionSummary.latestExecutedAt) }}</span>
+            </div>
+          </div>
+          <small class="plan-execution-detail">
+            <span v-if="item.executionSummary.latestExecutedAt">最近更新时间 {{ formatDate(item.executionSummary.latestExecutedAt) }}</span>
+            <span v-if="item.executionSummary.latestDeviationTags?.length">偏差 {{ item.executionSummary.latestDeviationTags.join(' / ') }}</span>
+          </small>
         </div>
         <div
           v-if="getLatestPlanAlert(workspace, item.id)"
@@ -276,6 +335,11 @@ const dismissCancel = () => {
   color: #1d4ed8;
 }
 
+.plan-status-draft {
+  background: rgba(99, 102, 241, 0.12);
+  color: #4f46e5;
+}
+
 .plan-status-triggered {
   background: rgba(22, 163, 74, 0.12);
   color: #15803d;
@@ -334,6 +398,99 @@ const dismissCancel = () => {
   background: rgba(37, 99, 235, 0.08);
   color: #1d4ed8;
   font-size: 0.78rem;
+}
+
+.plan-scenario-pill.scenario-success {
+  background: rgba(22, 163, 74, 0.12);
+  color: #15803d;
+}
+
+.plan-scenario-pill.scenario-warning {
+  background: rgba(245, 158, 11, 0.12);
+  color: #92400e;
+}
+
+.plan-scenario-pill.scenario-danger {
+  background: rgba(239, 68, 68, 0.14);
+  color: #b91c1c;
+}
+
+.plan-scenario-pill.scenario-info {
+  background: rgba(14, 165, 233, 0.12);
+  color: #0c4a6e;
+}
+
+.plan-scenario-card,
+.plan-position-summary,
+.plan-execution-summary {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.65rem 0.8rem;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(255, 255, 255, 0.65);
+}
+
+.plan-scenario-card strong,
+.plan-position-summary strong,
+.plan-execution-summary strong {
+  font-size: 0.8rem;
+}
+
+.plan-execution-header {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.plan-execution-overview {
+  font-size: 0.82rem;
+  color: var(--color-text-body, #334155);
+}
+
+.plan-execution-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+.plan-execution-metric {
+  display: grid;
+  gap: 0.12rem;
+  padding: 0.55rem 0.6rem;
+  border-radius: 10px;
+  background: rgba(37, 99, 235, 0.06);
+}
+
+.plan-execution-metric small {
+  font-size: 0.72rem;
+  color: var(--color-text-muted, #64748b);
+}
+
+.plan-execution-metric strong {
+  font-size: 0.92rem;
+  color: var(--color-text-primary, #0f172a);
+}
+
+.plan-execution-metric span {
+  font-size: 0.72rem;
+  color: var(--color-text-secondary, #475569);
+}
+
+.plan-execution-metric-main {
+  background: rgba(14, 165, 233, 0.08);
+}
+
+.plan-execution-detail {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.plan-scenario-card-danger {
+  border-color: rgba(220, 38, 38, 0.28);
+  background: rgba(254, 242, 242, 0.88);
+  color: #991b1b;
 }
 
 .plan-link-button {
@@ -401,6 +558,10 @@ const dismissCancel = () => {
   .trading-plan-header,
   .plan-item-header {
     flex-direction: column;
+  }
+
+  .plan-execution-strip {
+    grid-template-columns: 1fr;
   }
 }
 </style>

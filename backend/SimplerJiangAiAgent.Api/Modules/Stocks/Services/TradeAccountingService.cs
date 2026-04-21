@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 using SimplerJiangAiAgent.Api.Data;
 using SimplerJiangAiAgent.Api.Data.Entities;
 using SimplerJiangAiAgent.Api.Modules.Stocks.Models;
@@ -19,13 +20,16 @@ public interface ITradeAccountingService
 
 public sealed class TradeAccountingService : ITradeAccountingService
 {
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly AppDbContext _db;
     private readonly ITradeComplianceService _complianceService;
+    private readonly ITradeExecutionInsightService _tradeExecutionInsightService;
 
-    public TradeAccountingService(AppDbContext db, ITradeComplianceService complianceService)
+    public TradeAccountingService(AppDbContext db, ITradeComplianceService complianceService, ITradeExecutionInsightService tradeExecutionInsightService)
     {
         _db = db;
         _complianceService = complianceService;
+        _tradeExecutionInsightService = tradeExecutionInsightService;
     }
 
     public async Task<TradeExecution> RecordTradeAsync(TradeExecutionCreateDto dto)
@@ -64,7 +68,12 @@ public sealed class TradeAccountingService : ITradeAccountingService
             Commission = dto.Commission,
             UserNote = dto.UserNote,
             CreatedAt = DateTime.UtcNow,
-            ComplianceTag = ComplianceTag.Unplanned
+            ComplianceTag = ComplianceTag.Unplanned,
+            PlanAction = NormalizeOptional(dto.PlanAction),
+            ExecutionAction = NormalizeOptional(dto.ExecutionAction),
+            DeviationTagsJson = SerializeTags(dto.DeviationTags),
+            DeviationNote = NormalizeOptional(dto.DeviationNote),
+            AbandonReason = NormalizeOptional(dto.AbandonReason)
         };
 
         // Auto-calculate on sell
@@ -105,10 +114,11 @@ public sealed class TradeAccountingService : ITradeAccountingService
         }
 
         _db.TradeExecutions.Add(trade);
-        await _db.SaveChangesAsync();
 
         // Tag compliance
         await _complianceService.TagComplianceAsync(trade);
+        await MarkPlanTriggeredAsync(trade);
+        await _tradeExecutionInsightService.EnrichTradeExecutionAsync(trade);
         await _db.SaveChangesAsync();
 
         // Recalculate position
@@ -127,6 +137,11 @@ public sealed class TradeAccountingService : ITradeAccountingService
         trade.ExecutedAt = dto.ExecutedAt;
         trade.Commission = dto.Commission;
         trade.UserNote = dto.UserNote;
+        trade.PlanAction = NormalizeOptional(dto.PlanAction) ?? trade.PlanAction;
+        trade.ExecutionAction = NormalizeOptional(dto.ExecutionAction) ?? trade.ExecutionAction;
+        trade.DeviationTagsJson = SerializeTags(dto.DeviationTags) ?? trade.DeviationTagsJson;
+        trade.DeviationNote = NormalizeOptional(dto.DeviationNote);
+        trade.AbandonReason = NormalizeOptional(dto.AbandonReason);
 
         // Re-calculate PnL if sell
         if (trade.Direction == TradeDirection.Sell)
@@ -142,6 +157,8 @@ public sealed class TradeAccountingService : ITradeAccountingService
             }
         }
 
+        await _complianceService.TagComplianceAsync(trade);
+        await _tradeExecutionInsightService.EnrichTradeExecutionAsync(trade, useLiveQuote: false);
         await _db.SaveChangesAsync();
         await RecalculatePositionAsync(trade.Symbol);
         return trade;
@@ -350,7 +367,10 @@ public sealed class TradeAccountingService : ITradeAccountingService
         t.Commission, t.UserNote, t.CreatedAt,
         t.CostBasis, t.RealizedPnL, t.ReturnRate,
         t.ComplianceTag.ToString(),
-        t.AgentDirection, t.AgentConfidence, t.MarketStageAtTrade);
+        t.AgentDirection, t.AgentConfidence, t.MarketStageAtTrade,
+        t.PlanSourceAgent, t.PlanAction, t.ExecutionAction,
+        ParseDeviationTags(t.DeviationTagsJson), t.DeviationNote, t.AbandonReason,
+        ParseScenarioSnapshot(t.ScenarioSnapshotJson), ParsePositionSnapshot(t.PositionSnapshotJson), t.CoachTip);
 
     public async Task<(int deletedTrades, int deletedPositions, int deletedReviews)> ResetAllTradesAsync()
     {
@@ -367,6 +387,94 @@ public sealed class TradeAccountingService : ITradeAccountingService
         {
             await tx.RollbackAsync();
             throw;
+        }
+    }
+
+    private async Task MarkPlanTriggeredAsync(TradeExecution trade)
+    {
+        if (!trade.PlanId.HasValue)
+        {
+            return;
+        }
+
+        var plan = await _db.TradingPlans.FirstOrDefaultAsync(item => item.Id == trade.PlanId.Value);
+        if (plan is null || plan.Status != TradingPlanStatus.Pending)
+        {
+            return;
+        }
+
+        plan.Status = TradingPlanStatus.Triggered;
+        plan.TriggeredAt ??= trade.ExecutedAt;
+        plan.UpdatedAt = DateTime.UtcNow;
+    }
+
+    private static string? NormalizeOptional(string? value)
+    {
+        var result = value?.Trim();
+        return string.IsNullOrWhiteSpace(result) ? null : result;
+    }
+
+    private static string? SerializeTags(IReadOnlyList<string>? value)
+    {
+        var normalized = value?
+            .Where(item => !string.IsNullOrWhiteSpace(item))
+            .Select(item => item.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        return normalized is { Length: > 0 } ? JsonSerializer.Serialize(normalized, JsonOptions) : null;
+    }
+
+    private static IReadOnlyList<string> ParseDeviationTags(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return Array.Empty<string>();
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<List<string>>(value, JsonOptions)
+                   ?.Where(item => !string.IsNullOrWhiteSpace(item))
+                   .ToArray()
+                   ?? Array.Empty<string>();
+        }
+        catch
+        {
+            return Array.Empty<string>();
+        }
+    }
+
+    private static TradingPlanScenarioStatusDto? ParseScenarioSnapshot(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<TradingPlanScenarioStatusDto>(value, JsonOptions);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static TradingPlanPositionContextDto? ParsePositionSnapshot(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<TradingPlanPositionContextDto>(value, JsonOptions);
+        }
+        catch
+        {
+            return null;
         }
     }
 }

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
 using SimplerJiangAiAgent.Api.Data;
 using SimplerJiangAiAgent.Api.Data.Entities;
@@ -22,6 +23,16 @@ public sealed record TradingPlanSaveResult(TradingPlan Plan, bool WatchlistEnsur
 
 public sealed class TradingPlanService : ITradingPlanService
 {
+    private static readonly TimeZoneInfo ChinaTimeZone = ResolveChinaTimeZone();
+    private static readonly Expression<Func<TradingPlan, bool>> RenderablePlanPredicate = item =>
+        item.Symbol != null
+        && item.Symbol.Trim() != string.Empty
+        && item.Name != null
+        && item.Name.Trim() != string.Empty;
+    private static readonly Expression<Func<TradingPlan, bool>> NonTerminalPlanWithEndDatePredicate = item =>
+        item.Status != TradingPlanStatus.Invalid
+        && item.Status != TradingPlanStatus.Cancelled
+        && item.PlanEndDate != null;
     private readonly AppDbContext _dbContext;
     private readonly IActiveWatchlistService _watchlistService;
     private readonly IStockMarketContextService _marketContextService;
@@ -35,16 +46,18 @@ public sealed class TradingPlanService : ITradingPlanService
 
     public async Task<IReadOnlyList<TradingPlan>> GetListAsync(string? symbol, int take = 20, CancellationToken cancellationToken = default)
     {
+        var normalizedSymbol = string.IsNullOrWhiteSpace(symbol) ? null : StockSymbolNormalizer.Normalize(symbol);
+        await NormalizeExpiredPlansAsync(normalizedSymbol, null, cancellationToken);
+
         var query = _dbContext.TradingPlans
             .AsNoTracking()
-            .Where(IsRenderablePlan())
+            .Where(RenderablePlanPredicate)
             .OrderByDescending(item => item.CreatedAt)
             .AsQueryable();
 
-        if (!string.IsNullOrWhiteSpace(symbol))
+        if (!string.IsNullOrWhiteSpace(normalizedSymbol))
         {
-            var normalized = StockSymbolNormalizer.Normalize(symbol);
-            query = query.Where(item => item.Symbol == normalized);
+            query = query.Where(item => item.Symbol == normalizedSymbol);
         }
 
         return await query
@@ -54,9 +67,11 @@ public sealed class TradingPlanService : ITradingPlanService
 
     public async Task<TradingPlan?> GetByIdAsync(long id, CancellationToken cancellationToken = default)
     {
+        await NormalizeExpiredPlansAsync(null, id, cancellationToken);
+
         return await _dbContext.TradingPlans
             .AsNoTracking()
-            .Where(IsRenderablePlan())
+            .Where(RenderablePlanPredicate)
             .FirstOrDefaultAsync(item => item.Id == id, cancellationToken);
     }
 
@@ -68,11 +83,15 @@ public sealed class TradingPlanService : ITradingPlanService
             throw new ArgumentException("symbol 不能为空", nameof(request.Symbol));
         }
 
+        var normalizedAnalysisHistoryId = request.AnalysisHistoryId is > 0
+            ? request.AnalysisHistoryId.Value
+            : (long?)null;
+
         StockAgentAnalysisHistory? history = null;
-        if (request.AnalysisHistoryId.HasValue && request.AnalysisHistoryId.Value > 0)
+        if (normalizedAnalysisHistoryId.HasValue)
         {
             history = await _dbContext.StockAgentAnalysisHistories
-                .FirstOrDefaultAsync(item => item.Id == request.AnalysisHistoryId.Value, cancellationToken);
+                .FirstOrDefaultAsync(item => item.Id == normalizedAnalysisHistoryId.Value, cancellationToken);
             if (history is null)
             {
                 throw new InvalidOperationException("分析历史不存在");
@@ -94,7 +113,7 @@ public sealed class TradingPlanService : ITradingPlanService
             Name = name,
             Title = NormalizeLegacyTitle(name),
             Direction = ParseDirection(request.Direction),
-            Status = TradingPlanStatus.Pending,
+            Status = ParseRequestedStatus(request.Status, TradingPlanStatus.Pending),
             TriggerPrice = request.TriggerPrice,
             InvalidPrice = request.InvalidPrice,
             StopLossPrice = request.StopLossPrice,
@@ -104,9 +123,12 @@ public sealed class TradingPlanService : ITradingPlanService
             InvalidConditions = NormalizeOptional(request.InvalidConditions),
             RiskLimits = NormalizeOptional(request.RiskLimits),
             AnalysisSummary = NormalizeOptional(request.AnalysisSummary),
-            AnalysisHistoryId = request.AnalysisHistoryId ?? 0,
+            AnalysisHistoryId = normalizedAnalysisHistoryId,
             SourceAgent = NormalizeOptional(request.SourceAgent) ?? (history is null ? "manual" : "commander"),
             UserNote = NormalizeOptional(request.UserNote),
+            ActiveScenario = NormalizeScenarioKey(request.ActiveScenario) ?? "Primary",
+            PlanStartDate = request.PlanStartDate,
+            PlanEndDate = request.PlanEndDate,
             MarketStageLabelAtCreation = marketContext?.StageLabel,
             StageConfidenceAtCreation = marketContext?.StageConfidence,
             SuggestedPositionScale = marketContext?.SuggestedPositionScale,
@@ -119,6 +141,9 @@ public sealed class TradingPlanService : ITradingPlanService
             UpdatedAt = now
         };
 
+        ValidatePlanDateRange(plan.PlanStartDate, plan.PlanEndDate);
+        ApplyExpiryIfNeeded(plan, now);
+
         _dbContext.TradingPlans.Add(plan);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
@@ -128,6 +153,8 @@ public sealed class TradingPlanService : ITradingPlanService
 
     public async Task<TradingPlan?> UpdateAsync(long id, TradingPlanUpdateDto request, CancellationToken cancellationToken = default)
     {
+        await NormalizeExpiredPlansAsync(null, id, cancellationToken);
+
         var plan = await _dbContext.TradingPlans.FirstOrDefaultAsync(item => item.Id == id, cancellationToken);
         if (plan is null)
         {
@@ -136,17 +163,13 @@ public sealed class TradingPlanService : ITradingPlanService
 
         if (!IsEditableStatus(plan.Status))
         {
-            throw new InvalidOperationException("仅 Pending 计划允许编辑");
-        }
-
-        if (plan.Status == TradingPlanStatus.Draft)
-        {
-            plan.Status = TradingPlanStatus.Pending;
+            throw new InvalidOperationException("仅 Pending / Draft / ReviewRequired 计划允许编辑");
         }
 
         plan.Name = NormalizeRequiredName(request.Name, plan.Name);
         EnsureLegacyCompatibility(plan);
         plan.Direction = ParseDirection(request.Direction, plan.Direction);
+        plan.Status = ParseRequestedStatus(request.Status, plan.Status);
         plan.TriggerPrice = request.TriggerPrice;
         plan.InvalidPrice = request.InvalidPrice;
         plan.StopLossPrice = request.StopLossPrice;
@@ -158,7 +181,13 @@ public sealed class TradingPlanService : ITradingPlanService
         plan.AnalysisSummary = NormalizeOptional(request.AnalysisSummary);
         plan.SourceAgent = NormalizeOptional(request.SourceAgent) ?? plan.SourceAgent;
         plan.UserNote = NormalizeOptional(request.UserNote);
+        plan.ActiveScenario = NormalizeScenarioKey(request.ActiveScenario) ?? plan.ActiveScenario ?? "Primary";
+        plan.PlanStartDate = request.PlanStartDate;
+        plan.PlanEndDate = request.PlanEndDate;
         plan.UpdatedAt = DateTime.UtcNow;
+
+        ValidatePlanDateRange(plan.PlanStartDate, plan.PlanEndDate);
+        ApplyExpiryIfNeeded(plan, plan.UpdatedAt);
 
         await _dbContext.SaveChangesAsync(cancellationToken);
         return plan;
@@ -166,13 +195,15 @@ public sealed class TradingPlanService : ITradingPlanService
 
     public async Task<TradingPlan?> CancelAsync(long id, CancellationToken cancellationToken = default)
     {
+        await NormalizeExpiredPlansAsync(null, id, cancellationToken);
+
         var plan = await _dbContext.TradingPlans.FirstOrDefaultAsync(item => item.Id == id, cancellationToken);
         if (plan is null)
         {
             return null;
         }
 
-        if (plan.Status == TradingPlanStatus.Cancelled)
+        if (plan.Status is TradingPlanStatus.Cancelled or TradingPlanStatus.Invalid)
         {
             return plan;
         }
@@ -187,6 +218,8 @@ public sealed class TradingPlanService : ITradingPlanService
 
     public async Task<TradingPlan?> ResumeAsync(long id, CancellationToken cancellationToken = default)
     {
+        await NormalizeExpiredPlansAsync(null, id, cancellationToken);
+
         var plan = await _dbContext.TradingPlans.FirstOrDefaultAsync(item => item.Id == id, cancellationToken);
         if (plan is null)
         {
@@ -269,6 +302,84 @@ public sealed class TradingPlanService : ITradingPlanService
         return string.IsNullOrWhiteSpace(result) ? null : result;
     }
 
+    private static string? NormalizeScenarioKey(string? value)
+    {
+        var normalized = NormalizeOptional(value);
+        if (normalized is null)
+        {
+            return null;
+        }
+
+        if (string.Equals(normalized, "主场景", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(normalized, "Primary", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(normalized, "Main", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Primary";
+        }
+
+        if (string.Equals(normalized, "备选场景", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(normalized, "Backup", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(normalized, "Alternative", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Backup";
+        }
+
+        return normalized;
+    }
+
+    private static TradingPlanStatus ParseRequestedStatus(string? value, TradingPlanStatus fallback)
+    {
+        var normalized = NormalizeOptional(value);
+        if (normalized is null)
+        {
+            return fallback;
+        }
+
+        if (Enum.TryParse<TradingPlanStatus>(normalized, true, out var parsed))
+        {
+            return parsed;
+        }
+
+        if (string.Equals(normalized, "Archived", StringComparison.OrdinalIgnoreCase))
+        {
+            return TradingPlanStatus.Cancelled;
+        }
+
+        if (string.Equals(normalized, "NeedsReview", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(normalized, "Review", StringComparison.OrdinalIgnoreCase))
+        {
+            return TradingPlanStatus.ReviewRequired;
+        }
+
+        return fallback;
+    }
+
+    private static void ValidatePlanDateRange(DateOnly? startDate, DateOnly? endDate)
+    {
+        if (startDate.HasValue && endDate.HasValue && startDate.Value > endDate.Value)
+        {
+            throw new InvalidOperationException("开始日期不能晚于结束日期");
+        }
+    }
+
+    private static void ApplyExpiryIfNeeded(TradingPlan plan, DateTime nowUtc)
+    {
+        if (plan.PlanEndDate is null || IsTerminalStatus(plan.Status))
+        {
+            return;
+        }
+
+        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(nowUtc, ChinaTimeZone));
+        if (plan.PlanEndDate.Value >= today)
+        {
+            return;
+        }
+
+        plan.Status = TradingPlanStatus.Invalid;
+        plan.InvalidatedAt ??= nowUtc;
+        plan.UpdatedAt = nowUtc;
+    }
+
     private static TradingPlanDirection ParseDirection(string? value, TradingPlanDirection fallback = TradingPlanDirection.Long)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -286,9 +397,64 @@ public sealed class TradingPlanService : ITradingPlanService
         return status is TradingPlanStatus.Pending or TradingPlanStatus.Draft or TradingPlanStatus.ReviewRequired;
     }
 
-    private static System.Linq.Expressions.Expression<Func<TradingPlan, bool>> IsRenderablePlan()
+    private static bool IsTerminalStatus(TradingPlanStatus status)
     {
-        return item => !string.IsNullOrWhiteSpace(item.Symbol)
-            && !string.IsNullOrWhiteSpace(item.Name);
+        return status is TradingPlanStatus.Invalid or TradingPlanStatus.Cancelled;
+    }
+
+    private async Task NormalizeExpiredPlansAsync(string? symbol, long? id, CancellationToken cancellationToken)
+    {
+        var query = _dbContext.TradingPlans
+            .Where(NonTerminalPlanWithEndDatePredicate)
+            .AsQueryable();
+
+        if (id.HasValue)
+        {
+            query = query.Where(item => item.Id == id.Value);
+        }
+        else if (!string.IsNullOrWhiteSpace(symbol))
+        {
+            query = query.Where(item => item.Symbol == symbol);
+        }
+
+        var candidates = await query.ToListAsync(cancellationToken);
+
+        if (candidates.Count == 0)
+        {
+            return;
+        }
+
+        var now = DateTime.UtcNow;
+        var changed = false;
+        foreach (var candidate in candidates)
+        {
+            var previousStatus = candidate.Status;
+            var previousInvalidatedAt = candidate.InvalidatedAt;
+            var previousUpdatedAt = candidate.UpdatedAt;
+            ApplyExpiryIfNeeded(candidate, now);
+            if (candidate.Status != previousStatus
+                || candidate.InvalidatedAt != previousInvalidatedAt
+                || candidate.UpdatedAt != previousUpdatedAt)
+            {
+                changed = true;
+            }
+        }
+
+        if (changed)
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+    }
+
+    private static TimeZoneInfo ResolveChinaTimeZone()
+    {
+        try
+        {
+            return TimeZoneInfo.FindSystemTimeZoneById("China Standard Time");
+        }
+        catch (TimeZoneNotFoundException)
+        {
+            return TimeZoneInfo.CreateCustomTimeZone("China Standard Time", TimeSpan.FromHours(8), "China Standard Time", "China Standard Time");
+        }
     }
 }

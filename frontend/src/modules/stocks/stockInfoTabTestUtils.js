@@ -601,6 +601,7 @@ const createStockInfoTabCaseContext = ({ expect, vi }) => ({
 const resetStockInfoTabTestEnvironment = vi => {
   vi.restoreAllMocks()
   vi.useRealTimers()
+  document.body.innerHTML = ''
   localStorage.clear()
 }
 

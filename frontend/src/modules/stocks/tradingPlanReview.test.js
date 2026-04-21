@@ -9,12 +9,14 @@ import {
 
 describe('tradingPlanReview helpers', () => {
   it('normalizes legacy review statuses', () => {
-    expect(normalizeTradingPlanStatus('Draft')).toBe('Pending')
+    expect(normalizeTradingPlanStatus('Draft')).toBe('Draft')
     expect(normalizeTradingPlanStatus('NeedsReview')).toBe('ReviewRequired')
     expect(normalizeTradingPlanStatus('Archived')).toBe('Cancelled')
   })
 
   it('formats review required status for display', () => {
+    expect(formatTradingPlanStatus('Draft')).toBe('草稿')
+    expect(getTradingPlanStatusClass('Draft')).toBe('plan-status-draft')
     expect(formatTradingPlanStatus('ReviewRequired')).toBe('待复核')
     expect(getTradingPlanStatusClass('ReviewRequired')).toBe('plan-status-review-required')
   })

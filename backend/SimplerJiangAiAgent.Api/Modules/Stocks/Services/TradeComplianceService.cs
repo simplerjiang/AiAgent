@@ -15,6 +15,7 @@ public interface ITradeComplianceService
 
 public sealed class TradeComplianceService : ITradeComplianceService
 {
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly AppDbContext _db;
 
     public TradeComplianceService(AppDbContext db)
@@ -24,38 +25,99 @@ public sealed class TradeComplianceService : ITradeComplianceService
 
     public async Task TagComplianceAsync(TradeExecution trade)
     {
-        // Find matching plan for this symbol (Pending or Triggered)
-        var matchingPlan = await _db.TradingPlans
+        TradingPlan? matchingPlan = null;
+        if (trade.PlanId.HasValue)
+        {
+            matchingPlan = await _db.TradingPlans.FirstOrDefaultAsync(item => item.Id == trade.PlanId.Value);
+        }
+
+        matchingPlan ??= await _db.TradingPlans
             .Where(p => p.Symbol == trade.Symbol
-                && (p.Status == TradingPlanStatus.Pending || p.Status == TradingPlanStatus.Triggered))
+                && (p.Status == TradingPlanStatus.Pending || p.Status == TradingPlanStatus.Triggered || p.Status == TradingPlanStatus.ReviewRequired))
             .OrderByDescending(p => p.CreatedAt)
             .FirstOrDefaultAsync();
+
+        var deviationTags = ParseDeviationTags(trade.DeviationTagsJson).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         if (matchingPlan is null)
         {
             trade.ComplianceTag = ComplianceTag.Unplanned;
+            deviationTags.Add("无计划交易");
         }
         else
         {
             trade.PlanId ??= matchingPlan.Id;
+            trade.PlanSourceAgent ??= matchingPlan.SourceAgent;
+            trade.PlanAction ??= matchingPlan.Direction == TradingPlanDirection.Short ? "计划卖出" : "计划买入";
 
             // Check direction alignment
             var planIsBuy = matchingPlan.Direction == TradingPlanDirection.Long;
             var tradeIsBuy = trade.Direction == TradeDirection.Buy;
             var directionMatch = planIsBuy == tradeIsBuy;
+            if (!directionMatch)
+            {
+                deviationTags.Add("动作偏离");
+            }
 
-            // Check price deviation (±5%)
             var priceDeviation = true;
             if (matchingPlan.TriggerPrice.HasValue && matchingPlan.TriggerPrice.Value > 0)
             {
                 var deviation = Math.Abs(trade.ExecutedPrice - matchingPlan.TriggerPrice.Value) / matchingPlan.TriggerPrice.Value;
-                priceDeviation = deviation <= 0.05m;
+                priceDeviation = deviation <= 0.01m;
+
+                if (deviation > 0.01m)
+                {
+                    deviationTags.Add("未按触发位");
+                }
+
+                if (matchingPlan.Direction == TradingPlanDirection.Long)
+                {
+                    if (trade.ExecutedPrice < matchingPlan.TriggerPrice.Value * 0.99m)
+                    {
+                        deviationTags.Add("低于触发价成交");
+                    }
+
+                    if (trade.ExecutedPrice > matchingPlan.TriggerPrice.Value * 1.02m)
+                    {
+                        deviationTags.Add("高于触发价成交");
+                    }
+
+                    if (trade.Direction == TradeDirection.Buy && trade.ExecutedPrice > matchingPlan.TriggerPrice.Value * 1.03m)
+                    {
+                        deviationTags.Add("追价");
+                    }
+                }
+                else
+                {
+                    if (trade.ExecutedPrice > matchingPlan.TriggerPrice.Value * 1.01m)
+                    {
+                        deviationTags.Add("低于触发价成交");
+                    }
+
+                    if (trade.ExecutedPrice < matchingPlan.TriggerPrice.Value * 0.98m)
+                    {
+                        deviationTags.Add("高于触发价成交");
+                    }
+                }
             }
 
-            trade.ComplianceTag = directionMatch && priceDeviation
+            var settings = await _db.UserPortfolioSettings.AsNoTracking().FirstOrDefaultAsync();
+            if (settings is not null && settings.TotalCapital > 0 && matchingPlan.SuggestedPositionScale.HasValue && matchingPlan.SuggestedPositionScale.Value > 0)
+            {
+                var plannedValue = settings.TotalCapital * matchingPlan.SuggestedPositionScale.Value;
+                var tradeValue = trade.ExecutedPrice * trade.Quantity;
+                if (plannedValue > 0 && tradeValue > plannedValue * 1.15m)
+                {
+                    deviationTags.Add("超仓");
+                }
+            }
+
+            trade.ComplianceTag = directionMatch && priceDeviation && deviationTags.Count == 0
                 ? ComplianceTag.FollowedPlan
                 : ComplianceTag.DeviatedFromPlan;
         }
+
+        trade.DeviationTagsJson = deviationTags.Count == 0 ? null : JsonSerializer.Serialize(deviationTags.OrderBy(item => item), JsonOptions);
 
         // Snapshot latest analysis history
         var latestAnalysis = await _db.StockAgentAnalysisHistories
@@ -136,7 +198,10 @@ public sealed class TradeComplianceService : ITradeComplianceService
             t.Commission, t.UserNote, t.CreatedAt,
             t.CostBasis, t.RealizedPnL, t.ReturnRate,
             t.ComplianceTag.ToString(),
-            t.AgentDirection, t.AgentConfidence, t.MarketStageAtTrade)).ToList();
+            t.AgentDirection, t.AgentConfidence, t.MarketStageAtTrade,
+            t.PlanSourceAgent, t.PlanAction, t.ExecutionAction,
+            ParseDeviationTags(t.DeviationTagsJson), t.DeviationNote, t.AbandonReason,
+            ParseScenarioSnapshot(t.ScenarioSnapshotJson), ParsePositionSnapshot(t.PositionSnapshotJson), t.CoachTip)).ToList();
 
         var avgExecutedPrice = executions.Count > 0
             ? executions.Average(t => t.ExecutedPrice)
@@ -149,5 +214,60 @@ public sealed class TradeComplianceService : ITradeComplianceService
         return new PlanDeviationDto(
             plan.Id, plan.Title, plan.Direction.ToString(),
             plan.TriggerPrice, items, avgExecutedPrice, priceDeviation);
+    }
+
+    private static IReadOnlyList<string> ParseDeviationTags(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return Array.Empty<string>();
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<List<string>>(value, JsonOptions)
+                   ?.Where(item => !string.IsNullOrWhiteSpace(item))
+                   .Distinct(StringComparer.OrdinalIgnoreCase)
+                   .ToArray()
+                   ?? Array.Empty<string>();
+        }
+        catch
+        {
+            return Array.Empty<string>();
+        }
+    }
+
+    private static TradingPlanScenarioStatusDto? ParseScenarioSnapshot(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<TradingPlanScenarioStatusDto>(value, JsonOptions);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static TradingPlanPositionContextDto? ParsePositionSnapshot(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<TradingPlanPositionContextDto>(value, JsonOptions);
+        }
+        catch
+        {
+            return null;
+        }
     }
 }

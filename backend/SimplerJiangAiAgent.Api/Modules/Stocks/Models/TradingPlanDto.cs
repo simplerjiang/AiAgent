@@ -42,7 +42,11 @@ public sealed record TradingPlanCreateDto(
     string? AnalysisSummary,
     long? AnalysisHistoryId,
     string? SourceAgent,
-    string? UserNote
+    string? UserNote,
+    string? Status = null,
+    string? ActiveScenario = null,
+    DateOnly? PlanStartDate = null,
+    DateOnly? PlanEndDate = null
 );
 
 public sealed record TradingPlanUpdateDto(
@@ -58,7 +62,11 @@ public sealed record TradingPlanUpdateDto(
     string? RiskLimits,
     string? AnalysisSummary,
     string? SourceAgent,
-    string? UserNote
+    string? UserNote,
+    string? Status = null,
+    string? ActiveScenario = null,
+    DateOnly? PlanStartDate = null,
+    DateOnly? PlanEndDate = null
 );
 
 public sealed record TradingPlanItemDto(
@@ -86,7 +94,76 @@ public sealed record TradingPlanItemDto(
     DateTime? CancelledAt,
     bool? WatchlistEnsured,
     StockMarketContextDto? MarketContextAtCreation,
-    StockMarketContextDto? CurrentMarketContext
+    StockMarketContextDto? CurrentMarketContext,
+    TradingPlanExecutionSummaryDto? ExecutionSummary = null,
+    TradingPlanScenarioStatusDto? CurrentScenarioStatus = null,
+    TradingPlanPositionContextDto? CurrentPositionSnapshot = null,
+    string? ActiveScenario = null,
+    DateOnly? PlanStartDate = null,
+    DateOnly? PlanEndDate = null
+);
+
+public sealed record TradingPlanExecutionSummaryDto(
+    int ExecutionCount,
+    string? LatestAction,
+    DateTime? LatestExecutedAt,
+    int DeviatedCount,
+    int UnplannedCount,
+    string? LatestComplianceTag,
+    IReadOnlyList<string> LatestDeviationTags,
+    string? Summary
+);
+
+public sealed record TradingPlanScenarioStatusDto(
+    string Code,
+    string Label,
+    string Reason,
+    string SnapshotType,
+    DateTime SnapshotAt,
+    decimal? ReferencePrice,
+    string? MarketStage,
+    bool CounterTrendWarning,
+    bool IsMainlineAligned,
+    bool AbandonTriggered,
+    string? PlanStatus,
+    string? Summary
+);
+
+public sealed record TradingPlanPositionContextDto(
+    string Symbol,
+    string Name,
+    int Quantity,
+    decimal AverageCost,
+    decimal? LatestPrice,
+    decimal? MarketValue,
+    decimal? UnrealizedPnL,
+    decimal? PositionRatio,
+    string SnapshotType,
+    DateTime SnapshotAt,
+    decimal? AvailableCash,
+    decimal? TotalPositionRatio,
+    string? Summary
+);
+
+public sealed record TradingPlanPortfolioSummaryDto(
+    decimal TotalPositionRatio,
+    decimal AvailableCash,
+    decimal TotalUnrealizedPnL,
+    string Summary
+);
+
+public sealed record TradingPlanExecutionContextDto(
+    TradingPlanItemDto Plan,
+    TradingPlanScenarioStatusDto? ScenarioStatus,
+    TradingPlanPositionContextDto? CurrentPositionSnapshot,
+    TradingPlanPortfolioSummaryDto PortfolioSummary,
+    TradingPlanExecutionSummaryDto? ExecutionSummary
+);
+
+public sealed record TradingPlanRuntimeInsightDto(
+    TradingPlanExecutionSummaryDto? ExecutionSummary,
+    TradingPlanScenarioStatusDto? CurrentScenarioStatus,
+    TradingPlanPositionContextDto? CurrentPositionSnapshot
 );
 
 public sealed record TradingPlanEventItemDto(

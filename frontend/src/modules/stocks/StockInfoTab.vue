@@ -47,6 +47,7 @@ import {
 } from './stockInfoTabRequestUtils'
 import { useConfirm } from '../../composables/useConfirm.js'
 import {
+  buildPlanMarketContextMessage,
   buildRealtimeContextSymbols,
   canCancelTradingPlan,
   canEditTradingPlan,
@@ -54,6 +55,7 @@ import {
   createTradingPlanForm,
   formatPlanAlertSummary,
   getLatestPlanAlert,
+  getMissingMarketContextLabels,
   getPlanAlertClass,
   getPlanReviewHeadline,
   getPlanReviewText,
@@ -157,12 +159,26 @@ const getWorkspace = symbolKey => {
   return stockWorkspaces[normalized]
 }
 
+const resolveWorkspacePlanSymbol = workspace => normalizeStockSymbol(
+  workspace?.detail?.quote?.symbol || workspace?.symbolKey || ''
+)
+
 const currentWorkspace = computed(() => getWorkspace(currentStockKey.value) ?? rootWorkspace)
+const allStockWorkspaces = computed(() => Object.values(stockWorkspaces))
+const currentPlanWorkspace = computed(() => {
+  const workspace = currentWorkspace.value
+  if (!workspace || workspace === rootWorkspace) {
+    return null
+  }
+
+  const symbolKey = resolveWorkspacePlanSymbol(workspace) || normalizeStockSymbol(currentStockKey.value)
+  return symbolKey ? getWorkspace(symbolKey) : null
+})
 const sidebarWorkspaces = computed(() =>
-  Object.values(stockWorkspaces).filter(workspace => Boolean(workspace?.detail?.quote?.symbol))
+  allStockWorkspaces.value.filter(workspace => Boolean(workspace?.detail?.quote?.symbol))
 )
 const activePlanModalWorkspace = computed(() =>
-  sidebarWorkspaces.value.find(workspace => workspace?.planModalOpen && workspace?.planForm)
+  allStockWorkspaces.value.find(workspace => workspace?.planModalOpen && workspace?.planForm)
   ?? (rootWorkspace.planModalOpen && rootWorkspace.planForm ? rootWorkspace : null)
 )
 
@@ -461,7 +477,7 @@ const openExternal = url => {
   window.open(url, '_blank', 'noopener,noreferrer')
 }
 
-const PLAN_MARKET_CONTEXT_FALLBACK_MESSAGE = '暂未获取到市场上下文，可继续保存计划。'
+const PLAN_MARKET_CONTEXT_FALLBACK_MISSING_LABELS = ['市场阶段', '主线方向', '仓位建议', '执行节奏']
 const PLAN_MARKET_CONTEXT_MISSING_SYMBOL_MESSAGE = '缺少股票代码，暂无法获取市场上下文。'
 
 const resetPlanMarketContextRequest = workspace => {
@@ -501,12 +517,14 @@ const fetchManualTradingPlanMarketContext = async (workspace, form = workspace?.
     targetForm.marketContext = null
     targetForm.marketContextLoading = true
     targetForm.marketContextMessage = ''
+    targetForm.marketContextMissingLabels = []
   })
 
   if (!symbolValue) {
     updatePlanMarketContextForm(workspace, requestToken, form, targetForm => {
       targetForm.marketContextLoading = false
       targetForm.marketContextMessage = PLAN_MARKET_CONTEXT_MISSING_SYMBOL_MESSAGE
+      targetForm.marketContextMissingLabels = [...PLAN_MARKET_CONTEXT_FALLBACK_MISSING_LABELS]
     })
     if (workspace.planMarketContextAbortController === controller) {
       workspace.planMarketContextAbortController = null
@@ -523,12 +541,13 @@ const fetchManualTradingPlanMarketContext = async (workspace, form = workspace?.
     if (!response.ok) {
       const fallbackMessage = response.status === 400
         ? PLAN_MARKET_CONTEXT_MISSING_SYMBOL_MESSAGE
-        : PLAN_MARKET_CONTEXT_FALLBACK_MESSAGE
+        : buildPlanMarketContextMessage(PLAN_MARKET_CONTEXT_FALLBACK_MISSING_LABELS)
 
       updatePlanMarketContextForm(workspace, requestToken, form, targetForm => {
         targetForm.marketContext = null
         targetForm.marketContextLoading = false
         targetForm.marketContextMessage = fallbackMessage
+        targetForm.marketContextMissingLabels = [...PLAN_MARKET_CONTEXT_FALLBACK_MISSING_LABELS]
       })
       return
     }
@@ -540,6 +559,7 @@ const fetchManualTradingPlanMarketContext = async (workspace, form = workspace?.
     const latestSentimentRaw = latestSentimentResponse?.ok
       ? await latestSentimentResponse.json().catch(() => null)
       : null
+    const missingLabels = getMissingMarketContextLabels(marketContextRaw)
     const payload = normalizeMarketContext({
       ...marketContextRaw,
       snapshotTime: latestSentimentRaw?.snapshotTime ?? latestSentimentRaw?.SnapshotTime ?? marketContextRaw?.snapshotTime ?? marketContextRaw?.SnapshotTime ?? ''
@@ -547,7 +567,8 @@ const fetchManualTradingPlanMarketContext = async (workspace, form = workspace?.
     updatePlanMarketContextForm(workspace, requestToken, form, targetForm => {
       targetForm.marketContext = payload
       targetForm.marketContextLoading = false
-      targetForm.marketContextMessage = payload ? '' : PLAN_MARKET_CONTEXT_FALLBACK_MESSAGE
+      targetForm.marketContextMessage = missingLabels.length ? buildPlanMarketContextMessage(missingLabels) : ''
+      targetForm.marketContextMissingLabels = missingLabels
     })
   } catch (err) {
     if (isAbortError(err)) {
@@ -557,7 +578,8 @@ const fetchManualTradingPlanMarketContext = async (workspace, form = workspace?.
     updatePlanMarketContextForm(workspace, requestToken, form, targetForm => {
       targetForm.marketContext = null
       targetForm.marketContextLoading = false
-      targetForm.marketContextMessage = PLAN_MARKET_CONTEXT_FALLBACK_MESSAGE
+      targetForm.marketContextMessage = buildPlanMarketContextMessage(PLAN_MARKET_CONTEXT_FALLBACK_MISSING_LABELS)
+      targetForm.marketContextMissingLabels = [...PLAN_MARKET_CONTEXT_FALLBACK_MISSING_LABELS]
     })
   } finally {
     if (requestToken === workspace.planMarketContextRequestToken && workspace.planMarketContextAbortController === controller) {
@@ -626,6 +648,10 @@ const saveTradingPlan = async (symbolKey = currentStockKey.value) => {
         ? {
             name: form.name,
             direction: form.direction,
+          status: form.status,
+          activeScenario: form.activeScenario,
+          planStartDate: form.planStartDate || null,
+          planEndDate: form.planEndDate || null,
             triggerPrice: normalizePlanNumber(form.triggerPrice),
             invalidPrice: normalizePlanNumber(form.invalidPrice),
             stopLossPrice: normalizePlanNumber(form.stopLossPrice),
@@ -642,6 +668,10 @@ const saveTradingPlan = async (symbolKey = currentStockKey.value) => {
             symbol: form.symbol,
             name: form.name,
             direction: form.direction,
+          status: form.status,
+          activeScenario: form.activeScenario,
+          planStartDate: form.planStartDate || null,
+          planEndDate: form.planEndDate || null,
             triggerPrice: normalizePlanNumber(form.triggerPrice),
             invalidPrice: normalizePlanNumber(form.invalidPrice),
             stopLossPrice: normalizePlanNumber(form.stopLossPrice),
@@ -665,8 +695,8 @@ const saveTradingPlan = async (symbolKey = currentStockKey.value) => {
     resetPlanMarketContextRequest(workspace)
     workspace.planModalOpen = false
     workspace.planForm = createTradingPlanForm({
-      symbol: workspace.detail?.quote?.symbol ?? '',
-      name: workspace.detail?.quote?.name ?? ''
+      symbol: resolveWorkspacePlanSymbol(workspace),
+      name: workspace.detail?.quote?.name ?? workspace.planList?.[0]?.name ?? ''
     })
     await refreshTradingPlanSection(symbolKey, true)
     await refreshTradingPlanBoard(true)
@@ -765,8 +795,8 @@ const openCreatePlan = symbolKey => {
   resetPlanMarketContextRequest(workspace)
   workspace.planError = ''
   workspace.planForm = createTradingPlanForm({
-    symbol: workspace.detail?.quote?.symbol ?? '',
-    name: workspace.detail?.quote?.name ?? '',
+    symbol: resolveWorkspacePlanSymbol(workspace),
+    name: workspace.detail?.quote?.name ?? workspace.planList?.[0]?.name ?? '',
     sourceAgent: 'manual',
     marketContextLoading: true
   })
@@ -1207,6 +1237,21 @@ const handleNavigateStock = (event) => {
   }
 }
 
+const handleTradeExecutionSaved = async (event) => {
+  const targetSymbol = normalizeStockSymbol(event?.detail?.symbol)
+
+  if (targetSymbol) {
+    const workspace = getWorkspace(targetSymbol)
+    if (workspace) {
+      await refreshTradingPlanSection(workspace.symbolKey, true)
+    }
+  } else if (currentStockKey.value) {
+    await refreshTradingPlanSection(currentStockKey.value, true)
+  }
+
+  await refreshTradingPlanBoard(true)
+}
+
 onMounted(() => {
   fetchSources()
   setupRefresh()
@@ -1219,6 +1264,7 @@ onMounted(() => {
   setupPlanRefresh()
   window.addEventListener('click', closeContextMenu)
   window.addEventListener('navigate-stock-load', handleNavigateStock)
+  window.addEventListener('trade-execution-saved', handleTradeExecutionSaved)
 
   // Consume pending navigation that arrived before this component mounted
   if (window.__pendingNavigateStock) {
@@ -1276,6 +1322,7 @@ onUnmounted(() => {
   stockRealtimeAbortController?.abort()
   window.removeEventListener('click', closeContextMenu)
   window.removeEventListener('navigate-stock-load', handleNavigateStock)
+  window.removeEventListener('trade-execution-saved', handleTradeExecutionSaved)
 })
 
 watch(monochromeMode, value => {
@@ -1445,37 +1492,31 @@ watch(currentStockKey, (newKey) => {
       <div class="sc-workspace__right">
         <SidebarTabs>
           <template #plans>
-            <template v-if="sidebarWorkspaces.length">
-              <div
-                v-for="workspace in sidebarWorkspaces"
-                :key="`plan-${workspace.symbolKey}`"
-                v-show="workspace.symbolKey === currentStockKey"
-              >
-                <StockTradingPlanSection
-                  :workspace="workspace"
-                  :deleting-plan-id="cancellingPlanId"
-                  :resuming-plan-id="resumingPlanId"
-                  :format-trading-plan-status="formatTradingPlanStatus"
-                  :format-date="formatDate"
-                  :get-trading-plan-status-class="getTradingPlanStatusClass"
-                  :format-plan-scale="formatPlanScale"
-                  :format-plan-price="formatPlanPrice"
-                  :get-latest-plan-alert="getLatestPlanAlert"
-                  :get-plan-alert-class="getPlanAlertClass"
-                  :format-plan-alert-summary="formatPlanAlertSummary"
-                  :get-plan-review-headline="getPlanReviewHeadline"
-                  :get-plan-review-text="getPlanReviewText"
-                  :can-edit-trading-plan="canEditTradingPlan"
-                  :can-resume-trading-plan="canResumeTradingPlan"
-                  :can-cancel-trading-plan="canCancelTradingPlan"
-                  @refresh="refreshTradingPlanSection(workspace.symbolKey, true)"
-                  @edit="editTradingPlan(workspace.symbolKey, $event)"
-                  @resume="resumeTradingPlan(workspace.symbolKey, $event)"
-                  @cancel="cancelTradingPlan(workspace.symbolKey, $event)"
-                  @create="openCreatePlan(workspace.symbolKey)"
-                  @record-trade="handleRecordTrade"
-                />
-              </div>
+            <template v-if="currentPlanWorkspace">
+              <StockTradingPlanSection
+                :workspace="currentPlanWorkspace"
+                :deleting-plan-id="cancellingPlanId"
+                :resuming-plan-id="resumingPlanId"
+                :format-trading-plan-status="formatTradingPlanStatus"
+                :format-date="formatDate"
+                :get-trading-plan-status-class="getTradingPlanStatusClass"
+                :format-plan-scale="formatPlanScale"
+                :format-plan-price="formatPlanPrice"
+                :get-latest-plan-alert="getLatestPlanAlert"
+                :get-plan-alert-class="getPlanAlertClass"
+                :format-plan-alert-summary="formatPlanAlertSummary"
+                :get-plan-review-headline="getPlanReviewHeadline"
+                :get-plan-review-text="getPlanReviewText"
+                :can-edit-trading-plan="canEditTradingPlan"
+                :can-resume-trading-plan="canResumeTradingPlan"
+                :can-cancel-trading-plan="canCancelTradingPlan"
+                @refresh="refreshTradingPlanSection(currentPlanWorkspace.symbolKey, true)"
+                @edit="editTradingPlan(currentPlanWorkspace.symbolKey, $event)"
+                @resume="resumeTradingPlan(currentPlanWorkspace.symbolKey, $event)"
+                @cancel="cancelTradingPlan(currentPlanWorkspace.symbolKey, $event)"
+                @create="openCreatePlan(currentPlanWorkspace.symbolKey)"
+                @record-trade="handleRecordTrade"
+              />
             </template>
           </template>
 

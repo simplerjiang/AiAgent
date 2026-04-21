@@ -11,7 +11,12 @@ public sealed record TradeExecutionCreateDto(
     int Quantity,
     DateTime ExecutedAt,
     decimal? Commission,
-    string? UserNote
+    string? UserNote,
+    string? PlanAction = null,
+    string? ExecutionAction = null,
+    IReadOnlyList<string>? DeviationTags = null,
+    string? DeviationNote = null,
+    string? AbandonReason = null
 );
 
 // 修改交易请求
@@ -20,7 +25,12 @@ public sealed record TradeExecutionUpdateDto(
     int Quantity,
     DateTime ExecutedAt,
     decimal? Commission,
-    string? UserNote
+    string? UserNote,
+    string? PlanAction = null,
+    string? ExecutionAction = null,
+    IReadOnlyList<string>? DeviationTags = null,
+    string? DeviationNote = null,
+    string? AbandonReason = null
 );
 
 // 交易记录响应
@@ -44,7 +54,16 @@ public sealed record TradeExecutionItemDto(
     string ComplianceTag,
     string? AgentDirection,
     decimal? AgentConfidence,
-    string? MarketStageAtTrade
+    string? MarketStageAtTrade,
+    string? PlanSourceAgent,
+    string? PlanAction,
+    string? ExecutionAction,
+    IReadOnlyList<string> DeviationTags,
+    string? DeviationNote,
+    string? AbandonReason,
+    TradingPlanScenarioStatusDto? ScenarioSnapshot,
+    TradingPlanPositionContextDto? PositionSnapshot,
+    string? CoachTip
 );
 
 // 盈亏汇总响应

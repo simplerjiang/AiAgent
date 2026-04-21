@@ -1,6 +1,11 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import { fetchBackendGet } from './stockInfoTabRequestUtils'
+import {
+  formatTradingPlanDateRange,
+  formatTradingPlanScenario,
+  getTradingPlanExpiryText
+} from './stockInfoTabTradingPlans'
 
 defineProps({
   workspace: {
@@ -100,6 +105,9 @@ onMounted(async () => {
         </div>
         <div class="plan-status-row">
           <span class="plan-status-badge" :class="getTradingPlanStatusClass(item.status)">{{ formatTradingPlanStatus(item.status) }}</span>
+          <span v-if="item.activeScenario" class="plan-pill">启用 {{ formatTradingPlanScenario(item.activeScenario) }}</span>
+          <span v-if="formatTradingPlanDateRange(item.planStartDate, item.planEndDate)" class="plan-pill">{{ formatTradingPlanDateRange(item.planStartDate, item.planEndDate) }}</span>
+          <span v-if="getTradingPlanExpiryText(item)" class="plan-pill">{{ getTradingPlanExpiryText(item) }}</span>
           <span v-if="item.marketContextAtCreation" class="plan-pill">建立时 {{ item.marketContextAtCreation.stageLabel }}</span>
           <span v-if="item.currentMarketContext" class="plan-pill">当前 {{ item.currentMarketContext.stageLabel }}</span>
         </div>
@@ -233,6 +241,11 @@ onMounted(async () => {
 .plan-status-pending {
   background: rgba(37, 99, 235, 0.12);
   color: #1d4ed8;
+}
+
+.plan-status-draft {
+  background: rgba(99, 102, 241, 0.12);
+  color: #4f46e5;
 }
 
 .plan-status-triggered {

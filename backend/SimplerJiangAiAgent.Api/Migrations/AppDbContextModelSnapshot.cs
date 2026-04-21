@@ -998,7 +998,7 @@ namespace SimplerJiangAiAgent.Api.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
 
-                    b.Property<long>("AnalysisHistoryId")
+                    b.Property<long?>("AnalysisHistoryId")
                         .HasColumnType("bigint");
 
                     b.Property<string>("AnalysisSummary")
@@ -1104,8 +1104,7 @@ namespace SimplerJiangAiAgent.Api.Migrations
                     b.HasOne("SimplerJiangAiAgent.Api.Data.Entities.StockAgentAnalysisHistory", "AnalysisHistory")
                         .WithMany()
                         .HasForeignKey("AnalysisHistoryId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("AnalysisHistory");
                 });

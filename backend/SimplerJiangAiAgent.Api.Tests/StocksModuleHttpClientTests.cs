@@ -9,7 +9,9 @@ using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using SimplerJiangAiAgent.Api.Infrastructure.Storage;
+using SimplerJiangAiAgent.Api.Data.Entities;
 using SimplerJiangAiAgent.Api.Modules.Market.Models;
+using SimplerJiangAiAgent.Api.Modules.Stocks.Models;
 using SimplerJiangAiAgent.Api.Modules.Stocks;
 using SimplerJiangAiAgent.Api.Modules.Stocks.Services;
 using JsonSerializer = System.Text.Json.JsonSerializer;
@@ -177,6 +179,87 @@ public sealed class StocksModuleHttpClientTests
         Assert.Equal(expected.IsMainlineAligned, payload.IsMainlineAligned);
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public async Task ValidateTradingPlanDraftRequest_ReturnsBadRequestForInvalidAnalysisHistoryId(long analysisHistoryId)
+    {
+        var result = StocksModule.ValidateTradingPlanDraftRequest(new Modules.Stocks.Models.TradingPlanDraftRequestDto("sh600519", analysisHistoryId));
+
+        Assert.NotNull(result);
+
+        var response = await ExecuteResultAsync(result!);
+
+        Assert.Equal(StatusCodes.Status400BadRequest, response.StatusCode);
+        using var document = JsonDocument.Parse(response.Body);
+        Assert.Equal("analysisHistoryId 无效", document.RootElement.GetProperty("message").GetString());
+    }
+
+    [Fact]
+    public async Task GetTradingPlansResultAsync_WhenEnrichmentFails_StillReturnsPlanListPayload()
+    {
+        var createdAt = new DateTime(2026, 4, 21, 1, 2, 3, DateTimeKind.Utc);
+        var plans = new[]
+        {
+            new TradingPlan
+            {
+                Id = 101,
+                PlanKey = "plan-101",
+                Title = "平安银行计划",
+                Symbol = "sz000001",
+                Name = "平安银行",
+                Direction = TradingPlanDirection.Long,
+                Status = TradingPlanStatus.Pending,
+                SourceAgent = "manual",
+                CreatedAt = createdAt,
+                UpdatedAt = createdAt
+            },
+            new TradingPlan
+            {
+                Id = 102,
+                PlanKey = "plan-102",
+                Title = "万科A计划",
+                Symbol = "sz000002",
+                Name = "万科A",
+                Direction = TradingPlanDirection.Long,
+                Status = TradingPlanStatus.Pending,
+                SourceAgent = "manual",
+                CreatedAt = createdAt,
+                UpdatedAt = createdAt
+            }
+        };
+
+        var result = await StocksModule.GetTradingPlansResultAsync(
+            null,
+            50,
+            new StubTradingPlanService(plans),
+            new ThrowingStockMarketContextService(new Dictionary<string, StockMarketContextDto?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["sz000001"] = new StockMarketContextDto("主升", 80m, "银行", "银行", "BKYH", 88m, 0.7m, "积极执行", false, true)
+            },
+            new[] { "sz000002" }),
+            new ThrowingTradeExecutionInsightService(),
+            NullLogger.Instance,
+            CancellationToken.None);
+
+        var response = await ExecuteResultAsync(result);
+
+        Assert.Equal(StatusCodes.Status200OK, response.StatusCode);
+
+        using var document = JsonDocument.Parse(response.Body);
+        var items = document.RootElement;
+        Assert.Equal(JsonValueKind.Array, items.ValueKind);
+        Assert.Equal(2, items.GetArrayLength());
+        Assert.Equal(101, items[0].GetProperty("id").GetInt64());
+        Assert.Equal("sz000001", items[0].GetProperty("symbol").GetString());
+        Assert.Equal("主升", items[0].GetProperty("currentMarketContext").GetProperty("stageLabel").GetString());
+        Assert.Equal(102, items[1].GetProperty("id").GetInt64());
+        Assert.Equal("sz000002", items[1].GetProperty("symbol").GetString());
+        Assert.Equal(JsonValueKind.Null, items[1].GetProperty("currentMarketContext").ValueKind);
+        Assert.Equal(JsonValueKind.Null, items[0].GetProperty("executionSummary").ValueKind);
+        Assert.Equal(JsonValueKind.Null, items[1].GetProperty("executionSummary").ValueKind);
+    }
+
     [Fact]
     public void GetCollectionLogs_MapsLiteDbDocumentsToStableCamelCaseContract()
     {
@@ -322,6 +405,77 @@ public sealed class StocksModuleHttpClientTests
         {
             LastSymbol = symbol;
             return Task.FromResult(_result);
+        }
+    }
+
+    private sealed class StubTradingPlanService : ITradingPlanService
+    {
+        private readonly IReadOnlyList<TradingPlan> _plans;
+
+        public StubTradingPlanService(IReadOnlyList<TradingPlan> plans)
+        {
+            _plans = plans;
+        }
+
+        public Task<IReadOnlyList<TradingPlan>> GetListAsync(string? symbol, int take = 20, CancellationToken cancellationToken = default)
+            => Task.FromResult(_plans);
+
+        public Task<TradingPlan?> GetByIdAsync(long id, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<TradingPlanSaveResult> CreateAsync(TradingPlanCreateDto request, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<TradingPlan?> UpdateAsync(long id, TradingPlanUpdateDto request, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<TradingPlan?> CancelAsync(long id, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<TradingPlan?> ResumeAsync(long id, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<bool> DeleteAsync(long id, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+    }
+
+    private sealed class ThrowingTradeExecutionInsightService : ITradeExecutionInsightService
+    {
+        public Task<IReadOnlyDictionary<long, TradingPlanRuntimeInsightDto>> GetPlanInsightsAsync(IReadOnlyCollection<TradingPlan> plans, bool useLiveQuote = false, CancellationToken cancellationToken = default)
+            => throw new InvalidOperationException("insight enrichment exploded");
+
+        public Task<TradingPlanRuntimeInsightDto?> GetPlanInsightAsync(TradingPlan plan, bool useLiveQuote = true, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task<TradingPlanPortfolioSummaryDto> GetPortfolioSummaryAsync(CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
+        public Task EnrichTradeExecutionAsync(TradeExecution trade, bool useLiveQuote = true, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+    }
+
+    private sealed class ThrowingStockMarketContextService : IStockMarketContextService
+    {
+        private readonly IReadOnlyDictionary<string, StockMarketContextDto?> _results;
+        private readonly HashSet<string> _symbolsThatThrow;
+
+        public ThrowingStockMarketContextService(IReadOnlyDictionary<string, StockMarketContextDto?> results, IEnumerable<string> symbolsThatThrow)
+        {
+            _results = results;
+            _symbolsThatThrow = new HashSet<string>(symbolsThatThrow, StringComparer.OrdinalIgnoreCase);
+        }
+
+        public Task<StockMarketContextDto?> GetLatestAsync(string symbol, CancellationToken cancellationToken = default)
+            => GetLatestAsync(symbol, null, cancellationToken);
+
+        public Task<StockMarketContextDto?> GetLatestAsync(string symbol, string? sectorNameHint, CancellationToken cancellationToken = default)
+        {
+            if (_symbolsThatThrow.Contains(symbol))
+            {
+                throw new InvalidOperationException($"market context failed for {symbol}");
+            }
+
+            return Task.FromResult(_results.TryGetValue(symbol, out var result) ? result : null);
         }
     }
 }

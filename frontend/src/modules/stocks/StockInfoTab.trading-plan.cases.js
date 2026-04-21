@@ -1,3 +1,14 @@
+const getPlanModalBackdrop = () => document.body.querySelector('[data-testid="stock-plan-modal-backdrop"]')
+const getPlanModal = () => document.body.querySelector('[data-testid="stock-plan-modal"]')
+const getPlanMarketBox = () => getPlanModal()?.querySelector('.plan-market-box')
+const getPlanModalCloseButton = () => getPlanModal()?.querySelector('.search-modal-header .market-news-button')
+
+const setTeleportedFieldValue = (element, value) => {
+  element.value = value
+  element.dispatchEvent(new Event('input', { bubbles: true }))
+  element.dispatchEvent(new Event('change', { bubbles: true }))
+}
+
 export const stockInfoTabTradingPlanCases = ({
   StockInfoTab,
   mount,
@@ -13,6 +24,123 @@ export const stockInfoTabTradingPlanCases = ({
   makeResponse,
   vi,
 }) => [
+  {
+    title: "keeps the trading plan section mounted for the active workspace even when detail is missing",
+    run: async () => {
+    const { fetchMock } = createChatFetchMock({
+      handle: async url => {
+        if (url.startsWith('/api/stocks/plans?symbol=sh603099')) {
+          return makeResponse({ ok: true, status: 200, json: async () => ([]) })
+        }
+
+        if (url.startsWith('/api/stocks/plans/alerts?symbol=sh603099')) {
+          return makeResponse({ ok: true, status: 200, json: async () => ([]) })
+        }
+
+        if (url.startsWith('/api/stocks/market-context?symbol=sh603099')) {
+          return makeResponse({ ok: false, status: 404, json: async () => ({ message: 'not found' }) })
+        }
+
+        if (url === '/api/market/sentiment/latest') {
+          return makeResponse({ ok: true, status: 200, json: async () => ({ snapshotTime: '2026-04-21T08:00:00Z' }) })
+        }
+
+        return null
+      }
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    const wrapper = mount(StockInfoTab)
+    wrapper.vm.detail = {
+      quote: { name: '长白山', symbol: 'sh603099', price: 36.1, change: 0, changePercent: 0 },
+      kLines: [],
+      minuteLines: [],
+      messages: []
+    }
+
+    await wrapper.vm.$nextTick()
+    await flushPromises()
+    await flushPromises()
+
+    wrapper.vm.currentWorkspace.detail = null
+    wrapper.vm.currentWorkspace.planList = []
+    wrapper.vm.currentWorkspace.planAlerts = []
+    wrapper.vm.currentWorkspace.planListLoaded = true
+    wrapper.vm.currentWorkspace.planAlertsLoaded = true
+
+    await wrapper.vm.$nextTick()
+    await flushPromises()
+
+    const planSection = wrapper.find('.stock-plan-section')
+    expect(planSection.exists()).toBe(true)
+    expect(planSection.text()).toContain('当前交易计划')
+    expect(planSection.text()).toContain('暂无交易计划，可点击「新建计划」手动录入')
+
+    const createButton = wrapper.findAll('.plan-header-actions .market-news-button').find(button => button.text() === '新建计划')
+    expect(createButton).toBeTruthy()
+    expect(createButton?.attributes('disabled')).toBeUndefined()
+
+    await createButton.trigger('click')
+    await flushPromises()
+    await flushPromises()
+
+    expect(getPlanModal()).toBeTruthy()
+    const stockSymbolInput = getPlanModal()?.querySelector('.plan-field input[disabled]')
+    expect(stockSymbolInput?.value).toBe('sh603099')
+    expect(getPlanModal()?.textContent || '').toContain('手动新建计划')
+  }
+  },
+  {
+    title: "renders the trading plan modal in the global modal layer and only closes on backdrop click",
+    run: async () => {
+    const { fetchMock } = createChatFetchMock({ handle: async () => null })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    const wrapper = mount(StockInfoTab)
+    wrapper.vm.detail = {
+      quote: { name: '深科技', symbol: 'sz000021', price: 31.1, change: 0, changePercent: 0 },
+      kLines: [],
+      minuteLines: [],
+      messages: []
+    }
+
+    await wrapper.vm.$nextTick()
+    await flushPromises()
+    await flushPromises()
+
+    const createButton = wrapper.findAll('.plan-header-actions .market-news-button').find(button => button.text() === '新建计划')
+    expect(createButton).toBeTruthy()
+
+    await createButton.trigger('click')
+    await flushPromises()
+
+    const backdrop = getPlanModalBackdrop()
+    const modal = getPlanModal()
+
+    expect(backdrop).toBeTruthy()
+    expect(modal).toBeTruthy()
+    expect(document.body.contains(backdrop)).toBe(true)
+    expect(backdrop?.getAttribute('data-modal-layer')).toBe('global-modal')
+    expect(backdrop?.getAttribute('style') || '').toContain('z-index: var(--z-modal);')
+    expect(getPlanModal()?.querySelector('[data-testid="plan-active-scenario-select"]')).toBeTruthy()
+    expect(getPlanModal()?.querySelector('[data-testid="plan-status-select"]')).toBeTruthy()
+    expect(getPlanModal()?.querySelector('[data-testid="plan-start-date-input"]')).toBeTruthy()
+    expect(getPlanModal()?.querySelector('[data-testid="plan-end-date-input"]')).toBeTruthy()
+    expect(getPlanModal()?.textContent || '').toContain('开始日期')
+    expect(getPlanModal()?.textContent || '').toContain('结束日期')
+    expect(getPlanModal()?.querySelector('.plan-save-button')?.textContent || '').toContain('保存计划')
+
+    modal?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    await flushPromises()
+    expect(document.body.querySelector('[data-testid="stock-plan-modal"]')).toBeTruthy()
+
+    backdrop?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    await flushPromises()
+    expect(document.body.querySelector('[data-testid="stock-plan-modal"]')).toBeNull()
+  }
+  },
   {
     title: "loads market context for new manual trading plans without blocking the modal",
     run: async () => {
@@ -74,25 +202,29 @@ export const stockInfoTabTradingPlanCases = ({
     await createButton.trigger('click')
     await flushPromises()
 
-    expect(wrapper.find('.plan-modal').exists()).toBe(true)
-    expect(wrapper.find('.plan-market-box').text()).toContain('市场上下文')
-    expect(wrapper.find('.plan-market-box').text()).toContain('正在获取当前市场上下文，不影响保存计划。')
+  const backdrop = getPlanModalBackdrop()
+  expect(getPlanModal()).toBeTruthy()
+  expect(backdrop).toBeTruthy()
+  expect(backdrop?.getAttribute('style') || '').toContain('z-index: var(--z-modal);')
+  expect(getPlanMarketBox()?.textContent || '').toContain('市场上下文')
+  expect(getPlanMarketBox()?.textContent || '').toContain('正在获取当前市场上下文，不影响保存计划。')
 
     marketContextDeferred.resolve()
     await flushPromises()
     await flushPromises()
 
-    const marketBox = wrapper.find('.plan-market-box')
-    expect(marketBox.text()).toContain('阶段 主升')
-    expect(marketBox.text()).toContain('快照时间 2026-04-17')
-    expect(marketBox.text()).toContain('主线 AI 算力')
-    expect(marketBox.text()).toContain('建议仓位')
-    expect(marketBox.text()).not.toContain('正在获取当前市场上下文，不影响保存计划。')
+  const marketBoxText = getPlanMarketBox()?.textContent || ''
+    expect(marketBoxText).toContain('阶段 主升')
+    expect(marketBoxText).toContain('快照时间 2026-04-17')
+    expect(marketBoxText).toContain('主线 AI 算力')
+    expect(marketBoxText).toContain('建议仓位')
+    expect(marketBoxText).not.toContain('当前未获取到')
+    expect(marketBoxText).not.toContain('正在获取当前市场上下文，不影响保存计划。')
     expect(fetchMock.mock.calls.some(args => String(args[0]).startsWith('/api/stocks/market-context?symbol=sz000021'))).toBe(true)
   }
   },
   {
-    title: "supports editing and cancelling pending trading plans",
+    title: "supports editing scenario, status and date range before cancelling a trading plan",
     run: async () => {
     let stockPlanListCalls = 0
     let boardPlanListCalls = 0
@@ -121,6 +253,9 @@ export const stockInfoTabTradingPlanCases = ({
               analysisHistoryId: 42,
               sourceAgent: 'commander',
               userNote: '上调目标',
+              activeScenario: 'Backup',
+              planStartDate: '2026-03-15',
+              planEndDate: '2026-03-22',
               updatedAt: '2026-03-14T09:00:00Z',
               createdAt: '2026-03-14T08:30:00Z'
             })
@@ -150,6 +285,9 @@ export const stockInfoTabTradingPlanCases = ({
               analysisHistoryId: 42,
               sourceAgent: 'commander',
               userNote: '上调目标',
+              activeScenario: 'Backup',
+              planStartDate: '2026-03-15',
+              planEndDate: '2026-03-22',
               updatedAt: '2026-03-14T09:00:00Z',
               createdAt: '2026-03-14T08:30:00Z'
             })
@@ -184,6 +322,10 @@ export const stockInfoTabTradingPlanCases = ({
                 analysisHistoryId: 42,
                 sourceAgent: 'commander',
                 userNote: stockPlanListCalls >= 2 ? '上调目标' : '控制仓位',
+                status: stockPlanListCalls >= 2 ? 'Draft' : 'Pending',
+                activeScenario: stockPlanListCalls >= 2 ? 'Backup' : 'Primary',
+                planStartDate: stockPlanListCalls >= 2 ? '2026-03-15' : '2026-03-14',
+                planEndDate: stockPlanListCalls >= 2 ? '2026-03-22' : '2026-03-21',
                 updatedAt: '2026-03-14T09:00:00Z',
                 createdAt: '2026-03-14T08:30:00Z'
               }]
@@ -204,6 +346,7 @@ export const stockInfoTabTradingPlanCases = ({
                   targetPrice: 14.8, expectedCatalyst: '突破前高', invalidConditions: '跌破支撑',
                   riskLimits: '单笔亏损不超过 2%', analysisSummary: '等待突破确认',
                   analysisHistoryId: 42, sourceAgent: 'commander', userNote: '上调目标',
+                  activeScenario: 'Backup', planStartDate: '2026-03-15', planEndDate: '2026-03-22',
                   updatedAt: '2026-03-14T09:00:00Z', createdAt: '2026-03-14T08:30:00Z'
                 }]
               }
@@ -226,6 +369,10 @@ export const stockInfoTabTradingPlanCases = ({
                 analysisHistoryId: 42,
                 sourceAgent: 'commander',
                 userNote: boardPlanListCalls >= 2 ? '上调目标' : '控制仓位',
+                status: boardPlanListCalls >= 2 ? 'Draft' : 'Pending',
+                activeScenario: boardPlanListCalls >= 2 ? 'Backup' : 'Primary',
+                planStartDate: boardPlanListCalls >= 2 ? '2026-03-15' : '2026-03-14',
+                planEndDate: boardPlanListCalls >= 2 ? '2026-03-22' : '2026-03-21',
                 updatedAt: '2026-03-14T09:00:00Z',
                 createdAt: '2026-03-14T08:30:00Z'
               }]
@@ -257,25 +404,49 @@ export const stockInfoTabTradingPlanCases = ({
     await wrapper.find('.plan-item-actions .plan-link-button').trigger('click')
     await flushPromises()
 
-    expect(wrapper.find('.plan-modal').exists()).toBe(true)
-    expect(wrapper.find('input[placeholder="优先取指挥/机构目标"]').element.value).toBe('13.4')
-    expect(wrapper.find('input[placeholder="优先取指挥/趋势目标"]').element.value).toBe('14.2')
+  expect(getPlanModal()).toBeTruthy()
+  const takeProfitInput = getPlanModal()?.querySelector('input[placeholder="优先取指挥/机构目标"]')
+  const targetPriceInput = getPlanModal()?.querySelector('input[placeholder="优先取指挥/趋势目标"]')
+  const scenarioSelect = getPlanModal()?.querySelector('[data-testid="plan-active-scenario-select"]')
+  const statusSelect = getPlanModal()?.querySelector('[data-testid="plan-status-select"]')
+  const startDateInput = getPlanModal()?.querySelector('[data-testid="plan-start-date-input"]')
+  const endDateInput = getPlanModal()?.querySelector('[data-testid="plan-end-date-input"]')
+  const noteTextareas = getPlanModal()?.querySelectorAll('.plan-field textarea') || []
+  const saveButton = getPlanModal()?.querySelector('.plan-save-button')
 
-    await wrapper.find('input[placeholder="优先取指挥/机构目标"]').setValue('13.9')
-    await wrapper.find('input[placeholder="优先取指挥/趋势目标"]').setValue('14.8')
-    await wrapper.findAll('.plan-field textarea').at(-1).setValue('上调目标')
+  expect(takeProfitInput?.value).toBe('13.4')
+  expect(targetPriceInput?.value).toBe('14.2')
+  expect(scenarioSelect?.value).toBe('Primary')
+  expect(statusSelect?.value).toBe('Pending')
+  expect(startDateInput?.value).toBe('2026-03-14')
+  expect(endDateInput?.value).toBe('2026-03-21')
 
-    await wrapper.find('.plan-save-button').trigger('click')
+  setTeleportedFieldValue(takeProfitInput, '13.9')
+  setTeleportedFieldValue(targetPriceInput, '14.8')
+  setTeleportedFieldValue(scenarioSelect, 'Backup')
+  setTeleportedFieldValue(statusSelect, 'Draft')
+  setTeleportedFieldValue(startDateInput, '2026-03-15')
+  setTeleportedFieldValue(endDateInput, '2026-03-22')
+  setTeleportedFieldValue(noteTextareas[noteTextareas.length - 1], '上调目标')
+
+  saveButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     await flushPromises()
     await flushPromises()
 
     const updateCall = fetchMock.mock.calls.find(args => args[0] === '/api/stocks/plans/7' && args[1]?.method === 'PUT')
     expect(updateCall).toBeTruthy()
     expect(JSON.parse(updateCall[1].body)).toMatchObject({
+      status: 'Draft',
+      activeScenario: 'Backup',
+      planStartDate: '2026-03-15',
+      planEndDate: '2026-03-22',
       takeProfitPrice: 13.9,
       targetPrice: 14.8,
       userNote: '上调目标'
     })
+    expect(wrapper.text()).toContain('草稿')
+    expect(wrapper.text()).toContain('启用 备选场景')
+    expect(wrapper.text()).toContain('有效期 2026-03-15 ~ 2026-03-22')
     expect(wrapper.text()).toContain('止盈 13.90')
     expect(wrapper.text()).toContain('目标 14.80')
 
@@ -352,11 +523,11 @@ export const stockInfoTabTradingPlanCases = ({
 
     await createButton.trigger('click')
     await flushPromises()
-    expect(wrapper.find('.plan-market-box').text()).toContain('正在获取当前市场上下文，不影响保存计划。')
+  expect(getPlanMarketBox()?.textContent || '').toContain('正在获取当前市场上下文，不影响保存计划。')
 
-    await wrapper.find('.search-modal-header .market-news-button').trigger('click')
+  getPlanModalCloseButton()?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     await flushPromises()
-    expect(wrapper.find('.plan-modal').exists()).toBe(false)
+  expect(getPlanModal()).toBeNull()
 
     await createButton.trigger('click')
     await flushPromises()
@@ -366,12 +537,12 @@ export const stockInfoTabTradingPlanCases = ({
     await flushPromises()
     await flushPromises()
 
-    const marketBox = wrapper.find('.plan-market-box')
+    const marketBoxText = getPlanMarketBox()?.textContent || ''
     expect(marketContextCallCount).toBe(2)
-    expect(wrapper.find('.plan-modal').exists()).toBe(true)
-    expect(marketBox.text()).toContain('暂未获取到市场上下文，可继续保存计划。')
-    expect(marketBox.text()).not.toContain('过期结果')
-    expect(marketBox.text()).not.toContain('旧主线')
+    expect(getPlanModal()).toBeTruthy()
+    expect(marketBoxText).toContain('当前未获取到市场阶段、主线方向、仓位建议、执行节奏，不影响保存计划。')
+    expect(marketBoxText).not.toContain('过期结果')
+    expect(marketBoxText).not.toContain('旧主线')
   }
   },
   {
@@ -486,6 +657,92 @@ export const stockInfoTabTradingPlanCases = ({
     expect(boardCard.text()).toContain('Invalidated')
     expect(boardCard.text()).toContain('价格跌破失效位')
   }
+  },
+  {
+    title: "renders scenario status and execution summary on current trading plans",
+    run: async () => {
+    const { fetchMock } = createChatFetchMock({
+      handle: async url => {
+        if (url.startsWith('/api/stocks/plans?symbol=sz000021')) {
+          return makeResponse({
+            ok: true,
+            status: 200,
+            json: async () => ([{
+              id: 7,
+              symbol: 'sz000021',
+              name: '深科技',
+              direction: 'Long',
+              status: 'Triggered',
+              triggerPrice: 12.6,
+              invalidPrice: 11.9,
+              stopLossPrice: 11.5,
+              takeProfitPrice: 13.4,
+              targetPrice: 14.2,
+              analysisSummary: '等待突破确认',
+              sourceAgent: 'manual',
+              currentScenarioStatus: {
+                code: 'Abandon',
+                label: '放弃条件命中',
+                reason: '价格跌破失效位',
+                summary: '放弃条件命中 · 价格跌破失效位',
+                referencePrice: 11.88,
+                abandonTriggered: true
+              },
+              currentPositionSnapshot: {
+                quantity: 1200,
+                positionRatio: 0.14,
+                marketValue: 14256,
+                unrealizedPnL: -320,
+                summary: '当前持仓 1200 股 · 成本 12.14 · 浮盈 -320.00'
+              },
+              executionSummary: {
+                executionCount: 2,
+                latestAction: '加仓执行',
+                latestExecutedAt: '2026-03-14T09:40:00Z',
+                latestDeviationTags: ['追价', '超仓'],
+                summary: '已执行 2 次 · 最近 加仓执行 · 偏差 1 次'
+              },
+              updatedAt: '2026-03-14T09:00:00Z',
+              createdAt: '2026-03-14T08:30:00Z'
+            }])
+          })
+        }
+
+        if (url.startsWith('/api/stocks/plans?take=20')) {
+          return makeResponse({ ok: true, status: 200, json: async () => ([]) })
+        }
+
+        if (url.startsWith('/api/stocks/plans/alerts?symbol=sz000021') || url.startsWith('/api/stocks/plans/alerts?take=20')) {
+          return makeResponse({ ok: true, status: 200, json: async () => ([]) })
+        }
+
+        return null
+      }
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    const wrapper = mount(StockInfoTab)
+    wrapper.vm.detail = {
+      quote: { name: '深科技', symbol: 'sz000021', price: 31.1, change: 0, changePercent: 0 },
+      kLines: [],
+      minuteLines: [],
+      messages: []
+    }
+
+    await wrapper.vm.$nextTick()
+    await flushPromises()
+    await flushPromises()
+
+    const currentPlanCard = wrapper.findAll('section').find(section => section.text().includes('当前交易计划'))
+    expect(currentPlanCard.text()).toContain('放弃条件命中')
+    expect(currentPlanCard.text()).toContain('当前持仓快照')
+    expect(currentPlanCard.text()).toContain('已执行 2 次')
+    expect(currentPlanCard.text()).toContain('最近动作')
+    expect(currentPlanCard.text()).not.toContain('待复盘')
+    expect(currentPlanCard.text()).toContain('追价 / 超仓')
+    expect(currentPlanCard.find('.plan-execution-strip').exists()).toBe(true)
+    }
   },
   {
     title: "polls the trading plan board even when no stock is active",

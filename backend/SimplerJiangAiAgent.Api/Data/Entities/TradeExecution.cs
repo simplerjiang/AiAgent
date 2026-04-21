@@ -30,6 +30,19 @@ public sealed class TradeExecution
     public string? AgentDirection { get; set; }
     public decimal? AgentConfidence { get; set; }
     public string? MarketStageAtTrade { get; set; }
+    public string? PlanSourceAgent { get; set; }
+    public string? PlanAction { get; set; }
+    public string? ExecutionAction { get; set; }
+    public string? DeviationTagsJson { get; set; }
+    public string? DeviationNote { get; set; }
+    public string? AbandonReason { get; set; }
+    public string? ScenarioCode { get; set; }
+    public string? ScenarioLabel { get; set; }
+    public string? ScenarioReason { get; set; }
+    public string? ScenarioSnapshotType { get; set; }
+    public string? ScenarioSnapshotJson { get; set; }
+    public string? PositionSnapshotJson { get; set; }
+    public string? CoachTip { get; set; }
 
     // Navigation
     public TradingPlan? Plan { get; set; }

@@ -175,6 +175,10 @@ const handleNavigateStock = (e) => {
 }
 
 const handleNavigateTradeLog = (e) => {
+  const detail = e?.detail
+  if (detail?.plan) {
+    window.__pendingNavigateTradeLog = detail
+  }
   setActiveTab('trade-log')
 }
 

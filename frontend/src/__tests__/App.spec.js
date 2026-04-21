@@ -89,4 +89,27 @@ describe('App', () => {
     expect(window.location.search).not.toContain('onboarding=1')
     expect(fetchMock).toHaveBeenCalledTimes(4)
   })
+
+  it('stores pending trade-log navigation before switching to the trade log tab', async () => {
+    const wrapper = shallowMount(App, mountOptions)
+    await flushPromises()
+
+    const detail = {
+      plan: {
+        id: 7,
+        symbol: '000001',
+        name: '平安银行',
+        direction: 'Long'
+      }
+    }
+
+    window.dispatchEvent(new CustomEvent('navigate-trade-log', { detail }))
+    await flushPromises()
+
+    expect(window.__pendingNavigateTradeLog).toEqual(detail)
+    expect(window.location.search).toContain('tab=trade-log')
+
+    wrapper.unmount()
+    delete window.__pendingNavigateTradeLog
+  })
 })

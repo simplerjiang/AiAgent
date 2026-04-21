@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Data.Sqlite;
 using System.Runtime.CompilerServices;
 using SimplerJiangAiAgent.Api.Data;
 using SimplerJiangAiAgent.Api.Data.Entities;
@@ -547,6 +548,8 @@ public sealed class TradingPlanServicesTests
         Assert.Equal("sh600000", watchlist.Symbol);
         Assert.Equal("trading-plan", watchlist.SourceTag);
         Assert.Equal($"plan:{savedPlan.Id}", watchlist.Note);
+        Assert.Equal(history.Id, savedPlan.AnalysisHistoryId);
+        Assert.Equal("commander", savedPlan.SourceAgent);
         Assert.Equal(10.9m, savedPlan.TakeProfitPrice);
         Assert.Equal(11.5m, savedPlan.TargetPrice);
         Assert.Equal("主升", savedPlan.MarketStageLabelAtCreation);
@@ -554,6 +557,178 @@ public sealed class TradingPlanServicesTests
         Assert.Equal("BKYH", savedPlan.SectorCodeAtCreation);
         Assert.Equal("积极执行", savedPlan.ExecutionFrequencyLabel);
     }
+
+    [Fact]
+    public async Task CreateAsync_PersistsScenarioStatusAndDateRange()
+    {
+        await using var dbContext = CreateDbContext();
+        var service = new TradingPlanService(dbContext, new ActiveWatchlistService(dbContext), CreateMarketContextService(dbContext));
+
+        var result = await service.CreateAsync(new TradingPlanCreateDto(
+          "sz000021",
+          "深科技",
+          "Long",
+          31.2m,
+          29.8m,
+          29.4m,
+          34.5m,
+          36.2m,
+          "等待突破前高",
+          "跌回箱体",
+          "仓位不超过三成",
+          "手动策略测试",
+          null,
+          null,
+          "观察执行窗口",
+          "Draft",
+          "Backup",
+          new DateOnly(2026, 4, 20),
+          new DateOnly(2026, 4, 25)));
+
+        var savedPlan = await dbContext.TradingPlans.SingleAsync();
+
+        Assert.True(result.WatchlistEnsured);
+        Assert.Equal(TradingPlanStatus.Draft, savedPlan.Status);
+        Assert.Equal("Backup", savedPlan.ActiveScenario);
+        Assert.Equal(new DateOnly(2026, 4, 20), savedPlan.PlanStartDate);
+        Assert.Equal(new DateOnly(2026, 4, 25), savedPlan.PlanEndDate);
+      }
+
+      [Fact]
+      public async Task CreateAsync_WhenAnalysisHistoryIdIsNull_CreatesManualPlanWithoutHistoryReference()
+      {
+        await using var dbContext = CreateDbContext();
+        var service = new TradingPlanService(dbContext, new ActiveWatchlistService(dbContext), CreateMarketContextService(dbContext));
+
+        var result = await service.CreateAsync(new TradingPlanCreateDto(
+          "sh600519",
+          "贵州茅台",
+          "Long",
+          1680m,
+          1600m,
+          1580m,
+          1750m,
+          1800m,
+          "等待放量确认",
+          "跌破关键支撑",
+          "严格控制回撤",
+          "手动计划",
+          null,
+          null,
+          "人工录入"));
+
+        var savedPlan = await dbContext.TradingPlans.SingleAsync();
+
+        Assert.True(result.WatchlistEnsured);
+        Assert.Null(savedPlan.AnalysisHistoryId);
+        Assert.Equal("manual", savedPlan.SourceAgent);
+        Assert.Equal(TradingPlanStatus.Pending, savedPlan.Status);
+      }
+
+      [Fact]
+      public async Task CreateAsync_WhenAnalysisHistoryIdIsZero_TreatsPlanAsManual()
+      {
+        await using var dbContext = CreateDbContext();
+        var service = new TradingPlanService(dbContext, new ActiveWatchlistService(dbContext), CreateMarketContextService(dbContext));
+
+        var result = await service.CreateAsync(new TradingPlanCreateDto(
+          "sz000858",
+          "五粮液",
+          "Long",
+          145m,
+          138m,
+          136m,
+          155m,
+          160m,
+          "等待站稳均线",
+          "失守均线",
+          "轻仓试错",
+          "兼容旧前端传 0",
+          0,
+          null,
+          null));
+
+        Assert.Null(result.Plan.AnalysisHistoryId);
+        Assert.Equal("manual", result.Plan.SourceAgent);
+      }
+
+      [Fact]
+      public async Task CreateAsync_OnLegacySqliteTradingPlansSchema_AllowsManualPlanAfterInitializerFix()
+      {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var dbContext = CreateSqliteDbContext(connection);
+
+        await dbContext.Database.ExecuteSqlRawAsync("DROP TABLE IF EXISTS \"TradingPlans\";");
+        await dbContext.Database.ExecuteSqlRawAsync(@"
+          CREATE TABLE TradingPlans (
+            Id INTEGER PRIMARY KEY AUTOINCREMENT,
+            PlanKey TEXT NOT NULL DEFAULT '',
+            Title TEXT NOT NULL DEFAULT '',
+            Symbol TEXT NOT NULL DEFAULT '',
+            Name TEXT NOT NULL DEFAULT '',
+            Direction TEXT NOT NULL DEFAULT 'Long',
+            Status TEXT NOT NULL DEFAULT 'Pending',
+            TriggerPrice REAL NULL,
+            InvalidPrice REAL NULL,
+            StopLossPrice REAL NULL,
+            TakeProfitPrice REAL NULL,
+            TargetPrice REAL NULL,
+            ExpectedCatalyst TEXT NULL,
+            InvalidConditions TEXT NULL,
+            RiskLimits TEXT NULL,
+            AnalysisSummary TEXT NULL,
+            AnalysisHistoryId INTEGER NOT NULL DEFAULT 0,
+            SourceAgent TEXT NOT NULL DEFAULT 'commander',
+            UserNote TEXT NULL,
+            MarketStageLabelAtCreation TEXT NULL,
+            StageConfidenceAtCreation REAL NULL,
+            SuggestedPositionScale REAL NULL,
+            ExecutionFrequencyLabel TEXT NULL,
+            MainlineSectorName TEXT NULL,
+            MainlineScoreAtCreation REAL NULL,
+            SectorNameAtCreation TEXT NULL,
+            SectorCodeAtCreation TEXT NULL,
+            CreatedAt TEXT NOT NULL DEFAULT '2026-01-01T00:00:00Z',
+            UpdatedAt TEXT NOT NULL DEFAULT '2026-01-01T00:00:00Z',
+            TriggeredAt TEXT NULL,
+            InvalidatedAt TEXT NULL,
+            CancelledAt TEXT NULL
+          );");
+        await dbContext.Database.ExecuteSqlRawAsync(@"
+          INSERT INTO TradingPlans (PlanKey, Title, Symbol, Name, Direction, Status, AnalysisHistoryId, SourceAgent, CreatedAt, UpdatedAt)
+          VALUES ('legacy-plan', '旧计划', 'sh600000', '浦发银行', 'Long', 'Pending', 0, 'commander', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');");
+
+        await TradingPlanSchemaInitializer.EnsureAsync(dbContext);
+
+        var migratedLegacyPlan = await dbContext.TradingPlans
+          .AsNoTracking()
+          .SingleAsync(item => item.PlanKey == "legacy-plan");
+
+        Assert.Null(migratedLegacyPlan.AnalysisHistoryId);
+
+        var service = new TradingPlanService(dbContext, new ActiveWatchlistService(dbContext), CreateMarketContextService(dbContext));
+        var result = await service.CreateAsync(new TradingPlanCreateDto(
+          "sh600000",
+          "浦发银行",
+          "Long",
+          10.2m,
+          9.8m,
+          9.6m,
+          10.9m,
+          11.3m,
+          "手动观察",
+          "跌破 9.8",
+          "轻仓",
+          "legacy-sqlite-fix",
+          null,
+          null,
+          null));
+
+        Assert.NotEqual(0, result.Plan.Id);
+        Assert.Null(result.Plan.AnalysisHistoryId);
+        Assert.Equal("manual", result.Plan.SourceAgent);
+      }
 
     [Fact]
     public async Task UpdateAsync_RejectsNonPendingPlan()
@@ -592,7 +767,7 @@ public sealed class TradingPlanServicesTests
                 "commander",
                 null)));
 
-        Assert.Equal("仅 Pending 计划允许编辑", error.Message);
+        Assert.Equal("仅 Pending / Draft / ReviewRequired 计划允许编辑", error.Message);
     }
 
       [Fact]
@@ -632,13 +807,133 @@ public sealed class TradingPlanServicesTests
             "严格止损",
             "摘要",
             "commander",
-            null));
+            null,
+            "Triggered",
+            "Backup",
+            new DateOnly(2026, 4, 18),
+            new DateOnly(2026, 4, 28)));
 
         Assert.NotNull(updated);
-        Assert.Equal(TradingPlanStatus.ReviewRequired, updated!.Status);
+        Assert.Equal(TradingPlanStatus.Triggered, updated!.Status);
         Assert.False(string.IsNullOrWhiteSpace(updated.PlanKey));
         Assert.Equal("贵州茅台", updated.Title);
         Assert.Equal(1800m, updated.TriggerPrice);
+        Assert.Equal("Backup", updated.ActiveScenario);
+        Assert.Equal(new DateOnly(2026, 4, 18), updated.PlanStartDate);
+        Assert.Equal(new DateOnly(2026, 4, 28), updated.PlanEndDate);
+      }
+
+      [Fact]
+      public async Task GetListAsync_AutoInvalidatesExpiredNonTerminalPlans()
+      {
+        await using var dbContext = CreateDbContext();
+        var chinaToday = GetChinaToday();
+        dbContext.TradingPlans.Add(new TradingPlan
+        {
+          Symbol = "sz000021",
+          Name = "深科技",
+          Direction = TradingPlanDirection.Long,
+          Status = TradingPlanStatus.Pending,
+          ActiveScenario = "Primary",
+          PlanStartDate = chinaToday.AddDays(-5),
+          PlanEndDate = chinaToday.AddDays(-1),
+          SourceAgent = "manual",
+          CreatedAt = DateTime.UtcNow.AddDays(-5),
+          UpdatedAt = DateTime.UtcNow.AddDays(-5)
+        });
+        await dbContext.SaveChangesAsync();
+
+        var service = new TradingPlanService(dbContext, new ActiveWatchlistService(dbContext), CreateMarketContextService(dbContext));
+
+        var items = await service.GetListAsync("sz000021", 20);
+        var savedPlan = await dbContext.TradingPlans.SingleAsync();
+
+        Assert.Single(items);
+        Assert.Equal(TradingPlanStatus.Invalid, items[0].Status);
+        Assert.Equal(TradingPlanStatus.Invalid, savedPlan.Status);
+        Assert.NotNull(savedPlan.InvalidatedAt);
+      }
+
+      [Fact]
+      public async Task GetListAsync_OnSqliteProvider_UsesOnlyRelationallyTranslatablePredicates()
+      {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var dbContext = CreateSqliteDbContext(connection);
+        var chinaToday = GetChinaToday();
+        var now = DateTime.UtcNow;
+
+        var expiredPlan = new TradingPlan
+        {
+          PlanKey = "sqlite-expired-plan",
+          Title = "长白山",
+          Symbol = "sh603099",
+          Name = "长白山",
+          Direction = TradingPlanDirection.Long,
+          Status = TradingPlanStatus.Pending,
+          ActiveScenario = "Primary",
+          PlanStartDate = chinaToday.AddDays(-4),
+          PlanEndDate = chinaToday.AddDays(-1),
+          SourceAgent = "manual",
+          CreatedAt = now.AddMinutes(-5),
+          UpdatedAt = now.AddMinutes(-5)
+        };
+        var activePlan = new TradingPlan
+        {
+          PlanKey = "sqlite-active-plan",
+          Title = "深科技",
+          Symbol = "sz000021",
+          Name = "深科技",
+          Direction = TradingPlanDirection.Long,
+          Status = TradingPlanStatus.Pending,
+          ActiveScenario = "Primary",
+          PlanStartDate = chinaToday,
+          PlanEndDate = chinaToday.AddDays(5),
+          SourceAgent = "manual",
+          CreatedAt = now,
+          UpdatedAt = now
+        };
+
+        dbContext.TradingPlans.AddRange(
+          expiredPlan,
+          activePlan,
+          new TradingPlan
+          {
+            PlanKey = "sqlite-placeholder-plan",
+            Title = string.Empty,
+            Symbol = string.Empty,
+            Name = string.Empty,
+            Direction = TradingPlanDirection.Long,
+            Status = TradingPlanStatus.Draft,
+            SourceAgent = "manual",
+            CreatedAt = now.AddMinutes(-10),
+            UpdatedAt = now.AddMinutes(-10)
+          });
+        await dbContext.SaveChangesAsync();
+
+        var service = new TradingPlanService(dbContext, new ActiveWatchlistService(dbContext), CreateMarketContextService(dbContext));
+
+        var bySymbol = await service.GetListAsync("SH603099", 20);
+        var byTake = await service.GetListAsync(null, 20);
+        var byId = await service.GetByIdAsync(expiredPlan.Id);
+        var persistedExpiredPlan = await dbContext.TradingPlans.SingleAsync(item => item.Id == expiredPlan.Id);
+
+        Assert.Single(bySymbol);
+        Assert.Equal(expiredPlan.Id, bySymbol[0].Id);
+        Assert.Equal(TradingPlanStatus.Invalid, bySymbol[0].Status);
+        Assert.NotNull(bySymbol[0].InvalidatedAt);
+
+        Assert.NotNull(byId);
+        Assert.Equal(expiredPlan.Id, byId!.Id);
+        Assert.Equal(TradingPlanStatus.Invalid, byId.Status);
+
+        Assert.Equal(2, byTake.Count);
+        Assert.DoesNotContain(byTake, item => string.IsNullOrWhiteSpace(item.Symbol) || string.IsNullOrWhiteSpace(item.Name));
+        Assert.Contains(byTake, item => item.Id == expiredPlan.Id && item.Status == TradingPlanStatus.Invalid);
+        Assert.Contains(byTake, item => item.Id == activePlan.Id && item.Status == TradingPlanStatus.Pending);
+
+        Assert.Equal(TradingPlanStatus.Invalid, persistedExpiredPlan.Status);
+        Assert.NotNull(persistedExpiredPlan.InvalidatedAt);
       }
 
       [Fact]
@@ -680,6 +975,18 @@ public sealed class TradingPlanServicesTests
       return context;
     }
 
+      private static AppDbContext CreateSqliteDbContext(SqliteConnection connection)
+      {
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+          .UseSqlite(connection)
+          .Options;
+
+        var dbContext = new AppDbContext(options);
+        ContextOptionsMap.Add(dbContext, options);
+        dbContext.Database.EnsureCreated();
+        return dbContext;
+      }
+
       private static StockMarketContextService CreateMarketContextService(AppDbContext dbContext)
       {
       return new StockMarketContextService(GetOptions(dbContext));
@@ -691,6 +998,21 @@ public sealed class TradingPlanServicesTests
         ? options
         : throw new InvalidOperationException("Missing AppDbContext options for test instance.");
       }
+
+    private static DateOnly GetChinaToday()
+    {
+      TimeZoneInfo chinaTimeZone;
+      try
+      {
+        chinaTimeZone = TimeZoneInfo.FindSystemTimeZoneById("China Standard Time");
+      }
+      catch (TimeZoneNotFoundException)
+      {
+        chinaTimeZone = TimeZoneInfo.CreateCustomTimeZone("China Standard Time", TimeSpan.FromHours(8), "China Standard Time", "China Standard Time");
+      }
+
+      return DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, chinaTimeZone));
+    }
 
     [Fact]
     public async Task DeleteAsync_RemovesPlan()

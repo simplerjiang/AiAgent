@@ -235,6 +235,10 @@ public sealed class AppDbContext : DbContext
             .HasMaxLength(64);
 
         modelBuilder.Entity<TradingPlan>()
+            .Property(x => x.ActiveScenario)
+            .HasMaxLength(32);
+
+        modelBuilder.Entity<TradingPlan>()
             .Property(x => x.MarketStageLabelAtCreation)
             .HasMaxLength(16);
 
@@ -258,7 +262,8 @@ public sealed class AppDbContext : DbContext
             .HasOne(x => x.AnalysisHistory)
             .WithMany()
             .HasForeignKey(x => x.AnalysisHistoryId)
-            .OnDelete(DeleteBehavior.Restrict);
+            .OnDelete(DeleteBehavior.Restrict)
+            .IsRequired(false);
 
         modelBuilder.Entity<TradingPlanEvent>()
             .HasIndex(x => new { x.PlanId, x.OccurredAt });
@@ -611,6 +616,18 @@ public sealed class AppDbContext : DbContext
             .Property(x => x.AgentDirection).HasMaxLength(16);
         modelBuilder.Entity<TradeExecution>()
             .Property(x => x.MarketStageAtTrade).HasMaxLength(16);
+        modelBuilder.Entity<TradeExecution>()
+            .Property(x => x.PlanSourceAgent).HasMaxLength(64);
+        modelBuilder.Entity<TradeExecution>()
+            .Property(x => x.PlanAction).HasMaxLength(32);
+        modelBuilder.Entity<TradeExecution>()
+            .Property(x => x.ExecutionAction).HasMaxLength(32);
+        modelBuilder.Entity<TradeExecution>()
+            .Property(x => x.ScenarioCode).HasMaxLength(32);
+        modelBuilder.Entity<TradeExecution>()
+            .Property(x => x.ScenarioLabel).HasMaxLength(32);
+        modelBuilder.Entity<TradeExecution>()
+            .Property(x => x.ScenarioSnapshotType).HasMaxLength(16);
         modelBuilder.Entity<TradeExecution>()
             .HasOne(x => x.Plan)
             .WithMany()

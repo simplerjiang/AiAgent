@@ -5,6 +5,79 @@ import {
   parseTradingPlanAlertMetadata
 } from './tradingPlanReview'
 
+export const TRADING_PLAN_SCENARIO_OPTIONS = [
+  { value: 'Primary', label: '主场景' },
+  { value: 'Backup', label: '备选场景' }
+]
+
+export const PLAN_MARKET_CONTEXT_MISSING_LABELS = ['市场阶段', '主线方向', '仓位建议', '执行节奏']
+
+const normalizePlanDateValue = value => {
+  if (!value) return ''
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    if (!trimmed) return ''
+    const match = trimmed.match(/^\d{4}-\d{2}-\d{2}/)
+    if (match) return match[0]
+  }
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
+export const normalizeTradingPlanScenario = value => {
+  if (!value) return ''
+  const normalized = String(value).trim()
+  if (!normalized) return ''
+  if (['Primary', 'Main', '主场景'].includes(normalized)) return 'Primary'
+  if (['Backup', 'Alternative', '备选场景'].includes(normalized)) return 'Backup'
+  return normalized
+}
+
+export const formatTradingPlanScenario = value => {
+  const normalized = normalizeTradingPlanScenario(value)
+  return TRADING_PLAN_SCENARIO_OPTIONS.find(item => item.value === normalized)?.label || normalized || ''
+}
+
+export const formatTradingPlanDateRange = (startDate, endDate) => {
+  const start = normalizePlanDateValue(startDate)
+  const end = normalizePlanDateValue(endDate)
+  if (start && end) return `有效期 ${start} ~ ${end}`
+  if (start) return `开始 ${start}`
+  if (end) return `到期 ${end}`
+  return ''
+}
+
+export const getTradingPlanExpiryText = item => {
+  const end = normalizePlanDateValue(item?.planEndDate ?? item?.PlanEndDate)
+  if (!end) return ''
+  return normalizeTradingPlanStatus(item?.status ?? item?.Status) === 'Invalid'
+    ? `已于 ${end} 到期`
+    : `到期 ${end}`
+}
+
+const readMarketContextField = (item, key) => item?.[key] ?? item?.[`${key[0].toUpperCase()}${key.slice(1)}`]
+
+export const getMissingMarketContextLabels = item => {
+  if (!item) return [...PLAN_MARKET_CONTEXT_MISSING_LABELS]
+
+  const missing = []
+  if (!readMarketContextField(item, 'stageLabel')) missing.push('市场阶段')
+  if (!readMarketContextField(item, 'mainlineSectorName')) missing.push('主线方向')
+
+  const positionScale = readMarketContextField(item, 'suggestedPositionScale')
+  if (positionScale == null || positionScale === '') missing.push('仓位建议')
+
+  if (!readMarketContextField(item, 'executionFrequencyLabel')) missing.push('执行节奏')
+  return missing
+}
+
+export const buildPlanMarketContextMessage = missingLabels => {
+  const labels = Array.isArray(missingLabels) && missingLabels.length ? missingLabels : PLAN_MARKET_CONTEXT_MISSING_LABELS
+  return `当前未获取到${labels.join('、')}，不影响保存计划。`
+}
+
 export const normalizeMarketContext = item => item ? ({
   snapshotTime: item?.snapshotTime ?? item?.SnapshotTime ?? '',
   stageLabel: item?.stageLabel ?? item?.StageLabel ?? '混沌',
@@ -37,13 +110,61 @@ export const normalizeTradingPlan = item => ({
   analysisHistoryId: item?.analysisHistoryId ?? item?.AnalysisHistoryId ?? '',
   sourceAgent: item?.sourceAgent ?? item?.SourceAgent ?? 'commander',
   userNote: item?.userNote ?? item?.UserNote ?? '',
+  activeScenario: normalizeTradingPlanScenario(item?.activeScenario ?? item?.ActiveScenario),
+  planStartDate: normalizePlanDateValue(item?.planStartDate ?? item?.PlanStartDate),
+  planEndDate: normalizePlanDateValue(item?.planEndDate ?? item?.PlanEndDate),
   createdAt: item?.createdAt ?? item?.CreatedAt ?? '',
   updatedAt: item?.updatedAt ?? item?.UpdatedAt ?? '',
   watchlistEnsured: item?.watchlistEnsured ?? item?.WatchlistEnsured ?? null,
   marketContext: normalizeMarketContext(item?.marketContext ?? item?.MarketContext ?? null),
   marketContextAtCreation: normalizeMarketContext(item?.marketContextAtCreation ?? item?.MarketContextAtCreation ?? null),
-  currentMarketContext: normalizeMarketContext(item?.currentMarketContext ?? item?.CurrentMarketContext ?? null)
+  currentMarketContext: normalizeMarketContext(item?.currentMarketContext ?? item?.CurrentMarketContext ?? null),
+  executionSummary: normalizeExecutionSummary(item?.executionSummary ?? item?.ExecutionSummary ?? null),
+  currentScenarioStatus: normalizeScenarioStatus(item?.currentScenarioStatus ?? item?.CurrentScenarioStatus ?? null),
+  currentPositionSnapshot: normalizePositionSnapshot(item?.currentPositionSnapshot ?? item?.CurrentPositionSnapshot ?? null)
 })
+
+export const normalizeExecutionSummary = item => item ? ({
+  executionCount: Number(item?.executionCount ?? item?.ExecutionCount ?? 0),
+  latestAction: item?.latestAction ?? item?.LatestAction ?? '',
+  latestExecutedAt: item?.latestExecutedAt ?? item?.LatestExecutedAt ?? '',
+  deviatedCount: Number(item?.deviatedCount ?? item?.DeviatedCount ?? 0),
+  unplannedCount: Number(item?.unplannedCount ?? item?.UnplannedCount ?? 0),
+  latestComplianceTag: item?.latestComplianceTag ?? item?.LatestComplianceTag ?? '',
+  latestDeviationTags: item?.latestDeviationTags ?? item?.LatestDeviationTags ?? [],
+  summary: item?.summary ?? item?.Summary ?? ''
+}) : null
+
+export const normalizeScenarioStatus = item => item ? ({
+  code: item?.code ?? item?.Code ?? 'Watch',
+  label: item?.label ?? item?.Label ?? '待观察',
+  reason: item?.reason ?? item?.Reason ?? '',
+  snapshotType: item?.snapshotType ?? item?.SnapshotType ?? 'Current',
+  snapshotAt: item?.snapshotAt ?? item?.SnapshotAt ?? '',
+  referencePrice: normalizePlanNumber(item?.referencePrice ?? item?.ReferencePrice),
+  marketStage: item?.marketStage ?? item?.MarketStage ?? '',
+  counterTrendWarning: Boolean(item?.counterTrendWarning ?? item?.CounterTrendWarning ?? false),
+  isMainlineAligned: Boolean(item?.isMainlineAligned ?? item?.IsMainlineAligned ?? false),
+  abandonTriggered: Boolean(item?.abandonTriggered ?? item?.AbandonTriggered ?? false),
+  planStatus: item?.planStatus ?? item?.PlanStatus ?? '',
+  summary: item?.summary ?? item?.Summary ?? ''
+}) : null
+
+export const normalizePositionSnapshot = item => item ? ({
+  symbol: item?.symbol ?? item?.Symbol ?? '',
+  name: item?.name ?? item?.Name ?? '',
+  quantity: Number(item?.quantity ?? item?.Quantity ?? 0),
+  averageCost: normalizePlanNumber(item?.averageCost ?? item?.AverageCost) ?? 0,
+  latestPrice: normalizePlanNumber(item?.latestPrice ?? item?.LatestPrice),
+  marketValue: normalizePlanNumber(item?.marketValue ?? item?.MarketValue),
+  unrealizedPnL: normalizePlanNumber(item?.unrealizedPnL ?? item?.UnrealizedPnL),
+  positionRatio: normalizePlanNumber(item?.positionRatio ?? item?.PositionRatio),
+  snapshotType: item?.snapshotType ?? item?.SnapshotType ?? 'Current',
+  snapshotAt: item?.snapshotAt ?? item?.SnapshotAt ?? '',
+  availableCash: normalizePlanNumber(item?.availableCash ?? item?.AvailableCash),
+  totalPositionRatio: normalizePlanNumber(item?.totalPositionRatio ?? item?.TotalPositionRatio),
+  summary: item?.summary ?? item?.Summary ?? ''
+}) : null
 
 export const normalizeTradingPlanAlert = item => ({
   id: item?.id ?? item?.Id ?? '',
@@ -62,6 +183,10 @@ export const createTradingPlanForm = item => ({
   symbol: item?.symbol ?? '',
   name: item?.name ?? '',
   direction: item?.direction ?? 'Long',
+  status: normalizeTradingPlanStatus(item?.status ?? item?.Status ?? 'Pending'),
+  activeScenario: normalizeTradingPlanScenario(item?.activeScenario ?? item?.ActiveScenario) || 'Primary',
+  planStartDate: normalizePlanDateValue(item?.planStartDate ?? item?.PlanStartDate),
+  planEndDate: normalizePlanDateValue(item?.planEndDate ?? item?.PlanEndDate),
   triggerPrice: item?.triggerPrice ?? '',
   invalidPrice: item?.invalidPrice ?? '',
   stopLossPrice: item?.stopLossPrice ?? '',
@@ -77,6 +202,7 @@ export const createTradingPlanForm = item => ({
   marketContext: normalizeMarketContext(item?.marketContext ?? item?.marketContextAtCreation ?? item?.currentMarketContext ?? null),
   marketContextLoading: Boolean(item?.marketContextLoading ?? false),
   marketContextMessage: item?.marketContextMessage ?? '',
+  marketContextMissingLabels: Array.isArray(item?.marketContextMissingLabels) ? [...item.marketContextMissingLabels] : [],
   signalMetrics: item?.signalMetrics ?? null,
   realTradeMetrics: item?.realTradeMetrics ?? null,
   executionMode: item?.executionMode ?? null,
@@ -114,7 +240,7 @@ export const getPlanReviewHeadline = alert => {
   return metadata?.newsTitle || ''
 }
 
-export const canEditTradingPlan = item => ['Pending', 'ReviewRequired'].includes(normalizeTradingPlanStatus(item?.status))
+export const canEditTradingPlan = item => ['Draft', 'Pending', 'ReviewRequired'].includes(normalizeTradingPlanStatus(item?.status))
 
 export const canResumeTradingPlan = item => normalizeTradingPlanStatus(item?.status) === 'ReviewRequired'
 
