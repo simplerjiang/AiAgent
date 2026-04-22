@@ -1176,6 +1176,15 @@
       "completedAt": "2026-04-22",
       "commits": ["6f5f1aa", "fcefd62", "0dddb5b"],
       "notes": "扩展 CollectionResult/CollectionLog 6 字段；StocksModule 透传层注入 5 友好别名；4+5 单测覆盖；607+4 全绿；100% 向后兼容。"
+    },
+    {
+      "id": "V040-DEBT-1",
+      "title": "LocalFactAiEnrichmentServiceTests 14 失败修复",
+      "status": "done",
+      "level": "S",
+      "completedAt": "2026-04-22",
+      "commits": ["9aa0230"],
+      "notes": "EF InMemory 触发 ManyServiceProvidersCreatedWarning，导致全量回归时 14 案例 CreateDbContext 失败。修复：CreateDbContext 助手 ConfigureWarnings 忽略该警告。全量 607 全绿。"
     }
   ]
 }

@@ -93,7 +93,7 @@
 ## 技术债 Stories（与 v0.4.0 主线并行）
 
 ### Story V040-DEBT-1: 修复 LocalFactAiEnrichmentServiceTests 14 个失败用例
-- **状态**：TODO
+- **状态**：DONE（commit: 9aa0230）
 - **级别**：S（预估 1.5–2 小时）
 - **背景**：Bug-4 修复 commit `a616fe3` 引入 `ProcessMarketPendingAsync` RequestPath 模式与新排序逻辑，但 6 个测试方法（含 Theory 共 14 案例）的期望值未同步。
 - **失败用例**：
@@ -109,6 +109,7 @@
   - 单独跑 + 全量跑都 PASS
 - **依赖**：无（独立技术债）
 - **优先级**：在阻塞 V040-S2 复核信号前必须完成
+- **完成说明**：2026-04-22 修复，全量 607 测试 0 失败。
 
 ## 历史归档
 
