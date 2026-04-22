@@ -1,6 +1,11 @@
 ﻿<script setup>
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { fetchFinancialReportDetail, recollectFinancialReport } from './financialApi.js'
+import {
+  fetchFinancialReportDetail,
+  listPdfFiles,
+  recollectFinancialReport
+} from './financialApi.js'
+import FinancialReportComparePane from './FinancialReportComparePane.vue'
 import {
   BALANCE_SHEET_FIELDS,
   INCOME_STATEMENT_FIELDS,
@@ -26,6 +31,12 @@ const error = ref('')
 const recollecting = ref(false)
 const recollectError = ref('')
 const recollectMessage = ref('')
+
+// V041-S5: PDF 文件解析（detail 中无 pdfFileId 时回退到 listPdfFiles）
+const resolvedPdfId = ref(null)
+const resolvingPdf = ref(false)
+const resolvePdfError = ref('')
+let pdfResolveToken = 0
 
 const close = () => emit('close')
 
@@ -76,6 +87,58 @@ async function loadDetail() {
   } finally {
     if (token === fetchToken) {
       loading.value = false
+    }
+  }
+  // detail 加载完成后解析对应 PDF（独立 token，避免互相阻塞）
+  resolvePdfFileId()
+}
+
+function pickPdfIdFromDetail(d) {
+  if (!d) return null
+  return d.pdfFileId || d.PdfFileId || d.latestPdf?.id || d.latestPdf?.Id || null
+}
+
+async function resolvePdfFileId() {
+  const token = ++pdfResolveToken
+  resolvedPdfId.value = null
+  resolvePdfError.value = ''
+
+  // 先从 detail 字段中找
+  const direct = pickPdfIdFromDetail(detail.value)
+  if (direct) {
+    resolvedPdfId.value = String(direct)
+    return
+  }
+
+  // 没有则按 symbol + reportType 查 PDF 列表，取最新一份
+  const symbol = resolveSymbol()
+  if (!symbol) return
+  const reportType = props.item?.reportType || props.item?.ReportType || detail.value?.reportType || detail.value?.ReportType || null
+
+  resolvingPdf.value = true
+  try {
+    const res = await listPdfFiles({ symbol, reportType, page: 1, pageSize: 5 })
+    if (token !== pdfResolveToken) return
+    const items = Array.isArray(res?.items) ? res.items : (Array.isArray(res?.Items) ? res.Items : [])
+    if (items.length === 0) {
+      resolvedPdfId.value = null
+      return
+    }
+    // 优先匹配 reportPeriod === reportDate；不匹配则取第一条（后端按 LastParsedAt desc 排序）
+    const reportDate = props.item?.reportDate || props.item?.ReportDate || detail.value?.reportDate || detail.value?.ReportDate || null
+    let pick = null
+    if (reportDate) {
+      pick = items.find(x => (x.reportPeriod || x.ReportPeriod) === reportDate) || null
+    }
+    if (!pick) pick = items[0]
+    resolvedPdfId.value = String(pick.id || pick.Id || '') || null
+  } catch (e) {
+    if (token !== pdfResolveToken) return
+    resolvePdfError.value = e?.message || '加载 PDF 列表失败'
+    resolvedPdfId.value = null
+  } finally {
+    if (token === pdfResolveToken) {
+      resolvingPdf.value = false
     }
   }
 }
@@ -292,8 +355,27 @@ const cashRows = computed(() => buildRows('cashFlow', CASH_FLOW_FIELDS))
 
             <section class="fc-drawer-section">
               <h4 class="fc-drawer-section-title">PDF 原件</h4>
-              <div class="fc-drawer-pdf-placeholder">
-                📄 PDF 原件预览 —— 将在 v0.4.1 提供
+              <div
+                v-if="resolvingPdf"
+                class="fc-drawer-pdf-placeholder"
+                data-testid="fc-drawer-pdf-resolving"
+              >正在定位 PDF 原件…</div>
+              <div
+                v-else-if="resolvedPdfId"
+                class="fc-drawer-pdf-compare"
+                data-testid="fc-drawer-pdf-compare"
+              >
+                <FinancialReportComparePane
+                  :pdf-file-id="resolvedPdfId"
+                  @refresh="loadDetail"
+                />
+              </div>
+              <div
+                v-else
+                class="fc-drawer-pdf-placeholder"
+                data-testid="fc-drawer-pdf-empty"
+              >
+                {{ resolvePdfError || '该报告暂无 PDF 原件，请先触发「重新采集报告」' }}
               </div>
             </section>
           </template>
@@ -313,7 +395,7 @@ const cashRows = computed(() => buildRows('cashFlow', CASH_FLOW_FIELDS))
               :disabled="recollecting || !resolveSymbol()"
               @click="onRecollect"
             >
-              {{ recollecting ? '正在重新采集...' : '重新采集' }}
+              {{ recollecting ? '正在重新采集报告...' : '重新采集报告' }}
             </button>
             <button
               type="button"

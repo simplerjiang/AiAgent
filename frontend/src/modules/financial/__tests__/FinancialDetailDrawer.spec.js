@@ -8,12 +8,20 @@ import { nextTick } from 'vue'
 
 const mocks = {
   fetchFinancialReportDetail: vi.fn(),
-  recollectFinancialReport: vi.fn()
+  recollectFinancialReport: vi.fn(),
+  listPdfFiles: vi.fn(),
+  fetchPdfFileDetail: vi.fn(),
+  reparsePdfFile: vi.fn(),
+  buildPdfFileContentUrl: vi.fn((id) => `/api/stocks/financial/pdf-files/${id}/content`)
 }
 
 vi.mock('../financialApi.js', () => ({
   fetchFinancialReportDetail: (...args) => mocks.fetchFinancialReportDetail(...args),
-  recollectFinancialReport: (...args) => mocks.recollectFinancialReport(...args)
+  recollectFinancialReport: (...args) => mocks.recollectFinancialReport(...args),
+  listPdfFiles: (...args) => mocks.listPdfFiles(...args),
+  fetchPdfFileDetail: (...args) => mocks.fetchPdfFileDetail(...args),
+  reparsePdfFile: (...args) => mocks.reparsePdfFile(...args),
+  buildPdfFileContentUrl: (...args) => mocks.buildPdfFileContentUrl(...args)
 }))
 
 import FinancialDetailDrawer from '../FinancialDetailDrawer.vue'
@@ -69,6 +77,11 @@ const mountDrawer = (props = {}) => mount(FinancialDetailDrawer, {
 beforeEach(() => {
   mocks.fetchFinancialReportDetail.mockReset()
   mocks.recollectFinancialReport.mockReset()
+  mocks.listPdfFiles.mockReset()
+  mocks.fetchPdfFileDetail.mockReset()
+  mocks.reparsePdfFile.mockReset()
+  // 默认无 PDF：让多数旧用例进入「无 PDF」空态分支，与原占位行为兼容
+  mocks.listPdfFiles.mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 5 })
   document.body.innerHTML = ''
 })
 
@@ -137,12 +150,15 @@ describe('FinancialDetailDrawer - 加载与渲染', () => {
     wrapper.unmount()
   })
 
-  it('PDF 占位区显示提示文案', async () => {
+  it('PDF 占位区显示空态文案（V041-S5：无 pdfFileId 时）', async () => {
     mocks.fetchFinancialReportDetail.mockResolvedValueOnce(fullDetail())
+    mocks.listPdfFiles.mockResolvedValueOnce({ items: [], total: 0, page: 1, pageSize: 5 })
     const wrapper = mountDrawer()
     await flushPromises()
-    expect(document.body.textContent).toContain('PDF 原件预览')
-    expect(document.body.textContent).toContain('v0.4.1')
+    const empty = document.querySelector('[data-testid="fc-drawer-pdf-empty"]')
+    expect(empty).toBeTruthy()
+    expect(empty.textContent).toContain('该报告暂无 PDF 原件')
+    expect(empty.textContent).toContain('重新采集报告')
     wrapper.unmount()
   })
 
@@ -252,6 +268,64 @@ describe('FinancialDetailDrawer - 关闭交互', () => {
     removeSpy.mockClear()
     await wrapper.setProps({ visible: false })
     expect(removeSpy).toHaveBeenCalledWith('keydown', expect.any(Function))
+
+    wrapper.unmount()
+  })
+})
+
+describe('FinancialDetailDrawer - V041-S5 PDF 对照接入', () => {
+  it('listPdfFiles 返回 items 时渲染 ComparePane', async () => {
+    mocks.fetchFinancialReportDetail.mockResolvedValueOnce(fullDetail())
+    mocks.listPdfFiles.mockResolvedValueOnce({
+      items: [
+        {
+          id: 'pdf-abc',
+          symbol: '600519',
+          reportPeriod: '2024-12-31',
+          reportType: 'annual',
+          fileName: '600519-2024-annual.pdf'
+        }
+      ],
+      total: 1,
+      page: 1,
+      pageSize: 5
+    })
+    mocks.fetchPdfFileDetail.mockResolvedValueOnce({
+      id: 'pdf-abc',
+      fileName: '600519-2024-annual.pdf',
+      reportPeriod: '2024-12-31',
+      parseUnits: []
+    })
+
+    const wrapper = mountDrawer()
+    await flushPromises()
+    await flushPromises()
+
+    expect(mocks.listPdfFiles).toHaveBeenCalledWith({
+      symbol: '600519',
+      reportType: 'annual',
+      page: 1,
+      pageSize: 5
+    })
+    const compare = document.querySelector('[data-testid="fc-drawer-pdf-compare"]')
+    expect(compare).toBeTruthy()
+    expect(document.querySelector('[data-testid="fc-compare-pane"]')).toBeTruthy()
+    expect(document.querySelector('[data-testid="fc-drawer-pdf-empty"]')).toBeFalsy()
+
+    wrapper.unmount()
+  })
+
+  it('listPdfFiles 返回空时渲染空态文案，不渲染 ComparePane', async () => {
+    mocks.fetchFinancialReportDetail.mockResolvedValueOnce(fullDetail())
+    mocks.listPdfFiles.mockResolvedValueOnce({ items: [], total: 0, page: 1, pageSize: 5 })
+
+    const wrapper = mountDrawer()
+    await flushPromises()
+    await flushPromises()
+
+    expect(document.querySelector('[data-testid="fc-drawer-pdf-empty"]')).toBeTruthy()
+    expect(document.querySelector('[data-testid="fc-compare-pane"]')).toBeFalsy()
+    expect(mocks.fetchPdfFileDetail).not.toHaveBeenCalled()
 
     wrapper.unmount()
   })
