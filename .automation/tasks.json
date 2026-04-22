@@ -1,6 +1,13 @@
 {
   "tasks": [
     {
+      "id": "v0.4.4-product-stabilization",
+      "title": "v0.4.4 产品级稳定性 milestone（占位）",
+      "status": "backlog",
+      "level": "M",
+      "notes": "来自 v0.4.0 全产品巡检 2026-04-22（CONDITIONAL_PASS 65/100），非 v0.4.x 财报路线图，待 v0.4.1~v0.4.3 完成后排期。包含 V044-P0-A 推荐状态语义、V044-P0-B 情绪轮动榜单空态、V044-P1-C 股票详情基本面 3 字段、V044-P1-D 主力净流入单位 bug、V044-P1-E Worker 日志 sink、V044-P1-F 失败按钮文案、V044-NIT N-1~N-4。详见 .automation/reports/v0.4.0-product-walk-2026-04-22.md 与 .automation/sprint.md「v0.4.4 Backlog」段。"
+    },
+    {
       "id": "V040-S3",
       "title": "财报中心前端页面骨架",
       "status": "done",
