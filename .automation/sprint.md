@@ -31,9 +31,15 @@
 - **完成时间**：2026-04-22
 - **commit**：`a911e33`（含 V040-S1 实现 + 12 单元测试）
 - **遗留 NIT（待本 Sprint 内修完）**：
-  - `MapListItem` 用 `default(DateTime)` 序列化为 `0001-01-01`，需改为 nullable 或显式 fallback
-  - `ParseSort` 静默降级未识别字段无日志
-  - 缺 WebApplicationFactory `[AsParameters]` 集成测试（V040-S2 未补，留待 V040-DEBT 或后续 story）
+  - `MapListItem` 用 `default(DateTime)` 序列化为 `0001-01-01`，需改为 nullable 或显式 fallback（已确认在 V040-DEBT-1 阶段同步修复，DTO 已是 DateTime?，MapListItem 走 TryGetDateTime null 兜底，回归测试 ListReports_WhenCollectedAtMissing_ReturnsNull 覆盖）
+  - `ParseSort` 静默降级未识别字段无日志（已修，commit 41a5f9a）
+  - 缺 WebApplicationFactory `[AsParameters]` 集成测试（V040-S2 未补，留待 V040-DEBT 或后续 story）。仓库目前未引入 Microsoft.AspNetCore.Mvc.Testing，单独立 V040-DEBT-3 跟踪，本次跳过。
+
+### Story V040-DEBT-3: 引入 WebApplicationFactory 集成测试基础设施
+- **状态**：TODO
+- **级别**：S
+- **验收标准**：在 `SimplerJiangAiAgent.Api.Tests` 引入 `Microsoft.AspNetCore.Mvc.Testing` + 1 个 `[AsParameters]` 绑定 case 覆盖 `GET /api/financial/reports`。
+- **依赖**：无
 
 ### Story V040-S2: 采集结果透明化（后端）
 - **状态**：DONE（commits: 6f5f1aa / fcefd62 / 0dddb5b）

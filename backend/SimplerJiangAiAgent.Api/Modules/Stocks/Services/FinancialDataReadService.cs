@@ -386,19 +386,34 @@ public class FinancialDataReadService : IFinancialDataReadService
             .ToList();
     }
 
-    private static (string Field, int Order) ParseSort(string? sort)
+    private (string Field, int Order) ParseSort(string? sort)
     {
-        var raw = string.IsNullOrWhiteSpace(sort) ? "reportDate:desc" : sort.Trim();
+        const string defaultKey = "reportDate";
+        var raw = string.IsNullOrWhiteSpace(sort) ? $"{defaultKey}:desc" : sort.Trim();
         var parts = raw.Split(':', 2, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        var key = parts.Length > 0 ? parts[0].ToLowerInvariant() : "reportdate";
+        var key = parts.Length > 0 ? parts[0].ToLowerInvariant() : defaultKey.ToLowerInvariant();
         var dir = parts.Length > 1 ? parts[1].ToLowerInvariant() : "desc";
 
-        var field = key switch
+        string field;
+        switch (key)
         {
-            "updatedat" => "$.UpdatedAt",
-            "collectedat" => "$.CollectedAt",
-            _ => "$.ReportDate",
-        };
+            case "updatedat":
+                field = "$.UpdatedAt";
+                break;
+            case "collectedat":
+                field = "$.CollectedAt";
+                break;
+            case "reportdate":
+                field = "$.ReportDate";
+                break;
+            default:
+                _logger.LogWarning(
+                    "FinancialReports query received unknown sort '{Sort}', falling back to default '{Default}'",
+                    sort,
+                    defaultKey);
+                field = "$.ReportDate";
+                break;
+        }
         var order = dir == "asc" ? Query.Ascending : Query.Descending;
         return (field, order);
     }
