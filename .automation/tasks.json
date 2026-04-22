@@ -1167,6 +1167,15 @@
         "test": "done"
       },
       "notes": "2026-04-05 全部 12 步完成并通过零容忍验收。包含独立 FinancialWorker 进程（port 5120）、三级数据源降级（东方财富 emweb→datacenter→同花顺）、巨潮 PDF 三引擎投票解析管线、LiteDB 本地存储、FinancialReportMcp/FinancialTrendMcp MCP 工具注入 LLM 角色、前端财务报表侧边栏 Tab（理杏仁风格）、管理员配置/测试面板。安全修复（AdminAuthFilter）、指标对齐（16/16 字段）、空状态分支、格式修复均已通过。后端 455 / 前端 180 测试全通过。"
+    },
+    {
+      "id": "V040-S2",
+      "title": "采集结果透明化（后端）",
+      "status": "done",
+      "level": "S",
+      "completedAt": "2026-04-22",
+      "commits": ["6f5f1aa", "fcefd62", "0dddb5b"],
+      "notes": "扩展 CollectionResult/CollectionLog 6 字段；StocksModule 透传层注入 5 友好别名；4+5 单测覆盖；607+4 全绿；100% 向后兼容。"
     }
   ]
 }

@@ -33,10 +33,10 @@
 - **遗留 NIT（待本 Sprint 内修完）**：
   - `MapListItem` 用 `default(DateTime)` 序列化为 `0001-01-01`，需改为 nullable 或显式 fallback
   - `ParseSort` 静默降级未识别字段无日志
-  - 缺 WebApplicationFactory `[AsParameters]` 集成测试（V040-S2 一起补）
+  - 缺 WebApplicationFactory `[AsParameters]` 集成测试（V040-S2 未补，留待 V040-DEBT 或后续 story）
 
 ### Story V040-S2: 采集结果透明化（后端）
-- **状态**：TODO
+- **状态**：DONE（commits: 6f5f1aa / fcefd62 / 0dddb5b）
 - **级别**：S
 - **验收标准**：
   - `/api/stocks/financial/collect/{symbol}` 响应增加：`reportPeriod / reportTitle / sourceChannel / fallbackReason / pdfSummary`
@@ -44,6 +44,7 @@
   - 替换"只报数量"的旧响应格式（保持向后兼容字段，但补齐新字段）
   - 单元测试覆盖：成功 / 降级 / 失败 / PDF 补充触发 4 个路径
 - **依赖**：无
+- **完成说明**：3 cycles 完成，607 + 4 单测全绿；HTTP 响应含 11 原字段 + 6 完整新字段 + 5 友好别名。
 
 ### Story V040-S3: 财报中心前端页面骨架
 - **状态**：TODO
