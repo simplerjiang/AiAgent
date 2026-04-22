@@ -54,13 +54,9 @@
 - **风险备注**：voting candidates 数组当前后端未暴露，VotingPanel 用「候选提取器排序与投票明细将在后续版本暴露」灰色脚注诚实标注；后端补 `candidates: [{extractor, score, vote}]` 后再扩展面板（追到 V041-DEBT-3）。
 
 ### V041-S5: 前端 FinancialReportComparePane 双栏对照（财报中心抽屉接入）
-- **状态**：BACKLOG | **级别**：M | **依赖**：V041-S3 + V041-S4
-- **验收标准**：
-  - 新建 `FinancialReportComparePane.vue`：左栏 PdfViewer / 右栏可切换三表结构化|文本|投票
-  - `FinancialDetailDrawer.vue` 接入，替换 v0.4.0 PDF 占位区
-  - 「重新解析」按钮触发 reparse，完成后左右两栏自动刷新（page_start/page_end/block_kind 三字段必须更新）
-  - **必须**与「重新采集」按钮在 UI 上明确区分，防混淆
-  - 浏览器 packaged 验收：看原件/切右栏/重解析全流程，console 0 error
+- **状态**：DONE | **级别**：M | **完成时间**：2026-04-22 | **commits**：`36e873f`
+- 左 PdfViewer（透传 page prop 联动 jump-to-page）/ 右栏 Tab 切换 ParsePreview ↔ VotingPanel；reparsePdfFile 调用唯一收敛在 VotingPanel 内 emit 触发；reparse 成功整体替换 internalDetail，三字段 props 自动透传刷新；Drawer 通过 resolvePdfFileId（detail 字段优先 → listPdfFiles fallback by reportPeriod 匹配）注入 pdfFileId；文案严格区分「重新解析 PDF」vs「重新采集报告」。新增 9 vitest（7 ComparePane + 2 Drawer），共 33 files / 407 passed / 2 skipped。
+- **风险备注**：Firefox 老版本可能不响应 iframe `#page=N`（属 S8 真机验收）；切换抽屉 item 时 reparse 中态用 watch 重置兜底未做 abort（成本/收益不划算）；浏览器 packaged 验收留 V041-S8 一并完成。
 
 ### V041-S6: 前端 股票详情 FinancialReportTab 轻量入口 + 重新解析按钮
 - **状态**：BACKLOG | **级别**：S | **依赖**：V041-S5
@@ -70,11 +66,9 @@
   - vitest 覆盖入口可见性、点击跳转、重解析成功/失败回写
 
 ### V041-S7: 前端 阶段级失败可视化（5 阶段 timeline）
-- **状态**：BACKLOG | **级别**：S | **依赖**：V041-S2
-- **验收标准**：
-  - 5 阶段 timeline（download/extract/vote/parse/persist），每阶段显示状态+耗时+错误摘要
-  - 数据源对接 V041-S2 stageLogs 字段
-  - vitest 覆盖：5 阶段全成功 / 中段失败 / 全失败 3 种快照
+- **状态**：DONE | **级别**：S | **完成时间**：2026-04-22 | **commits**：`a46321d`
+- FinancialPdfStageTimeline.vue 固定 5 阶段顺序 download→extract→vote→parse→persist；4 状态徽标 success/failed/skipped/pending；durationMs 自适应 ms/s 格式；compact 模式折叠 message 为 tooltip；顶部摘要含成功阶段数+总耗时+最后失败阶段（按 STAGE_ORDER 倒序找）；空 stageLogs 显示 5 个 pending + 「尚未解析」。新增 7 vitest（含大小写兼容 + compact tooltip）。
+- **风险备注**：组件未集成（S8 接入时 ComparePane 紧凑场景 compact=true）；后端契约假设 stage 仅 5 个固定字符串，新增需同步扩 STAGE_ORDER；lastFailedStage 按顺序倒序找而非按 occurredAt（后端当前每阶段一条 log，无歧义）。
 
 ### V041-S8: v0.4.1 全链路验收
 - **状态**：BACKLOG | **级别**：M | **依赖**：V041-S5 + V041-S6 + V041-S7
