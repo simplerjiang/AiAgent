@@ -9,6 +9,120 @@
 3. **预存在测试失败必须立项**：复核中发现非本 Story 引入的失败用例，须开独立技术债 Story 跟踪，不允许"已知失败"长期挂在主干。
 4. **`tasks.json` 与 `sprint.md` 关系**：`sprint.md` 是当前 Sprint 唯一权威看板；`tasks.json` 仅作历史任务事件流（append-only），不再用作活跃任务管理。
 
+# v0.4.1 Sprint（PDF 原件对照与手动重新解析）
+
+## Sprint 目标
+
+**让用户在软件内直接看到 PDF 原件，并且能把原件和解析结果并排对照，同时支持手动重新解析。**（来自 [docs/GOAL-v041-pdf-compare-and-reparse.md](../docs/GOAL-v041-pdf-compare-and-reparse.md) §1）
+
+## 核心约束
+
+- **page_start / page_end / block_kind 必须持久化**：PDF 详情持久化模型每个解析单元必须落库 `page_start`（1-based 起始页）/ `page_end`（1-based 结束页）/ `block_kind`（枚举 `narrative_section` / `table` / `figure_caption`）三字段，为 v0.4.3 citation→PDF 跳转铺路。来自 §9.1 决策追加。
+- 不允许 v0.4.1 阶段交付「PDF 详情接口返回的解析单元缺三字段」的实现，这是验收硬条件。
+
+## 完成定义
+
+1. 能看原件（软件内嵌 PDF 预览，桌面 + 浏览器双环境兼容）
+2. 能对照（左 PDF 原件 / 右结构化或文本或投票信息双栏）
+3. 能手动重新解析（单文件触发，完成后详情自动刷新）
+4. 能定位失败层级（下载 / 提取 / 投票 / 解析 / 落库 5 阶段可视化）
+5. 同一能力在「财报中心」与「股票信息 → 财务报表」两处可用
+6. PDF 详情接口每个解析单元含 `page_start` / `page_end` / `block_kind` 三字段，重新解析后字段刷新（来自 §6 + §9.2）
+
+## 当前 Stories
+
+### Story V041-S1: 后端 PDF 详情持久化模型 + 解析单元三字段
+- **状态**：TODO
+- **级别**：M
+- **依赖**：无
+- **验收标准**：
+  - 新建 PDF 详情实体（文件名 / 标题 / 本地路径 / 报告期 / 报告类型 / 提取器 / 投票置信度 / 字段数 / 错误 / 最近解析时间 / 最近重解析时间）+ EF migration
+  - ParseUnit 子模型必含 `page_start` / `page_end` / `block_kind`（枚举 narrative_section / table / figure_caption），PdfPipelineResult 写入并落库
+  - 单元测试覆盖：3 类 block_kind / 跨页区间 / 单页区间 / 缺页降级（page_start=0 拒收）
+- **风险/备注**：硬约束来自 §9.1，三字段不允许为空；模型变更涉及现有 `PdfPipelineResult` / `PdfFileResult` 上游兼容性，需同步评估 Worker 写入路径。
+
+### Story V041-S2: 后端 4 个正式接口 + 阶段日志扩展
+- **状态**：TODO
+- **级别**：M
+- **依赖**：V041-S1
+- **验收标准**：
+  - `GET /api/stocks/financial/pdf-files`（列表，支持 symbol / reportPeriod 过滤分页）
+  - `GET /api/stocks/financial/pdf-files/{id}`（详情，返回模型 + 解析单元数组含三字段）
+  - `GET /api/stocks/financial/pdf-files/{id}/content`（PDF 二进制流，正确 Content-Type 与缓存头）
+  - `POST /api/stocks/financial/pdf-files/{id}/reparse`（同步触发，返回新 detail；阶段日志记录 5 阶段时长与错误）
+  - 单元 + WebApplicationFactory 集成测试覆盖 4 接口的成功 / 不存在 id / 重解析失败路径
+- **风险/备注**：reparse 需要单进程串行保护避免并发重算；PDF content 接口要防 path traversal。
+
+### Story V041-S3: 前端 FinancialPdfViewer.vue 共享组件（PDF 内嵌预览）
+- **状态**：TODO
+- **级别**：M
+- **依赖**：V041-S2
+- **验收标准**：
+  - 新建 `FinancialPdfViewer.vue`，封装 PDF 渲染（推荐 pdf.js 或 `<embed>` 兼容评估）
+  - 桌面（WebView2）+ 浏览器双环境验证可加载、翻页、缩放
+  - 暴露 `props: { pdfFileId }` + `emits: ['loaded','error']`，loading / error / 空态完整
+  - vitest 单测覆盖 props 切换 / loading / error；至少一次桌面 packaged 真机加载验证
+- **风险/备注**：§7 风险 1 — 桌面与浏览器渲染差异；若选 pdf.js 需评估 bundle 体积与 worker 路径在 packaged 模式下是否可达。
+
+### Story V041-S4: 前端 FinancialPdfParsePreview.vue + FinancialPdfVotingPanel.vue
+- **状态**：BACKLOG
+- **级别**：M
+- **依赖**：V041-S2
+- **验收标准**：
+  - `FinancialPdfParsePreview.vue` 渲染解析单元数组，按 `block_kind` 分类样式（narrative_section / table / figure_caption），显示 `page_start–page_end` 锚点
+  - `FinancialPdfVotingPanel.vue` 展示提取器候选、投票置信度、最终采用者
+  - 两组件能消费 `GET /pdf-files/{id}` 返回结构，loading / error / 空态完整
+  - vitest 覆盖三类 block_kind 渲染 + 投票置信度排序 + 重解析后 props 刷新
+- **风险/备注**：投票面板字段口径需与后端 §5.1 模型对齐，避免前后端字段名漂移。
+
+### Story V041-S5: 前端 FinancialReportComparePane.vue 双栏对照（财报中心抽屉接入）
+- **状态**：BACKLOG
+- **级别**：M
+- **依赖**：V041-S3 + V041-S4
+- **验收标准**：
+  - 新建 `FinancialReportComparePane.vue`，左栏嵌 `FinancialPdfViewer`、右栏切换 结构化三表 / 文本预览 / 投票信息
+  - `FinancialDetailDrawer.vue` 接入对照模式，替换 v0.4.0 「PDF 占位」区
+  - 「重新解析」按钮触发 `POST /pdf-files/{id}/reparse`，完成后自动刷新左右两栏
+  - 浏览器 packaged 验收：财报中心 → 详情抽屉 → 看原件 / 切右栏 / 重解析全流程通跑，console 0 error
+- **风险/备注**：§7 风险 3 — 必须把「重新采集」与「重新解析」按钮在 UI 上明确区分，避免用户混淆是重抓还是重算。
+
+### Story V041-S6: 前端 股票详情 FinancialReportTab 轻量入口 + 重新解析按钮
+- **状态**：BACKLOG
+- **级别**：S
+- **依赖**：V041-S5
+- **验收标准**：
+  - `FinancialReportTab.vue` 在单股票视图新增「查看 PDF 原件 / 对照」入口（轻量版，可调起 ComparePane 或抽屉）
+  - 复用 V041-S5 的对照组件，避免两套实现
+  - 重解析按钮共享 V041-S5 的 reparse 调用与刷新逻辑
+  - vitest 覆盖入口可见性、点击跳转、重解析成功/失败回写
+- **风险/备注**：保持轻量，不要把财报中心的所有筛选/分页搬进股票详情。
+
+### Story V041-S7: 前端 阶段级失败可视化（5 阶段 timeline）
+- **状态**：BACKLOG
+- **级别**：S
+- **依赖**：V041-S2
+- **验收标准**：
+  - 在 ComparePane 或详情抽屉补一条 5 阶段 timeline：下载 / 提取 / 投票 / 解析 / 落库
+  - 每个阶段显示状态（成功 / 失败 / 跳过 / 进行中）+ 耗时 + 失败错误摘要
+  - 数据源对接 V041-S2 阶段日志扩展输出
+  - vitest 覆盖 5 阶段全成功 / 中段失败 / 全失败 3 种快照
+- **风险/备注**：阶段口径要与 Worker 现有日志层对齐，避免 UI 出现「未知阶段」。
+
+### Story V041-S8: v0.4.1 全链路验收
+- **状态**：BACKLOG
+- **级别**：M
+- **依赖**：V041-S5 + V041-S6 + V041-S7
+- **验收标准**：
+  - Test Agent 跑通后端 dotnet test + 前端 vitest 全绿
+  - UI Designer Agent 走查 ComparePane / 阶段 timeline / 股票详情入口
+  - User Representative Agent 模拟交易员视角验收 6 项完成定义
+  - **页码锚点刷新验证**：触发重新解析 → 详情接口返回的解析单元 `page_start` / `page_end` / `block_kind` 全部刷新且非空（§9.2 硬条件）
+  - 桌面 packaged + 浏览器双环境验证 PDF 内嵌预览（§7 风险 1）
+  - 写 v0.4.1 完成报告 + 更新 README.UserAgentTest.md + tasks.json
+- **风险/备注**：若桌面 WebView2 与浏览器 PDF 渲染存在不可调和差异，须在本 Story 内决策是回退方案还是降级支持环境。
+
+# v0.4.0 Sprint（已完成 2026-04-22 归档）
+
 ## Sprint 目标
 
 **v0.4.0 财报中心基础落地**：把现有的财务数据测试工具升级为正式业务页面 `财报中心`，实现采集结果透明化与本地财报数据表格化。是 v0.4.x 路线的第一阶段。
