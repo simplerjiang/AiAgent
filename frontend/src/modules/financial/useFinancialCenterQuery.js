@@ -4,6 +4,7 @@
  */
 import { reactive, ref, watch } from 'vue'
 import { DEFAULT_QUERY, SORT_FIELDS, buildDefaultDateRange } from './financialCenterConstants.js'
+import { pickStockMatch } from './symbolMarketUtil.js'
 
 // 前端枚举（小写）→ 后端存储值（首字母大写）映射
 const REPORT_TYPE_API_MAP = {
@@ -210,14 +211,12 @@ export function useFinancialCenterQuery() {
         .then(data => {
           let name = ''
           if (Array.isArray(data) && data.length > 0) {
-            const exact = data.find(d => (d.symbol || d.code) === sym)
-            const pick = exact || data[0]
+            const pick = pickStockMatch(data, sym)
             name = pick?.name || pick?.shortName || ''
           } else if (data && typeof data === 'object') {
             const arr = data.items || data.data || data.results
             if (Array.isArray(arr) && arr.length > 0) {
-              const exact = arr.find(d => (d.symbol || d.code) === sym)
-              const pick = exact || arr[0]
+              const pick = pickStockMatch(arr, sym)
               name = pick?.name || pick?.shortName || ''
             } else {
               name = data.name || data.shortName || ''

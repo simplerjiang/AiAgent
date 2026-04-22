@@ -142,6 +142,20 @@
 - **完成说明**：全部为测试期望未跟上重构的 A 类问题 + 1 处 echarts mock 缺 API 的 C 类问题；vitest 316 passed / 0 failed / 2 skipped；未发现生产代码回归；未引入新依赖。
 - **PM Note**：TradingWorkbench 在 isRunning 状态下保留输入框、把发送按钮换成取消按钮是有意设计，建议 PM 后续在产品文档固化。MarketSentimentTab.spec.js 部分细粒度文案断言因子组件拆分被弱化，可后续补回。
 
+### Story V040-S6-FU-1: 修复 D-1 — 财报中心 000001 名称误显示为上证指数
+- **状态**：DONE
+- **级别**：S
+- **背景**：UI Designer 走查发现 `000001` 在表格名称列显示为「上证指数」（应为「平安银行」）。根因：腾讯 `s3` 搜索 API 同时返回 `sh000001`（指数）与 `sz000001`（平安银行），前端按 `code === sym` 取首条命中指数。
+- **验收标准**：
+  - 新建 `frontend/src/modules/financial/symbolMarketUtil.js`：`inferMarketFromCode` + `pickStockMatch`
+  - `useFinancialCenterQuery.js` 的两处名称解析切换到 `pickStockMatch`，优先级链：完整 symbol 严格 → code+market 一致 → code 兜底 → 首条
+  - 单测 17 cases 覆盖各前缀分支与关键去歧义场景
+  - 浏览器 packaged 验证：000001 → 平安银行 / 600519 → 贵州茅台 / console 0 error
+- **完成时间**：2026-04-22
+- **commits**：（commit 后回填）
+- **完成说明**：仅前端选择逻辑修复，未触碰后端 `/api/stocks/search` 排序问题（影响面更广，留独立 backlog）。vitest 360/0/2，重打包 + packaged 启动 + 浏览器 2 轮回归全部通过。
+- **遗留 backlog**：后端 `StockSearchService` 无排序/无市场过滤，其他消费者（如股票详情页）若直接消费 `data[0]` 仍可能踩坑，建议另立 V040-DEBT-4 跟踪后端搜索排序。
+
 ## 历史归档
 
 - v0.3.2 散户热度反向指标 → `/memories/repo/sprints/v0.3.2-retail-heat-contrarian.md`
