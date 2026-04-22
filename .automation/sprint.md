@@ -36,10 +36,13 @@
   - 缺 WebApplicationFactory `[AsParameters]` 集成测试（V040-S2 未补，留待 V040-DEBT 或后续 story）。仓库目前未引入 Microsoft.AspNetCore.Mvc.Testing，单独立 V040-DEBT-3 跟踪，本次跳过。
 
 ### Story V040-DEBT-3: 引入 WebApplicationFactory 集成测试基础设施
-- **状态**：TODO
+- **状态**：DONE
 - **级别**：S
 - **验收标准**：在 `SimplerJiangAiAgent.Api.Tests` 引入 `Microsoft.AspNetCore.Mvc.Testing` + 1 个 `[AsParameters]` 绑定 case 覆盖 `GET /api/financial/reports`。
 - **依赖**：无
+- **完成时间**：2026-04-22
+- **commits**：`813fdeb`
+- **完成说明**：引入 `Microsoft.AspNetCore.Mvc.Testing 8.0.16`；`Program.cs` 末尾追加 `public partial class Program {}` 以暴露入口；新增 `FinancialReportsEndpointTests.cs` 通过 Stub 替换 `IFinancialDataReadService` 隔离外部依赖；新增 1 个集成测试 `GetFinancialReports_WithFullQuery_BindsParametersAndReturns200`；后端 dotnet test 608/0/0 全绿。
 
 ### Story V040-S2: 采集结果透明化（后端）
 - **状态**：DONE（commits: 6f5f1aa / fcefd62 / 0dddb5b）

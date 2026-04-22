@@ -289,3 +289,6 @@ static string GetAppVersion()
     var version = assembly.GetName().Version;
     return version is null ? "0.0.0" : $"{version.Major}.{version.Minor}.{version.Build}";
 }
+
+// Exposed as public partial so integration tests can use WebApplicationFactory<Program>.
+public partial class Program { }
