@@ -131,7 +131,7 @@ describe('useFinancialCenterQuery — fetchReports request URL', () => {
 
     await fetchReports()
     const url = fetchMock.mock.calls[0][0]
-    expect(url).toContain('/api/financial/reports?')
+    expect(url).toContain('/api/stocks/financial/reports?')
     expect(url).toContain('symbol=600519%2C000001')
     expect(url).toContain('reportType=annual%2Cq1')
     expect(url).toContain('startDate=2025-01-01')
@@ -194,7 +194,7 @@ describe('useFinancialCenterQuery — race condition guard', () => {
 describe('useFinancialCenterQuery — symbol name lazy load', () => {
   it('populates symbolNameMap from /api/stocks/search responses', async () => {
     const fetchMock = vi.fn().mockImplementation((url) => {
-      if (typeof url === 'string' && url.startsWith('/api/financial/reports')) {
+      if (typeof url === 'string' && url.startsWith('/api/stocks/financial/reports')) {
         return Promise.resolve({
           ok: true,
           json: () => Promise.resolve({
@@ -223,7 +223,7 @@ describe('useFinancialCenterQuery — symbol name lazy load', () => {
 
   it('writes empty string for missing symbol so we never re-request', async () => {
     const fetchMock = vi.fn().mockImplementation((url) => {
-      if (url.startsWith('/api/financial/reports')) {
+      if (url.startsWith('/api/stocks/financial/reports')) {
         return Promise.resolve({
           ok: true,
           json: () => Promise.resolve({ items: [{ symbol: 'XYZ' }], total: 1 })
@@ -254,7 +254,7 @@ describe('useFinancialCenterQuery — symbol name lazy load', () => {
     let peak = 0
     const deferreds = []
     const fetchMock = vi.fn().mockImplementation((url) => {
-      if (url.startsWith('/api/financial/reports')) {
+      if (url.startsWith('/api/stocks/financial/reports')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ items: [], total: 0 }) })
       }
       active++

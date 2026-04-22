@@ -158,7 +158,7 @@ const buildApiUrl = (query) => {
   params.set('page', String(query.page))
   params.set('pageSize', String(query.pageSize))
   params.set('sort', `${query.sortField}:${query.sortDirection}`)
-  return `/api/financial/reports?${params.toString()}`
+  return `/api/stocks/financial/reports?${params.toString()}`
 }
 
 export function useFinancialCenterQuery() {
@@ -189,8 +189,15 @@ export function useFinancialCenterQuery() {
     while (nameInflight < NAME_MAX_CONCURRENCY && nameQueue.length > 0) {
       const sym = nameQueue.shift()
       nameInflight++
-      fetch(`/api/stocks/search?q=${encodeURIComponent(sym)}`)
-        .then(r => (r.ok ? r.json() : null))
+      fetch(`/api/stocks/search?q=${encodeURIComponent(sym)}&limit=5`)
+        .then(r => {
+          if (!r.ok) return null
+          const ct = (r.headers && typeof r.headers.get === 'function')
+            ? (r.headers.get('content-type') || '')
+            : 'application/json'
+          if (!ct.includes('application/json')) return null
+          return r.json()
+        })
         .then(data => {
           let name = ''
           if (Array.isArray(data) && data.length > 0) {
@@ -246,8 +253,11 @@ export function useFinancialCenterQuery() {
     try {
       const url = buildApiUrl(query)
       const res = await fetch(url)
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`)
+      const contentType = (res.headers && typeof res.headers.get === 'function')
+        ? (res.headers.get('content-type') || '')
+        : 'application/json'
+      if (!res.ok || !contentType.includes('application/json')) {
+        throw new Error(res.ok ? '服务端响应非 JSON（接口可能未上线或路径错误）' : `HTTP ${res.status}`)
       }
       const data = await res.json()
       if (reqId !== lastRequestId.value) return
