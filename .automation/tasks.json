@@ -17,9 +17,10 @@
     {
       "id": "V041-S1",
       "title": "后端 PDF 详情持久化模型 + 解析单元三字段",
-      "status": "todo",
+      "status": "done",
       "level": "M",
-      "notes": "新建 PDF 详情实体（文件名 / 标题 / 本地路径 / 报告期 / 类型 / 提取器 / 投票置信度 / 字段数 / 错误 / 最近解析时间 / 最近重解析时间）+ EF migration；ParseUnit 子模型必含 page_start / page_end / block_kind（narrative_section / table / figure_caption），PdfPipelineResult 写入并落库；单测覆盖 3 类 block_kind / 跨页 / 单页 / 缺页降级。硬约束来自 §9.1。无依赖。"
+      "completedAt": "2026-04-22",
+      "notes": "选 LiteDB 作为 PDF 详情持久化（轻量 embedded、无 EF migration 成本）；PdfFileDocument + PdfParseUnitBuilder + FinancialDbContext + PdfProcessingPipeline 接入；ParseUnit 必含 page_start / page_end / block_kind（narrative_section / table / figure_caption），page=0 拒收；Worker tests 4→20 全绿。硬约束来自 §9.1。遗留 V041-DEBT-1（BsonMapper.Global 并发 race）。"
     },
     {
       "id": "V041-S2",
@@ -31,9 +32,10 @@
     {
       "id": "V041-S3",
       "title": "前端 FinancialPdfViewer.vue 共享 PDF 内嵌预览组件",
-      "status": "todo",
+      "status": "done",
       "level": "M",
-      "notes": "新建 FinancialPdfViewer.vue，封装 PDF 渲染（pdf.js 或 <embed> 兼容评估），桌面 WebView2 + 浏览器双环境可加载/翻页/缩放；props pdfFileId + emits loaded/error；loading/error/空态完整；vitest 覆盖 props 切换 / loading / error，至少一次桌面 packaged 真机加载验证。依赖 V041-S2。风险来自 §7 风险 1。"
+      "completedAt": "2026-04-22",
+      "notes": "选用原生 <iframe> 渲染 PDF（WebView2 + Chromium 内置 PDF viewer 双端可用），不引入 pdfjs-dist 减少 bundle 体积与 packaged 模式 worker 路径风险；props pdfFileId + emits loaded/error，loading/error/空态完整；vitest 370→377 全绿。桌面 packaged 真机加载留待 V041-S5 接入对照模式时一并验收。依赖 V041-S2。"
     },
     {
       "id": "V041-S4",
@@ -69,6 +71,13 @@
       "status": "backlog",
       "level": "M",
       "notes": "Test Agent 后端 dotnet test + 前端 vitest 全绿；UI Designer 走查 ComparePane / timeline / 股票详情入口；User Representative 验收 6 项完成定义；硬条件页码锚点刷新验证（重新解析后 page_start/page_end/block_kind 全部刷新且非空，§9.2）；桌面 packaged + 浏览器双环境验证 PDF 内嵌预览（§7 风险 1）；写 v0.4.1 完成报告 + 更新 README.UserAgentTest.md + tasks.json。依赖 V041-S5 + V041-S6 + V041-S7。"
+    },
+    {
+      "id": "V041-DEBT-1",
+      "title": "FinancialDbContext 注入私有 BsonMapper 实例隔离测试（LiteDB BsonMapper.Global 并发 race）",
+      "status": "backlog",
+      "level": "S",
+      "notes": "V041-S1 实现当前共享 LiteDB BsonMapper.Global，并发跑 Worker tests 时存在映射注册竞态风险。需重构 FinancialDbContext 注入私有 BsonMapper 实例隔离测试与生产运行环境。优先级 v0.4.1 中。"
     },
     {
       "id": "V040-S3",

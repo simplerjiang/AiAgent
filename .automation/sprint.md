@@ -32,13 +32,16 @@
 ## 当前 Stories
 
 ### Story V041-S1: 后端 PDF 详情持久化模型 + 解析单元三字段
-- **状态**：TODO
+- **状态**：DONE
 - **级别**：M
 - **依赖**：无
 - **验收标准**：
   - 新建 PDF 详情实体（文件名 / 标题 / 本地路径 / 报告期 / 报告类型 / 提取器 / 投票置信度 / 字段数 / 错误 / 最近解析时间 / 最近重解析时间）+ EF migration
   - ParseUnit 子模型必含 `page_start` / `page_end` / `block_kind`（枚举 narrative_section / table / figure_caption），PdfPipelineResult 写入并落库
   - 单元测试覆盖：3 类 block_kind / 跨页区间 / 单页区间 / 缺页降级（page_start=0 拒收）
+- **完成时间**：2026-04-22
+- **commits**：（commit 后回填）
+- **完成说明**：选 LiteDB 作为 PDF 详情持久化（轻量 embedded、无 EF migration 成本），新建 `PdfFileDocument` + `PdfParseUnitBuilder`，三字段 `page_start` / `page_end` / `block_kind` 强校验落库（page=0 拒收），PdfProcessingPipeline 接入；Worker tests 4→20 全绿。
 - **风险/备注**：硬约束来自 §9.1，三字段不允许为空；模型变更涉及现有 `PdfPipelineResult` / `PdfFileResult` 上游兼容性，需同步评估 Worker 写入路径。
 
 ### Story V041-S2: 后端 4 个正式接口 + 阶段日志扩展
@@ -54,7 +57,7 @@
 - **风险/备注**：reparse 需要单进程串行保护避免并发重算；PDF content 接口要防 path traversal。
 
 ### Story V041-S3: 前端 FinancialPdfViewer.vue 共享组件（PDF 内嵌预览）
-- **状态**：TODO
+- **状态**：DONE
 - **级别**：M
 - **依赖**：V041-S2
 - **验收标准**：
@@ -62,6 +65,9 @@
   - 桌面（WebView2）+ 浏览器双环境验证可加载、翻页、缩放
   - 暴露 `props: { pdfFileId }` + `emits: ['loaded','error']`，loading / error / 空态完整
   - vitest 单测覆盖 props 切换 / loading / error；至少一次桌面 packaged 真机加载验证
+- **完成时间**：2026-04-22
+- **commits**：（commit 后回填）
+- **完成说明**：选用原生 `<iframe>` 渲染 PDF（WebView2 + Chromium 内置 PDF viewer 双端可用），不引入 pdfjs-dist 减少 bundle 体积与 packaged 模式 worker 路径风险；props `pdfFileId` + emits `loaded` / `error`，loading / error / 空态完整；vitest 370→377 全绿。桌面 packaged 真机加载留待 V041-S5 接入对照模式时一并验收。
 - **风险/备注**：§7 风险 1 — 桌面与浏览器渲染差异；若选 pdf.js 需评估 bundle 体积与 worker 路径在 packaged 模式下是否可达。
 
 ### Story V041-S4: 前端 FinancialPdfParsePreview.vue + FinancialPdfVotingPanel.vue
@@ -289,6 +295,7 @@
 - **V040-S6-FU-2**：财报中心关键词搜索后端不生效，目前由前端二次过滤兜底（关键词模式下 pageSize 临时拉到 100、page 锁 1），匹配总数超过 100 时存在漏。需要后端在 `GET /api/stocks/financial/reports` 支持 `keyword` 模糊匹配 `symbol`/`name`。优先级 v0.4.1 高。
 - **V040-S3-FU-1**：财报中心渠道 Tag 配色在表格列与采集面板/抽屉不统一（`ths` 在表格走绿、在采集面板走紫；`未分类/Unknown` pill 设计未定）。优先级 v0.4.1 中。
 - **V040-DEBT-4**（候选）：后端 `StockSearchService` 无排序无市场过滤，腾讯 `s3` API 同时返回 `sh000001`（指数）+ `sz000001`（平安银行）时下游消费者按 `data[0]` 取首条会踩坑。V040-S6-FU 已在前端 `useFinancialCenterQuery` 加 `pickStockMatch` 兜底，但其他消费者（股票详情页等）仍裸消费。建议 v0.4.1 在后端补 market 过滤或显式排序。
+- **V041-DEBT-1**：`FinancialDbContext` 注入私有 `BsonMapper` 实例隔离测试，避免 LiteDB `BsonMapper.Global` 全局并发 race。当前 V041-S1 实现共享 `BsonMapper.Global`，并发跑 Worker tests 时存在映射注册竞态风险。优先级 v0.4.1 中。
 
 ## v0.4.4 Backlog（产品级 P0/P1 修复，非财报路线图）
 

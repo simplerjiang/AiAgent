@@ -108,20 +108,22 @@ public class PdfProcessingPipeline : IPdfProcessingPipeline
         var votingResult = await _votingEngine.ExtractAndVoteAsync(pdf.FilePath, ct);
         if (votingResult.Winner == null)
         {
-            return new PdfFileResult
+            var failure = new PdfFileResult
             {
                 FileName = fileName,
                 Success = false,
                 Error = "三路提取均失败",
                 VotingConfidence = votingResult.Confidence.ToString()
             };
+            UpsertPdfFileDocument(symbol, pdf, votingResult, parsed: null, parseUnits: new(), failure);
+            return failure;
         }
 
         // 解析财务表格
         var parsed = _tableParser.Parse(votingResult.Winner);
         if (!parsed.HasData)
         {
-            return new PdfFileResult
+            var failure = new PdfFileResult
             {
                 FileName = fileName,
                 Success = false,
@@ -129,6 +131,8 @@ public class PdfProcessingPipeline : IPdfProcessingPipeline
                 VotingConfidence = votingResult.Confidence.ToString(),
                 ExtractorUsed = votingResult.Winner.ExtractorName
             };
+            UpsertPdfFileDocument(symbol, pdf, votingResult, parsed, parseUnits: new(), failure);
+            return failure;
         }
 
         // 存储到 LiteDB (priority=0，低于 API 数据)
@@ -148,7 +152,7 @@ public class PdfProcessingPipeline : IPdfProcessingPipeline
 
         SaveIfNoBetterData(report);
 
-        return new PdfFileResult
+        var success = new PdfFileResult
         {
             FileName = fileName,
             Success = true,
@@ -158,7 +162,85 @@ public class PdfProcessingPipeline : IPdfProcessingPipeline
             ExtractorUsed = votingResult.Winner.ExtractorName,
             FieldCount = parsed.BalanceSheet.Count + parsed.IncomeStatement.Count + parsed.CashFlowStatement.Count
         };
+
+        // v0.4.1 §5.1 + §9.1：构造解析单元并落 pdf_files 集合（含 page_start / page_end / block_kind）。
+        var parseUnits = PdfParseUnitBuilder.Build(votingResult.Winner, parsed);
+        UpsertPdfFileDocument(symbol, pdf, votingResult, parsed, parseUnits, success);
+
+        return success;
     }
+
+    /// <summary>
+    /// v0.4.1 §5.1：将 PDF 详情持久化到 pdf_files 集合。
+    /// 同一份 PDF（按 Symbol + LocalPath 唯一）已存在时刷新 LastReparsedAt 与解析快照。
+    /// </summary>
+    private void UpsertPdfFileDocument(
+        string symbol,
+        DownloadedPdf pdf,
+        PdfVotingResult voting,
+        ParsedFinancialStatements? parsed,
+        List<PdfParseUnit> parseUnits,
+        PdfFileResult outcome)
+    {
+        try
+        {
+            var fileName = Path.GetFileName(pdf.FilePath);
+            var localPath = pdf.FilePath ?? string.Empty;
+            var existing = _db.PdfFiles.FindOne(x => x.Symbol == symbol && x.LocalPath == localPath);
+            var now = DateTime.UtcNow;
+
+            var fieldCount = outcome.FieldCount;
+            var reportPeriod = outcome.ReportDate
+                ?? parsed?.ReportDate
+                ?? pdf.Announcement.PublishTime.ToString("yyyy-MM-dd");
+            var reportType = outcome.ReportType
+                ?? parsed?.ReportType
+                ?? "Unknown";
+
+            if (existing == null)
+            {
+                var doc = new PdfFileDocument
+                {
+                    Symbol = symbol,
+                    FileName = fileName,
+                    Title = pdf.Announcement.Title ?? string.Empty,
+                    LocalPath = localPath,
+                    AccessKey = fileName, // S2 接口层会替换为更稳定的可访问标识
+                    ReportPeriod = reportPeriod,
+                    ReportType = reportType,
+                    Extractor = outcome.ExtractorUsed ?? voting.Winner?.ExtractorName,
+                    VoteConfidence = outcome.VotingConfidence ?? voting.Confidence.ToString(),
+                    FieldCount = fieldCount,
+                    LastError = outcome.Success ? null : outcome.Error,
+                    LastParsedAt = now,
+                    LastReparsedAt = null,
+                    ParseUnits = parseUnits ?? new List<PdfParseUnit>(),
+                };
+                _db.PdfFiles.Insert(doc);
+            }
+            else
+            {
+                existing.FileName = fileName;
+                existing.Title = pdf.Announcement.Title ?? existing.Title;
+                existing.AccessKey = string.IsNullOrEmpty(existing.AccessKey) ? fileName : existing.AccessKey;
+                existing.ReportPeriod = reportPeriod;
+                existing.ReportType = reportType;
+                existing.Extractor = outcome.ExtractorUsed ?? voting.Winner?.ExtractorName ?? existing.Extractor;
+                existing.VoteConfidence = outcome.VotingConfidence ?? voting.Confidence.ToString();
+                existing.FieldCount = fieldCount;
+                existing.LastError = outcome.Success ? null : outcome.Error;
+                existing.LastReparsedAt = now;
+                existing.ParseUnits = parseUnits ?? existing.ParseUnits;
+                _db.PdfFiles.Update(existing);
+            }
+        }
+        catch (Exception ex)
+        {
+            // 不破坏主流程：落库失败仅记日志。
+            _logger.LogError(ex, "[PDF] pdf_files 集合写入失败: {File}", pdf.FilePath);
+        }
+    }
+
 
     private void SaveIfNoBetterData(FinancialReport report)
     {
