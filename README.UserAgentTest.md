@@ -218,6 +218,11 @@
 - 当前主要验证目标是盘中 3 轮（4/21-4/23）。
 - 如遇降级，必须核对 `sectorEmptyBody` 是否包含快照时间，以及 `/api/market/audit` 的 `reasons` 是否可读。
 
+盘中日检执行命令：
+- `python scripts/check-market-audit-once.py`
+- 关注项：sources 状态与 recentSyncs.reasons
+- 日志落盘位置 `logs/market-audit-check-*.json`
+
 #### 入口点
 
 - [ ] 顶部页签点击 `情绪轮动`。定位锚点：页面内应看到 `情绪轮动` 标题、按钮 `同步最新数据`、窗口切换 `5日 / 10日 / 20日`，以及 `数据审计面板` 或等价审计区块。等待时间：立即到 3 秒。

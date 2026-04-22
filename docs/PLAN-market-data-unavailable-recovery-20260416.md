@@ -7,6 +7,7 @@
 - 后端三源切换已落地。
 - 成交额链路已解耦，不再依赖 breadth 成功。
 - audit reasons 已可读。
+- `/api/market/audit` 已拆分 `sourceHealthy` 与 `businessComplete`，并保留 `wasComplete` 兼容字段。
 
 ### 0.2 已完成（验证结果）
 
@@ -16,6 +17,15 @@
 ### 0.3 待完成（最终放行门槛）
 
 - 仍需完成盘中 3 轮验收（4/21-4/23），全部全绿后最终放行。
+
+### 0.4 可达性研究补充（2026-04-17）
+
+1) 结论：当前不能判定“已解决所有数据不可达”，口径为“部分恢复”。
+2) Primary：bkzj dual merge（f3+f62）、push2ex getTopicZDFenBu（breadth）。
+3) Secondary：push2 ulist turnover、ths continuous_limit_up（需重试）。
+4) Reject：push2 clist breadth、push2ex getTopicZTPool、datacenter RPT_LIMIT_UP_POOL。
+5) 明确提示：source status 与 recentSync 业务状态存在语义脱节；本轮已在 `/api/market/audit` 输出中拆分 `sourceHealthy` 与 `businessComplete`（保留 `wasComplete` 兼容）。
+6) 研究文档：docs/RESEARCH-market-reachability-20260417.md。
 
 ## 背景与目标
 当用户看到以下提示时：
