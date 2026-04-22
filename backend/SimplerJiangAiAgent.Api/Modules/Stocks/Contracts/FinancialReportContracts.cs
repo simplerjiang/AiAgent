@@ -8,8 +8,8 @@ public sealed record FinancialReportListItem(
     string ReportDate,
     string ReportType,
     string? SourceChannel,
-    DateTime CollectedAt,
-    DateTime UpdatedAt);
+    DateTime? CollectedAt,
+    DateTime? UpdatedAt);
 
 public sealed record FinancialReportDetail(
     string Id,
@@ -18,8 +18,8 @@ public sealed record FinancialReportDetail(
     string ReportType,
     int CompanyType,
     string? SourceChannel,
-    DateTime CollectedAt,
-    DateTime UpdatedAt,
+    DateTime? CollectedAt,
+    DateTime? UpdatedAt,
     Dictionary<string, object?> BalanceSheet,
     Dictionary<string, object?> IncomeStatement,
     Dictionary<string, object?> CashFlow);

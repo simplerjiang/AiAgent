@@ -301,6 +301,36 @@ public sealed class FinancialDataReadServiceTests : IDisposable
         Assert.Equal(2, result.Items.Count);
     }
 
+    [Fact]
+    public void ListReports_WhenCollectedAtMissing_ReturnsNull()
+    {
+        // Insert a raw BsonDocument that omits CollectedAt / UpdatedAt entirely
+        using (var db = new LiteDatabase($"Filename={_dbPath};Connection=direct"))
+        {
+            var col = db.GetCollection("financial_reports");
+            var doc = new BsonDocument
+            {
+                ["_id"] = ObjectId.NewObjectId(),
+                ["Symbol"] = "600519",
+                ["ReportDate"] = "2024-12-31",
+                ["ReportType"] = "Annual",
+                ["CompanyType"] = 4,
+                ["SourceChannel"] = "emweb",
+                ["BalanceSheet"] = new BsonDocument(),
+                ["IncomeStatement"] = new BsonDocument(),
+                ["CashFlow"] = new BsonDocument(),
+            };
+            col.Insert(doc);
+        }
+
+        using var svc = CreateService();
+        var result = svc.ListReports(new FinancialReportListQuery(null, null, null, null));
+
+        Assert.Single(result.Items);
+        Assert.Null(result.Items[0].CollectedAt);
+        Assert.Null(result.Items[0].UpdatedAt);
+    }
+
     private sealed class FakeHostEnvironment : IHostEnvironment
     {
         public FakeHostEnvironment(string contentRoot)

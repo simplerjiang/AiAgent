@@ -341,8 +341,8 @@ public class FinancialDataReadService : IFinancialDataReadService
             SafeString(doc, "ReportType"),
             SafeInt32(doc, "CompanyType"),
             SafeNullableString(doc, "SourceChannel"),
-            SafeDateTime(doc, "CollectedAt") ?? default,
-            SafeDateTime(doc, "UpdatedAt") ?? default,
+            TryGetDateTime(doc, "CollectedAt"),
+            TryGetDateTime(doc, "UpdatedAt"),
             BsonDocToDict(SafeDoc(doc, "BalanceSheet")),
             BsonDocToDict(SafeDoc(doc, "IncomeStatement")),
             BsonDocToDict(SafeDoc(doc, "CashFlow")));
@@ -356,8 +356,15 @@ public class FinancialDataReadService : IFinancialDataReadService
             SafeString(doc, "ReportDate"),
             SafeString(doc, "ReportType"),
             SafeNullableString(doc, "SourceChannel"),
-            SafeDateTime(doc, "CollectedAt") ?? default,
-            SafeDateTime(doc, "UpdatedAt") ?? default);
+            TryGetDateTime(doc, "CollectedAt"),
+            TryGetDateTime(doc, "UpdatedAt"));
+    }
+
+    private static DateTime? TryGetDateTime(BsonDocument doc, string key)
+    {
+        var value = SafeDateTime(doc, key);
+        if (value is null || value == DateTime.MinValue) return null;
+        return value;
     }
 
     private static Dictionary<string, object?> BsonDocToDict(BsonDocument doc)
