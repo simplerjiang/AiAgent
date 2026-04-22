@@ -32,7 +32,7 @@
 - **commit**：`a911e33`（含 V040-S1 实现 + 12 单元测试）
 - **遗留 NIT（待本 Sprint 内修完）**：
   - `MapListItem` 用 `default(DateTime)` 序列化为 `0001-01-01`，需改为 nullable 或显式 fallback（已确认在 V040-DEBT-1 阶段同步修复，DTO 已是 DateTime?，MapListItem 走 TryGetDateTime null 兜底，回归测试 ListReports_WhenCollectedAtMissing_ReturnsNull 覆盖）
-  - `ParseSort` 静默降级未识别字段无日志（已修，commit 41a5f9a）
+  - `ParseSort` 静默降级未识别字段无日志（已修，commit 831c7c8）
   - 缺 WebApplicationFactory `[AsParameters]` 集成测试（V040-S2 未补，留待 V040-DEBT 或后续 story）。仓库目前未引入 Microsoft.AspNetCore.Mvc.Testing，单独立 V040-DEBT-3 跟踪，本次跳过。
 
 ### Story V040-DEBT-3: 引入 WebApplicationFactory 集成测试基础设施
@@ -41,7 +41,7 @@
 - **验收标准**：在 `SimplerJiangAiAgent.Api.Tests` 引入 `Microsoft.AspNetCore.Mvc.Testing` + 1 个 `[AsParameters]` 绑定 case 覆盖 `GET /api/stocks/financial/reports`。
 - **依赖**：无
 - **完成时间**：2026-04-22
-- **commits**：`813fdeb`
+- **commits**：`aee132c`
 - **完成说明**：引入 `Microsoft.AspNetCore.Mvc.Testing 8.0.16`；`Program.cs` 末尾追加 `public partial class Program {}` 以暴露入口；新增 `FinancialReportsEndpointTests.cs` 通过 Stub 替换 `IFinancialDataReadService` 隔离外部依赖；新增 1 个集成测试 `GetFinancialReports_WithFullQuery_BindsParametersAndReturns200`；后端 dotnet test 608/0/0 全绿。
 
 ### Story V040-S2: 采集结果透明化（后端）
@@ -80,7 +80,7 @@
   - 单元测试 + Browser 抽测
 - **依赖**：V040-S2
 - **完成时间**：2026-04-22
-- **commits**：`a2ee34c`
+- **commits**：`96d12a6`
 - **完成说明**：3 文件改动 + 1 新建公共 util；vitest 与本 Story 相关用例全绿（sourceChannelTag 10/10、FinancialFilterBar 13/13、FinancialReportTab 20/20）；frontend build 0 error；浏览器验收并入 V040-S6 一起做。同时修复财报中心筛选区 4 处面向开发者的 hint 文案，改为面向用户口吻。
 - **遗留 backlog**：渠道 → Tag 颜色与 V040-S3 表格内 `SOURCE_CHANNEL_STYLE` 不完全一致（ths 在表格走绿、在采集面板走紫），合并到 V040-S3-FU-1 一起处理。
 
@@ -94,7 +94,7 @@
   - 占位区域写明"PDF 原件预览将在 v0.4.1 提供"
 - **依赖**：V040-S1, V040-S3
 - **完成时间**：2026-04-22
-- **commits**：`c38b362`
+- **commits**：`e187f8c`
 - **完成说明**：新建 `financialApi.js`（`fetchFinancialReportDetail` / `recollectFinancialReport`，真实路径 `/api/stocks/financial/reports/{id}` 与 `/api/stocks/financial/collect/{symbol}`，spec 中描述的 `/api/financial/reports/{id}` 为历史笔误）；新建 `financialFieldDictionary.js` 三表业务白名单各 5 字段 + 中文 label + fallback 链；重写 `FinancialDetailDrawer.vue`（500 行）覆盖标题 / loading / error / 重试 / 元数据 dl（含 sourceChannelTag）/ 三表概览 / sticky 重新采集 + 关闭 / PDF 占位；vitest 343 / 0 / 2 全绿（新增 30 cases）；frontend build 0 error。
 - **浏览器验收**：延后到 V040-S6
 
@@ -138,7 +138,7 @@
   - 修复 10 个预存前端失败用例（MarketSentimentTab.spec.js 8 个、StockCharts.spec.js 1 个、TradingWorkbench.spec.js 1 个）
   - 不改生产代码
 - **完成时间**：2026-04-22
-- **commits**：`d3cc9c7`
+- **commits**：`b67584b`
 - **完成说明**：全部为测试期望未跟上重构的 A 类问题 + 1 处 echarts mock 缺 API 的 C 类问题；vitest 316 passed / 0 failed / 2 skipped；未发现生产代码回归；未引入新依赖。
 - **PM Note**：TradingWorkbench 在 isRunning 状态下保留输入框、把发送按钮换成取消按钮是有意设计，建议 PM 后续在产品文档固化。MarketSentimentTab.spec.js 部分细粒度文案断言因子组件拆分被弱化，可后续补回。
 
