@@ -681,6 +681,35 @@
 | 重新解析按钮无 loading | NIT | UX 体验问题 |
 | tooltip 不显示 | NIT | 移动端无影响 |
 
+## 财报 RAG 检索 (v0.4.2)
+
+测试目标：验证 PDF 财报切块入库、中文分词、BM25 检索完整链路。
+
+### 前置条件
+- 至少一只股票已完成 PDF 采集解析（可先执行上方 PDF 原件对照步骤 1-3）
+
+### 验证步骤
+
+| # | 步骤 | 预期结果 |
+|---|------|----------|
+| 1 | 确认 `%LOCALAPPDATA%\SimplerJiangAiAgent\App_Data\financial-rag.db` 存在 | DB 文件已自动创建 |
+| 2 | 用 sqlite3 或 DB Browser 打开 `financial-rag.db`，检查 `chunks` 表 | 有记录，每条含 chunk_id/symbol/text/tokenized_text |
+| 3 | 检查 `tokenized_text` 列 | 中文已被空格分词（如"贵州 茅台 营业 收入"） |
+| 4 | POST `/api/financial/rag/search` `{"query":"营业收入","symbol":"600519"}` | 返回相关 chunks，含 score/section/text |
+| 5 | POST `/api/financial/rag/search` `{"query":"净利润"}` | 不限股票，返回多只股票的结果 |
+| 6 | POST `/api/financial/rag/search` `{"query":"","topK":5}` | 返回 400 错误（query 不能为空） |
+| 7 | 重新解析一个 PDF（reparse），再查 chunks 表 | 旧 chunks 被删除，新 chunks 写入 |
+
+### 失败分类
+
+| 现象 | 级别 | 可能原因 |
+|------|------|----------|
+| `financial-rag.db` 不存在 | 🔴 | Worker 启动异常 |
+| chunks 表为空 | 🟡 | PDF 解析未触发切块（检查 Worker 日志） |
+| tokenized_text 未分词 | 🔴 | jieba.NET 初始化失败 |
+| 搜索返回空 | 🟡 | FTS5 索引未同步（检查 trigger） |
+| reparse 后旧数据残留 | 🔴 | DeleteChunksBySourceId 未执行 |
+
 ## 快速执行清单
 
 - [ ] 已确认主后端可用，且不是半准备环境。

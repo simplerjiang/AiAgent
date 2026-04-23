@@ -5,6 +5,7 @@ using SimplerJiangAiAgent.FinancialWorker.Data;
 using SimplerJiangAiAgent.FinancialWorker.Models;
 using SimplerJiangAiAgent.FinancialWorker.Services;
 using SimplerJiangAiAgent.FinancialWorker.Services.Pdf;
+using SimplerJiangAiAgent.FinancialWorker.Services.Rag;
 
 namespace SimplerJiangAiAgent.FinancialWorker.Tests;
 
@@ -17,6 +18,8 @@ public class PdfPipelineStubRecordTests : IDisposable
     private readonly string _dbPath;
     private readonly FinancialDbContext _db;
     private readonly string _tempDir;
+    private readonly string _ragDbPath;
+    private readonly RagDbContext _ragDb;
 
     public PdfPipelineStubRecordTests()
     {
@@ -24,14 +27,18 @@ public class PdfPipelineStubRecordTests : IDisposable
         _db = new FinancialDbContext($"Filename={_dbPath};Connection=direct");
         _tempDir = Path.Combine(Path.GetTempPath(), $"pdf-stub-{Guid.NewGuid():N}");
         Directory.CreateDirectory(_tempDir);
+        _ragDbPath = Path.Combine(Path.GetTempPath(), $"pdf-stub-rag-{Guid.NewGuid():N}.db");
+        _ragDb = new RagDbContext($"Data Source={_ragDbPath}");
     }
 
     public void Dispose()
     {
         _db.Dispose();
+        _ragDb.Dispose();
         try { if (File.Exists(_dbPath)) File.Delete(_dbPath); } catch { }
         var log = Path.ChangeExtension(_dbPath, "-log.db");
         try { if (File.Exists(log)) File.Delete(log); } catch { }
+        try { if (File.Exists(_ragDbPath)) File.Delete(_ragDbPath); } catch { }
         try { if (Directory.Exists(_tempDir)) Directory.Delete(_tempDir, true); } catch { }
     }
 
@@ -71,7 +78,10 @@ public class PdfPipelineStubRecordTests : IDisposable
             votingEngine,
             tableParser,
             _db,
-            NullLogger<PdfProcessingPipeline>.Instance);
+            NullLogger<PdfProcessingPipeline>.Instance,
+            _ragDb,
+            new FinancialReportChunker(),
+            new JiebaTokenizer());
 
         var pdf = new DownloadedPdf
         {
@@ -147,7 +157,10 @@ public class PdfPipelineStubRecordTests : IDisposable
             votingEngine,
             tableParser,
             _db,
-            NullLogger<PdfProcessingPipeline>.Instance);
+            NullLogger<PdfProcessingPipeline>.Instance,
+            _ragDb,
+            new FinancialReportChunker(),
+            new JiebaTokenizer());
 
         var pdf = new DownloadedPdf
         {

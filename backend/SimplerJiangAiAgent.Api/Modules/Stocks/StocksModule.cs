@@ -462,6 +462,20 @@ public sealed class StocksModule : IModule
         .WithName("UpdateStockFinancialConfig")
         .WithOpenApi();
 
+        // v0.4.2 S6: RAG search proxy
+        financialGroup.MapPost("/rag/search", async (JsonElement payload, IConfiguration configuration, IHttpClientFactory httpClientFactory, HttpContext httpContext) =>
+        {
+            return await ProxyFinancialWorkerAsync(
+                HttpMethod.Post,
+                "api/rag/search",
+                configuration,
+                httpClientFactory,
+                httpContext.RequestAborted,
+                payload);
+        })
+        .WithName("SearchFinancialRag")
+        .WithOpenApi();
+
         group.MapGet("/watchlist", async (IActiveWatchlistService watchlistService) =>
         {
             var items = await watchlistService.GetAllAsync();

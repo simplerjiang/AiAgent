@@ -2,6 +2,7 @@ using System.Diagnostics;
 using LiteDB;
 using SimplerJiangAiAgent.FinancialWorker.Data;
 using SimplerJiangAiAgent.FinancialWorker.Models;
+using SimplerJiangAiAgent.FinancialWorker.Services.Rag;
 using Microsoft.Extensions.Logging;
 
 namespace SimplerJiangAiAgent.FinancialWorker.Services.Pdf;
@@ -27,19 +28,28 @@ public class PdfProcessingPipeline : IPdfProcessingPipeline
     private readonly FinancialTableParser _tableParser;
     private readonly FinancialDbContext _db;
     private readonly ILogger<PdfProcessingPipeline> _logger;
+    private readonly RagDbContext _ragDb;
+    private readonly IChunker _chunker;
+    private readonly IChineseTokenizer _tokenizer;
 
     public PdfProcessingPipeline(
         CninfoClient cninfoClient,
         PdfVotingEngine votingEngine,
         FinancialTableParser tableParser,
         FinancialDbContext db,
-        ILogger<PdfProcessingPipeline> logger)
+        ILogger<PdfProcessingPipeline> logger,
+        RagDbContext ragDb,
+        IChunker chunker,
+        IChineseTokenizer tokenizer)
     {
         _cninfoClient = cninfoClient;
         _votingEngine = votingEngine;
         _tableParser = tableParser;
         _db = db;
         _logger = logger;
+        _ragDb = ragDb;
+        _chunker = chunker;
+        _tokenizer = tokenizer;
     }
 
     /// <summary>
@@ -396,6 +406,20 @@ public class PdfProcessingPipeline : IPdfProcessingPipeline
         parseUnits = PdfParseUnitBuilder.Build(votingResult.Winner!, parsed);
         UpsertPdfFileDocument(symbol, pdf, votingResult, parsed, parseUnits, fullTextPages, outcome, stageLogs);
 
+        // v0.4.2 S4: Auto-chunk and store in RAG database
+        try
+        {
+            var pdfDoc = _db.PdfFiles.FindOne(x => x.Symbol == symbol && x.LocalPath == (pdf.FilePath ?? ""));
+            if (pdfDoc != null)
+            {
+                ChunkAndStoreInRag(pdfDoc);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[PDF][RAG] 切块入库失败: {File}", pdf.FilePath);
+        }
+
         return outcome;
     }
 
@@ -658,6 +682,38 @@ public class PdfProcessingPipeline : IPdfProcessingPipeline
             // 不破坏主流程：落库失败仅记日志。
             _logger.LogError(ex, "[PDF] pdf_files 集合写入失败: {File}", pdf.FilePath);
         }
+    }
+
+
+    /// <summary>
+    /// v0.4.2 S4: Chunk a PDF document and store in RAG database.
+    /// Deletes existing chunks for this source before inserting new ones.
+    /// </summary>
+    private void ChunkAndStoreInRag(PdfFileDocument doc)
+    {
+        var sourceId = doc.Id.ToString();
+
+        // Delete old chunks for this document (supports reparse)
+        _ragDb.DeleteChunksBySourceId(sourceId);
+
+        // Chunk the document
+        var chunks = _chunker.Chunk(doc);
+        if (chunks.Count == 0)
+        {
+            _logger.LogDebug("[PDF][RAG] 文档无可切块内容: {Symbol} {File}", doc.Symbol, doc.FileName);
+            return;
+        }
+
+        // Tokenize each chunk's text for FTS5
+        foreach (var chunk in chunks)
+        {
+            chunk.TokenizedText = _tokenizer.Tokenize(chunk.Text);
+        }
+
+        // Bulk insert
+        _ragDb.InsertChunks(chunks);
+        _logger.LogInformation("[PDF][RAG] 已切块入库: {Symbol} {File} → {Count} chunks",
+            doc.Symbol, doc.FileName, chunks.Count);
     }
 
 

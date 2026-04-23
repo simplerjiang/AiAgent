@@ -247,6 +247,9 @@ internal static class FinancialWorkerRuntimePaths
     {
         return Path.Combine(ResolveAppDataPath(), "financial-reports");
     }
+
+    public static string ResolveRagDatabasePath() =>
+        Path.Combine(ResolveAppDataPath(), "financial-rag.db");
 }
 
 public class CninfoAnnouncement

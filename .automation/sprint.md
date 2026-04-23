@@ -101,42 +101,42 @@
 ### Stories
 
 #### V042-S1: SQLite RAG 存储层
-- **状态**：TODO | **级别**：M
+- **状态**：DONE | **级别**：M
 - **描述**：在 FinancialWorker 中创建 `financial-rag.db`，包含 `chunks` 表 + FTS5 虚表。使用 `Microsoft.Data.Sqlite`。Schema 按 §16.2 含 chunk_id/source_type/source_id/symbol/report_date/report_type/section/block_kind/page_start/page_end/text/created_at。
 - **验收**：Worker 启动时自动创建 DB + 表；dotnet test 验证 CRUD。
 
 #### V042-S2: jieba.NET 中文分词集成
-- **状态**：TODO | **级别**：S
+- **状态**：DONE | **级别**：S
 - **描述**：引入 jieba.NET NuGet 包，创建 `ChineseTokenizer` 服务。入库时将中文文本预分词（jieba cut）→ 空格 join 后写入 FTS5。
 - **验收**：分词服务能对中文财报文本正确切词；与 FTS5 配合实现中文 BM25 检索。
 
 #### V042-S3: IChunker 切块服务
-- **状态**：TODO | **级别**：M | **依赖**：S1, S2
+- **状态**：DONE | **级别**：M | **依赖**：S1, S2
 - **描述**：实现 `IChunker.Chunk(PdfFileDocument doc)` → `List<FinancialChunk>`。三层策略：(1) H1/H2/H3 标题切；(2) 超 800 字段落兜底切（512-800 字，80 字重叠）；(3) 表格独立存 JSON，prose 中保留指针。
 - **验收**：给定一份多章节财报文本，输出正确的 chunks 列表；每 chunk 含 section/page_start/page_end/block_kind。
 
 #### V042-S4: Pipeline 自动切块入库
-- **状态**：TODO | **级别**：M | **依赖**：S3
+- **状态**：DONE | **级别**：M | **依赖**：S3
 - **描述**：在 `PdfProcessingPipeline.ProcessSinglePdfAsync` 的 persist 阶段后，调用 IChunker 切块并写入 `financial-rag.db`。Reparse 时先删除旧 chunks 再插入新 chunks。
 - **验收**：PDF 解析完成后 chunks 表有记录；reparse 后 chunks 更新。
 
 #### V042-S5: IRetriever 检索服务
-- **状态**：TODO | **级别**：M | **依赖**：S1, S2
+- **状态**：DONE | **级别**：M | **依赖**：S1, S2
 - **描述**：实现 `IRetriever.RetrieveAsync(query, symbol?, reportDate?, reportType?, topK)` → `List<RetrievedChunk>`。使用 FTS5 MATCH + bm25() 排序 + metadata WHERE 过滤。
 - **验收**：中文查询能命中相关 chunks；metadata 过滤正确；返回含 score/page_start/page_end/section。
 
 #### V042-S6: REST API endpoint
-- **状态**：TODO | **级别**：S | **依赖**：S5
+- **状态**：DONE | **级别**：S | **依赖**：S5
 - **描述**：在主 API 增加 `POST /api/financial/rag/search`，入参 `{ query, symbol?, reportDate?, reportType?, topK }`，返回带 score 的 chunk 列表。
 - **验收**：curl 可调用；返回格式含 chunk_id/text/section/page_start/page_end/score。
 
 #### V042-S7: IEmbedder 占位接口
-- **状态**：TODO | **级别**：S
+- **状态**：DONE | **级别**：S
 - **描述**：定义 `IEmbedder` 接口 + 空实现 `NoOpEmbedder`。v0.4.3 启用 sqlite-vec 时接入实际 embedding。
 - **验收**：接口定义存在；空实现注册到 DI；不影响现有功能。
 
 #### V042-S8: v0.4.2 全链路验收
-- **状态**：TODO | **级别**：M | **依赖**：S1~S7
+- **状态**：DONE | **级别**：M | **依赖**：S1~S7
 - **验收标准**：
   - dotnet test + vitest 全绿
   - `financial-rag.db` 在数据目录下自动创建

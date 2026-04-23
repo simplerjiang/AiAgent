@@ -3,6 +3,7 @@ using SimplerJiangAiAgent.FinancialWorker.Data;
 using SimplerJiangAiAgent.FinancialWorker.Models;
 using SimplerJiangAiAgent.FinancialWorker.Services;
 using SimplerJiangAiAgent.FinancialWorker.Services.Pdf;
+using SimplerJiangAiAgent.FinancialWorker.Services.Rag;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -15,6 +16,13 @@ var dbPath = FinancialWorkerRuntimePaths.ResolveFinancialDatabasePath();
 Directory.CreateDirectory(appDataPath);
 
 builder.Services.AddSingleton(new FinancialDbContext($"Filename={dbPath};Connection=shared"));
+
+var ragDbPath = FinancialWorkerRuntimePaths.ResolveRagDatabasePath();
+builder.Services.AddSingleton(new RagDbContext($"Data Source={ragDbPath}"));
+builder.Services.AddSingleton<IChineseTokenizer, JiebaTokenizer>();
+builder.Services.AddSingleton<IChunker, FinancialReportChunker>();
+builder.Services.AddSingleton<IEmbedder, NoOpEmbedder>();
+builder.Services.AddSingleton<IRetriever, Fts5Retriever>();
 
 builder.Services.AddHttpClient<IEastmoneyFinanceClient, EastmoneyFinanceClient>(client =>
 {
@@ -179,6 +187,45 @@ app.MapGet("/api/runtime-logs", (long? afterId, int? count, InMemoryLogStore sto
         ? store.GetEntries(afterId.Value, take)
         : store.GetLatest(take);
     return Results.Ok(entries);
+});
+
+// v0.4.2 S6: RAG search endpoint
+app.MapPost("/api/rag/search", async (
+    RagSearchRequest request,
+    IRetriever retriever,
+    CancellationToken ct) =>
+{
+    if (string.IsNullOrWhiteSpace(request.Query))
+        return Results.BadRequest(new { error = "query is required" });
+
+    var topK = request.TopK is > 0 and <= 50 ? request.TopK.Value : 5;
+    var results = await retriever.RetrieveAsync(
+        request.Query,
+        request.Symbol,
+        request.ReportDate,
+        request.ReportType,
+        topK,
+        ct);
+
+    return Results.Ok(new RagSearchResponse
+    {
+        Query = request.Query,
+        TotalResults = results.Count,
+        Results = results.Select(r => new RagSearchResultItem
+        {
+            ChunkId = r.ChunkId,
+            SourceId = r.SourceId,
+            Symbol = r.Symbol,
+            ReportDate = r.ReportDate,
+            ReportType = r.ReportType,
+            Section = r.Section,
+            BlockKind = r.BlockKind,
+            PageStart = r.PageStart,
+            PageEnd = r.PageEnd,
+            Text = r.Text,
+            Score = r.Score
+        }).ToList()
+    });
 });
 
 app.Run();
