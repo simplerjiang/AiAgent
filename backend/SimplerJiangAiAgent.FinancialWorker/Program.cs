@@ -77,15 +77,13 @@ builder.Services.AddSingleton<FinancialTableParser>();
 builder.Services.AddSingleton<PdfProcessingPipeline>();
 builder.Services.AddSingleton<IPdfProcessingPipeline>(sp => sp.GetRequiredService<PdfProcessingPipeline>());
 
-builder.Services.AddSingleton<InMemoryLogStore>();
+var logStore = new InMemoryLogStore();
+builder.Services.AddSingleton(logStore);
+builder.Logging.AddProvider(new InMemoryLoggerProvider(logStore));
 builder.Services.AddHostedService<Worker>();
 builder.Services.AddCors();
 
 var app = builder.Build();
-
-// 注册内存日志 Provider，捕获运行时 ILogger 输出
-var logStore = app.Services.GetRequiredService<InMemoryLogStore>();
-app.Services.GetRequiredService<ILoggerFactory>().AddProvider(new InMemoryLoggerProvider(logStore));
 
 app.UseCors(c => c.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
 
