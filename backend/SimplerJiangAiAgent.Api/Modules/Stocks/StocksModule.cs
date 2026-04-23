@@ -150,6 +150,9 @@ public sealed class StocksModule : IModule
         services.AddSingleton<IBackfillStatusTracker, BackfillStatusTracker>();
         services.AddHostedService<ForumScrapingWorker>();
 
+        // v0.4.3 S6: RAG context enrichment
+        services.AddSingleton<RagContextEnricher>();
+
         // FinancialWorker process supervisor
         services.AddSingleton<FinancialWorkerSupervisorService>();
         services.AddSingleton<IFinancialWorkerSupervisor>(sp => sp.GetRequiredService<FinancialWorkerSupervisorService>());
@@ -474,6 +477,31 @@ public sealed class StocksModule : IModule
                 payload);
         })
         .WithName("SearchFinancialRag")
+        .WithOpenApi();
+
+        // v0.4.3 S6: RAG context enrichment endpoint
+        financialGroup.MapPost("/rag/context", async (
+            RagContextRequest request,
+            RagContextEnricher enricher,
+            CancellationToken ct) =>
+        {
+            if (string.IsNullOrWhiteSpace(request.Query))
+                return Results.BadRequest(new { error = "query is required" });
+
+            var citations = await enricher.EnrichAsync(
+                request.Query,
+                request.Symbol,
+                request.TopK ?? 3,
+                ct);
+
+            return Results.Ok(new
+            {
+                query = request.Query,
+                citations,
+                contextText = RagContextEnricher.FormatAsContext(citations)
+            });
+        })
+        .WithName("GetRagContext")
         .WithOpenApi();
 
         group.MapGet("/watchlist", async (IActiveWatchlistService watchlistService) =>

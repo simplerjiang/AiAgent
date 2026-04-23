@@ -31,4 +31,5 @@ public class RagSearchResultItem
     public int? PageEnd { get; set; }
     public string Text { get; set; } = "";
     public double Score { get; set; }
+    public string? SourceFile { get; set; }  // For future: link to PDF file
 }

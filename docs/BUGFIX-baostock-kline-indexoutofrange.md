@@ -256,15 +256,92 @@ endDate = NormalizeDateParam(endDate, DateTime.Now.ToString("yyyy-MM-dd", Cultur
 
 ---
 
+## Bug 3：QueryTradeDatesAsync 日期格式拒绝
+
+### 复现
+
+```csharp
+// 以下调用被服务端拒绝："开始日期格式不正确"
+await foreach (var r in client.QueryTradeDatesAsync("2024")) { }
+await foreach (var r in client.QueryTradeDatesAsync("2025")) { }
+```
+
+### 问题
+
+`QueryTradeDatesAsync` 接收 `year` 参数（字符串），但服务端实际需要完整日期格式。需要确认 Python 版 baostock 的 `query_trade_dates(start_date, end_date)` 参数格式，然后对齐 .NET 版实现。
+
+### 修复方案
+
+确认 Python 版参数后，统一处理。可能需要修改方法签名或内部日期转换。
+
+---
+
+## 数据质量备注：3 个宏观 API 返回空数据
+
+### 现象
+
+以下 3 个 API 使用 `"2020-01-01"` ~ `"2024-12-31"` 调用成功（无异常），但返回 **0 条记录**：
+- `QueryDepositRateDataAsync` — 存款利率
+- `QueryLoanRateDataAsync` — 贷款利率  
+- `QueryRequiredReserveRatioDataAsync` — 存款准备金率
+
+而货币供应量 API 正常返回数据（月度 59 条，年度 4 条）。
+
+### 可能原因
+
+1. **baostock 服务端停更**：这 3 个宏观 API 可能在某个时间点后停止更新数据
+2. **日期范围不匹配**：可能需要更早的日期范围（如 2010-2020）
+3. **服务端维护中**：临时性问题
+
+### 建议
+
+1. 用更大的日期范围测试（如 `"2010-01-01"` ~ `"2024-12-31"`）
+2. 对照 Python 版 baostock 测试相同 API 是否也返回空
+3. 如果确认 baostock 不再提供这些数据，v0.5.1 的宏观数据需要寻找替代数据源（如央行官网 API、Wind 等）
+
+---
+
+## 数据质量测试全景（2026-04-23）
+
+| API | 状态 | 数据量 | 备注 |
+|-----|------|-------|------|
+| QueryTradeDatesAsync | ❌ FAIL | — | 日期格式拒绝（Bug 3） |
+| QueryAllStockAsync | ✅ | 5657 | 合理 |
+| QueryStockBasicAsync | ✅ | 2 条 | 浦发银行/平安银行正确 |
+| QueryStockIndustryAsync | ✅ | 1 条 | 证监会分类正确 |
+| QueryHistoryKDataPlusAsync | ✅* | 22/19 行 | 本次通过，但有间歇性 Bug |
+| QueryProfitDataAsync | ✅ | 2 条 | ROE/净利润正确 |
+| QueryOperationDataAsync | ✅ | 1 条 | 正常 |
+| QueryGrowthDataAsync | ✅ | 1 条 | 正常 |
+| QueryDupontDataAsync | ✅ | 1 条 | ROE=0.0516 |
+| QueryBalanceDataAsync | ✅ | 1 条 | 负债率=0.9186 |
+| QueryCashFlowDataAsync | ✅ | 1 条 | 正常 |
+| QueryDividendDataAsync | ✅ | 1-2 条 | 正常 |
+| QueryAdjustFactorAsync | ✅ | 1 条 | 正常 |
+| QueryPerformanceExpressReportAsync | ✅ | 4 条 | 正常 |
+| QueryForecastReportAsync | ✅ | 0 条 | 浦发无预告（正常） |
+| QueryDepositRateDataAsync | ⚠️ | 0 条 | 无异常但无数据 |
+| QueryLoanRateDataAsync | ⚠️ | 0 条 | 无异常但无数据 |
+| QueryRequiredReserveRatioDataAsync | ⚠️ | 0 条 | 无异常但无数据 |
+| QueryMoneySupplyDataMonthAsync | ✅ | 59 条 | 正常 |
+| QueryMoneySupplyDataYearAsync | ✅ | 4 条 | 正常 |
+| QueryHs300StocksAsync | ✅ | 300 | 精确 |
+| QuerySz50StocksAsync | ✅ | 50 | 精确 |
+| QueryZz500StocksAsync | ✅ | 500 | 精确 |
+| QueryStStocksAsync | ✅ | 81 | 合理 |
+| QueryStarStStocksAsync | ✅ | 70 | 合理 |
+| QuerySuspendedStocksAsync | ✅ | 0 | 该日期无暂停股（正常） |
+| QueryTerminatedStocksAsync | ✅ | 246 | 合理 |
+
+---
+
 ## 影响范围总结
 
 | Bug | 方法 | 严重程度 | 修复优先级 |
-|-----|------|---------|----------|
-| Bug 1 | `QueryHistoryKDataPlusAsync` | 🔴 崩溃 | P0 |
+|-----|------|---------|-----------|
+| Bug 1 | `QueryHistoryKDataPlusAsync` | 🔴 间歇性崩溃 | P0 |
 | Bug 1 | `QueryHistoryKDataPlusMinuteAsync` | 🟠 可能崩溃 | P0 |
-| Bug 2 | `QueryDepositRateDataAsync` | 🟡 易用性 | P1 |
-| Bug 2 | `QueryLoanRateDataAsync` | 🟡 易用性 | P1 |
-| Bug 2 | `QueryRequiredReserveRatioDataAsync` | 🟡 易用性 | P1 |
-| Bug 2 | `QueryMoneySupplyDataMonthAsync` | 🟡 易用性 | P1 |
-| Bug 2 | `QueryMoneySupplyDataYearAsync` | 🟡 易用性 | P1 |
-| — | 其他 query 方法（Profit/Growth/...） | ✅ 正常 | — |
+| Bug 2 | 5 个宏观 API 日期格式 | 🟡 易用性 | P1 |
+| Bug 3 | `QueryTradeDatesAsync` 日期格式 | 🔴 功能不可用 | P0 |
+| 数据 | DepositRate/LoanRate/ReserveRatio | ⚠️ 返回空数据 | 需排查 |
+| — | 其他 22 个 API | ✅ 正常 | — |
