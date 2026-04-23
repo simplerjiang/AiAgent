@@ -710,6 +710,39 @@
 | 搜索返回空 | 🟡 | FTS5 索引未同步（检查 trigger） |
 | reparse 后旧数据残留 | 🔴 | DeleteChunksBySourceId 未执行 |
 
+## 混合检索与 AI 集成 (v0.4.3)
+
+测试目标：验证 Ollama embedding + sqlite-vec 向量检索、BM25+向量混合召回、Citation 引用链路、AI 路径集成、Embedding 管理 UI、FTS5 特殊字符安全。
+
+### 前置条件
+- 至少一只股票已完成 PDF 采集解析并入库 chunks（可先执行上方财报 RAG 检索步骤 1-3）
+- Ollama 已安装并运行（hybrid 模式需 bge-m3 模型；Ollama 不可用时自动降级为 BM25）
+
+### 验证步骤
+
+| # | 步骤 | 预期结果 |
+|---|------|----------|
+| 1 | POST `/api/stocks/financial/rag/search` `{"query":"营业收入","symbol":"600519","mode":"bm25"}` | 返回相关 chunks，`mode` 字段为 `bm25` |
+| 2 | POST `/api/stocks/financial/rag/search` `{"query":"营业收入","symbol":"600519","mode":"hybrid"}` | 若 Ollama + bge-m3 可用则返回 hybrid 结果（`mode:"hybrid"`）；否则降级为 BM25（`mode:"bm25"`） |
+| 3 | POST `/api/stocks/financial/rag/context` `{"query":"净利润增长原因","symbol":"600519"}` | 返回 `citations` 数组和 `contextText`；每条 citation 含 chunk_id / text / section / score / source_file |
+| 4 | GET `/api/stocks/financial/embedding/status` | 返回 `model`（如 bge-m3）、`dimension`（如 1024）、`coverage`（已嵌入 chunk 比例） |
+| 5 | 停止 Ollama 服务后，POST `/api/stocks/financial/rag/search` `{"query":"营业收入","mode":"hybrid"}` | 自动降级为 BM25，返回结果中 `mode:"bm25"`，无 500 错误或崩溃 |
+| 6 | 进入 `管理设置 → LLM 设置 → Embedding 模型管理` 面板 | 面板显示 Ollama 在线状态、已安装 embedding 模型列表、安装/切换按钮 |
+| 7 | 在 Embedding 面板点击检查状态 | 显示当前 embedding 模型名、向量维度、已覆盖 chunk 数量/比例 |
+| 8 | 进入 `股票信息`，选择已采集股票，打开 `AI 分析` Tab，触发一次分析 | 分析结果包含 citation chips（如 `[年报 P.12]`），可展开查看原文片段 |
+| 9 | POST `/api/stocks/financial/rag/search` `{"query":"NEAR NOT * OR","symbol":"600519"}` | 正常返回结果（可能为空），不返回 500 或 FTS5 语法错误 |
+
+### 失败分类
+
+| 现象 | 级别 | 可能原因 |
+|------|------|----------|
+| hybrid 模式返回 500 | 🔴 | sqlite-vec 扩展未加载或 chunk_embeddings 表不存在 |
+| Ollama 离线时 hybrid 崩溃 | 🔴 | OllamaEmbedder.IsAvailable 未正确检测 |
+| embedding/status 返回 404 | 🟡 | 路由未注册 |
+| citation chips 不可见 | 🟡 | AI 路径未注入 RAG context 或前端未渲染 RagCitationList |
+| FTS5 特殊字符返回 500 | 🔴 | query sanitization 未生效 |
+| 降级后 mode 字段仍显示 hybrid | 🟡 | 返回 DTO 未反映实际检索模式 |
+
 ## 快速执行清单
 
 - [ ] 已确认主后端可用，且不是半准备环境。
@@ -727,4 +760,5 @@
 - [ ] `交易日志` 已额外覆盖 `右侧复盘工作区`、`偏差标签`、`刷新当前状态`、`仅看偏离/无计划` 快捷筛选。
 - [ ] `散户热度指标` 已覆盖 `启用窗格`、`颜色验证`、`tooltip 检查`、`反向指标警告`、`API 数据验证`。
 - [ ] `财务工作者监控` 已覆盖 `状态查看`、`停止`、`启动`、`重启`、`心跳更新`、`系统信息`、`刷新保持`。
+- [ ] `混合检索与 AI 集成 (v0.4.3)` 已覆盖 `RAG BM25 搜索`、`RAG Hybrid 搜索`、`RAG 上下文增强`、`Embedding 状态查询`、`Ollama 离线降级`、`Embedding 模型管理 UI`、`AI 分析含 RAG 引用`、`FTS5 特殊字符安全`。
 - [ ] 若执行了 `🔄 重置`，已确认仅在隔离环境最后一步执行，且 `本金设置` 与 `交易计划` 未被误删。
