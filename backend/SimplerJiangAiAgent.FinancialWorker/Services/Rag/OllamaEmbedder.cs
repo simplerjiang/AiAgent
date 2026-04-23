@@ -27,7 +27,18 @@ public class OllamaEmbedder : IEmbedder
                 try
                 {
                     var response = _httpClient.GetAsync("/api/tags").GetAwaiter().GetResult();
-                    _available = response.IsSuccessStatusCode;
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        _available = false;
+                    }
+                    else
+                    {
+                        var tags = response.Content.ReadFromJsonAsync<OllamaTagsResponse>().GetAwaiter().GetResult();
+                        _available = tags?.Models?.Any(m =>
+                            m.Name != null && m.Name.StartsWith(_model, StringComparison.OrdinalIgnoreCase)) == true;
+                        if (_available == false)
+                            _logger.LogWarning("[Embedding] Ollama is reachable but model '{Model}' is not installed", _model);
+                    }
                 }
                 catch
                 {
@@ -99,4 +110,16 @@ internal class OllamaEmbeddingResponse
 {
     [JsonPropertyName("embedding")]
     public float[]? Embedding { get; set; }
+}
+
+internal class OllamaTagsResponse
+{
+    [JsonPropertyName("models")]
+    public OllamaModelInfo[]? Models { get; set; }
+}
+
+internal class OllamaModelInfo
+{
+    [JsonPropertyName("name")]
+    public string? Name { get; set; }
 }
