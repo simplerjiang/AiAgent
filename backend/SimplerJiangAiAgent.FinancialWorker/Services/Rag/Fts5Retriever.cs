@@ -29,6 +29,10 @@ public class Fts5Retriever : IRetriever
         if (string.IsNullOrWhiteSpace(tokenizedQuery))
             return Task.FromResult(results);
 
+        // Escape FTS5 special characters by quoting each token
+        tokenizedQuery = string.Join(" ", tokenizedQuery.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Select(token => "\"" + token.Replace("\"", "\"\"") + "\""));
+
         using var conn = new SqliteConnection(_ragDb.ConnectionString);
         conn.Open();
 

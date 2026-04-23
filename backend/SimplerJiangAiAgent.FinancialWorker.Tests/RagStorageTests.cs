@@ -249,6 +249,22 @@ public class Fts5RetrieverTests : IDisposable
         Assert.Single(results);
     }
 
+    [Fact]
+    public async Task Retrieve_SpecialCharacters_DoesNotThrow()
+    {
+        SeedTestData();
+        // These should not throw SQLite errors
+        var r1 = await _retriever.RetrieveAsync("营业收入 NOT 净利润");
+        var r2 = await _retriever.RetrieveAsync("\"quoted query\"");
+        var r3 = await _retriever.RetrieveAsync("wildcard*");
+        var r4 = await _retriever.RetrieveAsync("term1 NEAR term2");
+        // All should return without error (results may vary)
+        Assert.NotNull(r1);
+        Assert.NotNull(r2);
+        Assert.NotNull(r3);
+        Assert.NotNull(r4);
+    }
+
     public void Dispose()
     {
         _ctx.Dispose();

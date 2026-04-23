@@ -695,9 +695,9 @@
 | 1 | 确认 `%LOCALAPPDATA%\SimplerJiangAiAgent\App_Data\financial-rag.db` 存在 | DB 文件已自动创建 |
 | 2 | 用 sqlite3 或 DB Browser 打开 `financial-rag.db`，检查 `chunks` 表 | 有记录，每条含 chunk_id/symbol/text/tokenized_text |
 | 3 | 检查 `tokenized_text` 列 | 中文已被空格分词（如"贵州 茅台 营业 收入"） |
-| 4 | POST `/api/financial/rag/search` `{"query":"营业收入","symbol":"600519"}` | 返回相关 chunks，含 score/section/text |
-| 5 | POST `/api/financial/rag/search` `{"query":"净利润"}` | 不限股票，返回多只股票的结果 |
-| 6 | POST `/api/financial/rag/search` `{"query":"","topK":5}` | 返回 400 错误（query 不能为空） |
+| 4 | POST `/api/stocks/financial/rag/search` `{"query":"营业收入","symbol":"600519"}` | 返回相关 chunks，含 score/section/text |
+| 5 | POST `/api/stocks/financial/rag/search` `{"query":"净利润"}` | 不限股票，返回多只股票的结果 |
+| 6 | POST `/api/stocks/financial/rag/search` `{"query":"","topK":5}` | 返回 400 错误（query 不能为空） |
 | 7 | 重新解析一个 PDF（reparse），再查 chunks 表 | 旧 chunks 被删除，新 chunks 写入 |
 
 ### 失败分类
