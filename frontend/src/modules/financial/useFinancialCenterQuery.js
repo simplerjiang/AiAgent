@@ -260,9 +260,8 @@ export function useFinancialCenterQuery() {
   }
 
   /**
-   * V040-S5-FU（B-2）：后端 keyword 参数当前不做名称过滤，
-   * 前端在收到列表后做二次过滤：name.includes(kw) || symbol.includes(kw)。
-   * 关键词模式下 fetchReports 会把 pageSize 临时拉到 100，并把 page 锁到 1。
+   * 后端已支持 keyword 按 Symbol LIKE 过滤；
+   * 前端仅做股票名二次过滤（名称不在后端 DB 中）。
    */
   const applyClientFilter = () => {
     const list = rawItems.value
@@ -272,10 +271,12 @@ export function useFinancialCenterQuery() {
       total.value = rawTotal.value
       return
     }
+    // 后端已按 Symbol 过滤，前端再补充按股票名过滤
     const filtered = list.filter((it) => {
       const sym = String(it?.symbol || it?.Symbol || '').toLowerCase()
+      if (sym.includes(kw)) return true
       const name = String(symbolNameMap[it?.symbol || it?.Symbol] || '').toLowerCase()
-      return sym.includes(kw) || name.includes(kw)
+      return name.includes(kw)
     })
     items.value = filtered
     total.value = filtered.length
@@ -286,22 +287,7 @@ export function useFinancialCenterQuery() {
     loading.value = true
     error.value = ''
     try {
-      const isKeywordActive = !!(query.keyword && query.keyword.trim())
-      // 关键词模式下临时把 pageSize 拉到 100、page 锁到 1，避免分页与前端过滤冲突
-      const effectiveQuery = isKeywordActive
-        ? {
-            symbols: query.symbols,
-            startDate: query.startDate,
-            endDate: query.endDate,
-            reportTypes: query.reportTypes,
-            keyword: query.keyword,
-            page: 1,
-            pageSize: Math.max(Number(query.pageSize) || 0, 100),
-            sortField: query.sortField,
-            sortDirection: query.sortDirection
-          }
-        : query
-      const url = buildApiUrl(effectiveQuery)
+      const url = buildApiUrl(query)
       const res = await fetch(url)
       const contentType = (res.headers && typeof res.headers.get === 'function')
         ? (res.headers.get('content-type') || '')

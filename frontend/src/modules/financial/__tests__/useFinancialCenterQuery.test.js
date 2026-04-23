@@ -338,7 +338,7 @@ describe('useFinancialCenterQuery — response shape parsing', () => {
 })
 
 describe('useFinancialCenterQuery — keyword frontend filter (B-2)', () => {
-  it('keyword 非空时把 pageSize 临时拉到 100、page 锁到 1', async () => {
+  it('keyword 非空时透传 keyword 到后端，page/pageSize 保持用户值', async () => {
     const fetchMock = vi.fn().mockImplementation((url) => {
       if (typeof url === 'string' && url.startsWith('/api/stocks/financial/reports')) {
         return Promise.resolve({ ok: true, json: () => Promise.resolve({ items: [], total: 0 }) })
@@ -353,11 +353,9 @@ describe('useFinancialCenterQuery — keyword frontend filter (B-2)', () => {
     query.pageSize = 20
     await fetchReports()
     const url = fetchMock.mock.calls[0][0]
-    expect(url).toContain('page=1')
-    expect(url).toContain('pageSize=100')
-    // 用户在 query 上的 page/pageSize 不被改变（保持 URL 同步契约）
-    expect(query.page).toBe(5)
-    expect(query.pageSize).toBe(20)
+    expect(url).toContain('keyword=%E8%8C%85%E5%8F%B0')
+    expect(url).toContain('page=5')
+    expect(url).toContain('pageSize=20')
   })
 
   it('keyword 空时按用户的 page/pageSize 透传到后端', async () => {

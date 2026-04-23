@@ -304,6 +304,14 @@ public class FinancialDataReadService : IFinancialDataReadService
             idx++;
         }
 
+        if (!string.IsNullOrWhiteSpace(query.Keyword))
+        {
+            var kw = query.Keyword.Trim();
+            pars[$"p{idx}"] = $"%{kw}%";
+            parts.Add($"$.Symbol LIKE @p{idx}");
+            idx++;
+        }
+
         BsonExpression? predicate = parts.Count == 0
             ? null
             : BsonExpression.Create(string.Join(" AND ", parts), pars);
