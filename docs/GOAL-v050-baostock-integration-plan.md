@@ -160,7 +160,7 @@ Baostock.NET 是我们自研的纯 .NET 9 客户端（MIT 许可），对接 bao
 | Story | 类型 | 描述 | 验收标准 |
 |-------|------|------|---------|
 | S1: AI Context 增强 | L | 宏观指标 + 指数成分 + 行业分类 + 杜邦数据注入 AI 分析 prompt context | AI 分析输出包含宏观环境判断 |
-| S2: ST/退市风险过滤 | M | 接入 ST/*ST/退市/暂停上市列表；推荐系统自动排除或标记 | 推荐列表不含退市股；ST 股有风险标签 |
+| S2: ST/退市风险标记 | M | 每日采集 ST/*ST/退市/暂停上市列表；前端股票名称旁显示风险标签（推荐系统不排除） | 前端正确显示 ST/退市标签；风险数据每日更新 |
 | S3: K 线数据备份源 | M | 东财 K 线失败时自动回退到 baostock；分钟级 K 线作为补充源 | 东财不可用时 K 线仍可加载 |
 | S4: 分红策略分析 | M | 接入历史分红数据 + 复权因子；股息率计算 + 分红稳定性评分 | 财报中心展示分红历史和股息率 |
 | S5: 指数成分变动追踪 | M | 定期对比成分股列表变动；纳入/剔除事件记录 | 成分变动事件可查询，AI 可引用 |
@@ -174,7 +174,7 @@ Baostock.NET 是我们自研的纯 .NET 9 客户端（MIT 许可），对接 bao
 
 | 改进项 | 理由 | 优先级 |
 |-------|------|-------|
-| 连接池 / 多会话支持 | 生产环境需并发查询不同 API | P0 |
+| 连接池 / 多会话支持 | 已决策：放消费端实现，NuGet 包保持单连接 | — (消费端) |
 | 重连 + 熔断机制 | baostock 服务偶尔不稳定 | P0 |
 | 批量查询优化 | 批量拉取多只股票财务数据时减少 TCP 往返 | P1 |
 | 本地缓存层（可选） | 高频调用相同数据时避免重复网络请求 | P1 |
@@ -288,3 +288,85 @@ v0.5.x (本计划)
 
 1. **v0.5.0 启动时机**：是否等 v0.4.2 RAG 完成后再启动，还是可以并行？
 5. **Baostock.NET 包增强优先级**：连接池和重连机制是否在 v0.5.0 之前就在 NuGet 仓库实现？
+
+---
+
+## 11. 技术决策落档
+
+> **本节为 v0.5.x 技术方案的权威记录。** 经 PM 与用户讨论确认，2026-04-23。
+
+### 11.1 连接管理：连接池放消费端
+
+- Baostock.NET NuGet 包只提供单连接 `BaostockClient`（现状保持不变）
+- 本项目（消费端）实现 `BaostockClientPool`，基于 `Channel<BaostockClient>` 的简单连接池
+- DI 注册为 `Singleton`，最大连接数 3，空闲超时 5 分钟
+- **理由**：连接池逻辑跟业务场景强相关，放消费端更灵活
+
+```csharp
+// Program.cs
+services.AddSingleton<IBaostockClientFactory, BaostockClientFactory>();
+// 内部维护连接池，不修改 NuGet 包
+```
+
+### 11.2 LLM Context 注入：通过现有 MCP Tool 体系
+
+- **不修改现有 prompt/tool 内容**，仅新增 `macro_indicators` tool
+- 宏观数据通过 `RecommendToolDispatcher` 注册为新 tool，MacroAnalyst 角色可调用
+- 返回结构化 JSON（含 current/direction/percentile/signal 等字段）
+- 预生成 `policy_summary` 一句话总结，减少 LLM 推理负担
+
+```json
+{
+  "tool": "macro_indicators",
+  "result": {
+    "snapshot_date": "2026-04-23",
+    "lpr_1y": { "current": 3.10, "direction": "下行", "percentile_10y": 12, "signal": "偏宽松" },
+    "m2_yoy": { "current_pct": 8.7, "trend_3m": "持续上行", "percentile_10y": 45 },
+    "m1_m2_spread": { "current": -4.2, "direction": "收窄", "interpretation": "资金活化" },
+    "rrr": { "current": 9.0, "direction": "下行", "signal": "释放流动性" },
+    "policy_summary": "当前货币政策整体偏宽松..."
+  }
+}
+```
+
+### 11.3 交叉验证引擎：统一 5% 阈值
+
+- 全字段统一 5% 偏差阈值，不分级
+- 偏差基准用东财值（主源）作分母
+- ROE 对比需注意口径差异（东财加权 ROE vs baostock 平均 ROE），此字段可配置为排除或单独阈值
+- 校验结果存 `FinancialValidationAlert` 表，管理后台可查
+- **不干预前端展示**，仅后台告警
+
+### 11.4 ST/退市处理：仅前端标记，不排除
+
+- **推荐系统不排除** ST/退市股票，保持现有推荐逻辑不变
+- 前端股票名称旁显示风险标签：🔴 ST / ⚠️ *ST / ⛔ 退市 / ⏸ 暂停上市
+- 每日采集 ST/*ST/暂停/终止上市列表，存入 `StockRiskTag` 表
+- 风险标签数据通过现有股票信息 API 附加返回
+
+### 11.5 数据采集调度
+
+| 数据类型 | 采集频率 | 时间窗口 | 失败策略 |
+|---------|---------|---------|----------|
+| 交易日历 | 年初一次 + 每月校验 | 任意 | 重试 3 次；用上次缓存 |
+| 指数成分 | 每月第一个交易日 | 18:00-23:00 | 重试 3 次 |
+| 行业分类 | 每季度一次 | 任意 | 重试 3 次 |
+| 宏观经济 | 每日 18:00 | 18:00-20:00 | 重试 3 次；数据不变跳过 |
+| 季频财务 | 随东财 FinancialWorker | 15:30-23:00 | 跟随现有逻辑 |
+| ST/退市列表 | 每日 | 9:00 前 | 重试 3 次 |
+
+- 新增 `BaostockDataWorker : BackgroundService`，统一管理采集
+- 熔断：连续 5 次失败 → 暂停 1 小时 → 自动恢复
+- 不影响东财主源运行
+
+### 11.6 前端布局
+
+| 新功能 | 放置位置 | 说明 |
+|-------|---------|------|
+| 宏观经济面板 | `market-sentiment` Tab 内新增子区域 | 需 UI Designer 设计稿 |
+| 杜邦分析 | `financial-center` Tab 选股后子页 | 需 UI Designer 设计稿 |
+| 成长性趋势图 | `financial-center` Tab 与杜邦并列 | 复用现有图表组件 |
+| 业绩快报/预告 | `financial-center` Tab 新子 Tab | 复用现有列表组件 |
+| ST/退市标签 | 股票名称旁（全局） | 🔴ST / ⛔退市 标签 |
+
+- **不新增主 Tab**，宏观嵌入情绪页，财务嵌入财报中心

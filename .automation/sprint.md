@@ -48,7 +48,7 @@
 ### Stories
 
 #### V043-S0: v0.4.2.1 评估集（前置门禁）
-- **状态**：TODO | **级别**：M
+- **状态**：DONE | **级别**：M
 - **描述**：人工标注 30 条财报 Q&A（经营情况 10 / 风险 5 / 募资 5 / 会计政策 5 / 分红 5），每条标注 1-3 个正确 chunk 作为 ground truth。提供 CLI 评估脚本 `tools/RagEval`，输出 nDCG@5 / Recall@10 / MRR 报告。
 - **验收**：评估集 JSON 存在；BM25 baseline 报告已生成；nDCG@5 有数值。
 
