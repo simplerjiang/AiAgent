@@ -20,7 +20,7 @@ describe('sourceChannelTag util', () => {
     const tag = getSourceChannelTag('emweb')
     expect(tag.tone).toBe('blue')
     expect(tag.label).toBe('EM 网页')
-    expect(tag.color).toBe('#1d4ed8')
+    expect(tag.color).toBe('var(--color-info)')
   })
 
   it('maps datacenter → teal', () => {
@@ -63,9 +63,9 @@ describe('sourceChannelTag util', () => {
   it('sourceChannelTagStyle joins color/bg/border into inline css', () => {
     const tag = getSourceChannelTag('emweb')
     const css = sourceChannelTagStyle(tag)
-    expect(css).toContain('color:#1d4ed8')
-    expect(css).toContain('background:rgba(29, 78, 216, 0.10)')
-    expect(css).toContain('border:1px solid rgba(29, 78, 216, 0.25)')
+    expect(css).toContain('color:var(--color-info)')
+    expect(css).toContain('background:var(--color-info-bg)')
+    expect(css).toContain('border:1px solid var(--color-info-border)')
   })
 
   it('sourceChannelTagStyle returns empty for falsy tag', () => {

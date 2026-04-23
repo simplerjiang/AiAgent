@@ -17,33 +17,33 @@ const TAGS = {
     key: 'emweb',
     label: 'EM 网页',
     tone: 'blue',
-    color: '#1d4ed8',
-    bg: 'rgba(29, 78, 216, 0.10)',
-    border: 'rgba(29, 78, 216, 0.25)'
+    color: 'var(--color-info)',
+    bg: 'var(--color-info-bg)',
+    border: 'var(--color-info-border)'
   },
   datacenter: {
     key: 'datacenter',
     label: '数据中心',
     tone: 'teal',
-    color: '#0f766e',
-    bg: 'rgba(15, 118, 110, 0.10)',
-    border: 'rgba(15, 118, 110, 0.25)'
+    color: 'var(--color-tag-sector)',
+    bg: 'var(--color-tag-sector-bg)',
+    border: 'var(--color-tag-sector-bg)'
   },
   ths: {
     key: 'ths',
     label: '同花顺',
     tone: 'purple',
-    color: '#7c3aed',
-    bg: 'rgba(124, 58, 237, 0.10)',
-    border: 'rgba(124, 58, 237, 0.25)'
+    color: 'var(--color-success)',
+    bg: 'var(--color-success-bg)',
+    border: 'var(--color-success-border)'
   },
   pdf: {
     key: 'pdf',
     label: 'PDF',
     tone: 'orange',
-    color: '#d97706',
-    bg: 'rgba(217, 119, 6, 0.10)',
-    border: 'rgba(217, 119, 6, 0.25)'
+    color: 'var(--color-neutral)',
+    bg: 'var(--color-neutral-bg)',
+    border: 'var(--color-neutral-border)'
   }
 }
 
@@ -51,9 +51,9 @@ const FALLBACK = {
   key: 'unknown',
   label: '未知来源',
   tone: 'gray',
-  color: '#6b7280',
-  bg: 'rgba(107, 114, 128, 0.10)',
-  border: 'rgba(107, 114, 128, 0.25)'
+  color: 'var(--color-neutral)',
+  bg: 'var(--color-neutral-bg)',
+  border: 'var(--color-neutral-border)'
 }
 
 /**
