@@ -7,12 +7,14 @@ public class RagSearchRequest
     public string? ReportDate { get; set; }
     public string? ReportType { get; set; }
     public int? TopK { get; set; }
+    public string? Mode { get; set; }  // "bm25" | "vector" | "hybrid" (default: hybrid)
 }
 
 public class RagSearchResponse
 {
     public string Query { get; set; } = "";
     public int TotalResults { get; set; }
+    public string Mode { get; set; } = "hybrid";  // Actual mode used (may differ from requested)
     public List<RagSearchResultItem> Results { get; set; } = new();
 }
 

@@ -86,6 +86,22 @@ public class RagDbContext : IDisposable
             tCmd.CommandText = trigger;
             tCmd.ExecuteNonQuery();
         }
+
+        // chunk_embeddings table for vector search
+        using var embCmd = conn.CreateCommand();
+        embCmd.CommandText = @"
+            CREATE TABLE IF NOT EXISTS chunk_embeddings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                chunk_id TEXT NOT NULL UNIQUE,
+                embedding BLOB NOT NULL,
+                model_name TEXT NOT NULL,
+                dimension INTEGER NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                FOREIGN KEY (chunk_id) REFERENCES chunks(chunk_id) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS idx_chunk_embeddings_chunk_id ON chunk_embeddings(chunk_id);
+        ";
+        embCmd.ExecuteNonQuery();
     }
 
     /// <summary>Insert a chunk and let triggers sync FTS5.</summary>
@@ -175,6 +191,164 @@ public class RagDbContext : IDisposable
             cmd.CommandText = "SELECT COUNT(*) FROM chunks";
         }
         return Convert.ToInt32(cmd.ExecuteScalar());
+    }
+
+    /// <summary>Insert or replace embedding for a chunk.</summary>
+    public void UpsertEmbedding(string chunkId, float[] embedding, string modelName)
+    {
+        using var conn = new SqliteConnection(_connectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+            INSERT OR REPLACE INTO chunk_embeddings (chunk_id, embedding, model_name, dimension, created_at)
+            VALUES ($chunk_id, $embedding, $model_name, $dimension, datetime('now'))";
+        cmd.Parameters.AddWithValue("$chunk_id", chunkId);
+        cmd.Parameters.AddWithValue("$embedding", FloatsToBlob(embedding));
+        cmd.Parameters.AddWithValue("$model_name", modelName);
+        cmd.Parameters.AddWithValue("$dimension", embedding.Length);
+        cmd.ExecuteNonQuery();
+    }
+
+    /// <summary>Bulk upsert embeddings in a transaction.</summary>
+    public void UpsertEmbeddings(IEnumerable<(string ChunkId, float[] Embedding, string ModelName)> items)
+    {
+        using var conn = new SqliteConnection(_connectionString);
+        conn.Open();
+        using var tx = conn.BeginTransaction();
+        foreach (var (chunkId, embedding, modelName) in items)
+        {
+            using var cmd = conn.CreateCommand();
+            cmd.Transaction = tx;
+            cmd.CommandText = @"
+                INSERT OR REPLACE INTO chunk_embeddings (chunk_id, embedding, model_name, dimension, created_at)
+                VALUES ($chunk_id, $embedding, $model_name, $dimension, datetime('now'))";
+            cmd.Parameters.AddWithValue("$chunk_id", chunkId);
+            cmd.Parameters.AddWithValue("$embedding", FloatsToBlob(embedding));
+            cmd.Parameters.AddWithValue("$model_name", modelName);
+            cmd.Parameters.AddWithValue("$dimension", embedding.Length);
+            cmd.ExecuteNonQuery();
+        }
+        tx.Commit();
+    }
+
+    /// <summary>Delete embeddings for all chunks of a given source document.</summary>
+    public int DeleteEmbeddingsBySourceId(string sourceId)
+    {
+        using var conn = new SqliteConnection(_connectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+            DELETE FROM chunk_embeddings 
+            WHERE chunk_id IN (SELECT chunk_id FROM chunks WHERE source_id = $source_id)";
+        cmd.Parameters.AddWithValue("$source_id", sourceId);
+        return cmd.ExecuteNonQuery();
+    }
+
+    /// <summary>
+    /// Vector similarity search using cosine similarity computed in C#.
+    /// Returns chunks sorted by descending similarity.
+    /// </summary>
+    public List<(string ChunkId, double Similarity)> SearchByVector(float[] queryEmbedding, int topK = 5,
+        string? symbol = null, string? reportDate = null, string? reportType = null)
+    {
+        using var conn = new SqliteConnection(_connectionString);
+        conn.Open();
+
+        var sql = new System.Text.StringBuilder();
+        sql.Append(@"
+            SELECT e.chunk_id, e.embedding
+            FROM chunk_embeddings e
+            JOIN chunks c ON c.chunk_id = e.chunk_id
+            WHERE 1=1");
+        if (!string.IsNullOrEmpty(symbol))
+            sql.Append(" AND c.symbol = $symbol");
+        if (!string.IsNullOrEmpty(reportDate))
+            sql.Append(" AND c.report_date = $reportDate");
+        if (!string.IsNullOrEmpty(reportType))
+            sql.Append(" AND c.report_type = $reportType");
+
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = sql.ToString();
+        if (!string.IsNullOrEmpty(symbol))
+            cmd.Parameters.AddWithValue("$symbol", symbol);
+        if (!string.IsNullOrEmpty(reportDate))
+            cmd.Parameters.AddWithValue("$reportDate", reportDate);
+        if (!string.IsNullOrEmpty(reportType))
+            cmd.Parameters.AddWithValue("$reportType", reportType);
+
+        var candidates = new List<(string ChunkId, float[] Embedding)>();
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read())
+        {
+            var chunkId = reader.GetString(0);
+            var blob = (byte[])reader[1];
+            candidates.Add((chunkId, BlobToFloats(blob)));
+        }
+
+        return candidates
+            .Select(c => (c.ChunkId, Similarity: CosineSimilarity(queryEmbedding, c.Embedding)))
+            .OrderByDescending(x => x.Similarity)
+            .Take(topK)
+            .ToList();
+    }
+
+    /// <summary>Get the embedding dimension currently stored (0 if no embeddings).</summary>
+    public int GetEmbeddingDimension()
+    {
+        using var conn = new SqliteConnection(_connectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT dimension FROM chunk_embeddings LIMIT 1";
+        var result = cmd.ExecuteScalar();
+        return result != null ? Convert.ToInt32(result) : 0;
+    }
+
+    /// <summary>Count embeddings, optionally filtered by source_id.</summary>
+    public int CountEmbeddings(string? sourceId = null)
+    {
+        using var conn = new SqliteConnection(_connectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        if (sourceId != null)
+        {
+            cmd.CommandText = @"
+                SELECT COUNT(*) FROM chunk_embeddings 
+                WHERE chunk_id IN (SELECT chunk_id FROM chunks WHERE source_id = $source_id)";
+            cmd.Parameters.AddWithValue("$source_id", sourceId);
+        }
+        else
+        {
+            cmd.CommandText = "SELECT COUNT(*) FROM chunk_embeddings";
+        }
+        return Convert.ToInt32(cmd.ExecuteScalar());
+    }
+
+    private static byte[] FloatsToBlob(float[] floats)
+    {
+        var bytes = new byte[floats.Length * 4];
+        Buffer.BlockCopy(floats, 0, bytes, 0, bytes.Length);
+        return bytes;
+    }
+
+    private static float[] BlobToFloats(byte[] blob)
+    {
+        var floats = new float[blob.Length / 4];
+        Buffer.BlockCopy(blob, 0, floats, 0, blob.Length);
+        return floats;
+    }
+
+    private static double CosineSimilarity(float[] a, float[] b)
+    {
+        if (a.Length != b.Length) return 0;
+        double dot = 0, normA = 0, normB = 0;
+        for (int i = 0; i < a.Length; i++)
+        {
+            dot += a[i] * b[i];
+            normA += a[i] * a[i];
+            normB += b[i] * b[i];
+        }
+        var denom = Math.Sqrt(normA) * Math.Sqrt(normB);
+        return denom > 0 ? dot / denom : 0;
     }
 
     public void Dispose()

@@ -81,7 +81,8 @@ public class PdfPipelineStubRecordTests : IDisposable
             NullLogger<PdfProcessingPipeline>.Instance,
             _ragDb,
             new FinancialReportChunker(),
-            new JiebaTokenizer());
+            new JiebaTokenizer(),
+            new NoOpEmbedder());
 
         var pdf = new DownloadedPdf
         {
@@ -160,7 +161,8 @@ public class PdfPipelineStubRecordTests : IDisposable
             NullLogger<PdfProcessingPipeline>.Instance,
             _ragDb,
             new FinancialReportChunker(),
-            new JiebaTokenizer());
+            new JiebaTokenizer(),
+            new NoOpEmbedder());
 
         var pdf = new DownloadedPdf
         {

@@ -21,8 +21,19 @@ var ragDbPath = FinancialWorkerRuntimePaths.ResolveRagDatabasePath();
 builder.Services.AddSingleton(new RagDbContext($"Data Source={ragDbPath}"));
 builder.Services.AddSingleton<IChineseTokenizer, JiebaTokenizer>();
 builder.Services.AddSingleton<IChunker, FinancialReportChunker>();
-builder.Services.AddSingleton<IEmbedder, NoOpEmbedder>();
-builder.Services.AddSingleton<IRetriever, Fts5Retriever>();
+// v0.4.3 S2: OllamaEmbedder (falls back gracefully if Ollama unavailable)
+builder.Services.AddHttpClient<OllamaEmbedder>(client =>
+{
+    client.BaseAddress = new Uri("http://localhost:11434");
+    client.Timeout = TimeSpan.FromSeconds(30);
+});
+builder.Services.AddSingleton<IEmbedder>(sp =>
+{
+    var ollamaEmbedder = sp.GetRequiredService<OllamaEmbedder>();
+    return ollamaEmbedder;
+});
+builder.Services.AddSingleton<HybridRetriever>();
+builder.Services.AddSingleton<IRetriever>(sp => sp.GetRequiredService<HybridRetriever>());
 
 builder.Services.AddHttpClient<IEastmoneyFinanceClient, EastmoneyFinanceClient>(client =>
 {
@@ -192,15 +203,24 @@ app.MapGet("/api/runtime-logs", (long? afterId, int? count, InMemoryLogStore sto
 // v0.4.2 S6: RAG search endpoint
 app.MapPost("/api/rag/search", async (
     RagSearchRequest request,
-    IRetriever retriever,
+    HybridRetriever retriever,
     CancellationToken ct) =>
 {
     if (string.IsNullOrWhiteSpace(request.Query))
         return Results.BadRequest(new { error = "query is required" });
 
     var topK = request.TopK is > 0 and <= 50 ? request.TopK.Value : 5;
+    var mode = (request.Mode?.ToLowerInvariant()) switch
+    {
+        "bm25" => SearchMode.Bm25,
+        "vector" => SearchMode.Vector,
+        "hybrid" => SearchMode.Hybrid,
+        _ => SearchMode.Hybrid
+    };
+
     var results = await retriever.RetrieveAsync(
         request.Query,
+        mode,
         request.Symbol,
         request.ReportDate,
         request.ReportType,
@@ -211,6 +231,7 @@ app.MapPost("/api/rag/search", async (
     {
         Query = request.Query,
         TotalResults = results.Count,
+        Mode = retriever.ActualMode.ToString().ToLowerInvariant(),
         Results = results.Select(r => new RagSearchResultItem
         {
             ChunkId = r.ChunkId,

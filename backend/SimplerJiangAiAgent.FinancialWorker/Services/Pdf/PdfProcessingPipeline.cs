@@ -31,6 +31,7 @@ public class PdfProcessingPipeline : IPdfProcessingPipeline
     private readonly RagDbContext _ragDb;
     private readonly IChunker _chunker;
     private readonly IChineseTokenizer _tokenizer;
+    private readonly IEmbedder _embedder;
 
     public PdfProcessingPipeline(
         CninfoClient cninfoClient,
@@ -40,7 +41,8 @@ public class PdfProcessingPipeline : IPdfProcessingPipeline
         ILogger<PdfProcessingPipeline> logger,
         RagDbContext ragDb,
         IChunker chunker,
-        IChineseTokenizer tokenizer)
+        IChineseTokenizer tokenizer,
+        IEmbedder embedder)
     {
         _cninfoClient = cninfoClient;
         _votingEngine = votingEngine;
@@ -50,6 +52,7 @@ public class PdfProcessingPipeline : IPdfProcessingPipeline
         _ragDb = ragDb;
         _chunker = chunker;
         _tokenizer = tokenizer;
+        _embedder = embedder;
     }
 
     /// <summary>
@@ -412,7 +415,7 @@ public class PdfProcessingPipeline : IPdfProcessingPipeline
             var pdfDoc = _db.PdfFiles.FindOne(x => x.Symbol == symbol && x.LocalPath == (pdf.FilePath ?? ""));
             if (pdfDoc != null)
             {
-                ChunkAndStoreInRag(pdfDoc);
+                await ChunkAndStoreInRag(pdfDoc);
             }
         }
         catch (Exception ex)
@@ -689,11 +692,12 @@ public class PdfProcessingPipeline : IPdfProcessingPipeline
     /// v0.4.2 S4: Chunk a PDF document and store in RAG database.
     /// Deletes existing chunks for this source before inserting new ones.
     /// </summary>
-    private void ChunkAndStoreInRag(PdfFileDocument doc)
+    private async Task ChunkAndStoreInRag(PdfFileDocument doc)
     {
         var sourceId = doc.Id.ToString();
 
-        // Delete old chunks for this document (supports reparse)
+        // Delete old embeddings + chunks for this document (supports reparse)
+        _ragDb.DeleteEmbeddingsBySourceId(sourceId);
         _ragDb.DeleteChunksBySourceId(sourceId);
 
         // Chunk the document
@@ -714,6 +718,33 @@ public class PdfProcessingPipeline : IPdfProcessingPipeline
         _ragDb.InsertChunks(chunks);
         _logger.LogInformation("[PDF][RAG] 已切块入库: {Symbol} {File} → {Count} chunks",
             doc.Symbol, doc.FileName, chunks.Count);
+
+        // v0.4.3 S3: Generate embeddings if embedder is available
+        if (_embedder.IsAvailable)
+        {
+            try
+            {
+                var embeddings = new List<(string ChunkId, float[] Embedding, string ModelName)>();
+                foreach (var chunk in chunks)
+                {
+                    var embedding = await _embedder.EmbedAsync(chunk.Text);
+                    if (embedding != null)
+                    {
+                        embeddings.Add((chunk.ChunkId, embedding, "ollama"));
+                    }
+                }
+                if (embeddings.Count > 0)
+                {
+                    _ragDb.UpsertEmbeddings(embeddings);
+                    _logger.LogInformation("[PDF][RAG] 已生成向量: {Symbol} {File} → {Count} embeddings",
+                        doc.Symbol, doc.FileName, embeddings.Count);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "[PDF][RAG] 向量生成失败（不影响 BM25 索引）: {File}", doc.FileName);
+            }
+        }
     }
 
 
