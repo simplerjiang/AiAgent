@@ -53,42 +53,42 @@
 - **验收**：评估集 JSON 存在；BM25 baseline 报告已生成；nDCG@5 有数值。
 
 #### V043-S1: sqlite-vec 扩展 + chunk_embeddings 表
-- **状态**：TODO | **级别**：M
+- **状态**：DONE | **级别**：M
 - **描述**：在 `financial-rag.db` 中启用 sqlite-vec 扩展，新增 `chunk_embeddings` 虚表（chunk_id, embedding FLOAT[dim]）。dim 从配置读取（默认 1024）。
 - **验收**：Worker 启动时加载 sqlite-vec 并创建虚表；dotnet test 验证插入/查询向量。
 
 #### V043-S2: OllamaEmbedder 实现
-- **状态**：TODO | **级别**：M
+- **状态**：DONE | **级别**：M
 - **描述**：实现 `IEmbedder` → Ollama HTTP API（`http://localhost:11434/api/embeddings`）。默认模型 bge-m3。检测 Ollama 是否在线，不可用时 `IsAvailable=false` 并 fallback 到纯 BM25。
 - **验收**：Ollama 在线时生成向量；离线时优雅降级不崩溃。
 
 #### V043-S3: Embedding Pipeline 集成
-- **状态**：TODO | **级别**：M | **依赖**：S1, S2
+- **状态**：DONE | **级别**：M | **依赖**：S1, S2
 - **描述**：chunk 入库后异步调用 `IEmbedder`，将向量写入 `chunk_embeddings`。支持批量 embedding。Ollama 不可用时跳过 embedding，仅保留 BM25 索引。
 - **验收**：PDF 解析后 chunk_embeddings 有记录；Ollama 离线时 chunks 仍正常入库。
 
 #### V043-S4: HybridRetriever（BM25 + 向量 + RRF）
-- **状态**：TODO | **级别**：M | **依赖**：S1, S2, S3
+- **状态**：DONE | **级别**：M | **依赖**：S1, S2, S3
 - **描述**：扩展 `IRetriever`，内部组合 BM25（FTS5）+ 向量（sqlite-vec knn）+ RRF 合并排序。Embedding 不可用时自动降级为纯 BM25。
 - **验收**：Hybrid 模式 nDCG@5 比 BM25 baseline 提升 ≥15%；降级后行为与 v0.4.2 一致。
 
 #### V043-S5: Search Mode 扩展
-- **状态**：TODO | **级别**：S | **依赖**：S4
+- **状态**：DONE | **级别**：S | **依赖**：S4
 - **描述**：`POST /api/rag/search` 增加 `mode` 参数（bm25 / vector / hybrid，默认 hybrid）。返回中增加 `mode` 字段标识实际使用的检索模式（含降级场景）。
 - **验收**：3 种 mode 可切换；降级时返回实际 mode。
 
 #### V043-S6: Citation DTO + AI 路径注入
-- **状态**：TODO | **级别**：M | **依赖**：S4
+- **状态**：DONE | **级别**：M | **依赖**：S4
 - **描述**：定义 Citation DTO（chunk_id / text / section / page_start / page_end / score / source_file）。在股票信息页 AI 分析、Research、Recommend 调用 LLM 前注入 hybrid 检索结果，响应中保留 citation 数组。
 - **验收**：AI 分析结果含 citations；citation 包含页码和来源。
 
 #### V043-S7: 前端 Citation Chip
-- **状态**：TODO | **级别**：M | **依赖**：S6
+- **状态**：DONE | **级别**：M | **依赖**：S6
 - **描述**：AI 分析结果中的 citation 显示为可点击 chip（[报告名 P.xx]），点击后打开 PDF Viewer 并定位到 `page_start`。缺 page 字段的旧数据显示"原文页码不可用"。
 - **验收**：citation chip 可点击跳转；旧数据降级提示。
 
 #### V043-S8: Embedding Model 管理 UI
-- **状态**：TODO | **级别**：M | **依赖**：S2
+- **状态**：DONE | **级别**：M | **依赖**：S2
 - **描述**：LLM 设置页面新增 Embedding 模型管理子面板：检测 Ollama 在线状态、列出已安装 embedding 模型、一键 `ollama pull <model>` 安装、切换模型时提示重建索引。
 - **验收**：UI 可检测 Ollama / 安装模型 / 切换模型；切换时触发重建提示。
 
