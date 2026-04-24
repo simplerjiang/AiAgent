@@ -3,6 +3,7 @@ using SimplerJiangAiAgent.Api.Infrastructure.Llm;
 using SimplerJiangAiAgent.Api.Modules.Market.Models;
 using SimplerJiangAiAgent.Api.Modules.Stocks.Models;
 using SimplerJiangAiAgent.Api.Modules.Stocks.Services;
+using SimplerJiangAiAgent.Api.Modules.Stocks.Services.IntentClassification;
 using SimplerJiangAiAgent.Api.Modules.Stocks.Services.Recommend.WebSearch;
 
 namespace SimplerJiangAiAgent.Api.Tests;
@@ -334,7 +335,22 @@ public sealed class StockCopilotLiveGateServiceTests
             new McpServiceRegistry(),
             new StockAgentRoleContractRegistry(),
             new FakeStockMarketContextService(),
-            new StockCopilotAcceptanceService(new FakeReplayCalibrationService()));
+            new StockCopilotAcceptanceService(new FakeReplayCalibrationService()),
+            new NoOpIntentClassifier(),
+            new NoOpEvidencePackBuilder());
+    }
+
+    private sealed class NoOpIntentClassifier : IQuestionIntentClassifier
+    {
+        public Task<QuestionIntent> ClassifyAsync(string question, string? stockSymbol = null, CancellationToken ct = default)
+            => Task.FromResult(new QuestionIntent(IntentType.General, 1.0, false, false, SuggestedPipeline.LiveGate));
+    }
+
+    private sealed class NoOpEvidencePackBuilder : IEvidencePackBuilder
+    {
+        public Task<EvidencePack> BuildAsync(string symbol, string query, IntentType intent, CancellationToken ct = default)
+            => Task.FromResult(new EvidencePack(symbol, query, intent, Array.Empty<RagCitationDto>(), Array.Empty<FinancialMetricSummary>(), null, Array.Empty<string>()));
+        public string FormatAsPromptContext(EvidencePack pack) => string.Empty;
     }
 
     private sealed class FakeLlmService : ILlmService

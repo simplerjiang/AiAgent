@@ -3,6 +3,7 @@ using System.Text.Json;
 using SimplerJiangAiAgent.Api.Infrastructure.Llm;
 using SimplerJiangAiAgent.Api.Modules.Market.Models;
 using SimplerJiangAiAgent.Api.Modules.Stocks.Models;
+using SimplerJiangAiAgent.Api.Modules.Stocks.Services.IntentClassification;
 
 namespace SimplerJiangAiAgent.Api.Modules.Stocks.Services;
 
@@ -30,6 +31,8 @@ public sealed class StockCopilotLiveGateService : IStockCopilotLiveGateService
     private readonly IStockAgentRoleContractRegistry _roleContractRegistry;
     private readonly IStockMarketContextService _marketContextService;
     private readonly IStockCopilotAcceptanceService _acceptanceService;
+    private readonly IQuestionIntentClassifier _intentClassifier;
+    private readonly IEvidencePackBuilder _evidencePackBuilder;
 
     public StockCopilotLiveGateService(
         IStockChatHistoryService chatHistoryService,
@@ -39,7 +42,9 @@ public sealed class StockCopilotLiveGateService : IStockCopilotLiveGateService
         IMcpServiceRegistry mcpServiceRegistry,
         IStockAgentRoleContractRegistry roleContractRegistry,
         IStockMarketContextService marketContextService,
-        IStockCopilotAcceptanceService acceptanceService)
+        IStockCopilotAcceptanceService acceptanceService,
+        IQuestionIntentClassifier intentClassifier,
+        IEvidencePackBuilder evidencePackBuilder)
     {
         _chatHistoryService = chatHistoryService;
         _llmService = llmService;
@@ -49,6 +54,8 @@ public sealed class StockCopilotLiveGateService : IStockCopilotLiveGateService
         _roleContractRegistry = roleContractRegistry;
         _marketContextService = marketContextService;
         _acceptanceService = acceptanceService;
+        _intentClassifier = intentClassifier;
+        _evidencePackBuilder = evidencePackBuilder;
     }
 
     public async Task<StockCopilotLiveGateResultDto> RunAsync(StockCopilotLiveGateRequestDto request, CancellationToken cancellationToken = default)
@@ -66,7 +73,27 @@ public sealed class StockCopilotLiveGateService : IStockCopilotLiveGateService
         var session = await _chatHistoryService.CreateSessionAsync(normalizedSymbol, sessionTitle, request.SessionKey, cancellationToken);
         var marketContext = await _marketContextService.GetLatestAsync(normalizedSymbol, cancellationToken);
         var checklist = _roleContractRegistry.BuildChecklist();
+        var intentTask = _intentClassifier.ClassifyAsync(trimmedQuestion, normalizedSymbol, cancellationToken);
         var prompt = BuildPrompt(normalizedSymbol, trimmedQuestion, request.AllowExternalSearch, marketContext, checklist);
+
+        var intent = await intentTask;
+        if (intent.RequiresRag || intent.RequiresFinancialData)
+        {
+            var evidencePack = await _evidencePackBuilder.BuildAsync(
+                normalizedSymbol, trimmedQuestion, intent.Type, cancellationToken);
+            var evidenceContext = _evidencePackBuilder.FormatAsPromptContext(evidencePack);
+            if (!string.IsNullOrWhiteSpace(evidenceContext))
+            {
+                prompt = InjectEvidenceIntoPrompt(prompt, evidenceContext);
+            }
+            else if (intent.Type is IntentType.Valuation or IntentType.Risk or IntentType.FinancialAnalysis)
+            {
+                prompt = InjectEvidenceIntoPrompt(prompt,
+                    "\n[系统提示：该问题需要财报数据支撑，但当前没有找到相关财报证据。" +
+                    "请在回答中明确说明缺少财报依据，建议用户先采集该股票的财报数据。]\n");
+            }
+        }
+
         var (planJson, rawModelResponse, llmTraceId, parseError) = await RequestPlanWithRepairAsync(
             provider,
             request.Model,
@@ -1094,6 +1121,11 @@ public sealed class StockCopilotLiveGateService : IStockCopilotLiveGateService
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
         return items.Length == 0 ? null : items;
+    }
+
+    private static string InjectEvidenceIntoPrompt(string prompt, string evidenceContext)
+    {
+        return prompt + "\n\n" + evidenceContext;
     }
 
     private static string BuildSessionTitle(string question)
