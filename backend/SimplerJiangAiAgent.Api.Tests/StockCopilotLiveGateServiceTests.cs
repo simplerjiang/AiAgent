@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
 using SimplerJiangAiAgent.Api.Data.Entities;
 using SimplerJiangAiAgent.Api.Infrastructure.Llm;
 using SimplerJiangAiAgent.Api.Modules.Market.Models;
@@ -339,7 +341,15 @@ public sealed class StockCopilotLiveGateServiceTests
             new FakeStockMarketContextService(),
             new StockCopilotAcceptanceService(new FakeReplayCalibrationService()),
             new NoOpIntentClassifier(),
-            new NoOpEvidencePackBuilder());
+            new NoOpEvidencePackBuilder(),
+            new NoOpHttpClientFactory(),
+            new ConfigurationBuilder().Build(),
+            NullLogger<StockCopilotLiveGateService>.Instance);
+    }
+
+    private sealed class NoOpHttpClientFactory : IHttpClientFactory
+    {
+        public HttpClient CreateClient(string name) => new();
     }
 
     private sealed class NoOpIntentClassifier : IQuestionIntentClassifier

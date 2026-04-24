@@ -33,6 +33,9 @@ public sealed class StockCopilotLiveGateService : IStockCopilotLiveGateService
     private readonly IStockCopilotAcceptanceService _acceptanceService;
     private readonly IQuestionIntentClassifier _intentClassifier;
     private readonly IEvidencePackBuilder _evidencePackBuilder;
+    private readonly IHttpClientFactory _httpClientFactory;
+    private readonly IConfiguration _configuration;
+    private readonly ILogger<StockCopilotLiveGateService> _logger;
 
     public StockCopilotLiveGateService(
         IStockChatHistoryService chatHistoryService,
@@ -44,7 +47,10 @@ public sealed class StockCopilotLiveGateService : IStockCopilotLiveGateService
         IStockMarketContextService marketContextService,
         IStockCopilotAcceptanceService acceptanceService,
         IQuestionIntentClassifier intentClassifier,
-        IEvidencePackBuilder evidencePackBuilder)
+        IEvidencePackBuilder evidencePackBuilder,
+        IHttpClientFactory httpClientFactory,
+        IConfiguration configuration,
+        ILogger<StockCopilotLiveGateService> logger)
     {
         _chatHistoryService = chatHistoryService;
         _llmService = llmService;
@@ -56,6 +62,9 @@ public sealed class StockCopilotLiveGateService : IStockCopilotLiveGateService
         _acceptanceService = acceptanceService;
         _intentClassifier = intentClassifier;
         _evidencePackBuilder = evidencePackBuilder;
+        _httpClientFactory = httpClientFactory;
+        _configuration = configuration;
+        _logger = logger;
     }
 
     public async Task<StockCopilotLiveGateResultDto> RunAsync(StockCopilotLiveGateRequestDto request, CancellationToken cancellationToken = default)
@@ -842,7 +851,58 @@ public sealed class StockCopilotLiveGateService : IStockCopilotLiveGateService
         sw.Stop();
 
         if (citations.Count == 0)
-            return BuildFailedOutcome(approvedCall, "未找到相关财报 RAG 证据");
+        {
+            // Fire-and-forget: trigger PDF collection so next query can succeed
+            // Strip sh/sz prefix for worker API (same logic as StocksModule.NormalizeFinancialWorkerSymbol)
+            var workerSymbol = symbol;
+            if (workerSymbol.Length == 8
+                && (workerSymbol.StartsWith("sh", StringComparison.OrdinalIgnoreCase)
+                    || workerSymbol.StartsWith("sz", StringComparison.OrdinalIgnoreCase)))
+            {
+                workerSymbol = workerSymbol[2..];
+            }
+            if (!string.IsNullOrEmpty(workerSymbol))
+            {
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        var workerBaseUrl = _configuration["FinancialWorker:BaseUrl"] ?? "http://localhost:5120";
+                        var client = _httpClientFactory.CreateClient();
+                        client.Timeout = TimeSpan.FromMinutes(5);
+                        await client.PostAsync($"{workerBaseUrl}/api/pdf-collect/{Uri.EscapeDataString(workerSymbol)}", null);
+                        _logger.LogInformation("[RAG] Triggered PDF collection for {Symbol} (fire-and-forget)", workerSymbol);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "[RAG] Failed to trigger PDF collection for {Symbol}", workerSymbol);
+                    }
+                });
+            }
+
+            var degradedWarnings = new[] { "财报RAG暂无数据，已触发后台索引，稍后重试可获取" };
+            var degradedResult = new StockCopilotToolResultDto(
+                approvedCall.CallId,
+                approvedCall.Registration.ToolName,
+                "completed",
+                null,
+                0,
+                0,
+                degradedWarnings,
+                Array.Empty<string>(),
+                Array.Empty<StockCopilotMcpEvidenceDto>(),
+                "财报RAG: 暂无数据，已触发后台索引");
+            var degradedMetric = new StockCopilotToolExecutionMetricDto(
+                approvedCall.CallId,
+                approvedCall.Registration.ToolName,
+                approvedCall.Registration.PolicyClass,
+                sw.ElapsedMilliseconds,
+                0,
+                0,
+                degradedWarnings,
+                Array.Empty<string>());
+            return new ToolExecutionOutcome(degradedResult, degradedMetric);
+        }
 
         var evidence = citations.Select(c => new StockCopilotMcpEvidenceDto(
             Point: c.Text.Length > 200 ? c.Text[..200] + "…" : c.Text,

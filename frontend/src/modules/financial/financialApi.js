@@ -159,3 +159,38 @@ export async function reparsePdfFile(id) {
   }
   return resp.json().catch(() => ({ success: false, error: '响应解析失败', detail: null }))
 }
+
+// ============================================================================
+// 财报采集配置 API
+// ============================================================================
+
+/**
+ * 获取财报采集配置
+ * @returns {Promise<object>}
+ */
+export async function fetchFinancialConfig() {
+  const resp = await fetch('/api/stocks/financial/config')
+  if (!resp.ok) {
+    const msg = await extractMessage(resp)
+    throw new Error(msg ? `${msg} (HTTP ${resp.status})` : `加载配置失败 (HTTP ${resp.status})`)
+  }
+  return resp.json()
+}
+
+/**
+ * 更新财报采集配置
+ * @param {object} config 配置对象
+ * @returns {Promise<object>}
+ */
+export async function updateFinancialConfig(config) {
+  const resp = await fetch('/api/stocks/financial/config', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(config)
+  })
+  if (!resp.ok) {
+    const msg = await extractMessage(resp)
+    throw new Error(msg ? `${msg} (HTTP ${resp.status})` : `保存配置失败 (HTTP ${resp.status})`)
+  }
+  return resp.json()
+}
