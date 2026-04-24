@@ -58,6 +58,8 @@
 - **P0-1 修复**：添加 SynthesizeAnalysisAsync 第二次 LLM 调用（commit `bf67a8c`）
 - **二轮验收（User Rep）**：通过 ✅ — B+ 评级，PE/PB/ROE 等真实数据，结构化分析
 - **遗留项**：FinancialTrendMcp LiveGate 适配、RAG 在部分场景失败、PE/PB 精确计算
+- **HF-2 修复**：LiveGate 添加 FinancialReport/FinancialTrend/FinancialReportRag 工具 dispatch（commit `b3bfe09`）
+- **验证**：FinancialTrendMcp completed, PE≈22.06x, PB≈7.41x, 0 个"暂不支持"错误
 
 ---
 
