@@ -2,6 +2,7 @@ using SimplerJiangAiAgent.FinancialWorker;
 using SimplerJiangAiAgent.FinancialWorker.Data;
 using SimplerJiangAiAgent.FinancialWorker.Models;
 using SimplerJiangAiAgent.FinancialWorker.Services;
+using SimplerJiangAiAgent.FinancialWorker.Services.Announcement;
 using SimplerJiangAiAgent.FinancialWorker.Services.Pdf;
 using SimplerJiangAiAgent.FinancialWorker.Services.Rag;
 
@@ -75,6 +76,14 @@ builder.Services.AddHttpClient<CninfoClient>(client =>
 
 builder.Services.AddSingleton<FinancialDataOrchestrator>();
 
+builder.Services.AddHttpClient<AnnouncementPdfCollector>(client =>
+{
+    client.DefaultRequestHeaders.Add("User-Agent",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36");
+    client.DefaultRequestHeaders.Add("Accept", "*/*");
+    client.Timeout = TimeSpan.FromSeconds(60);
+});
+
 builder.Services.AddSingleton<IPdfTextExtractor, DocnetExtractor>();
 builder.Services.AddSingleton<IPdfTextExtractor, PdfPigExtractor>();
 builder.Services.AddSingleton<IPdfTextExtractor, IText7Extractor>();
@@ -142,6 +151,14 @@ app.MapPost("/api/pdf-collect/{symbol}", async (string symbol, PdfProcessingPipe
     return Results.Ok(result);
 })
 .WithName("PdfCollect");
+
+// v0.4.7 S2: 东方财富公告 PDF 采集
+app.MapPost("/api/announcement-pdf-collect/{symbol}", async (string symbol, AnnouncementPdfCollector collector, CancellationToken ct) =>
+{
+    var result = await collector.CollectAsync(symbol, 10, ct);
+    return Results.Ok(new { downloaded = result.Count, files = result });
+})
+.WithName("AnnouncementPdfCollect");
 
 // v0.4.1 §S2：单文件重新解析（同步，覆盖 stageLogs，更新 LastReparsedAt）
 app.MapPost("/api/pdf-reparse/{id}", async (string id, IPdfProcessingPipeline pipeline, CancellationToken ct) =>
