@@ -50,6 +50,7 @@
 | S6 | V040-S6-FU-1 | 财报毛利润补算 | S | 财报中心「毛利润」= 营业总收入 - 营业总成本，有值展示 | DONE |
 | S7 | V040-S6-FU-2 | 财报 keyword 搜索 | M | 搜索框按代码/名称模糊匹配，返回正确结果 | DONE |
 | S8 | — | 全链路验收 | S | dotnet test + vitest 全绿；浏览器验收关键页面 | DONE |
+| HF-1 | API 稳定性 | SQLite 并发写入崩溃修复 | S | busy_timeout 15s + DbRetryHelper + 全局异常处理 | DONE |
 
 ---
 
