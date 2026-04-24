@@ -770,6 +770,21 @@ public sealed class StocksModule : IModule
         .WithName("BackfillAllRetailHeat")
         .WithOpenApi();
 
+        group.MapPost("/{symbol}/retail-heat/refresh", async (
+            string symbol,
+            int? days,
+            IHistoricalBackfillService backfillService,
+            CancellationToken ct) =>
+        {
+            if (string.IsNullOrWhiteSpace(symbol))
+                return Results.BadRequest(new { message = "symbol 不能为空" });
+
+            await backfillService.BackfillAsync(symbol, days ?? 90, ct);
+            return Results.Ok(new { message = $"Refresh completed for {symbol}" });
+        })
+        .WithName("RefreshRetailHeat")
+        .WithOpenApi();
+
         // S2: Collection status endpoint
         group.MapGet("/{symbol}/retail-heat/collection-status", async (
             string symbol,
