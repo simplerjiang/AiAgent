@@ -56,7 +56,7 @@ public sealed class ForumScrapingService : IForumScrapingService
 
                 try
                 {
-                    var count = await scraper.GetPostCountAsync(stock.Symbol, ct);
+                    var count = await ScrapeWithRetryAsync(scraper, stock.Symbol, 3, ct);
                     if (count.HasValue)
                     {
                         await UpsertPostCountAsync(stock.Symbol, scraper.Platform, tradingDate, sessionPhase, count.Value, ct);
@@ -65,6 +65,7 @@ public sealed class ForumScrapingService : IForumScrapingService
                     else
                     {
                         failCount++;
+                        _logger.LogWarning("论坛帖子采集最终失败: {Symbol} {Platform} (3次重试均失败)", stock.Symbol, scraper.Platform);
                     }
                 }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -74,7 +75,7 @@ public sealed class ForumScrapingService : IForumScrapingService
                 catch (Exception ex)
                 {
                     failCount++;
-                    _logger.LogWarning(ex, "论坛帖子采集异常: {Symbol} {Platform}", stock.Symbol, scraper.Platform);
+                    _logger.LogWarning(ex, "论坛帖子采集异常: {Symbol} {Platform} (重试耗尽)", stock.Symbol, scraper.Platform);
                 }
 
                 // Random delay 3-5 seconds between requests
@@ -145,7 +146,7 @@ public sealed class ForumScrapingService : IForumScrapingService
             {
                 try
                 {
-                    var count = await scraper.GetPostCountAsync(stock.Symbol, ct);
+                    var count = await ScrapeWithRetryAsync(scraper, stock.Symbol, 3, ct);
                     if (count.HasValue)
                     {
                         await UpsertPostCountAsync(stock.Symbol, scraper.Platform, tradingDate,
@@ -155,11 +156,12 @@ public sealed class ForumScrapingService : IForumScrapingService
                     else
                     {
                         failCount++;
+                        _logger.LogWarning("InitialCollect最终失败: {Symbol} {Platform} (3次重试均失败)", stock.Symbol, scraper.Platform);
                     }
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
-                    _logger.LogWarning(ex, "InitialCollect failed for {Symbol} on {Platform}", stock.Symbol, scraper.Platform);
+                    _logger.LogWarning(ex, "InitialCollect failed for {Symbol} on {Platform} (重试耗尽)", stock.Symbol, scraper.Platform);
                     failCount++;
                 }
 
@@ -185,7 +187,7 @@ public sealed class ForumScrapingService : IForumScrapingService
             ct.ThrowIfCancellationRequested();
             try
             {
-                var count = await scraper.GetPostCountAsync(symbol, ct);
+                var count = await ScrapeWithRetryAsync(scraper, symbol, 3, ct);
                 if (count.HasValue)
                 {
                     await UpsertPostCountAsync(symbol, scraper.Platform, tradingDate, sessionPhase, count.Value, ct);
@@ -193,7 +195,7 @@ public sealed class ForumScrapingService : IForumScrapingService
                 }
                 else
                 {
-                    results.Add(new SingleStockCollectResult(scraper.Platform, false, null, "scraper returned null"));
+                    results.Add(new SingleStockCollectResult(scraper.Platform, false, null, "scraper returned null after 3 retries"));
                 }
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -239,6 +241,50 @@ public sealed class ForumScrapingService : IForumScrapingService
         }
 
         return s;
+    }
+
+    private async Task<int?> ScrapeWithRetryAsync(
+        IForumPostCountScraper scraper, string symbol, int maxRetries, CancellationToken ct)
+    {
+        for (var attempt = 1; attempt <= maxRetries; attempt++)
+        {
+            ct.ThrowIfCancellationRequested();
+            try
+            {
+                var count = await scraper.GetPostCountAsync(symbol, ct);
+                if (count.HasValue)
+                    return count;
+
+                // Scraper returned null — retry if attempts remain
+                if (attempt < maxRetries)
+                {
+                    _logger.LogDebug(
+                        "论坛帖子采集重试: {Symbol} {Platform} 第{Attempt}/{Max}次 (返回null)",
+                        symbol, scraper.Platform, attempt, maxRetries);
+                    await Task.Delay(TimeSpan.FromMilliseconds(Random.Shared.Next(5000, 10000)), ct);
+                }
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                if (attempt < maxRetries)
+                {
+                    _logger.LogDebug(ex,
+                        "论坛帖子采集重试: {Symbol} {Platform} 第{Attempt}/{Max}次",
+                        symbol, scraper.Platform, attempt, maxRetries);
+                    await Task.Delay(TimeSpan.FromMilliseconds(Random.Shared.Next(5000, 10000)), ct);
+                }
+                else
+                {
+                    throw; // Last attempt, rethrow for caller to handle
+                }
+            }
+        }
+
+        return null; // All retries exhausted
     }
 
     private static TimeZoneInfo ResolveChinaTimeZone()

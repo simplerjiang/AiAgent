@@ -1020,6 +1020,13 @@ public sealed class StockCopilotLiveGateService : IStockCopilotLiveGateService
         }
 
         builder.AppendLine($"- external_gated={string.Join(", ", externalGated)}");
+
+        builder.AppendLine();
+        builder.AppendLine("FinancialReportRag 使用指南：");
+        builder.AppendLine("- RAG 数据库包含已解析的上市公司年报/半年报/季报全文（利润表、资产负债表、现金流量表、管理层讨论与分析、公司治理、业务概述等章节）。");
+        builder.AppendLine("- query 参数应使用具体的财务术语（如'营业收入 净利润'、'应收账款 坏账准备'、'研发费用 比例'），而非用户原始问题。");
+        builder.AppendLine("- 每个角色应根据自身分析需要生成针对性查询，例如：基本面分析师应查询'营收增长 毛利率 ROE'，公司概览分析师应查询'主营业务 行业地位 竞争优势'。");
+        builder.AppendLine("- 支持多组查询：用分号分隔多个查询（如 query='营业收入 净利润; 资产负债率 现金流; 管理层分析 风险提示'），系统会分别搜索并合并结果。");
     }
 
     private static void AppendRoleConstraintSummary(StringBuilder builder, StockCopilotRoleContractChecklistDto checklist)

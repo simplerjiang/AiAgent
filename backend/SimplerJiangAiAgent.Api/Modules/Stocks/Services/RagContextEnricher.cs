@@ -24,6 +24,7 @@ public class RagContextEnricher
 
     /// <summary>
     /// Query RAG for relevant financial report chunks.
+    /// Supports semicolon-separated multi-queries.
     /// Returns empty list if worker unavailable or no results.
     /// </summary>
     public async Task<List<RagCitationDto>> EnrichAsync(
@@ -42,48 +43,79 @@ public class RagContextEnricher
                 symbol = symbol[2..];
             }
 
-            var workerBaseUrl = _configuration["FinancialWorker:BaseUrl"] ?? "http://localhost:5120";
-            var client = _httpClientFactory.CreateClient();
-            client.Timeout = TimeSpan.FromSeconds(10);
-
-            var request = new
+            // 支持分号分隔的多查询
+            var queries = query.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (queries.Length <= 1)
             {
-                query,
-                symbol,
-                topK,
-                mode = "hybrid"
-            };
-
-            var response = await client.PostAsJsonAsync($"{workerBaseUrl}/api/rag/search", request, ct);
-            if (!response.IsSuccessStatusCode)
-            {
-                _logger.LogWarning("[RAG] Worker RAG search returned {Status} for symbol={Symbol} query={Query}", response.StatusCode, symbol, query);
-                return new();
+                // 单查询：走原有逻辑
+                return await EnrichSingleAsync(query, symbol, topK, ct);
             }
-
-            var result = await response.Content.ReadFromJsonAsync<RagSearchResponseInternal>(cancellationToken: ct);
-            if (result?.Results == null || result.Results.Count == 0)
-                return new();
-
-            return result.Results.Select(r => new RagCitationDto
+            else
             {
-                ChunkId = r.ChunkId,
-                Symbol = r.Symbol,
-                ReportDate = r.ReportDate,
-                ReportType = r.ReportType,
-                Section = r.Section,
-                BlockKind = r.BlockKind,
-                PageStart = r.PageStart,
-                PageEnd = r.PageEnd,
-                Text = r.Text,
-                Score = r.Score
-            }).ToList();
+                // 多查询：分别搜索后合并去重
+                var allCitations = new List<RagCitationDto>();
+                var seenChunkIds = new HashSet<string>();
+                foreach (var subQuery in queries)
+                {
+                    var subResults = await EnrichSingleAsync(subQuery, symbol, Math.Max(topK / queries.Length, 2), ct);
+                    foreach (var r in subResults)
+                    {
+                        if (seenChunkIds.Add(r.ChunkId))
+                            allCitations.Add(r);
+                    }
+                }
+                return allCitations.OrderByDescending(c => c.Score).Take(topK).ToList();
+            }
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "[RAG] Context enrichment failed for symbol={Symbol} query={Query}", symbol, query);
             return new();
         }
+    }
+
+    private async Task<List<RagCitationDto>> EnrichSingleAsync(
+        string query,
+        string? symbol,
+        int topK,
+        CancellationToken ct)
+    {
+        var workerBaseUrl = _configuration["FinancialWorker:BaseUrl"] ?? "http://localhost:5120";
+        var client = _httpClientFactory.CreateClient();
+        client.Timeout = TimeSpan.FromSeconds(10);
+
+        var request = new
+        {
+            query,
+            symbol,
+            topK,
+            mode = "hybrid"
+        };
+
+        var response = await client.PostAsJsonAsync($"{workerBaseUrl}/api/rag/search", request, ct);
+        if (!response.IsSuccessStatusCode)
+        {
+            _logger.LogWarning("[RAG] Worker RAG search returned {Status} for symbol={Symbol} query={Query}", response.StatusCode, symbol, query);
+            return new();
+        }
+
+        var result = await response.Content.ReadFromJsonAsync<RagSearchResponseInternal>(cancellationToken: ct);
+        if (result?.Results == null || result.Results.Count == 0)
+            return new();
+
+        return result.Results.Select(r => new RagCitationDto
+        {
+            ChunkId = r.ChunkId,
+            Symbol = r.Symbol,
+            ReportDate = r.ReportDate,
+            ReportType = r.ReportType,
+            Section = r.Section,
+            BlockKind = r.BlockKind,
+            PageStart = r.PageStart,
+            PageEnd = r.PageEnd,
+            Text = r.Text,
+            Score = r.Score
+        }).ToList();
     }
 
     /// <summary>

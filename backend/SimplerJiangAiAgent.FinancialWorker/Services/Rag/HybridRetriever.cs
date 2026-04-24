@@ -79,7 +79,13 @@ public class HybridRetriever : IRetriever
         if (string.IsNullOrWhiteSpace(tokenizedQuery))
             return new();
 
-        tokenizedQuery = string.Join(" ", tokenizedQuery.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+        var tokens = tokenizedQuery.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        // 过滤掉常见停用词
+        var stopwords = new HashSet<string> { "的", "了", "是", "在", "和", "与", "或", "及", "等", "对", "为", "中", "有", "从", "到", "以", "上", "下", "个", "这", "那", "最近", "请", "帮", "我", "看看", "一下", "什么", "怎么", "如何", "是否", "还", "能", "可以", "可能", "应该", "需要", "想", "要", "做", "吗", "呢", "啊", "吧", "哪", "几", "多少" };
+        var filteredTokens = tokens.Where(t => !stopwords.Contains(t) && t.Length > 1).ToArray();
+        if (filteredTokens.Length == 0) filteredTokens = tokens; // 降级：停用词过滤后为空则保留原始
+
+        tokenizedQuery = string.Join(" OR ", filteredTokens
             .Select(token => "\"" + token.Replace("\"", "\"\"") + "\""));
 
         using var conn = new SqliteConnection(_ragDb.ConnectionString);
