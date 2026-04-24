@@ -21,6 +21,7 @@ using SimplerJiangAiAgent.Api.Modules.Stocks.Services.Recommend.WebSearch;
 using SimplerJiangAiAgent.Api.Modules.Market.Services;
 using SimplerJiangAiAgent.Api.Infrastructure;
 using SimplerJiangAiAgent.Api.Infrastructure.Jobs.ForumScraping;
+using SimplerJiangAiAgent.Api.Modules.Stocks.Services.IntentClassification;
 
 namespace SimplerJiangAiAgent.Api.Modules.Stocks;
 
@@ -98,6 +99,7 @@ public sealed class StocksModule : IModule
         services.AddScoped<IResearchArtifactService, ResearchArtifactService>();
         services.AddScoped<IResearchReportService, ResearchReportService>();
         services.AddSingleton<Infrastructure.Logging.ISessionFileLogger, Infrastructure.Logging.SessionFileLogger>();
+        services.AddSingleton<IQuestionIntentClassifier, QuestionIntentClassifier>();
         services.AddSingleton<IRecommendEventBus, RecommendEventBus>();
         services.AddSingleton<IRecommendRoleContractRegistry, RecommendRoleContractRegistry>();
         services.AddScoped<IRecommendToolDispatcher, RecommendToolDispatcher>();
