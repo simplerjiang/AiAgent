@@ -267,6 +267,7 @@ app.MapPost("/api/rag/search", async (
         request.Symbol,
         request.ReportDate,
         request.ReportType,
+        request.SourceType,
         topK,
         ct);
 

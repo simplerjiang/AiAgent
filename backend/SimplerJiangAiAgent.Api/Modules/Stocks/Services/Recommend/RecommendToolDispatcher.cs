@@ -150,6 +150,13 @@ public sealed class RecommendToolDispatcher : IRecommendToolDispatcher
                         GetInt(args, "top_k", 5),
                         ct)) is var ragText && !string.IsNullOrEmpty(ragText) ? ragText : "[]",
 
+                "announcement_rag" => RagContextEnricher.FormatAsContext(
+                    await _gateway.SearchAnnouncementRagAsync(
+                        GetRequiredSymbol(args),
+                        GetRequired(args, "query"),
+                        GetInt(args, "top_k", 5),
+                        ct), "公告") is var annRagText && !string.IsNullOrEmpty(annRagText) ? annRagText : "[]",
+
                 _ => JsonSerializer.Serialize(new { tool_error = true, error = $"未知工具: {toolName}" }, JsonOpts)
             };
 

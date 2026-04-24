@@ -249,7 +249,7 @@ public class RagDbContext : IDisposable
     /// Returns chunks sorted by descending similarity.
     /// </summary>
     public List<(string ChunkId, double Similarity)> SearchByVector(float[] queryEmbedding, int topK = 5,
-        string? symbol = null, string? reportDate = null, string? reportType = null)
+        string? symbol = null, string? reportDate = null, string? reportType = null, string? sourceType = null)
     {
         using var conn = new SqliteConnection(_connectionString);
         conn.Open();
@@ -266,6 +266,8 @@ public class RagDbContext : IDisposable
             sql.Append(" AND c.report_date = $reportDate");
         if (!string.IsNullOrEmpty(reportType))
             sql.Append(" AND c.report_type = $reportType");
+        if (!string.IsNullOrEmpty(sourceType))
+            sql.Append(" AND c.source_type = $sourceType");
 
         using var cmd = conn.CreateCommand();
         cmd.CommandText = sql.ToString();
@@ -275,6 +277,8 @@ public class RagDbContext : IDisposable
             cmd.Parameters.AddWithValue("$reportDate", reportDate);
         if (!string.IsNullOrEmpty(reportType))
             cmd.Parameters.AddWithValue("$reportType", reportType);
+        if (!string.IsNullOrEmpty(sourceType))
+            cmd.Parameters.AddWithValue("$sourceType", sourceType);
 
         var candidates = new List<(string ChunkId, float[] Embedding)>();
         using var reader = cmd.ExecuteReader();

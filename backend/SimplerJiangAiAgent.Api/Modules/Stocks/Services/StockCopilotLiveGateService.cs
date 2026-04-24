@@ -776,6 +776,7 @@ public sealed class StockCopilotLiveGateService : IStockCopilotLiveGateService
                     await _mcpToolGateway.GetFinancialTrendAsync(symbol, ParseInt(input, "periods", 8), toolTaskId, cancellationToken),
                     envelope => $"财务趋势: {envelope.Data?.PeriodCount ?? 0}期"),
                 StockMcpToolNames.FinancialReportRag => await ExecuteRagToolAsync(approvedCall, symbol, input.GetValueOrDefault("query", question), toolTaskId, cancellationToken),
+                StockMcpToolNames.AnnouncementRag => await ExecuteAnnouncementRagToolAsync(approvedCall, symbol, input.GetValueOrDefault("query", question), toolTaskId, cancellationToken),
                 _ => BuildFailedOutcome(approvedCall, $"暂不支持工具 {approvedCall.Registration.ToolName} 的 live gate 执行。")
             };
         }
@@ -924,6 +925,85 @@ public sealed class StockCopilotLiveGateService : IStockCopilotLiveGateService
             Tags: Array.Empty<string>())).ToList();
 
         var summary = $"财报RAG: 找到{citations.Count}条相关证据";
+        var toolResult = new StockCopilotToolResultDto(
+            approvedCall.CallId,
+            approvedCall.Registration.ToolName,
+            "completed",
+            taskId,
+            evidence.Count,
+            0,
+            Array.Empty<string>(),
+            Array.Empty<string>(),
+            evidence,
+            summary);
+
+        var executionMetric = new StockCopilotToolExecutionMetricDto(
+            approvedCall.CallId,
+            approvedCall.Registration.ToolName,
+            approvedCall.Registration.PolicyClass,
+            sw.ElapsedMilliseconds,
+            evidence.Count,
+            0,
+            Array.Empty<string>(),
+            Array.Empty<string>());
+
+        return new ToolExecutionOutcome(toolResult, executionMetric);
+    }
+
+    private async Task<ToolExecutionOutcome> ExecuteAnnouncementRagToolAsync(
+        ApprovedToolCall approvedCall, string symbol, string question,
+        string taskId, CancellationToken ct)
+    {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var citations = await _mcpToolGateway.SearchAnnouncementRagAsync(symbol, question, 5, ct);
+        sw.Stop();
+
+        if (citations.Count == 0)
+        {
+            var degradedWarnings = new[] { "公告RAG暂无数据" };
+            var degradedResult = new StockCopilotToolResultDto(
+                approvedCall.CallId,
+                approvedCall.Registration.ToolName,
+                "completed",
+                null,
+                0,
+                0,
+                degradedWarnings,
+                Array.Empty<string>(),
+                Array.Empty<StockCopilotMcpEvidenceDto>(),
+                "公告RAG: 暂无数据");
+            var degradedMetric = new StockCopilotToolExecutionMetricDto(
+                approvedCall.CallId,
+                approvedCall.Registration.ToolName,
+                approvedCall.Registration.PolicyClass,
+                sw.ElapsedMilliseconds,
+                0,
+                0,
+                degradedWarnings,
+                Array.Empty<string>());
+            return new ToolExecutionOutcome(degradedResult, degradedMetric);
+        }
+
+        var evidence = citations.Select(c => new StockCopilotMcpEvidenceDto(
+            Point: c.Text.Length > 200 ? c.Text[..200] + "…" : c.Text,
+            Title: $"{c.ReportDate} {c.Section ?? c.BlockKind}",
+            Source: c.Source,
+            PublishedAt: null,
+            CrawledAt: null,
+            Url: null,
+            Excerpt: c.Text.Length > 300 ? c.Text[..300] : c.Text,
+            Summary: null,
+            ReadMode: "rag",
+            ReadStatus: "ok",
+            IngestedAt: null,
+            LocalFactId: null,
+            SourceRecordId: c.ChunkId,
+            Level: null,
+            Sentiment: null,
+            Target: symbol,
+            Tags: Array.Empty<string>())).ToList();
+
+        var summary = $"公告RAG: 找到{citations.Count}条相关证据";
         var toolResult = new StockCopilotToolResultDto(
             approvedCall.CallId,
             approvedCall.Registration.ToolName,
