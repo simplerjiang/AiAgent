@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import FinancialFilterBar from './FinancialFilterBar.vue'
 import FinancialReportTable from './FinancialReportTable.vue'
 import FinancialDetailDrawer from './FinancialDetailDrawer.vue'
+import FinancialCollectPanel from './FinancialCollectPanel.vue'
 import { useFinancialCenterQuery } from './useFinancialCenterQuery.js'
 import { DEFAULT_QUERY } from './financialCenterConstants.js'
 
@@ -21,6 +22,7 @@ const {
 
 const drawerVisible = ref(false)
 const drawerItem = ref(null)
+const collectPanelOpen = ref(false)
 
 const collectTabAvailable = computed(() => {
   if (typeof window === 'undefined') return false
@@ -88,6 +90,10 @@ const onGoCollect = () => {
   // 兼容：直接用 URL hashless query 触发也无意义；这里采用 emit 风格事件
 }
 
+function handleCollectSuccess() {
+  fetchReports()
+}
+
 const hasFilter = computed(() => {
   if (query.symbols.length > 0) return true
   if (query.keyword && query.keyword.trim()) return true
@@ -120,12 +126,14 @@ onMounted(() => {
         >刷新</button>
         <button
           type="button"
-          class="fc-btn fc-btn--primary"
-          :disabled="!collectTabAvailable"
-          @click="collectTabAvailable && onGoCollect()"
-        >前往采集面板</button>
+          class="fc-btn"
+          :class="collectPanelOpen ? 'fc-btn--active' : 'fc-btn--primary'"
+          @click="collectPanelOpen = !collectPanelOpen"
+        >{{ collectPanelOpen ? '▼ 收起采集' : '▶ 采集' }}</button>
       </div>
     </header>
+
+    <FinancialCollectPanel v-if="collectPanelOpen" @collect-success="handleCollectSuccess" />
 
     <FinancialFilterBar
       :query="query"
@@ -238,5 +246,15 @@ onMounted(() => {
 .fc-btn:disabled {
   cursor: not-allowed;
   opacity: 0.5;
+}
+
+.fc-btn--active {
+  background: var(--color-bg-surface-alt, #2a3a4a);
+  color: var(--color-text-body);
+  border-color: var(--color-accent, #3b82f6);
+}
+
+.fc-btn--active:hover {
+  background: var(--color-bg-surface, #1e2a3a);
 }
 </style>
