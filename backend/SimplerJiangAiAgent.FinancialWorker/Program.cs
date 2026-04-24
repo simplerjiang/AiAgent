@@ -243,6 +243,32 @@ app.MapGet("/api/embedding/status", (RagDbContext ragDb, IEmbedder embedder) =>
     });
 });
 
+// v0.4.7: Embedding backfill — fill missing embeddings for all chunks
+app.MapPost("/api/embedding/backfill", async (RagDbContext ragDb, IEmbedder embedder, CancellationToken ct) =>
+{
+    if (!embedder.IsAvailable)
+        return Results.Ok(new { filled = 0, message = "Embedder not available (Ollama offline or model missing)" });
+
+    var missing = ragDb.GetChunkIdsWithoutEmbedding(500);
+    if (missing.Count == 0)
+        return Results.Ok(new { filled = 0, message = "All chunks already have embeddings" });
+
+    var filled = 0;
+    foreach (var (chunkId, text) in missing)
+    {
+        ct.ThrowIfCancellationRequested();
+        var embedding = await embedder.EmbedAsync(text, ct);
+        if (embedding != null)
+        {
+            ragDb.UpsertEmbedding(chunkId, embedding, "ollama");
+            filled++;
+        }
+    }
+
+    return Results.Ok(new { filled, total = missing.Count });
+})
+.WithName("EmbeddingBackfill");
+
 // v0.4.2 S6: RAG search endpoint
 app.MapPost("/api/rag/search", async (
     RagSearchRequest request,

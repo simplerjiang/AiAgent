@@ -20,15 +20,18 @@ public class AnnouncementPdfProcessor
 
     private readonly RagDbContext _ragDb;
     private readonly IChineseTokenizer _tokenizer;
+    private readonly IEmbedder _embedder;
     private readonly ILogger<AnnouncementPdfProcessor> _logger;
 
     public AnnouncementPdfProcessor(
         RagDbContext ragDb,
         IChineseTokenizer tokenizer,
+        IEmbedder embedder,
         ILogger<AnnouncementPdfProcessor> logger)
     {
         _ragDb = ragDb;
         _tokenizer = tokenizer;
+        _embedder = embedder;
         _logger = logger;
     }
 
@@ -63,14 +66,14 @@ public class AnnouncementPdfProcessor
         return totalChunks;
     }
 
-    private Task<int> ProcessSingleAsync(DownloadedAnnouncementPdf pdf, CancellationToken ct)
+    private async Task<int> ProcessSingleAsync(DownloadedAnnouncementPdf pdf, CancellationToken ct)
     {
         // 去重：检查该 art_code 是否已入库
         var existing = _ragDb.CountChunks(pdf.ArtCode);
         if (existing > 0)
         {
             _logger.LogDebug("[AnnPdf] 跳过已入库: {ArtCode} ({Existing} chunks)", pdf.ArtCode, existing);
-            return Task.FromResult(0);
+            return 0;
         }
 
         // 提取文本
@@ -78,7 +81,7 @@ public class AnnouncementPdfProcessor
         if (string.IsNullOrWhiteSpace(text))
         {
             _logger.LogWarning("[AnnPdf] 提取文本为空: {ArtCode} {File}", pdf.ArtCode, pdf.FilePath);
-            return Task.FromResult(0);
+            return 0;
         }
 
         // 切块
@@ -116,14 +119,42 @@ public class AnnouncementPdfProcessor
         }
 
         if (chunks.Count == 0)
-            return Task.FromResult(0);
+            return 0;
 
         // 批量写入
         _ragDb.InsertChunks(chunks);
         _logger.LogInformation("[AnnPdf] 入库: {ArtCode} \"{Title}\" → {Count} chunks",
             pdf.ArtCode, pdf.Title, chunks.Count);
 
-        return Task.FromResult(chunks.Count);
+        // 生成 embedding（如果可用）
+        if (_embedder.IsAvailable)
+        {
+            try
+            {
+                var embeddings = new List<(string ChunkId, float[] Embedding, string ModelName)>();
+                foreach (var chunk in chunks)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    var embedding = await _embedder.EmbedAsync(chunk.Text, ct);
+                    if (embedding != null)
+                    {
+                        embeddings.Add((chunk.ChunkId, embedding, "ollama"));
+                    }
+                }
+                if (embeddings.Count > 0)
+                {
+                    _ragDb.UpsertEmbeddings(embeddings);
+                    _logger.LogInformation("[AnnPdf] 已生成向量: {ArtCode} → {Count} embeddings",
+                        pdf.ArtCode, embeddings.Count);
+                }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogWarning(ex, "[AnnPdf] 向量生成失败（不影响 BM25 索引）: {ArtCode}", pdf.ArtCode);
+            }
+        }
+
+        return chunks.Count;
     }
 
     /// <summary>使用 PdfPig 提取 PDF 全文</summary>

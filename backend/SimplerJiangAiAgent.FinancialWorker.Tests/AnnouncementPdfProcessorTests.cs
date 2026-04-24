@@ -132,6 +132,7 @@ public class AnnouncementPdfProcessorTests : IDisposable
         var processor = new AnnouncementPdfProcessor(
             _ragDb,
             new JiebaTokenizer(),
+            new NoOpEmbedder(),
             NullLogger<AnnouncementPdfProcessor>.Instance);
 
         var pdfs = new List<DownloadedAnnouncementPdf>
