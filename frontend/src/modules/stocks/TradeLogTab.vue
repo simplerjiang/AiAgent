@@ -88,6 +88,7 @@ const state = reactive({
   tradeFormContext: null,
   tradeFormContextLoading: false,
   tradeFormContextError: '',
+  tradeFormSymbolMismatch: '',
 
   selectedPlanContext: null,
   feedbackPlanRuntimeContext: null,
@@ -358,13 +359,15 @@ const exposureBarWidth = computed(() => `${Math.min(100, Math.max(0, (state.expo
 const exposureBarClass = computed(() => (state.exposure?.combinedExposure ?? 0) > 0.8 ? 'bar-danger' : (state.exposure?.combinedExposure ?? 0) > 0.5 ? 'bar-warning' : 'bar-safe')
 const exposureBadgeClass = computed(() => (state.exposure?.combinedExposure ?? 0) > 0.8 ? 'badge-danger' : (state.exposure?.combinedExposure ?? 0) > 0.5 ? 'badge-warning' : 'badge-success')
 const disciplineScoreClass = computed(() => {
-  const s = state.behaviorStats?.disciplineScore ?? 100
+  const s = state.behaviorStats?.disciplineScore
+  if (s == null) return 'score-neutral'
   if (s >= 80) return 'score-good'
   if (s >= 60) return 'score-warn'
   return 'score-danger'
 })
 const planRateClass = computed(() => {
-  const r = state.behaviorStats?.planExecutionRate ?? 1
+  const r = state.behaviorStats?.planExecutionRate
+  if (r == null) return ''
   if (r >= 0.8) return 'text-rise'
   if (r >= 0.5) return ''
   return 'text-fall'
@@ -659,8 +662,74 @@ function onSymbolInput(e) {
 function selectStock(item) {
   state.tradeForm.symbol = item.Symbol || item.symbol
   state.tradeForm.name = item.Name || item.name
+  state.tradeFormSymbolMismatch = ''
   searchOpen.value = false
   searchResults.value = []
+}
+
+// V048-S1 #92: 代码框 blur 时查询 search API，填充/校验名称
+async function lookupStockBySymbol(symbol) {
+  if (!symbol) return null
+  try {
+    const res = await fetchBackendGet(`/api/stocks/search?q=${encodeURIComponent(symbol)}`)
+    if (!res.ok) return null
+    const list = await res.json()
+    if (!Array.isArray(list) || list.length === 0) return null
+    // 精确代码匹配优先
+    const normSymbol = String(symbol).toLowerCase()
+    const exact = list.find(x => {
+      const s = String(x.Symbol || x.symbol || '').toLowerCase()
+      const c = String(x.Code || x.code || '').toLowerCase()
+      return s === normSymbol || c === normSymbol || s.endsWith(normSymbol) || c.endsWith(normSymbol)
+    })
+    return exact || list[0]
+  } catch {
+    return null
+  }
+}
+
+async function onSymbolBlur() {
+  const symbol = (state.tradeForm.symbol || '').trim()
+  if (!symbol) {
+    state.tradeFormSymbolMismatch = ''
+    return
+  }
+  const hit = await lookupStockBySymbol(symbol)
+  if (!hit) {
+    state.tradeFormSymbolMismatch = ''
+    return
+  }
+  const hitName = hit.Name || hit.name || ''
+  const hitSymbol = hit.Symbol || hit.symbol || ''
+  // 名称为空 → 自动补齐
+  if (!state.tradeForm.name && hitName) {
+    state.tradeForm.name = hitName
+    state.tradeFormSymbolMismatch = ''
+    return
+  }
+  // 名称存在但不一致 → 提示
+  if (hitName && state.tradeForm.name && state.tradeForm.name.trim() !== hitName.trim()) {
+    state.tradeFormSymbolMismatch = `${hitSymbol} 应为「${hitName}」，当前名称「${state.tradeForm.name}」`
+  } else {
+    state.tradeFormSymbolMismatch = ''
+  }
+}
+
+async function onNameBlur() {
+  // 名称改动后若与代码不一致也提示
+  const symbol = (state.tradeForm.symbol || '').trim()
+  const name = (state.tradeForm.name || '').trim()
+  if (!symbol || !name) {
+    state.tradeFormSymbolMismatch = ''
+    return
+  }
+  const hit = await lookupStockBySymbol(symbol)
+  const hitName = (hit?.Name || hit?.name || '').trim()
+  if (hitName && hitName !== name) {
+    state.tradeFormSymbolMismatch = `${symbol} 应为「${hitName}」，当前名称「${name}」`
+  } else {
+    state.tradeFormSymbolMismatch = ''
+  }
 }
 
 async function loadPortfolioSnapshot() {
@@ -873,6 +942,15 @@ function viewPlanStock(plan) {
   window.dispatchEvent(new CustomEvent('navigate-stock', {
     detail: { symbol: plan.symbol, name: plan.name }
   }))
+}
+
+// V048-S1 #91: 持仓总览点击行跳股票信息（手册 F 场景）
+function navigateToStockInfo(position) {
+  if (!position?.symbol) return
+  window.dispatchEvent(new CustomEvent('navigate-stock', {
+    detail: { symbol: position.symbol, name: position.name }
+  }))
+  toast.info(`已跳转到 ${position.name || position.symbol} 股票信息`)
 }
 
 function recordTradeFromWorkspace(plan) {
@@ -1107,6 +1185,7 @@ function openQuickEntry() {
   }
   state.tradeFormContext = null
   state.tradeFormContextError = ''
+  state.tradeFormSymbolMismatch = ''
   resetTradeForm()
   state.tradeForm.executedAt = nowLocalString()
   state.tradeForm.executionAction = '买入执行'
@@ -1308,7 +1387,15 @@ onUnmounted(() => {
         <div class="position-bar-fill" :style="{ width: positionBarWidth }" :class="positionBarClass"></div>
       </div>
       <div class="position-list" v-if="state.snapshot.positions?.length">
-        <div class="position-item" v-for="p in state.snapshot.positions" :key="p.symbol">
+        <div class="position-item position-item-clickable"
+             v-for="p in state.snapshot.positions"
+             :key="p.symbol"
+             role="button"
+             tabindex="0"
+             :title="`点击查看 ${p.name || p.symbol} 股票信息`"
+             @click="navigateToStockInfo(p)"
+             @keydown.enter.prevent="navigateToStockInfo(p)"
+             @keydown.space.prevent="navigateToStockInfo(p)">
           <span class="position-symbol">{{ p.name || p.symbol }}</span>
           <span>{{ p.quantity }}股</span>
           <span>成本 {{ p.averageCost?.toFixed(2) }}</span>
@@ -1364,7 +1451,7 @@ onUnmounted(() => {
       <div class="behavior-header">
         <h4>🧘 交易健康度</h4>
         <span class="discipline-score" :class="disciplineScoreClass" title="满分100分。计划执行率<50%扣20分；连亏≥3笔扣15分；过度交易扣15分；追涨率>50%扣20分">
-          {{ state.behaviorStats.disciplineScore }} 分
+          {{ state.behaviorStats.disciplineScore == null ? 'N/A' : state.behaviorStats.disciplineScore + ' 分' }}
         </span>
       </div>
       <div class="behavior-metrics">
@@ -1375,7 +1462,7 @@ onUnmounted(() => {
         <div class="behavior-metric">
           <span class="metric-label" title="有关联计划的交易占总交易的比例，越高越好">计划执行率</span>
           <span class="metric-value" :class="planRateClass">
-            {{ formatPercent(state.behaviorStats.planExecutionRate) }}
+            {{ state.behaviorStats.planExecutionRate == null ? 'N/A' : formatPercent(state.behaviorStats.planExecutionRate) }}
           </span>
         </div>
         <div class="behavior-metric">
@@ -1782,6 +1869,7 @@ onUnmounted(() => {
                      data-testid="trade-symbol"
                      :value="state.tradeForm.symbol"
                      @input="onSymbolInput"
+                     @blur="onSymbolBlur"
                      @focus="state.tradeForm.symbol && searchStocks(state.tradeForm.symbol)"
                      placeholder="输入代码/名称/拼音"
                      required
@@ -1796,10 +1884,13 @@ onUnmounted(() => {
                   <span style="color: var(--color-text-secondary);">{{ item.Code || item.code }}</span>
                 </div>
               </div>
+              <div v-if="state.tradeFormSymbolMismatch" class="text-warning" data-testid="trade-symbol-mismatch" style="font-size:12px;margin-top:4px;">
+                ⚠ 代码与名称不一致，请确认：{{ state.tradeFormSymbolMismatch }}
+              </div>
             </div>
             <div v-if="!showReadonlyTradeIdentity" class="form-group">
               <label>股票名称</label>
-              <input class="input input-sm" data-testid="trade-name" v-model="state.tradeForm.name" required :disabled="!!state.editingTradeId" />
+              <input class="input input-sm" data-testid="trade-name" v-model="state.tradeForm.name" @blur="onNameBlur" required :disabled="!!state.editingTradeId" />
             </div>
             <div v-if="!showReadonlyTradeIdentity" class="form-group">
               <label>方向</label>
@@ -2203,6 +2294,15 @@ onUnmounted(() => {
   border-bottom: 1px solid var(--color-border-light);
 }
 .position-item:last-child { border-bottom: none; }
+.position-item-clickable {
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+.position-item-clickable:hover,
+.position-item-clickable:focus {
+  background-color: var(--color-bg-hover, rgba(0,0,0,0.04));
+  outline: none;
+}
 .position-symbol {
   font-weight: 600;
   min-width: 120px;

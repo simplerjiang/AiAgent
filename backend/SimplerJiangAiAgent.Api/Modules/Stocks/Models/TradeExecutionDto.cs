@@ -242,13 +242,13 @@ public sealed record TradeBehaviorStatsDto(
     decimal AvgDailyTrades30Days,
     int PlannedTrades30Days,
     int TotalTrades30Days,
-    decimal PlanExecutionRate,
+    decimal? PlanExecutionRate,
     int CurrentLossStreak,
     int MaxLossStreak30Days,
     int ChasingBuyCount30Days,
     decimal ChasingBuyRate,
     bool IsOverTrading,
-    int DisciplineScore,
+    int? DisciplineScore,
     IReadOnlyList<BehaviorAlertDto> ActiveAlerts
 );
 

@@ -1799,6 +1799,9 @@ public sealed class StocksModule : IModule
             if (string.IsNullOrWhiteSpace(request.Symbol))
                 return Results.BadRequest(new { message = "symbol 不能为空" });
 
+            // V048-S1 #88: TotalCost 必须等于 avgCost × qty，避免持仓账务公式崩塌
+            var totalCost = decimal.Round(request.AverageCostPrice * request.QuantityLots, 2, MidpointRounding.AwayFromZero);
+
             var pos = await db.StockPositions
                 .FirstOrDefaultAsync(p => p.Symbol == request.Symbol, ct);
             if (pos is null)
@@ -1808,6 +1811,7 @@ public sealed class StocksModule : IModule
                     Symbol = request.Symbol,
                     QuantityLots = request.QuantityLots,
                     AverageCostPrice = request.AverageCostPrice,
+                    TotalCost = totalCost,
                     Notes = request.Notes,
                     UpdatedAt = DateTime.UtcNow
                 };
@@ -1817,11 +1821,12 @@ public sealed class StocksModule : IModule
             {
                 pos.QuantityLots = request.QuantityLots;
                 pos.AverageCostPrice = request.AverageCostPrice;
+                pos.TotalCost = totalCost;
                 pos.Notes = request.Notes;
                 pos.UpdatedAt = DateTime.UtcNow;
             }
             await db.SaveChangesAsync(ct);
-            return Results.Ok(new { pos.Symbol, pos.QuantityLots, pos.AverageCostPrice, pos.Notes });
+            return Results.Ok(new { pos.Symbol, pos.QuantityLots, pos.AverageCostPrice, pos.TotalCost, pos.Notes });
         })
         .WithName("UpsertStockPosition")
         .WithOpenApi();
