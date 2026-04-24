@@ -765,6 +765,18 @@
 | FTS5 特殊字符返回 500 | 🔴 | query sanitization 未生效 |
 | 降级后 mode 字段仍显示 hybrid | 🟡 | 返回 DTO 未反映实际检索模式 |
 
+## v0.4.6 多 Agent 路由与财报 RAG 闭环
+
+| # | 场景 | 验收标准 |
+|---|------|----------|
+| 1 | 意图分类 | 输入"这个股票贵不贵"，系统分类为 Valuation 意图，confidence ≥ 0.8 |
+| 2 | 路由决策 | Valuation 意图路由到 Research 管道，RequiresRag=true |
+| 3 | RAG 工具注册 | FundamentalsAnalyst/CompanyOverviewAnalyst 工具列表包含 FinancialReportRag |
+| 4 | Recommend RAG | LeaderPicker/GrowthPicker 工具列表包含 financial_report_rag |
+| 5 | Evidence Pack | EvidencePackBuilder 并行获取 RAG+财务指标+本地新闻 |
+| 6 | 估值强制取证 | LiveGate 估值问题注入证据上下文，无证据时显示降级提示 |
+| 7 | 结论格式 | 估值/风险/财报问题输出包含结论/依据/假设/引用来源四段式 |
+
 ## 快速执行清单
 
 - [ ] 已确认主后端可用，且不是半准备环境。

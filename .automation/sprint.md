@@ -43,15 +43,15 @@
 
 | Story | 标题 | 分级 | 验收标准 | 状态 |
 |---|---|---|---|---|
-| S0 | 问题意图分类器 | M | 10 个测试问题 ≥ 80% 正确分类 | TODO |
-| S1 | 路由决策表 | M | 路由覆盖所有意图类型 | TODO |
-| S2 | 注册财报 RAG 为 MCP 工具 | M | 子角色工具列表包含 SearchFinancialReport | TODO |
-| S3 | Research 子角色接入 RAG | M | Research 报告包含财报引用 | TODO |
-| S4 | Recommend 子流程接入 RAG | M | 推荐报告含财报 citation | TODO |
-| S5 | Evidence Pack 统一组装 | M | 3 条链路证据来源一致 | TODO |
-| S6 | 估值问题强制取证 | M | 估值回答含 ≥1 条财报引用 | TODO |
-| S7 | 结论格式标准化 | S | 输出含结论/依据/假设/引用 4 字段 | TODO |
-| S8 | 全链路验收 | S | tests 全绿 + 5 个 E2E 问题验证 | TODO |
+| S0 | 问题意图分类器 | M | 10 个测试问题 ≥ 80% 正确分类 | DONE |
+| S1 | 路由决策表 | M | 路由覆盖所有意图类型 | DONE |
+| S2 | 注册财报 RAG 为 MCP 工具 | M | 子角色工具列表包含 SearchFinancialReport | DONE |
+| S3 | Research 子角色接入 RAG | M | Research 报告包含财报引用 | DONE |
+| S4 | Recommend 子流程接入 RAG | M | 推荐报告含财报 citation | DONE |
+| S5 | Evidence Pack 统一组装 | M | 3 条链路证据来源一致 | DONE |
+| S6 | 估值问题强制取证 | M | 估值回答含 ≥1 条财报引用 | DONE |
+| S7 | 结论格式标准化 | S | 输出含结论/依据/假设/引用 4 字段 | DONE |
+| S8 | 全链路验收 | S | tests 全绿 + 5 个 E2E 问题验证 | DONE |
 
 ---
 
