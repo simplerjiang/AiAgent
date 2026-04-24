@@ -4,6 +4,7 @@ using SimplerJiangAiAgent.Api.Data;
 using SimplerJiangAiAgent.Api.Data.Entities;
 using SimplerJiangAiAgent.Api.Infrastructure.Llm;
 using SimplerJiangAiAgent.Api.Infrastructure.Logging;
+using Models = SimplerJiangAiAgent.Api.Modules.Stocks.Models;
 
 namespace SimplerJiangAiAgent.Api.Modules.Stocks.Services;
 
@@ -618,6 +619,16 @@ public sealed class ResearchRunner : IResearchRunner
             if (r.Status == ResearchRoleStatus.Failed) failed = true;
             if (r.Status == ResearchRoleStatus.Degraded) degradedFlags.AddRange(r.DegradedFlags);
             if (r.OutputContentJson is not null) outputs.Add($"[{r.RoleId}]\n{r.OutputContentJson}");
+
+            // Collect RAG citations from role results
+            if (r.RagCitations is { Count: > 0 })
+            {
+                var existing = turn.RagCitationsJson is not null
+                    ? JsonSerializer.Deserialize<List<Models.RagCitationDto>>(turn.RagCitationsJson) ?? new()
+                    : new List<Models.RagCitationDto>();
+                existing.AddRange(r.RagCitations);
+                turn.RagCitationsJson = JsonSerializer.Serialize(existing);
+            }
         }
         await _dbContext.SaveChangesAsync(cancellationToken);
 
@@ -654,6 +665,17 @@ public sealed class ResearchRunner : IResearchRunner
         roleState.ErrorCode = result.ErrorCode;
         roleState.ErrorMessage = result.ErrorMessage;
         roleState.CompletedAt = DateTime.UtcNow;
+
+        // Collect RAG citations from role results
+        if (result.RagCitations is { Count: > 0 })
+        {
+            var existing = turn.RagCitationsJson is not null
+                ? JsonSerializer.Deserialize<List<Models.RagCitationDto>>(turn.RagCitationsJson) ?? new()
+                : new List<Models.RagCitationDto>();
+            existing.AddRange(result.RagCitations);
+            turn.RagCitationsJson = JsonSerializer.Serialize(existing);
+        }
+
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         return result;
