@@ -83,6 +83,7 @@ builder.Services.AddHttpClient<AnnouncementPdfCollector>(client =>
     client.DefaultRequestHeaders.Add("Accept", "*/*");
     client.Timeout = TimeSpan.FromSeconds(60);
 });
+builder.Services.AddSingleton<AnnouncementPdfProcessor>();
 
 builder.Services.AddSingleton<IPdfTextExtractor, DocnetExtractor>();
 builder.Services.AddSingleton<IPdfTextExtractor, PdfPigExtractor>();
@@ -152,11 +153,14 @@ app.MapPost("/api/pdf-collect/{symbol}", async (string symbol, PdfProcessingPipe
 })
 .WithName("PdfCollect");
 
-// v0.4.7 S2: 东方财富公告 PDF 采集
-app.MapPost("/api/announcement-pdf-collect/{symbol}", async (string symbol, AnnouncementPdfCollector collector, CancellationToken ct) =>
+// v0.4.7 S2+S3: 东方财富公告 PDF 采集 + RAG 入库
+app.MapPost("/api/announcement-pdf-collect/{symbol}", async (string symbol, AnnouncementPdfCollector collector, AnnouncementPdfProcessor processor, CancellationToken ct) =>
 {
-    var result = await collector.CollectAsync(symbol, 10, ct);
-    return Results.Ok(new { downloaded = result.Count, files = result });
+    var downloaded = await collector.CollectAsync(symbol, 10, ct);
+    var chunksIndexed = downloaded.Count > 0
+        ? await processor.ProcessAsync(downloaded, ct)
+        : 0;
+    return Results.Ok(new { downloaded = downloaded.Count, chunksIndexed, files = downloaded });
 })
 .WithName("AnnouncementPdfCollect");
 
