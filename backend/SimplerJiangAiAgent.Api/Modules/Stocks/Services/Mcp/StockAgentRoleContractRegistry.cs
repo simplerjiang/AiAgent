@@ -60,7 +60,7 @@ public sealed class StockAgentRoleContractRegistry : IStockAgentRoleContractRegi
             "Company Overview Analyst",
             "analyst",
             "local_required",
-            [StockMcpToolNames.CompanyOverview, StockMcpToolNames.MarketContext, StockMcpToolNames.News, StockMcpToolNames.Search],
+            [StockMcpToolNames.CompanyOverview, StockMcpToolNames.FinancialReportRag, StockMcpToolNames.MarketContext, StockMcpToolNames.News, StockMcpToolNames.Search],
             "必须先完成 CompanyOverviewMcp 的本地公司识别；只有本地主营描述或别名字段仍不足时，才允许在 governor 批准后使用 StockSearchMcp 做受控补充。",
             "若 symbol 解析失败、CompanyOverviewMcp 不可用或关键公司字段为空，则停止 analyst fan-out。",
             2,

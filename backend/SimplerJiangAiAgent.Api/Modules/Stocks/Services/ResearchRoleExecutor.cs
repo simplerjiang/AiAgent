@@ -770,11 +770,29 @@ public sealed class ResearchRoleExecutor : IResearchRoleExecutor
 
         if (localToolResults.Count > 0)
         {
-            sb.AppendLine("\n## 本地工具数据:");
-            foreach (var r in localToolResults)
+            // Place RAG evidence prominently before other tool results
+            var ragTag = $"[{StockMcpToolNames.FinancialReportRag}]";
+            var ragResults = localToolResults.Where(r => r.StartsWith(ragTag, StringComparison.Ordinal)).ToList();
+            var otherResults = localToolResults.Where(r => !r.StartsWith(ragTag, StringComparison.Ordinal)).ToList();
+
+            if (ragResults.Count > 0)
             {
-                sb.AppendLine(r);
-                sb.AppendLine("---");
+                sb.AppendLine("\n## === 财报 RAG 证据 ===");
+                foreach (var r in ragResults)
+                {
+                    sb.AppendLine(r);
+                    sb.AppendLine("---");
+                }
+            }
+
+            if (otherResults.Count > 0)
+            {
+                sb.AppendLine("\n## 本地工具数据:");
+                foreach (var r in otherResults)
+                {
+                    sb.AppendLine(r);
+                    sb.AppendLine("---");
+                }
             }
         }
 
