@@ -203,7 +203,7 @@ public class AnnouncementPdfCollector
         var dir = Path.Combine(_baseDir, symbol);
         Directory.CreateDirectory(dir);
 
-        var fileName = $"{ann.ArtCode}_{SanitizeFileName(ann.Title)}.pdf";
+        var fileName = $"{SanitizeFileName(ann.ArtCode)}_{SanitizeFileName(ann.Title)}.pdf";
         var filePath = Path.Combine(dir, fileName);
 
         // 已存在则跳过

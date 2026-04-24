@@ -770,17 +770,37 @@ public sealed class StocksModule : IModule
         .WithName("BackfillAllRetailHeat")
         .WithOpenApi();
 
-        group.MapPost("/{symbol}/retail-heat/refresh", async (
+        group.MapPost("/{symbol}/retail-heat/refresh", (
             string symbol,
             int? days,
-            IHistoricalBackfillService backfillService,
-            CancellationToken ct) =>
+            IBackfillStatusTracker backfillStatusTracker,
+            IServiceProvider serviceProvider) =>
         {
             if (string.IsNullOrWhiteSpace(symbol))
                 return Results.BadRequest(new { message = "symbol 不能为空" });
 
-            await backfillService.BackfillAsync(symbol, days ?? 90, ct);
-            return Results.Ok(new { message = $"Refresh completed for {symbol}" });
+            var normalizedSymbol = symbol.Trim();
+
+            if (backfillStatusTracker.IsBackfilling(normalizedSymbol))
+                return Results.Ok(new { message = "Already refreshing", symbol = normalizedSymbol, status = "in_progress" });
+
+            // Run in background — return immediately
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    using var scope = serviceProvider.CreateScope();
+                    var backfillService = scope.ServiceProvider.GetRequiredService<IHistoricalBackfillService>();
+                    await backfillService.BackfillAsync(normalizedSymbol, days ?? 30, CancellationToken.None);
+                }
+                catch (Exception ex)
+                {
+                    var logger = serviceProvider.GetService<ILoggerFactory>()?.CreateLogger("RetailHeatRefresh");
+                    logger?.LogWarning(ex, "Refresh failed: {Symbol}", normalizedSymbol);
+                }
+            });
+
+            return Results.Accepted(value: new { message = "Refresh started", symbol = normalizedSymbol, status = "started" });
         })
         .WithName("RefreshRetailHeat")
         .WithOpenApi();
