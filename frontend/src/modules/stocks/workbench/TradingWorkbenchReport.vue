@@ -3,11 +3,13 @@ import { computed } from 'vue'
 import DOMPurify from 'dompurify'
 import { marked } from 'marked'
 import { valueToSafeHtml, translateSignal } from '../../../utils/jsonMarkdownService.js'
+import RagCitationList from '../../financial/RagCitationList.vue'
 
 const props = defineProps({
   blocks: { type: Array, default: () => [] },
   decision: { type: Object, default: null },
   nextActions: { type: Array, default: () => [] },
+  ragCitations: { type: Array, default: () => [] },
   loading: { type: Boolean, default: false },
   error: { type: String, default: null }
 })
@@ -255,6 +257,13 @@ const evidenceLabel = ev => {
         </div>
       </div>
     </div>
+
+    <!-- RAG Citations -->
+    <RagCitationList
+      v-if="ragCitations.length > 0"
+      :citations="ragCitations"
+      :show-details="true"
+    />
 
     <!-- Empty state -->
     <div v-if="!loading && !props.error && blocks.length === 0 && !decision" class="wb-report-empty">
