@@ -70,14 +70,22 @@ public sealed class RecommendationRoleExecutor : IRecommendationRoleExecutor
 
     public async Task<RecommendRoleExecutionResult> ExecuteAsync(RecommendRoleExecutionContext context, CancellationToken ct = default)
     {
+        // V048-S2 #85: 在 RoleStarted 事件 DetailJson 中暴露工具上限和角色起点，供前端显示 ETA 与 N/M 工具进度
+        var startedContract = _contractRegistry.GetContract(context.RoleId);
         _eventBus.Publish(new RecommendEvent(
             RecommendEventType.RoleStarted, context.SessionId, context.TurnId,
             context.StageId, context.StageType, context.RoleId, null,
-            $"角色 {context.RoleId} 开始执行", null, DateTime.UtcNow));
+            $"角色 {context.RoleId} 开始执行",
+            JsonSerializer.Serialize(new
+            {
+                maxToolCalls = startedContract.MaxToolCalls,
+                startedAt = DateTime.UtcNow
+            }),
+            DateTime.UtcNow));
 
         try
         {
-            var contract = _contractRegistry.GetContract(context.RoleId);
+            var contract = startedContract;
             var prompt = BuildPrompt(contract, context);
 
             _sessionLogger?.LogRoleLlmRequest(context.SessionId, context.TurnId, context.RoleId,

@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 
 const props = defineProps({
   session: { type: Object, default: null },
@@ -8,6 +8,26 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['retry-from-stage'])
+
+// V048-S2 #85: 1s tick 让 elapsed 秒数自动刷新，给运行中角色显示 ETA 文案
+const nowMs = ref(Date.now())
+let tickHandle = null
+onMounted(() => {
+  tickHandle = setInterval(() => { nowMs.value = Date.now() }, 1000)
+})
+onUnmounted(() => {
+  if (tickHandle) { clearInterval(tickHandle); tickHandle = null }
+})
+
+// V048-S2 #85: 安全解析 SSE detailJson（可能为 null/字符串/对象）
+const parseEventDetail = (detail) => {
+  if (!detail) return null
+  if (typeof detail === 'object') return detail
+  if (typeof detail === 'string') {
+    try { return JSON.parse(detail) } catch { return null }
+  }
+  return null
+}
 
 const STAGES = [
   { index: 0, type: 'MarketScan', label: '市场扫描', roles: ['recommend_macro_analyst', 'recommend_sector_hunter', 'recommend_smart_money'] },
@@ -240,7 +260,16 @@ const liveRoleStatus = computed(() => {
   const status = {}
   for (const e of currentTurnEvents.value) {
     if (!e.roleId) continue
-    if (e.eventType === 'RoleStarted') status[e.roleId] = { status: 'Running', toolCalls: 0 }
+    if (e.eventType === 'RoleStarted') {
+      // V048-S2 #85: 解析 detailJson 中的 maxToolCalls / startedAt，给 ETA 文案使用
+      const meta = parseEventDetail(e.detailJson ?? e.DetailJson)
+      status[e.roleId] = {
+        status: 'Running',
+        toolCalls: 0,
+        maxToolCalls: meta?.maxToolCalls ?? null,
+        startedAt: meta?.startedAt ?? e.timestamp ?? e.Timestamp ?? null
+      }
+    }
     if (e.eventType === 'RoleCompleted') {
       if (!status[e.roleId]) status[e.roleId] = {}
       status[e.roleId].status = 'Completed'
@@ -337,6 +366,32 @@ const formatElapsed = ms => {
   return `${(ms / 1000).toFixed(1)}s`
 }
 
+// V048-S2 #85: 角色 ETA 警示文案
+// 触发条件：运行中且（已耗时 > 180s 或 工具用量 > 80%）
+const buildRoleEtaInfo = (info) => {
+  if (!info || info.status !== 'Running') return null
+  const startedAt = info.startedAt ? Date.parse(info.startedAt) : null
+  const elapsedSec = startedAt && Number.isFinite(startedAt)
+    ? Math.max(0, Math.floor((nowMs.value - startedAt) / 1000))
+    : null
+  const used = Number(info.toolCalls) || 0
+  const max = Number(info.maxToolCalls) || 0
+  const toolText = max > 0 ? `🔧 ${used}/${max}` : (used > 0 ? `🔧 ${used}` : '')
+  const elapsedText = elapsedSec != null ? `⏱️ ${elapsedSec}s` : ''
+  const overTime = elapsedSec != null && elapsedSec > 180
+  const overTool = max > 0 && used / max >= 0.8
+  const warn = overTime || overTool
+  return {
+    toolText,
+    elapsedText,
+    elapsedSec,
+    warn,
+    warnLabel: warn
+      ? (overTime && overTool ? '已超时且接近工具上限' : (overTime ? '运行超 3 分钟' : '工具使用接近上限'))
+      : ''
+  }
+}
+
 const truncateError = (msg) => {
   if (!msg) return ''
   return msg.length > 40 ? msg.slice(0, 40) + '...' : msg
@@ -384,12 +439,26 @@ const hasFailedStages = computed(() => firstFailedStageIndex.value !== null)
             :class="{ 'role-failed': getRoleInfo(stage, roleId).status === 'Failed' }">
             <span class="role-status-icon">{{ getRoleStatusIcon(getRoleInfo(stage, roleId).status) }}</span>
             <span class="role-name">{{ ROLE_LABELS[roleId] || roleId }}</span>
-            <span v-if="getRoleInfo(stage, roleId).toolCalls" class="role-tools">
-              🔧 {{ getRoleInfo(stage, roleId).toolCalls }}
-            </span>
-            <span v-if="getRoleInfo(stage, roleId).elapsed" class="role-elapsed">
-              {{ formatElapsed(getRoleInfo(stage, roleId).elapsed) }}
-            </span>
+            <template v-if="buildRoleEtaInfo(getRoleInfo(stage, roleId))">
+              <span v-if="buildRoleEtaInfo(getRoleInfo(stage, roleId)).toolText" class="role-tools">
+                {{ buildRoleEtaInfo(getRoleInfo(stage, roleId)).toolText }}
+              </span>
+              <span v-if="buildRoleEtaInfo(getRoleInfo(stage, roleId)).elapsedText" class="role-elapsed-live">
+                {{ buildRoleEtaInfo(getRoleInfo(stage, roleId)).elapsedText }}
+              </span>
+              <span v-if="buildRoleEtaInfo(getRoleInfo(stage, roleId)).warn" class="role-eta-warn"
+                :title="buildRoleEtaInfo(getRoleInfo(stage, roleId)).warnLabel">
+                ⚠️ {{ buildRoleEtaInfo(getRoleInfo(stage, roleId)).warnLabel }}
+              </span>
+            </template>
+            <template v-else>
+              <span v-if="getRoleInfo(stage, roleId).toolCalls" class="role-tools">
+                🔧 {{ getRoleInfo(stage, roleId).toolCalls }}
+              </span>
+              <span v-if="getRoleInfo(stage, roleId).elapsed" class="role-elapsed">
+                {{ formatElapsed(getRoleInfo(stage, roleId).elapsed) }}
+              </span>
+            </template>
             <span v-if="getRoleInfo(stage, roleId).status === 'Failed' && getRoleInfo(stage, roleId).errorMessage"
               class="role-error" :title="getRoleInfo(stage, roleId).errorMessage">
               {{ truncateError(getRoleInfo(stage, roleId).errorMessage) }}
@@ -448,6 +517,15 @@ const hasFailedStages = computed(() => firstFailedStageIndex.value !== null)
 .role-name { min-width: 6rem; }
 .role-tools { font-size: 0.8rem; color: var(--color-text-secondary); }
 .role-elapsed { margin-left: auto; font-size: 0.75rem; color: var(--color-text-secondary); }
+.role-elapsed-live { font-size: 0.75rem; color: var(--color-text-secondary); margin-left: auto; }
+.role-eta-warn {
+  font-size: 0.75rem;
+  color: #b45309;
+  background: #fef3c7;
+  padding: 0.05rem 0.4rem;
+  border-radius: 4px;
+  border: 1px solid #fcd34d;
+}
 .stage-retry-btn {
   margin-left: 0.5rem;
   padding: 0.15rem 0.5rem;

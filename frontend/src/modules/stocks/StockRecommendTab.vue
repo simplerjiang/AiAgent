@@ -383,6 +383,25 @@ const loadSessionHistory = async () => {
   }
 }
 
+// V048-S2 #82: mount 时检测左侧"运行中"会话，自动选中并续上 SSE
+const resumeRunningSessionIfAny = async () => {
+  await loadSessionHistory()
+  if (!componentAlive) return
+  const list = Array.isArray(sessionHistory.value) ? sessionHistory.value : []
+  const running = list.find(s => {
+    const status = s?.status ?? s?.Status
+    return status === 'Running'
+  })
+  if (!running) return
+  const id = running.id ?? running.Id
+  if (id == null) return
+  await loadSessionDetail(id)
+  if (!componentAlive) return
+  // 切到进度 Tab 让用户立刻看到正在跑的角色
+  activeTab.value = 'progress'
+  connectSse(id)
+}
+
 const loadSessionDetail = async (id) => {
   const loadToken = ++activeSessionLoadToken
   try {
@@ -923,7 +942,9 @@ onMounted(() => {
     isRunning.value = false
   }
   fetchMarketContext()
-  loadSessionHistory()
+  // V048-S2 #82: 切走再切回时自动检测运行中会话并续上 SSE，
+  // 避免推荐 Tab 默认空白、必须手点左侧条目才能恢复
+  void resumeRunningSessionIfAny()
 })
 
 onUnmounted(() => {

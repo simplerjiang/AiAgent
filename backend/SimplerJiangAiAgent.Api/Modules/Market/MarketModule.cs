@@ -52,6 +52,8 @@ public sealed class MarketModule : IModule
         services.AddScoped<ISectorRotationQueryService, SectorRotationQueryService>();
         services.AddScoped<IRealtimeMarketOverviewService, RealtimeMarketOverviewService>();
         services.AddScoped<IRealtimeSectorBoardService, RealtimeSectorBoardService>();
+        // V048-S2 #78: 单实例非阻塞门闸，并发 sync 立即返 409
+        services.AddSingleton<MarketSyncGate>();
         services.AddHostedService<SectorRotationWorker>();
     }
 
@@ -240,14 +242,33 @@ public sealed class MarketModule : IModule
         .WithName("GetMarketHealth")
         .WithDescription("数据源健康状态");
 
-        group.MapPost("/sync", async (ISectorRotationIngestionService ingestionService, HttpContext httpContext) =>
+        group.MapPost("/sync", async (ISectorRotationIngestionService ingestionService, MarketSyncGate gate, HttpContext httpContext) =>
         {
-            await ingestionService.SyncAsync(httpContext.RequestAborted);
-            return Results.Ok(new { synced = true, timestamp = DateTimeOffset.UtcNow });
+            // V048-S2 #78: 已在跑时立即返 409，不阻塞排队，避免并发请求 30s 全超时
+            if (!gate.TryEnter())
+            {
+                var elapsed = (int)Math.Max(1, (DateTimeOffset.UtcNow - gate.StartedAt).TotalSeconds);
+                return Results.Json(new
+                {
+                    status = "throttled",
+                    message = "市场数据同步正在进行中，请稍后重试",
+                    elapsedSeconds = elapsed,
+                    retryAfter = 30
+                }, statusCode: StatusCodes.Status409Conflict);
+            }
+
+            try
+            {
+                await ingestionService.SyncAsync(httpContext.RequestAborted);
+                return Results.Ok(new { synced = true, timestamp = DateTimeOffset.UtcNow });
+            }
+            finally
+            {
+                gate.Exit();
+            }
         })
         .WithName("TriggerMarketSync")
-        .WithOpenApi()
-        .RequireRateLimiting("MarketSync");
+        .WithOpenApi();
 
         group.MapGet("/audit", () =>
         {

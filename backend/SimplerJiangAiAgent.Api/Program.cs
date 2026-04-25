@@ -198,6 +198,14 @@ app.MapGet("/api/app/version", () => Results.Ok(new
 
 app.MapModules();
 
+// V048-S2 #71: /api/* 未命中应进入标准 404，而不是被 SPA fallback 吞成 index.html
+// MapFallback 路由特异性：/api/{**path} 比 {**path} 更具体，会优先匹配
+app.MapFallback("/api/{**path}", () => Results.NotFound(new
+{
+    error = "api_endpoint_not_found",
+    message = "请求的 API 路径不存在"
+}));
+
 // 前端路由兜底
 if (!string.IsNullOrWhiteSpace(distPath) && Directory.Exists(distPath))
 {
