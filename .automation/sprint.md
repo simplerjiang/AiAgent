@@ -149,14 +149,29 @@
 
 ---
 
-## v0.6.0 Sprint — （待规划）
+## v0.6.0 Sprint — AI 分析回测验证
 
-> 待填充。
+**目标**：对历史 AI 分析记录进行后验验证，计算多窗口命中率、目标价触达率，生成记分卡
 
-**Sprint 开始**: TBD
+**Sprint 开始**: 2026-04-28
 **分支**: `v060`
+**计划书**: [GOAL-v060-ai-backtest-plan.md](../docs/GOAL-v060-ai-backtest-plan.md)
 
 ### Active Stories (max 3)
+
+| Story | Title | Level | Status |
+|-------|-------|-------|--------|
+| V060-S1 | BacktestResult 实体 + Schema | M | TODO |
+| V060-S2 | BacktestService 核心计算 | L | TODO |
+| V060-S3 | 回测 REST API | M | TODO |
+
+### 批次 2 预告
+
+| Story | Title | Level |
+|-------|-------|-------|
+| V060-S4 | 前端回测仪表板 | L |
+| V060-S5 | K 线图回测标注 | M |
+| V060-S6 | 自动回测 Worker | M |
 
 （空）
 
