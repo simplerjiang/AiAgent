@@ -23,6 +23,7 @@
 | v0.4.5 | 2026-04-24 | S0–S5 全部 DONE | 1158 tests, 0 fail | 数值单位修复 / Worker 重启 / cninfo headers / 采集面板集成 |
 | v0.4.6 | 2026-04-24 | S0–S8 + HF-1 + HF-2 全部 DONE | — | 多 Agent 路由 / 财报 RAG 闭环 / LiveGate 合成 / 散户热度图表 / cninfo 修复 / 论坛重试 |
 | v0.4.7 | 2026-04-24 | S1–S5 全部 DONE | 768+466 tests, 0 fail | AI 分析 JSON 修复 / 公告 PDF 爬取+RAG / MCP 注册 |
+| v0.4.8 | 2026-04-28 | S1–S3 全部 DONE | — | 交易账务闭环 / 核心稳定性四件套 / 财报数据语义完整 |
 
 ---
 
@@ -89,7 +90,7 @@
 
 ---
 
-## v0.4.8 Sprint（回归测试 111 条 Bug 修复 - 交易员可信度底线）
+## v0.4.8 Sprint（回归测试 111 条 Bug 修复 - 交易员可信度底线）✅ 已归档
 
 ### Sprint 目标
 
@@ -105,9 +106,9 @@
 
 | Story | 标题 | 分级 | 覆盖 Bug | 验收标准 | 状态 |
 |---|---|---|---|---|---|
-| V048-S1 | 交易账务闭环一致性 | L | #88/#89/#90/#91/#92 | 持仓账务 `成本+浮盈=市值` 自洽；交易流水→持仓→可用资金三者联动；0 笔交易健康度显示 N/A 而非 100%；持仓行点击 drill-down 跳回股票信息并自动搜索；快速录入代码→名称自动补齐 | TODO |
-| V048-S2 | 核心稳定性四件套 | L | #71/#78/#82/#85 | `/api/*` 未命中路径返 404 而非 SPA index.html（监控恢复可见性）；`/api/market/sync` 加 Semaphore + 429 throttle 避免并发 30s 全超时；股票推荐 SSE 切页回来自动按 sessionId 续上（或显著 reconnect 提示）；单角色运行 >3 分钟或 >工具上限 80% 时显示 ETA 警示与一键终止 | TODO |
-| V048-S3 | 财报数据语义完整 | L | #94/#95/#96/#107/#80 | PDF 来源标签与详情抽屉一致（有 PDF 才标 PDF）；茅台一季报明确标"累计(YTD)"或转为单季口径；关键字段缺失时不标"PDF 解析成功"；Embedding 能力不可用时股票信息/财报中心页主动显示降级横幅；PDF Q1 补齐"资产总计/负债总计"字段 | TODO |
+| V048-S1 | 交易账务闭环一致性 | L | #88/#89/#90/#91/#92 | 持仓账务 `成本+浮盈=市值` 自洽；交易流水→持仓→可用资金三者联动；0 笔交易健康度显示 N/A 而非 100%；持仓行点击 drill-down 跳回股票信息并自动搜索；快速录入代码→名称自动补齐 | DONE |
+| V048-S2 | 核心稳定性四件套 | L | #71/#78/#82/#85 | `/api/*` 未命中路径返 404 而非 SPA index.html（监控恢复可见性）；`/api/market/sync` 加 Semaphore + 429 throttle 避免并发 30s 全超时；股票推荐 SSE 切页回来自动按 sessionId 续上（或显著 reconnect 提示）；单角色运行 >3 分钟或 >工具上限 80% 时显示 ETA 警示与一键终止 | DONE |
+| V048-S3 | 财报数据语义完整 | L | #94/#95/#96/#107/#80 | PDF 来源标签与详情抽屉一致（有 PDF 才标 PDF）；茅台一季报明确标"累计(YTD)"或转为单季口径；关键字段缺失时不标"PDF 解析成功"；Embedding 能力不可用时股票信息/财报中心页主动显示降级横幅；PDF Q1 补齐"资产总计/负债总计"字段 | DONE |
 
 ### Backlog（本 Sprint 不做，P1 优先）
 
@@ -136,7 +137,34 @@
 - v0.4.2 RAG Lite → 本看板"已完成 Sprint 摘要"
 - v0.4.2N PDF 管线重构 → 本看板"已完成 Sprint 摘要"
 - v0.4.2 必修 → 本看板"已完成 Sprint 摘要"
+- v0.4.8 回归测试 111 条 Bug 修复 → 本看板"已完成 Sprint 摘要"
 - v0.4.1 PDF 原件对照 → `/memories/repo/sprints/v041-pdf-compare-reparse.md`
 - v0.4.0 财报中心基础设施 → `/memories/repo/sprints/v040-financial-center.md`
 - v0.3.2 散户热度反向指标 → `/memories/repo/sprints/v0.3.2-retail-heat-contrarian.md`
 - `tasks.json` 自 2026-04-22 起仅作 append-only 历史事件流
+
+---
+
+## v0.5.0 Sprint — Baostock.NET 基础管道 + 交易日历 + 指数成分 + K线切换
+
+> 打通 Baostock.NET 接入管道，替换硬编码交易日历，切换 K 线历史数据主源，补齐指数成分和行业分类数据。
+
+**Sprint 开始**: 2026-04-28
+**分支**: `v050`
+
+### Active Stories (max 3)
+
+| Story | Title | Level | 描述 | Status |
+|-------|-------|-------|------|--------|
+| V050-S1 | NuGet 集成 + 连接管理 | S | 添加 Baostock.NET 本地项目引用，实现 IBaostockClientFactory 连接池 | TODO |
+| V050-S2 | 交易日历替换 | M | 用 QueryTradeDatesAsync() 替换 KnownHolidayClosures 硬编码 | TODO |
+| V050-S3 | K线历史数据切换 | M | SC 日期参数 bug，切换为 Baostock.NET 作为 K线历史主源 | TODO |
+
+### Backlog
+
+| Story | Title | Level | 描述 | Status |
+|-------|-------|-------|------|--------|
+| V050-S4 | 实时行情增加 Baostock 源 | M | 与东财互补，增加 Baostock 为实时行情数据源 | BACKLOG |
+| V050-S5 | 指数成分数据采集 | S | 接入 HS300/SZ50/ZZ500 成分股列表，存储到 SQL | BACKLOG |
+| V050-S6 | 行业分类数据 | M | 接入证监会行业分类，关联到 Stock 实体 | BACKLOG |
+| V050-S7 | v0.5.0 全链路验收 | S | 集成测试 + 浏览器验收 | BACKLOG |
