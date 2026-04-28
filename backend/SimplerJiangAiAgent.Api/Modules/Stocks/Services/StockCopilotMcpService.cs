@@ -358,6 +358,7 @@ public sealed class StockCopilotMcpService : IStockCopilotMcpService
         var windowOptions = NormalizeWindowOptions(window);
         var rawMarketContext = await _marketContextService.GetLatestAsync(normalizedSymbol, cancellationToken);
         var marketContext = RedactProgrammaticMarketContext(rawMarketContext);
+        marketContext = await EnrichWithMacroContextAsync(marketContext, cancellationToken);
         var warnings = new List<string>();
         var degradedFlags = new List<string>();
 
@@ -570,7 +571,7 @@ public sealed class StockCopilotMcpService : IStockCopilotMcpService
             symbol: normalizedSymbol,
             interval: null,
             query: null,
-            marketContext: ToCopilotMarketContext(marketContext),
+            marketContext: await EnrichWithMacroContextAsync(ToCopilotMarketContext(marketContext), cancellationToken),
             degradedFlags: degradedFlags,
             warnings: warnings);
     }
