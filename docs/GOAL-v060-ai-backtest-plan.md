@@ -1,4 +1,4 @@
-# GOAL v0.5.1 — AI 分析回测（精简评审稿）
+# GOAL v0.6.0 — AI 分析回测（精简评审稿）
 
 Status: Discussion Only · 不进 sprint.md · 评审通过后再拆 Story
 
