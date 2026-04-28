@@ -57,6 +57,8 @@ builder.Services.AddScoped<ISourceGovernanceReadService>(serviceProvider =>
         serviceProvider.GetRequiredService<AppRuntimePaths>()));
 builder.Services.AddSingleton<ICommandRunner, ProcessCommandRunner>();
 builder.Services.AddSingleton<IBaostockClientFactory, BaostockClientFactory>();
+builder.Services.AddSingleton<ITradingCalendarService, TradingCalendarService>();
+builder.Services.AddHostedService<TradingCalendarWorker>();
 
 var runtimePaths = new AppRuntimePaths(builder.Environment, builder.Configuration);
 runtimePaths.EnsureWritableDirectories();

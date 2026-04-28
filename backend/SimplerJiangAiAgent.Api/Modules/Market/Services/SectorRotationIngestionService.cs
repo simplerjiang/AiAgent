@@ -5,6 +5,7 @@ using SimplerJiangAiAgent.Api.Data.Entities;
 using SimplerJiangAiAgent.Api.Infrastructure.Jobs;
 using SimplerJiangAiAgent.Api.Modules.Market;
 using SimplerJiangAiAgent.Api.Modules.Market.Models;
+using SimplerJiangAiAgent.Api.Services;
 using System.Text.Json;
 using System.Globalization;
 using System.Diagnostics;
@@ -25,19 +26,22 @@ public sealed class SectorRotationIngestionService : ISectorRotationIngestionSer
     private readonly IEastmoneyRealtimeMarketClient _realtimeClient;
     private readonly SectorRotationOptions _options;
     private readonly ILogger<SectorRotationIngestionService> _logger;
+    private readonly ITradingCalendarService _calendar;
 
     public SectorRotationIngestionService(
         AppDbContext dbContext,
         IEastmoneySectorRotationClient client,
         IEastmoneyRealtimeMarketClient realtimeClient,
         IOptions<SectorRotationOptions> options,
-        ILogger<SectorRotationIngestionService> logger)
+        ILogger<SectorRotationIngestionService> logger,
+        ITradingCalendarService calendar)
     {
         _dbContext = dbContext;
         _client = client;
         _realtimeClient = realtimeClient;
         _options = options.Value;
         _logger = logger;
+        _calendar = calendar;
     }
 
     public async Task SyncAsync(CancellationToken cancellationToken = default)
@@ -394,10 +398,10 @@ public sealed class SectorRotationIngestionService : ISectorRotationIngestionSer
         }
     }
 
-    internal static DateOnly ResolveMarketPoolTradingDate(DateTimeOffset localNow)
+    internal DateOnly ResolveMarketPoolTradingDate(DateTimeOffset localNow)
     {
         var candidate = DateOnly.FromDateTime(localNow.DateTime);
-        if (ChinaAStockMarketClock.IsTradingDay(candidate) && localNow.TimeOfDay >= MarketOpenTime)
+        if (_calendar.IsTradingDay(candidate) && localNow.TimeOfDay >= MarketOpenTime)
         {
             return candidate;
         }
@@ -406,7 +410,7 @@ public sealed class SectorRotationIngestionService : ISectorRotationIngestionSer
         {
             candidate = candidate.AddDays(-1);
         }
-        while (!ChinaAStockMarketClock.IsTradingDay(candidate));
+        while (!_calendar.IsTradingDay(candidate));
 
         return candidate;
     }
@@ -640,7 +644,7 @@ public sealed class SectorRotationIngestionService : ISectorRotationIngestionSer
         return "混沌";
     }
 
-    private static string ResolveSessionPhase(DateTimeOffset localNow)
+    private string ResolveSessionPhase(DateTimeOffset localNow)
     {
         var time = localNow.TimeOfDay;
         if (time < MarketOpenTime)
@@ -648,7 +652,7 @@ public sealed class SectorRotationIngestionService : ISectorRotationIngestionSer
             return "盘前";
         }
 
-        if (ChinaAStockMarketClock.IsTradingSession(localNow))
+        if (ChinaAStockMarketClock.IsTradingSession(localNow, _calendar))
         {
             return "盘中";
         }

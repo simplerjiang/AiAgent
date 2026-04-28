@@ -4,6 +4,7 @@ using Microsoft.Extensions.Options;
 using SimplerJiangAiAgent.Api.Data;
 using SimplerJiangAiAgent.Api.Data.Entities;
 using SimplerJiangAiAgent.Api.Infrastructure.Jobs;
+using SimplerJiangAiAgent.Api.Services;
 
 namespace SimplerJiangAiAgent.Api.Modules.Stocks.Services;
 
@@ -17,16 +18,18 @@ public sealed class TradingPlanTriggerService : ITradingPlanTriggerService
 {
     private readonly AppDbContext _dbContext;
     private readonly TradingPlanTriggerOptions _options;
+    private readonly ITradingCalendarService _calendar;
 
-    public TradingPlanTriggerService(AppDbContext dbContext, IOptions<TradingPlanTriggerOptions> options)
+    public TradingPlanTriggerService(AppDbContext dbContext, IOptions<TradingPlanTriggerOptions> options, ITradingCalendarService calendar)
     {
         _dbContext = dbContext;
         _options = options.Value;
+        _calendar = calendar;
     }
 
     public async Task<int> EvaluateAsync(DateTimeOffset now, CancellationToken cancellationToken = default)
     {
-        if (!_options.Enabled || !ChinaAStockMarketClock.IsTradingSession(now))
+        if (!_options.Enabled || !ChinaAStockMarketClock.IsTradingSession(now, _calendar))
         {
             return 0;
         }

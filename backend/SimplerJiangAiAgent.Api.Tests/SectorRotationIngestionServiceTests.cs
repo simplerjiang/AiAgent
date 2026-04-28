@@ -5,6 +5,7 @@ using SimplerJiangAiAgent.Api.Data;
 using SimplerJiangAiAgent.Api.Modules.Market;
 using SimplerJiangAiAgent.Api.Modules.Market.Models;
 using SimplerJiangAiAgent.Api.Modules.Market.Services;
+using SimplerJiangAiAgent.Api.Services;
 
 namespace SimplerJiangAiAgent.Api.Tests;
 
@@ -43,7 +44,8 @@ public sealed class SectorRotationIngestionServiceTests
 			client,
 			new FakeRealtimeMarketClient(),
 			Options.Create(new SectorRotationOptions { BoardPageSize = 20, LeaderTake = 5 }),
-			NullLogger<SectorRotationIngestionService>.Instance);
+			NullLogger<SectorRotationIngestionService>.Instance,
+			new FakeTradingCalendarService());
 
 		await service.SyncAsync();
 
@@ -91,7 +93,8 @@ public sealed class SectorRotationIngestionServiceTests
 			client,
 			new FakeRealtimeMarketClient(),
 			Options.Create(new SectorRotationOptions { BoardPageSize = 20, LeaderTake = 5 }),
-			NullLogger<SectorRotationIngestionService>.Instance);
+			NullLogger<SectorRotationIngestionService>.Instance,
+			new FakeTradingCalendarService());
 
 		await service.SyncAsync();
 
@@ -139,7 +142,8 @@ public sealed class SectorRotationIngestionServiceTests
 			client,
 			new FakeRealtimeMarketClient(),
 			Options.Create(new SectorRotationOptions { BoardPageSize = 20, LeaderTake = 5 }),
-			NullLogger<SectorRotationIngestionService>.Instance);
+			NullLogger<SectorRotationIngestionService>.Instance,
+			new FakeTradingCalendarService());
 
 		await service.SyncAsync();
 
@@ -196,7 +200,8 @@ public sealed class SectorRotationIngestionServiceTests
 			client,
 			realtime,
 			Options.Create(new SectorRotationOptions { BoardPageSize = 20, LeaderTake = 5 }),
-			NullLogger<SectorRotationIngestionService>.Instance);
+			NullLogger<SectorRotationIngestionService>.Instance,
+			new FakeTradingCalendarService());
 
 		await service.SyncAsync();
 
@@ -248,7 +253,8 @@ public sealed class SectorRotationIngestionServiceTests
 				client,
 				new FakeRealtimeMarketClient(),
 				Options.Create(new SectorRotationOptions { BoardPageSize = 20, LeaderTake = 5 }),
-				NullLogger<SectorRotationIngestionService>.Instance);
+				NullLogger<SectorRotationIngestionService>.Instance,
+				new FakeTradingCalendarService());
 
 			await service.SyncAsync();
 
@@ -302,7 +308,8 @@ public sealed class SectorRotationIngestionServiceTests
 			client,
 			new FakeRealtimeMarketClient(),
 			Options.Create(new SectorRotationOptions { BoardPageSize = 20, LeaderTake = 5 }),
-			NullLogger<SectorRotationIngestionService>.Instance);
+			NullLogger<SectorRotationIngestionService>.Instance,
+			new FakeTradingCalendarService());
 
 		await service.SyncAsync();
 
@@ -344,7 +351,8 @@ public sealed class SectorRotationIngestionServiceTests
 			client,
 			new FakeRealtimeMarketClient(),
 			Options.Create(new SectorRotationOptions { BoardPageSize = 20, LeaderTake = 5 }),
-			NullLogger<SectorRotationIngestionService>.Instance);
+			NullLogger<SectorRotationIngestionService>.Instance,
+			new FakeTradingCalendarService());
 
 		await service.SyncAsync(new DateTimeOffset(2026, 3, 15, 5, 40, 0, TimeSpan.Zero));
 
@@ -360,7 +368,8 @@ public sealed class SectorRotationIngestionServiceTests
 	{
 		var localNow = new DateTimeOffset(2026, 3, 15, 13, 40, 0, TimeSpan.FromHours(8));
 
-		var result = SectorRotationIngestionService.ResolveMarketPoolTradingDate(localNow);
+		var service = CreateMinimalService();
+		var result = service.ResolveMarketPoolTradingDate(localNow);
 
 		Assert.Equal(new DateOnly(2026, 3, 13), result);
 	}
@@ -370,7 +379,8 @@ public sealed class SectorRotationIngestionServiceTests
 	{
 		var localNow = new DateTimeOffset(2026, 3, 16, 9, 0, 0, TimeSpan.FromHours(8));
 
-		var result = SectorRotationIngestionService.ResolveMarketPoolTradingDate(localNow);
+		var service = CreateMinimalService();
+		var result = service.ResolveMarketPoolTradingDate(localNow);
 
 		Assert.Equal(new DateOnly(2026, 3, 13), result);
 	}
@@ -413,6 +423,17 @@ public sealed class SectorRotationIngestionServiceTests
 			.Options;
 
 		return new AppDbContext(options);
+	}
+
+	private static SectorRotationIngestionService CreateMinimalService()
+	{
+		return new SectorRotationIngestionService(
+			CreateDbContext(),
+			new FakeSectorRotationClient(),
+			new FakeRealtimeMarketClient(),
+			Options.Create(new SectorRotationOptions { BoardPageSize = 20, LeaderTake = 5 }),
+			NullLogger<SectorRotationIngestionService>.Instance,
+			new FakeTradingCalendarService());
 	}
 
 	private sealed class FakeSectorRotationClient : IEastmoneySectorRotationClient
@@ -534,5 +555,18 @@ public sealed class SectorRotationIngestionServiceTests
 
 			return Task.FromResult(BreadthDistribution);
 		}
+	}
+
+	private sealed class FakeTradingCalendarService : ITradingCalendarService
+	{
+		public bool IsLoaded => false;
+		public bool IsTradingDay(DateOnly date) => date.DayOfWeek is not DayOfWeek.Saturday and not DayOfWeek.Sunday;
+		public DateOnly GetPreviousTradingDay(DateOnly date)
+		{
+			var d = date.AddDays(-1);
+			while (!IsTradingDay(d)) d = d.AddDays(-1);
+			return d;
+		}
+		public Task RefreshAsync(CancellationToken ct = default) => Task.CompletedTask;
 	}
 }

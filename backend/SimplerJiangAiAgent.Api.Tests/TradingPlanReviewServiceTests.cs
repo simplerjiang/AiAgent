@@ -6,6 +6,7 @@ using SimplerJiangAiAgent.Api.Data.Entities;
 using SimplerJiangAiAgent.Api.Infrastructure.Jobs;
 using SimplerJiangAiAgent.Api.Infrastructure.Llm;
 using SimplerJiangAiAgent.Api.Modules.Stocks.Services;
+using SimplerJiangAiAgent.Api.Services;
 
 namespace SimplerJiangAiAgent.Api.Tests;
 
@@ -42,7 +43,8 @@ public sealed class TradingPlanReviewServiceTests
             }
             """),
             Options.Create(new TradingPlanReviewOptions()),
-            NullLogger<TradingPlanReviewService>.Instance);
+            NullLogger<TradingPlanReviewService>.Instance,
+            new FakeTradingCalendar());
 
         var changes = await service.EvaluateAsync(new DateTimeOffset(2026, 3, 16, 2, 8, 0, TimeSpan.Zero));
 
@@ -84,7 +86,8 @@ public sealed class TradingPlanReviewServiceTests
             }
             """),
             Options.Create(new TradingPlanReviewOptions()),
-            NullLogger<TradingPlanReviewService>.Instance);
+            NullLogger<TradingPlanReviewService>.Instance,
+            new FakeTradingCalendar());
 
         var changes = await service.EvaluateAsync(new DateTimeOffset(2026, 3, 16, 2, 8, 0, TimeSpan.Zero));
 
@@ -118,7 +121,8 @@ public sealed class TradingPlanReviewServiceTests
             dbContext,
             new StubLlmService(exception: new InvalidOperationException("provider unavailable")),
             Options.Create(new TradingPlanReviewOptions()),
-            NullLogger<TradingPlanReviewService>.Instance);
+            NullLogger<TradingPlanReviewService>.Instance,
+            new FakeTradingCalendar());
 
         var changes = await service.EvaluateAsync(new DateTimeOffset(2026, 3, 16, 2, 8, 0, TimeSpan.Zero));
 
@@ -161,7 +165,8 @@ public sealed class TradingPlanReviewServiceTests
             dbContext,
             new StubLlmService("{\"isPlanThreatened\":false,\"reason\":\"safe\",\"confidence\":50}"),
             Options.Create(new TradingPlanReviewOptions()),
-            NullLogger<TradingPlanReviewService>.Instance);
+            NullLogger<TradingPlanReviewService>.Instance,
+            new FakeTradingCalendar());
 
         var changes = await service.EvaluateAsync(new DateTimeOffset(2026, 3, 16, 2, 8, 0, TimeSpan.Zero));
 
@@ -193,7 +198,8 @@ public sealed class TradingPlanReviewServiceTests
             dbContext,
             new StubLlmService("{" + "\"isPlanThreatened\":true,\"reason\":\"客户取消大单\",\"confidence\":88.5}"),
             Options.Create(new TradingPlanReviewOptions()),
-            NullLogger<TradingPlanReviewService>.Instance);
+            NullLogger<TradingPlanReviewService>.Instance,
+            new FakeTradingCalendar());
 
         var changes = await service.EvaluateAsync(new DateTimeOffset(2026, 3, 16, 2, 8, 0, TimeSpan.Zero));
 
@@ -228,7 +234,8 @@ public sealed class TradingPlanReviewServiceTests
             dbContext,
             new StubLlmService("{" + "\"isPlanThreatened\":true,\"reason\":\"合作终止破坏催化预期\",\"confidence\":\"90.2\"}"),
             Options.Create(new TradingPlanReviewOptions()),
-            NullLogger<TradingPlanReviewService>.Instance);
+            NullLogger<TradingPlanReviewService>.Instance,
+            new FakeTradingCalendar());
 
         var changes = await service.EvaluateAsync(new DateTimeOffset(2026, 3, 16, 2, 8, 0, TimeSpan.Zero));
 
@@ -317,5 +324,13 @@ public sealed class TradingPlanReviewServiceTests
 
             return Task.FromResult(new LlmChatResult(_content));
         }
+    }
+
+    private sealed class FakeTradingCalendar : ITradingCalendarService
+    {
+        public bool IsLoaded => false;
+        public bool IsTradingDay(DateOnly date) => date.DayOfWeek is not DayOfWeek.Saturday and not DayOfWeek.Sunday;
+        public DateOnly GetPreviousTradingDay(DateOnly date) { var d = date.AddDays(-1); while (!IsTradingDay(d)) d = d.AddDays(-1); return d; }
+        public Task RefreshAsync(CancellationToken ct = default) => Task.CompletedTask;
     }
 }
