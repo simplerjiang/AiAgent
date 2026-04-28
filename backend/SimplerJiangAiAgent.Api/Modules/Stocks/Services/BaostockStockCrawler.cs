@@ -5,8 +5,7 @@ using SimplerJiangAiAgent.Api.Services;
 namespace SimplerJiangAiAgent.Api.Modules.Stocks.Services;
 
 /// <summary>
-/// K 线历史数据主源：通过 Baostock.NET 获取日/周/月 K 线。
-/// 实时行情等接口返回空，由 CompositeStockCrawler 回退到其他源。
+/// Baostock 数据源：日/周/月 K 线（主源）+ 实时行情（备用源）。
 /// </summary>
 public sealed class BaostockStockCrawler : IStockCrawlerSource
 {
@@ -57,8 +56,40 @@ public sealed class BaostockStockCrawler : IStockCrawlerSource
         }
     }
 
-    public Task<StockQuoteDto?> GetQuoteAsync(string symbol, CancellationToken ct = default)
-        => Task.FromResult<StockQuoteDto?>(null);
+    public async Task<StockQuoteDto?> GetQuoteAsync(string symbol, CancellationToken ct = default)
+    {
+        try
+        {
+            await using var lease = await _clientFactory.GetClientAsync(ct);
+            var quote = await lease.Client.GetRealtimeQuoteAsync(symbol, ct);
+
+            var change = quote.Last - quote.PreClose;
+            var changePct = quote.PreClose != 0
+                ? Math.Round(change / quote.PreClose * 100, 2)
+                : 0m;
+
+            return new StockQuoteDto(
+                Symbol: symbol,
+                Name: quote.Name,
+                Price: quote.Last,
+                Change: change,
+                ChangePercent: changePct,
+                TurnoverRate: 0m,
+                PeRatio: 0m,
+                High: quote.High,
+                Low: quote.Low,
+                Speed: 0m,
+                Timestamp: quote.Timestamp,
+                News: Array.Empty<StockNewsDto>(),
+                Indicators: Array.Empty<StockIndicatorDto>()
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Baostock realtime quote failed for {Symbol}", symbol);
+            return null;
+        }
+    }
 
     public Task<MarketIndexDto> GetMarketIndexAsync(string symbol, CancellationToken ct = default)
         => Task.FromResult(new MarketIndexDto(symbol, symbol, 0m, 0m, 0m, DateTime.UtcNow));
