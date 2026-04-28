@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using SimplerJiangAiAgent.Api.Data;
+using SimplerJiangAiAgent.Api.Infrastructure.Jobs;
 
 namespace SimplerJiangAiAgent.Api.Modules.Backtest;
 
@@ -13,6 +14,7 @@ public sealed class BacktestModule : IModule
     public void Register(IServiceCollection services, IConfiguration configuration)
     {
         services.AddScoped<IBacktestService, BacktestService>();
+        services.AddHostedService<BacktestWorker>();
     }
 
     public void MapEndpoints(IEndpointRouteBuilder app)
@@ -50,11 +52,13 @@ public sealed class BacktestModule : IModule
                 query = query.Where(r => r.AnalysisDate <= to.Value);
 
             var results = await query.ToListAsync(ct);
+            var insufficientCount = results.Count(r => r.CalcStatus == "insufficient_data");
             var calculated = results.Where(r => r.CalcStatus == "calculated").ToList();
 
             var stats = new
             {
                 totalAnalyses = results.Count,
+                insufficientDataCount = insufficientCount,
                 windows = BuildWindowStats(calculated),
                 targetHitRate = ComputeRate(calculated, r => r.TargetHit),
                 stopTriggerRate = ComputeRate(calculated, r => r.StopTriggered),

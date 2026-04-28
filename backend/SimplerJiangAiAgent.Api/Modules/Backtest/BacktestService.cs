@@ -140,7 +140,6 @@ public sealed class BacktestService : IBacktestService
             query = query.Where(h => h.CreatedAt <= to.Value.ToDateTime(TimeOnly.MaxValue));
 
         var alreadyDone = _dbContext.BacktestResults
-            .Where(b => b.CalcStatus == "calculated")
             .Select(b => b.AnalysisHistoryId);
 
         var histories = await query
