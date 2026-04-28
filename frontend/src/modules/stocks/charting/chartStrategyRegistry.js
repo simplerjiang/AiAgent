@@ -666,6 +666,57 @@ const buildVwapStrengthMarkers = records => {
   return markers
 }
 
+export const buildBacktestMarkers = (backtestResults, klineRecords) => {
+  const markers = []
+  if (!backtestResults?.length || !klineRecords?.length) return markers
+
+  for (const bt of backtestResults) {
+    if (bt.calcStatus !== 'calculated') continue
+
+    const analysisDate = bt.analysisDate
+    const kline = klineRecords.find(k => {
+      const d = new Date(k.timestamp || k.date)
+      return d.toISOString().slice(0, 10) === analysisDate
+    })
+
+    if (!kline) continue
+
+    const isCorrect = bt.isCorrect10d ?? bt.isCorrect5d ?? bt.isCorrect3d ?? bt.isCorrect1d
+    const isBull = bt.predictedDirection?.includes('多')
+    const isBear = bt.predictedDirection?.includes('空')
+
+    let color, text
+    if (isCorrect === true) {
+      color = isBull ? '#ef4444' : '#22c55e'
+      text = isBull ? '✓多' : '✓空'
+    } else if (isCorrect === false) {
+      color = '#6b7280'
+      text = isBull ? '✗多' : isBear ? '✗空' : '✗'
+    } else {
+      color = '#eab308'
+      text = isBull ? '?多' : isBear ? '?空' : '?'
+    }
+
+    const timestamp = kline.timestamp || new Date(kline.date).getTime()
+    const value = isBull
+      ? roundPrice((kline.low || kline.close) * 0.978)
+      : roundPrice((kline.high || kline.close) * 1.022)
+
+    markers.push({
+      id: `backtest-${bt.id}-${timestamp}`,
+      timestamp,
+      value,
+      text,
+      color,
+      lineSize: 1,
+      textSize: 11,
+      textWeight: '700'
+    })
+  }
+
+  return markers
+}
+
 const CHART_STRATEGIES = Object.freeze([
   createStrategyDefinition({
     id: 'price',
@@ -1326,6 +1377,32 @@ const CHART_STRATEGIES = Object.freeze([
         ]
       }
     }
+  }),
+  createStrategyDefinition({
+    id: 'backtest',
+    label: 'AI回测',
+    category: 'signal',
+    kind: 'marker',
+    accentColor: '#eab308',
+    accentSecondaryColor: '#6b7280',
+    help: createHelp(
+      '在 K 线上标注历史 AI 分析点，显示预测方向和实际结果。',
+      '✓ 表示预测正确，✗ 表示预测错误，? 表示尚未判定。红=看多，绿=看空，灰=预测错误。',
+      '用于回顾 AI 分析的历史表现，辅助评估 AI 信号的参考价值。'
+    ),
+    lineLegends: [
+      createLineLegend('#ef4444', '✓多', '看多预测正确。'),
+      createLineLegend('#22c55e', '✓空', '看空预测正确。'),
+      createLineLegend('#6b7280', '✗', '预测错误。'),
+      createLineLegend('#eab308', '?', '尚未判定。')
+    ],
+    supportedViews: ['day'],
+    defaultVisible: false,
+    requires: [],
+    compute: ({ records, backtestResults }) => {
+      const markers = buildBacktestMarkers(backtestResults, records)
+      return markers.length ? { markers } : null
+    }
   })
 ])
 
@@ -1586,7 +1663,7 @@ export function getOverlayGroupIdsForView(viewId) {
   return OVERLAY_GROUPS_BY_VIEW[viewId] ?? []
 }
 
-export function buildStrategyRenderPlan({ viewId, records, visibility = {}, aiLevels, basePrice }) {
+export function buildStrategyRenderPlan({ viewId, records, visibility = {}, aiLevels, basePrice, backtestResults }) {
   const renderPlan = {
     indicators: [],
     overlays: [],
@@ -1597,7 +1674,7 @@ export function buildStrategyRenderPlan({ viewId, records, visibility = {}, aiLe
   getChartStrategiesForView(viewId)
     .filter(item => visibility[item.id] !== false)
     .forEach(item => {
-      const result = item.compute?.({ viewId, records, aiLevels, basePrice, visibility })
+      const result = item.compute?.({ viewId, records, aiLevels, basePrice, visibility, backtestResults })
       if (!result) {
         return
       }
