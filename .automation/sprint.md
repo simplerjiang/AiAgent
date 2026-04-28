@@ -183,9 +183,9 @@
 
 | Story | Title | Level | 描述 | 验收标准 | Status |
 |-------|-------|-------|------|---------|--------|
-| V051-S1 | 宏观数据全量采集 | M | 接入 5 个 Baostock.NET 宏观 API（存款利率/贷款利率/准备金率/月度货币供应/年度货币供应）；创建 MacroIndicator 实体；MacroDataWorker 后台定时采集 | 全部 5 类宏观数据落库；数据时间跨度 ≥ 5 年；Worker 日志无异常 | TODO |
-| V051-S2 | 宏观数据 REST API | M | 暴露统一端点 `GET /api/macro/{indicator}?from=&to=`；支持 JSON 时间序列响应；包含趋势方向标注 | 5 个指标均可通过 API 查询；响应包含时间序列 + 趋势方向 | TODO |
-| V051-S3 | 分红数据接入 | M | 接入 Baostock.NET QueryDividendDataAsync；创建 DividendRecord 实体；暴露 API 端点 `GET /api/stocks/{symbol}/dividends` | 分红数据可查询；与公开数据交叉验证通过 | TODO |
+| V051-S1 | 宏观数据全量采集 | M | 接入 5 个 Baostock.NET 宏观 API（存款利率/贷款利率/准备金率/月度货币供应/年度货币供应）；创建 MacroIndicator 实体；MacroDataWorker 后台定时采集 | 全部 5 类宏观数据落库；数据时间跨度 ≥ 5 年；Worker 日志无异常 | DONE |
+| V051-S2 | 宏观数据 REST API | M | 暴露统一端点 `GET /api/macro/{indicator}?from=&to=`；支持 JSON 时间序列响应；包含趋势方向标注 | 5 个指标均可通过 API 查询；响应包含时间序列 + 趋势方向 | DONE |
+| V051-S3 | 分红数据接入 | M | 接入 Baostock.NET QueryDividendDataAsync；创建 DividendRecord 实体；暴露 API 端点 `GET /api/stocks/{symbol}/dividends` | 分红数据可查询；与公开数据交叉验证通过 | DONE |
 
 ### 批次 2 预告（批次 1 完成后进入）
 
