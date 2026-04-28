@@ -18,7 +18,7 @@ async function loadStats() {
   loading.value = true
   try {
     const resp = await fetchBackendGet('/api/backtest/stats')
-    stats.value = resp
+    stats.value = await resp.json()
   } catch (e) { console.error(e) }
   loading.value = false
 }
@@ -31,8 +31,9 @@ async function loadResults() {
   if (filterStatus.value) params.set('status', filterStatus.value)
   try {
     const resp = await fetchBackendGet(`/api/backtest/results?${params}`)
-    results.value = resp.items || []
-    totalResults.value = resp.total || 0
+    const data = await resp.json()
+    results.value = data.items || []
+    totalResults.value = data.total || 0
     if (!symbolList.value.length && results.value.length) {
       symbolList.value = [...new Set(results.value.map(r => r.symbol))].sort()
     }
@@ -59,8 +60,8 @@ function prevPage() { if (page.value > 1) { page.value--; loadResults() } }
 function nextPage() { page.value++; loadResults() }
 
 function formatReturn(val) { return val != null ? `${val >= 0 ? '+' : ''}${val.toFixed(2)}%` : '-' }
-function formatPct(val) { return val != null ? `${(val * 100).toFixed(1)}%` : '-' }
-function accuracyClass(v) { return v >= 0.6 ? 'good' : v >= 0.4 ? 'neutral' : 'poor' }
+function formatPct(val) { return val != null ? `${Number(val).toFixed(1)}%` : '-' }
+function accuracyClass(v) { return v >= 60 ? 'good' : v >= 40 ? 'neutral' : 'poor' }
 function directionClass(d) { return d?.includes('多') ? 'bull' : d?.includes('空') ? 'bear' : '' }
 function correctClass(v) { return v === true ? 'correct' : v === false ? 'wrong' : '' }
 
@@ -81,28 +82,28 @@ onMounted(() => { loadStats(); loadResults() })
       </span>
     </div>
 
-    <div class="scorecard-grid" v-if="stats">
+    <div class="scorecard-grid" v-if="stats && stats.totalAnalyses > 0">
       <div class="scorecard-item" v-for="(w, key) in stats.windows" :key="key">
         <div class="scorecard-label">{{ key }} 窗口</div>
         <div class="scorecard-value" :class="accuracyClass(w.accuracy)">
-          {{ (w.accuracy * 100).toFixed(1) }}%
+          {{ Number(w.accuracy).toFixed(1) }}%
         </div>
         <div class="scorecard-sub">{{ w.count }} 条样本</div>
       </div>
       <div class="scorecard-item">
         <div class="scorecard-label">目标价触达</div>
-        <div class="scorecard-value">{{ (stats.targetHitRate * 100).toFixed(1) }}%</div>
+        <div class="scorecard-value">{{ Number(stats.targetHitRate).toFixed(1) }}%</div>
       </div>
       <div class="scorecard-item">
         <div class="scorecard-label">止损触发</div>
-        <div class="scorecard-value warning">{{ (stats.stopTriggerRate * 100).toFixed(1) }}%</div>
+        <div class="scorecard-value warning">{{ Number(stats.stopTriggerRate).toFixed(1) }}%</div>
       </div>
     </div>
 
     <div v-else-if="loading" class="loading">加载中...</div>
     <div v-else class="empty">暂无回测数据，请先执行批量回测</div>
 
-    <div class="direction-table" v-if="stats?.byDirection">
+    <div class="direction-table" v-if="stats && stats.totalAnalyses > 0 && stats.byDirection">
       <h3>按方向统计</h3>
       <table>
         <thead>
