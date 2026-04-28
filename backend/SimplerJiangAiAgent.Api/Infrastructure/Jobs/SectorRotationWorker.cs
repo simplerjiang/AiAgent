@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Options;
 using SimplerJiangAiAgent.Api.Modules.Market.Models;
 using SimplerJiangAiAgent.Api.Modules.Market.Services;
+using SimplerJiangAiAgent.Api.Services;
 
 namespace SimplerJiangAiAgent.Api.Infrastructure.Jobs;
 
@@ -11,15 +12,18 @@ public sealed class SectorRotationWorker : BackgroundService
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<SectorRotationWorker> _logger;
     private readonly SectorRotationOptions _options;
+    private readonly ITradingCalendarService _calendar;
 
     public SectorRotationWorker(
         IServiceProvider serviceProvider,
         ILogger<SectorRotationWorker> logger,
-        IOptions<SectorRotationOptions> options)
+        IOptions<SectorRotationOptions> options,
+        ITradingCalendarService calendar)
     {
         _serviceProvider = serviceProvider;
         _logger = logger;
         _options = options.Value;
+        _calendar = calendar;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -64,13 +68,13 @@ public sealed class SectorRotationWorker : BackgroundService
             return TimeSpan.FromMinutes(10);
         }
 
-        if (ChinaAStockMarketClock.IsTradingSession(utcNow))
+        if (ChinaAStockMarketClock.IsTradingSession(utcNow, _calendar))
         {
             return TimeSpan.FromSeconds(Math.Max(60, _options.IntervalSeconds));
         }
 
         var localNow = TimeZoneInfo.ConvertTime(utcNow, ChinaTimeZone);
-        if (ChinaAStockMarketClock.IsTradingDay(DateOnly.FromDateTime(localNow.DateTime)) && localNow.TimeOfDay >= new TimeSpan(15, 5, 0) && localNow.TimeOfDay < new TimeSpan(16, 0, 0))
+        if (_calendar.IsTradingDay(DateOnly.FromDateTime(localNow.DateTime)) && localNow.TimeOfDay >= new TimeSpan(15, 5, 0) && localNow.TimeOfDay < new TimeSpan(16, 0, 0))
         {
             return TimeSpan.FromMinutes(15);
         }
@@ -78,15 +82,15 @@ public sealed class SectorRotationWorker : BackgroundService
         return TimeSpan.FromMinutes(30);
     }
 
-    private static bool ShouldSync(DateTimeOffset utcNow)
+    private bool ShouldSync(DateTimeOffset utcNow)
     {
-        if (ChinaAStockMarketClock.IsTradingSession(utcNow))
+        if (ChinaAStockMarketClock.IsTradingSession(utcNow, _calendar))
         {
             return true;
         }
 
         var localNow = TimeZoneInfo.ConvertTime(utcNow, ChinaTimeZone);
-        return ChinaAStockMarketClock.IsTradingDay(DateOnly.FromDateTime(localNow.DateTime))
+        return _calendar.IsTradingDay(DateOnly.FromDateTime(localNow.DateTime))
             && localNow.TimeOfDay >= new TimeSpan(15, 5, 0)
             && localNow.TimeOfDay < new TimeSpan(16, 0, 0);
     }

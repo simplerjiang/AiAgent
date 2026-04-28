@@ -5,6 +5,7 @@ namespace SimplerJiangAiAgent.Api.Modules.Stocks.Services;
 public sealed class CompositeStockCrawler : IStockCrawler
 {
     private const string EastmoneySourceName = "东方财富";
+    private const string BaostockSourceName = "Baostock";
     private const string TencentSourceName = "腾讯";
     private readonly IReadOnlyList<IStockCrawlerSource> _crawlers;
 
@@ -180,6 +181,7 @@ public sealed class CompositeStockCrawler : IStockCrawler
     {
         return crawlers
             .OrderByDescending(crawler => string.Equals(crawler.SourceName, EastmoneySourceName, StringComparison.OrdinalIgnoreCase))
+            .ThenByDescending(crawler => string.Equals(crawler.SourceName, BaostockSourceName, StringComparison.OrdinalIgnoreCase))
             .ThenByDescending(crawler => string.Equals(crawler.SourceName, TencentSourceName, StringComparison.OrdinalIgnoreCase))
             .ToArray();
     }

@@ -52,6 +52,8 @@ public sealed class StocksModule : IModule
         services.AddHttpClient<TencentStockCrawler>(client => ConfigureStockHttpClient(client, stockHttpTimeout));
         services.AddHttpClient<SinaStockCrawler>(client => ConfigureStockHttpClient(client, stockHttpTimeout));
         services.AddTransient<BaiduStockCrawler>();
+        services.AddTransient<BaostockStockCrawler>();
+        services.AddTransient<IStockCrawlerSource>(serviceProvider => serviceProvider.GetRequiredService<BaostockStockCrawler>());
         services.AddTransient<IStockCrawlerSource>(serviceProvider => serviceProvider.GetRequiredService<EastmoneyStockCrawler>());
         services.AddTransient<IStockCrawlerSource>(serviceProvider => serviceProvider.GetRequiredService<TencentStockCrawler>());
         services.AddTransient<IStockCrawlerSource>(serviceProvider => serviceProvider.GetRequiredService<SinaStockCrawler>());

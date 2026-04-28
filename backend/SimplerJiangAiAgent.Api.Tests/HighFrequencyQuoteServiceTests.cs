@@ -7,6 +7,7 @@ using SimplerJiangAiAgent.Api.Data.Entities;
 using SimplerJiangAiAgent.Api.Infrastructure.Jobs;
 using SimplerJiangAiAgent.Api.Modules.Stocks.Models;
 using SimplerJiangAiAgent.Api.Modules.Stocks.Services;
+using SimplerJiangAiAgent.Api.Services;
 
 namespace SimplerJiangAiAgent.Api.Tests;
 
@@ -22,7 +23,8 @@ public class HighFrequencyQuoteServiceTests
         var service = new HighFrequencyQuoteService(
             provider,
             NullLogger<HighFrequencyQuoteService>.Instance,
-            Options.Create(new HighFrequencyQuoteOptions()));
+            Options.Create(new HighFrequencyQuoteOptions()),
+            new FakeTradingCalendar());
 
         var processed = await service.SyncOnceAsync(new DateTimeOffset(2026, 3, 16, 0, 0, 0, TimeSpan.Zero));
 
@@ -42,7 +44,8 @@ public class HighFrequencyQuoteServiceTests
         var service = new HighFrequencyQuoteService(
             provider,
             NullLogger<HighFrequencyQuoteService>.Instance,
-            Options.Create(new HighFrequencyQuoteOptions { MaxConcurrentSymbols = 1 }));
+            Options.Create(new HighFrequencyQuoteOptions { MaxConcurrentSymbols = 1 }),
+            new FakeTradingCalendar());
 
         var processed = await service.SyncOnceAsync(new DateTimeOffset(2026, 3, 16, 2, 0, 0, TimeSpan.Zero));
 
@@ -73,7 +76,8 @@ public class HighFrequencyQuoteServiceTests
         var service = new HighFrequencyQuoteService(
             provider,
             NullLogger<HighFrequencyQuoteService>.Instance,
-            Options.Create(new HighFrequencyQuoteOptions()));
+            Options.Create(new HighFrequencyQuoteOptions()),
+            new FakeTradingCalendar(new DateOnly(2026, 10, 1)));
 
         var processed = await service.SyncOnceAsync(new DateTimeOffset(2026, 10, 1, 2, 0, 0, TimeSpan.Zero));
 
@@ -94,7 +98,8 @@ public class HighFrequencyQuoteServiceTests
         var service = new HighFrequencyQuoteService(
             provider,
             NullLogger<HighFrequencyQuoteService>.Instance,
-            Options.Create(new HighFrequencyQuoteOptions { MaxConcurrentSymbols = 1 }));
+            Options.Create(new HighFrequencyQuoteOptions { MaxConcurrentSymbols = 1 }),
+            new FakeTradingCalendar());
 
         var processed = await service.SyncOnceAsync(new DateTimeOffset(2026, 3, 16, 2, 0, 0, TimeSpan.Zero));
 
@@ -190,5 +195,15 @@ public class HighFrequencyQuoteServiceTests
                 new IntradayMessageDto("高频快讯", "fake", DateTime.UtcNow, "https://example.com")
             });
         }
+    }
+
+    private sealed class FakeTradingCalendar : ITradingCalendarService
+    {
+        private readonly HashSet<DateOnly> _nonTradingDays;
+        public FakeTradingCalendar(params DateOnly[] nonTradingDays) => _nonTradingDays = new(nonTradingDays);
+        public bool IsLoaded => true;
+        public bool IsTradingDay(DateOnly date) => date.DayOfWeek is not DayOfWeek.Saturday and not DayOfWeek.Sunday && !_nonTradingDays.Contains(date);
+        public DateOnly GetPreviousTradingDay(DateOnly date) { var d = date.AddDays(-1); while (!IsTradingDay(d)) d = d.AddDays(-1); return d; }
+        public Task RefreshAsync(CancellationToken ct = default) => Task.CompletedTask;
     }
 }

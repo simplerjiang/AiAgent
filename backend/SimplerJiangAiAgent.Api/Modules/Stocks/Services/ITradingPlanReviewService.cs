@@ -6,6 +6,7 @@ using SimplerJiangAiAgent.Api.Data;
 using SimplerJiangAiAgent.Api.Data.Entities;
 using SimplerJiangAiAgent.Api.Infrastructure.Jobs;
 using SimplerJiangAiAgent.Api.Infrastructure.Llm;
+using SimplerJiangAiAgent.Api.Services;
 
 namespace SimplerJiangAiAgent.Api.Modules.Stocks.Services;
 
@@ -21,22 +22,25 @@ public sealed class TradingPlanReviewService : ITradingPlanReviewService
     private readonly ILlmService _llmService;
     private readonly TradingPlanReviewOptions _options;
     private readonly ILogger<TradingPlanReviewService> _logger;
+    private readonly ITradingCalendarService _calendar;
 
     public TradingPlanReviewService(
         AppDbContext dbContext,
         ILlmService llmService,
         IOptions<TradingPlanReviewOptions> options,
-        ILogger<TradingPlanReviewService> logger)
+        ILogger<TradingPlanReviewService> logger,
+        ITradingCalendarService calendar)
     {
         _dbContext = dbContext;
         _llmService = llmService;
         _options = options.Value;
         _logger = logger;
+        _calendar = calendar;
     }
 
     public async Task<int> EvaluateAsync(DateTimeOffset now, CancellationToken cancellationToken = default)
     {
-        if (!_options.Enabled || !ChinaAStockMarketClock.IsTradingSession(now))
+        if (!_options.Enabled || !ChinaAStockMarketClock.IsTradingSession(now, _calendar))
         {
             return 0;
         }

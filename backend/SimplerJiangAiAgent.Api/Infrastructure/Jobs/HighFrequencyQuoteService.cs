@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Options;
 using SimplerJiangAiAgent.Api.Modules.Stocks.Models;
 using SimplerJiangAiAgent.Api.Modules.Stocks.Services;
+using SimplerJiangAiAgent.Api.Services;
 
 namespace SimplerJiangAiAgent.Api.Infrastructure.Jobs;
 
@@ -9,15 +10,18 @@ public sealed class HighFrequencyQuoteService : BackgroundService
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<HighFrequencyQuoteService> _logger;
     private readonly HighFrequencyQuoteOptions _options;
+    private readonly ITradingCalendarService _calendar;
 
     public HighFrequencyQuoteService(
         IServiceProvider serviceProvider,
         ILogger<HighFrequencyQuoteService> logger,
-        IOptions<HighFrequencyQuoteOptions> options)
+        IOptions<HighFrequencyQuoteOptions> options,
+        ITradingCalendarService calendar)
     {
         _serviceProvider = serviceProvider;
         _logger = logger;
         _options = options.Value;
+        _calendar = calendar;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -51,7 +55,7 @@ public sealed class HighFrequencyQuoteService : BackgroundService
 
     public async Task<int> SyncOnceAsync(DateTimeOffset now, CancellationToken cancellationToken = default)
     {
-        if (!_options.Enabled || !ChinaAStockMarketClock.IsTradingSession(now))
+        if (!_options.Enabled || !ChinaAStockMarketClock.IsTradingSession(now, _calendar))
         {
             return 0;
         }

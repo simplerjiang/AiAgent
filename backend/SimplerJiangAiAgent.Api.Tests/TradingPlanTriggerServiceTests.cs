@@ -4,6 +4,7 @@ using SimplerJiangAiAgent.Api.Data;
 using SimplerJiangAiAgent.Api.Data.Entities;
 using SimplerJiangAiAgent.Api.Infrastructure.Jobs;
 using SimplerJiangAiAgent.Api.Modules.Stocks.Services;
+using SimplerJiangAiAgent.Api.Services;
 
 namespace SimplerJiangAiAgent.Api.Tests;
 
@@ -311,7 +312,8 @@ public sealed class TradingPlanTriggerServiceTests
                 Enabled = true,
                 MaxPlansPerPass = 50,
                 DivergenceLookbackMinutes = 30
-            }));
+            }),
+            new FakeTradingCalendar());
     }
 
     private static AppDbContext CreateDbContext()
@@ -373,5 +375,13 @@ public sealed class TradingPlanTriggerServiceTests
             UpdatedAt = new DateTime(2026, 3, 16, 1, 45, 0, DateTimeKind.Utc)
         });
         await dbContext.SaveChangesAsync();
+    }
+
+    private sealed class FakeTradingCalendar : ITradingCalendarService
+    {
+        public bool IsLoaded => false;
+        public bool IsTradingDay(DateOnly date) => date.DayOfWeek is not DayOfWeek.Saturday and not DayOfWeek.Sunday;
+        public DateOnly GetPreviousTradingDay(DateOnly date) { var d = date.AddDays(-1); while (!IsTradingDay(d)) d = d.AddDays(-1); return d; }
+        public Task RefreshAsync(CancellationToken ct = default) => Task.CompletedTask;
     }
 }
