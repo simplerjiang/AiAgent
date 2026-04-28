@@ -8,6 +8,7 @@ public sealed class StockDataService : IStockDataService
 {
     private const string TencentSourceName = "腾讯";
     private const string EastmoneySourceName = "东方财富";
+    private const string BaostockSourceName = "Baostock";
     private static readonly TimeSpan RequestPathLocalFactRefreshTimeout = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan RequestPathCrawlerMessagesTimeout = TimeSpan.FromSeconds(3);
     private readonly IMemoryCache _cache;
@@ -286,7 +287,7 @@ public sealed class StockDataService : IStockDataService
 
     private IReadOnlyList<IStockCrawler> ResolveKLineSources(string? source)
     {
-        return ResolvePreferredSources(source, EastmoneySourceName, TencentSourceName);
+        return ResolvePreferredSources(source, BaostockSourceName, EastmoneySourceName, TencentSourceName);
     }
 
     private IReadOnlyList<IStockCrawler> ResolveMinuteSources(string? source)
