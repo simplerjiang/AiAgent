@@ -168,3 +168,35 @@
 ### Backlog
 
 （无）
+
+---
+
+## v0.5.1 Sprint — 宏观经济数据全量接入（批次 1：基础数据层）
+
+> 接入 Baostock.NET 宏观五维数据 + 分红数据，暴露 REST API，为后续 LLM 集成和前端面板打基础。
+
+**Sprint 开始**: 2026-04-28
+**分支**: `v051`
+**计划文档**: [GOAL-v050 §3.2](../docs/GOAL-v050-baostock-integration-plan.md)
+
+### Active Stories (max 3)
+
+| Story | Title | Level | 描述 | 验收标准 | Status |
+|-------|-------|-------|------|---------|--------|
+| V051-S1 | 宏观数据全量采集 | M | 接入 5 个 Baostock.NET 宏观 API（存款利率/贷款利率/准备金率/月度货币供应/年度货币供应）；创建 MacroIndicator 实体；MacroDataWorker 后台定时采集 | 全部 5 类宏观数据落库；数据时间跨度 ≥ 5 年；Worker 日志无异常 | DONE |
+| V051-S2 | 宏观数据 REST API | M | 暴露统一端点 `GET /api/macro/{indicator}?from=&to=`；支持 JSON 时间序列响应；包含趋势方向标注 | 5 个指标均可通过 API 查询；响应包含时间序列 + 趋势方向 | DONE |
+| V051-S3 | 分红数据接入 | M | 接入 Baostock.NET QueryDividendDataAsync；创建 DividendRecord 实体；暴露 API 端点 `GET /api/stocks/{symbol}/dividends` | 分红数据可查询；与公开数据交叉验证通过 | DONE |
+| V051-S4 | LLM 宏观环境条件注入 | L | 事件驱动注入：利率调整→注入利率上下文；M2拐点→注入流动性信号；SHIBOR异常→注入资金面预警 | ≤200 token JSON 块注入 LLM prompt | DONE |
+| V051-S6 | 前端宏观环境卡片 | M | 市场概览页新增轻量级卡片（一行摘要） | 卡片正常渲染，仅变动时高亮 | DONE |
+| V051-S8 | 股票分析宏观标签 | S | 个股/行业分析时附加宏观环境标签 | 分析结果含宏观标签，不修改推荐分数 | DONE |
+
+### 批次 2 预告（待下一迭代）
+
+| Story | Title | Level | 描述 |
+|-------|-------|-------|------|
+| V051-S5 | 情绪分析宏观维度 | M | 宏观指标变动纳入情绪评分模型，新增"货币政策信号"维度。行业敏感度映射：利率↓→银行利空/地产利好 |
+| V051-S7 | 公告检索 Baostock 切换 | M | 巨潮+东财公告检索和 PDF 下载接入 Baostock.NET |
+
+### Backlog
+
+（继承 v0.4.8 技术债）
