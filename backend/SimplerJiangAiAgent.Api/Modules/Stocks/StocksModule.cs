@@ -1196,6 +1196,7 @@ public sealed class StocksModule : IModule
         group.MapGet("/dividends/{symbol}", async (
             string symbol,
             int? year,
+            bool? refresh,
             AppDbContext db,
             IBaostockClientFactory clientFactory,
             ILogger<StocksModule> logger,
@@ -1209,12 +1210,11 @@ public sealed class StocksModule : IModule
 
             var normalizedSymbol = StockSymbolNormalizer.Normalize(symbol);
 
-            // Check DB first
-            var query = db.StockDividendRecords.AsNoTracking()
-                .Where(x => x.StockCode == normalizedSymbol)
-                .OrderByDescending(x => x.ExDividendDate);
+            // Check DB first; skip cache if refresh=true
+            var forceRefresh = refresh == true;
+            var cached = !forceRefresh && await db.StockDividendRecords.AsNoTracking()
+                .AnyAsync(x => x.StockCode == normalizedSymbol, ct);
 
-            var cached = await query.AnyAsync(ct);
             if (!cached)
             {
                 // On-demand fetch from Baostock
@@ -1222,22 +1222,27 @@ public sealed class StocksModule : IModule
                 {
                     await using var lease = await clientFactory.GetClientAsync(ct);
                     var rows = new List<StockDividendRecord>();
+
+                    // Lookup StockName from StockIndustryClassification
+                    var upperSymbol = normalizedSymbol.ToUpperInvariant();
+                    var stockInfo = await db.StockIndustryClassifications.AsNoTracking()
+                        .FirstOrDefaultAsync(s => s.StockCode == normalizedSymbol || s.StockCode == upperSymbol, ct);
+                    var stockName = stockInfo?.StockName ?? string.Empty;
+
                     await foreach (var row in lease.Client.QueryDividendDataAsync(normalizedSymbol, null, "operate", ct))
                     {
-                        rows.Add(MapDividendRow(row, normalizedSymbol));
+                        rows.Add(MapDividendRow(row, normalizedSymbol, stockName));
                     }
 
                     if (rows.Count > 0)
                     {
+                        // Full-replace: delete old records to avoid NULL dedup issue
+                        var oldRecords = await db.StockDividendRecords
+                            .Where(r => r.StockCode == normalizedSymbol)
+                            .ToListAsync(ct);
+                        db.StockDividendRecords.RemoveRange(oldRecords);
                         db.StockDividendRecords.AddRange(rows);
-                        try
-                        {
-                            await db.SaveChangesAsync(ct);
-                        }
-                        catch (DbUpdateException)
-                        {
-                            // Duplicate key — another request already cached; ignore
-                        }
+                        await db.SaveChangesAsync(ct);
                     }
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
@@ -3779,12 +3784,12 @@ public sealed class StocksModule : IModule
         return status;
     }
 
-    private static StockDividendRecord MapDividendRow(Baostock.NET.Models.DividendRow row, string normalizedSymbol)
+    private static StockDividendRecord MapDividendRow(Baostock.NET.Models.DividendRow row, string normalizedSymbol, string stockName)
     {
         return new StockDividendRecord
         {
             StockCode = normalizedSymbol,
-            StockName = string.Empty,
+            StockName = stockName,
             PreNoticeDate = TryParseDateOnly(row.DividPreNoticeDate),
             DividendPerShare = TryParseDecimal(row.DividCashPsBeforeTax),
             DividendPerShareAfterTax = TryParseDecimal(row.DividCashPsAfterTax),
