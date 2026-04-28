@@ -161,9 +161,10 @@
 
 | Story | Title | Level | Status |
 |-------|-------|-------|--------|
-| V060-S1 | BacktestResult 实体 + Schema | M | TODO |
-| V060-S2 | BacktestService 核心计算 | L | TODO |
-| V060-S3 | 回测 REST API | M | TODO |
+| V060-S1 | BacktestResult 实体 + Schema | M | DONE |
+| V060-S2 | BacktestService 核心计算 | L | DONE |
+| V060-S3 | 回测 REST API | M | DONE |
+| V060-S6 | 自动回测 Worker | M | TODO |
 
 ### 批次 2 预告
 
@@ -171,7 +172,6 @@
 |-------|-------|-------|
 | V060-S4 | 前端回测仪表板 | L |
 | V060-S5 | K 线图回测标注 | M |
-| V060-S6 | 自动回测 Worker | M |
 
 （空）
 
