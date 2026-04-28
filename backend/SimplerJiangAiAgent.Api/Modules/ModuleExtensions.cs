@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using SimplerJiangAiAgent.Api.Modules.Backtest;
 using SimplerJiangAiAgent.Api.Modules.Llm;
 using SimplerJiangAiAgent.Api.Modules.Market;
 using SimplerJiangAiAgent.Api.Modules.Stocks;
@@ -17,7 +18,8 @@ public static class ModuleExtensions
         {
             new StocksModule(),
             new MarketModule(),
-            new LlmModule()
+            new LlmModule(),
+            new BacktestModule()
         };
 
         foreach (var module in modules)
