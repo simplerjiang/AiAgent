@@ -44,7 +44,7 @@ public sealed class BaostockStockCrawler : IStockCrawlerSource
                     row.Close.Value,
                     row.High.Value,
                     row.Low.Value,
-                    row.Volume ?? 0));
+                    (row.Volume ?? 0) / 100m));
             }
 
             return results.TakeLast(count).ToList();
