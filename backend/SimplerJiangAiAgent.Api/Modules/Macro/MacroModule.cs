@@ -18,13 +18,13 @@ public sealed class MacroModule : IModule
 
         group.MapGet("/", () => Results.Ok(new
         {
-            indicators = new[]
+            indicators = new object[]
             {
-                new { id = "deposit-rate", name = "存款基准利率", granularity = "event" },
-                new { id = "loan-rate", name = "贷款基准利率", granularity = "event" },
-                new { id = "money-supply-month", name = "月度货币供应量(M0/M1/M2)", granularity = "month" },
-                new { id = "money-supply-year", name = "年度货币供应量(M0/M1/M2)", granularity = "year" },
-                new { id = "shibor", name = "上海银行间同业拆放利率", granularity = "daily" }
+                new { id = "deposit-rate", name = "存款基准利率", granularity = "event", available = true },
+                new { id = "loan-rate", name = "贷款基准利率", granularity = "event", available = true },
+                new { id = "money-supply-month", name = "月度货币供应量(M0/M1/M2)", granularity = "month", available = true },
+                new { id = "money-supply-year", name = "年度货币供应量(M0/M1/M2)", granularity = "year", available = true },
+                new { id = "shibor", name = "上海银行间同业拆放利率", granularity = "daily", available = false, note = "Baostock.NET 客户端方法未实现" }
             }
         }))
         .WithName("ListMacroIndicators")
