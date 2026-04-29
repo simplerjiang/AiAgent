@@ -280,7 +280,7 @@ public sealed class LlmModule : IModule
         .WithName("TestLlmProvider")
         .WithOpenApi();
 
-        secureAdminGroup.MapGet("/ollama/status", async (IHttpClientFactory httpClientFactory) =>
+        adminGroup.MapGet("/ollama/status", async (IHttpClientFactory httpClientFactory) =>
         {
             using var httpClient = httpClientFactory.CreateClient();
             try
@@ -309,7 +309,7 @@ public sealed class LlmModule : IModule
         .WithName("GetOllamaStatus")
         .WithOpenApi();
 
-        secureAdminGroup.MapPost("/ollama/start", async (IHttpClientFactory httpClientFactory) =>
+        adminGroup.MapPost("/ollama/start", async (IHttpClientFactory httpClientFactory) =>
         {
             using var httpClient = httpClientFactory.CreateClient();
             try
