@@ -692,7 +692,7 @@ public sealed class StocksModule : IModule
             }
 
             var result = await fundamentalSnapshotService.GetSnapshotAsync(StockSymbolNormalizer.Normalize(symbol), httpContext.RequestAborted);
-            return result is null ? Results.NotFound() : Results.Ok(result);
+            return result is null ? Results.NoContent() : Results.Ok(result);
         })
         .WithName("GetStockFundamentalSnapshot")
         .WithOpenApi();
