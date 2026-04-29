@@ -10,6 +10,9 @@ public class OllamaEmbedder : IEmbedder
     private readonly ILogger<OllamaEmbedder> _logger;
     private readonly string _model;
     private bool? _available;
+    private DateTime _availableCheckedAt = DateTime.MinValue;
+    private static readonly TimeSpan AvailableCacheDuration = TimeSpan.FromMinutes(5);
+    private static readonly TimeSpan UnavailableCacheDuration = TimeSpan.FromSeconds(60);
 
     public OllamaEmbedder(HttpClient httpClient, ILogger<OllamaEmbedder> logger, string model = "bge-m3")
     {
@@ -22,29 +25,36 @@ public class OllamaEmbedder : IEmbedder
     {
         get
         {
-            if (_available == null)
+            var now = DateTime.UtcNow;
+            var cacheDuration = _available == true ? AvailableCacheDuration : UnavailableCacheDuration;
+
+            if (_available != null && (now - _availableCheckedAt) < cacheDuration)
             {
-                try
-                {
-                    var response = _httpClient.GetAsync("/api/tags").GetAwaiter().GetResult();
-                    if (!response.IsSuccessStatusCode)
-                    {
-                        _available = false;
-                    }
-                    else
-                    {
-                        var tags = response.Content.ReadFromJsonAsync<OllamaTagsResponse>().GetAwaiter().GetResult();
-                        _available = tags?.Models?.Any(m =>
-                            m.Name != null && m.Name.StartsWith(_model, StringComparison.OrdinalIgnoreCase)) == true;
-                        if (_available == false)
-                            _logger.LogWarning("[Embedding] Ollama is reachable but model '{Model}' is not installed", _model);
-                    }
-                }
-                catch
+                return _available.Value;
+            }
+
+            try
+            {
+                var response = _httpClient.GetAsync("/api/tags").GetAwaiter().GetResult();
+                if (!response.IsSuccessStatusCode)
                 {
                     _available = false;
                 }
+                else
+                {
+                    var tags = response.Content.ReadFromJsonAsync<OllamaTagsResponse>().GetAwaiter().GetResult();
+                    _available = tags?.Models?.Any(m =>
+                        m.Name != null && m.Name.StartsWith(_model, StringComparison.OrdinalIgnoreCase)) == true;
+                    if (_available == false)
+                        _logger.LogWarning("[Embedding] Ollama is reachable but model '{Model}' is not installed", _model);
+                }
             }
+            catch
+            {
+                _available = false;
+            }
+
+            _availableCheckedAt = now;
             return _available.Value;
         }
     }
@@ -68,6 +78,7 @@ public class OllamaEmbedder : IEmbedder
                 _logger.LogWarning("[Embedding] Ollama returned {Status} for model {Model}",
                     response.StatusCode, _model);
                 _available = false;
+                _availableCheckedAt = DateTime.UtcNow;
                 return null;
             }
 
@@ -79,6 +90,7 @@ public class OllamaEmbedder : IEmbedder
             }
 
             _available = true;
+            _availableCheckedAt = DateTime.UtcNow;
             return result.Embedding;
         }
         catch (OperationCanceledException)
@@ -89,6 +101,7 @@ public class OllamaEmbedder : IEmbedder
         {
             _logger.LogWarning(ex, "[Embedding] Ollama embedding failed for model {Model}", _model);
             _available = false;
+            _availableCheckedAt = DateTime.UtcNow;
             return null;
         }
     }
