@@ -1396,7 +1396,7 @@ public sealed class StocksModule : IModule
         .WithName("GetNewsImpact")
         .WithOpenApi();
 
-        app.MapGet("/api/news", async (string? symbol, string? level, ILocalFactIngestionService ingestionService, IQueryLocalFactDatabaseTool queryTool) =>
+        app.MapGet("/api/news", async (string? symbol, string? level, ILocalFactIngestionService ingestionService, IQueryLocalFactDatabaseTool queryTool, ILogger<StocksModule> logger) =>
         {
             var normalizedLevel = string.IsNullOrWhiteSpace(level) ? "stock" : level.Trim().ToLowerInvariant();
             if (normalizedLevel is not ("stock" or "sector" or "market"))
@@ -1422,9 +1422,25 @@ public sealed class StocksModule : IModule
             }
 
             var target = symbol.Trim();
-            await ingestionService.EnsureFreshAsync(target);
-            var result = await queryTool.QueryLevelAsync(target, normalizedLevel);
-            return Results.Ok(result);
+            try
+            {
+                await ingestionService.EnsureFreshAsync(target);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogWarning(ex, "EnsureFreshAsync failed for {Symbol}, proceeding with cached data", target);
+            }
+
+            try
+            {
+                var result = await queryTool.QueryLevelAsync(target, normalizedLevel);
+                return Results.Ok(result);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogWarning(ex, "QueryLevelAsync failed for {Symbol} level={Level}", target, normalizedLevel);
+                return Results.Ok(new LocalNewsBucketDto(target, normalizedLevel, null, Array.Empty<LocalNewsItemDto>()));
+            }
         })
         .WithName("GetLocalNews")
         .WithOpenApi();

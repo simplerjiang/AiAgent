@@ -206,7 +206,18 @@ public sealed class LocalFactIngestionService : ILocalFactIngestionService
                 SymbolCrawlTimestamps[normalized] = DateTime.UtcNow;
             }
 
-            await _aiEnrichmentService.ProcessSymbolPendingAsync(normalized, cancellationToken);
+            try
+            {
+                await _aiEnrichmentService.ProcessSymbolPendingAsync(normalized, cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "AI 富化处理失败，跳过: {Symbol}", normalized);
+            }
         }
         finally
         {
