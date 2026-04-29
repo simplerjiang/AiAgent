@@ -73,6 +73,28 @@ const showBackfillButton = computed(() => embedderAvailable.value && degradation
 const backfilling = ref(false)
 const backfillResult = ref(null)
 
+const startingOllama = ref(false)
+const ollamaStartResult = ref(null)
+
+async function startOllama() {
+  startingOllama.value = true
+  ollamaStartResult.value = null
+  try {
+    const res = await fetch('/api/admin/ollama/start', { method: 'POST' })
+    const data = await res.json()
+    if (data.success) {
+      ollamaStartResult.value = { type: 'success', text: 'Ollama 已启动，正在刷新状态...' }
+      setTimeout(() => emit('refresh'), 3000)
+    } else {
+      ollamaStartResult.value = { type: 'error', text: data.message || '启动失败' }
+    }
+  } catch {
+    ollamaStartResult.value = { type: 'error', text: '无法连接后端' }
+  } finally {
+    startingOllama.value = false
+  }
+}
+
 async function triggerBackfill() {
   backfilling.value = true
   backfillResult.value = null
@@ -120,8 +142,18 @@ async function triggerBackfill() {
       <p v-if="backfillResult" class="embedding-degraded-banner__backfill-result" :class="'embedding-degraded-banner__backfill-result--' + backfillResult.type">
         {{ backfillResult.text }}
       </p>
+      <p v-if="ollamaStartResult" class="embedding-degraded-banner__backfill-result" :class="'embedding-degraded-banner__backfill-result--' + ollamaStartResult.type">
+        {{ ollamaStartResult.text }}
+      </p>
     </div>
     <div class="embedding-degraded-banner__actions">
+      <button
+        v-if="degradationCause === 'ollama'"
+        type="button"
+        class="embedding-degraded-banner__backfill"
+        :disabled="startingOllama"
+        @click="startOllama"
+      >{{ startingOllama ? '启动中...' : '启动 Ollama' }}</button>
       <button
         v-if="showBackfillButton"
         type="button"

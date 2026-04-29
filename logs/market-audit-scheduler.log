@@ -33,3 +33,18 @@ Sync: FAIL
 Audit: FAIL
 Log written: C:\Users\kong\AiAgent\logs\market-audit-check-20260428-143001.json
 Exit code: 2
+=== Market Audit Daily Check (Once) ===
+Base URL: http://localhost:5119
+Sync: OK
+Audit: OK
+Source statuses:
+  - bkzj_board_rankings: ok
+  - bkzj_board_rankings_industry: ok
+  - bkzj_board_rankings_concept: ok
+  - bkzj_board_rankings_style: ok
+  - ths_continuous_limit_up: ok
+  - eastmoney_market_fs_sh_sz: ok
+sourceHealthy: n/a  businessComplete: n/a
+Latest reasons: (none)
+Log written: C:\Users\kong\AiAgent\logs\market-audit-check-20260429-143001.json
+Exit code: 0

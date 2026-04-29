@@ -9,14 +9,14 @@
 
 - **BACKLOG #113** 无 Vue Router/深链接仍未完成。（BACKLOG - 后续迭代）
 
-### v0.6.0 用户验收发现（2026-04-29）— 仍 OPEN
+### v0.6.0 用户验收发现（2026-04-29）— 全部 FIXED
 
 | Bug# | 严重度 | 描述 | 状态 |
 |------|--------|------|------|
-| **#118** | P2 | 导航栏标签在不同 Tab 间显示简称/全称不一致（如"股票"vs"股票信息"）。 | OPEN |
-| **#120** | P2 | AI 回测明细：同股同日出现两行记录（一行"已计算"一行"数据不足"），缺乏解释。 | OPEN |
-| **#122** | P3 | AI 回测页面下半部分大量空白，数据少时缺乏引导。 | OPEN |
-| **#125** | P3 | RAG 降级警告常驻，视觉醒目占空间大，应可折叠。 | OPEN |
+| **#118** | P2 | 导航栏标签在不同 Tab 间显示简称/全称不一致（如"股票"vs"股票信息"）。 | FIXED |
+| **#120** | P2 | AI 回测明细：同股同日出现两行记录（一行"已计算"一行"数据不足"），缺乏解释。 | FIXED |
+| **#122** | P3 | AI 回测页面下半部分大量空白，数据少时缺乏引导。 | FIXED |
+| **#125** | P3 | RAG 降级警告常驻，视觉醒目占空间大，应可折叠。 | FIXED |
 
 ---
 
@@ -108,6 +108,10 @@
 | **#124** | 回测明细股票筛选下拉显示名称 | ✓ FIXED |
 | **#126** | `FinancialReportTab.vue` 表格 CSS 硬编码颜色替换为 `var(--vscode-xxx)` 变量 | ✓ FIXED |
 | **#127** | `FinancialDataReadService.GetTrendSummary` YoY 改为同类型报告同比，新增 QoQ 环比字段 | ✓ FIXED |
+| **#118** | `App.vue` tab 标签统一使用 `shortName`，`title` 属性显示全名 | ✓ FIXED |
+| **#120** | `BacktestDashboard.vue` 回测明细增加"分析时间"列区分同股同日多条记录 | ✓ FIXED |
+| **#122** | `BacktestDashboard.vue` 空态引导内容替代空白区域 | ✓ FIXED |
+| **#125** | `EmbeddingDegradedBanner.vue` 添加关闭按钮 + sessionStorage 记忆 | ✓ FIXED |
 
 ### 三批修复最终总计
 

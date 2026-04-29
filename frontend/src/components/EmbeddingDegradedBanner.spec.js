@@ -29,7 +29,9 @@ describe('EmbeddingDegradedBanner', () => {
     expect(wrapper.text()).toContain('Ollama 未运行或 bge-m3 模型未安装')
     expect(wrapper.text()).toContain('bge-m3')
     expect(wrapper.text()).toContain('0 / 1456 chunks (0.0%)')
-    expect(wrapper.find('.embedding-degraded-banner__backfill').exists()).toBe(false)
+    const btns = wrapper.findAll('.embedding-degraded-banner__backfill')
+    expect(btns).toHaveLength(1)
+    expect(btns[0].text()).toBe('启动 Ollama')
   })
 
   it('renders zero-embedding cause with backfill button', () => {
@@ -150,6 +152,58 @@ describe('EmbeddingDegradedBanner', () => {
     await vi.dynamicImportSettled()
 
     expect(wrapper.text()).toContain('启动失败')
+    vi.unstubAllGlobals()
+  })
+
+  it('calls start ollama endpoint and shows success message', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      json: () => Promise.resolve({ success: true })
+    }))
+    const wrapper = mount(EmbeddingDegradedBanner, {
+      props: {
+        status: {
+          available: false,
+          model: 'bge-m3',
+          dimension: null,
+          embeddingCount: 0,
+          chunkCount: 100,
+          coverage: 0
+        }
+      }
+    })
+
+    const startBtn = wrapper.findAll('.embedding-degraded-banner__backfill').find(b => b.text() === '启动 Ollama')
+    expect(startBtn.exists()).toBe(true)
+    await startBtn.trigger('click')
+    await vi.dynamicImportSettled()
+
+    expect(fetch).toHaveBeenCalledWith('/api/admin/ollama/start', { method: 'POST' })
+    expect(wrapper.text()).toContain('Ollama 已启动')
+    vi.unstubAllGlobals()
+  })
+
+  it('shows error message on start ollama failure', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      json: () => Promise.resolve({ success: false, message: '找不到 Ollama' })
+    }))
+    const wrapper = mount(EmbeddingDegradedBanner, {
+      props: {
+        status: {
+          available: false,
+          model: 'bge-m3',
+          dimension: null,
+          embeddingCount: 0,
+          chunkCount: 100,
+          coverage: 0
+        }
+      }
+    })
+
+    const startBtn = wrapper.findAll('.embedding-degraded-banner__backfill').find(b => b.text() === '启动 Ollama')
+    await startBtn.trigger('click')
+    await vi.dynamicImportSettled()
+
+    expect(wrapper.text()).toContain('找不到 Ollama')
     vi.unstubAllGlobals()
   })
 })
