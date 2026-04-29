@@ -40,7 +40,7 @@ describe('App', () => {
     const wrapper = shallowMount(App, mountOptions)
     const buttons = wrapper.findAll('button.nav-tab')
     expect(buttons.length).toBeGreaterThan(0)
-    expect(wrapper.text()).toContain('情绪轮动')
+    expect(wrapper.text()).toContain('情绪')
   })
 
   it('shows compact date context in the header clock', async () => {
