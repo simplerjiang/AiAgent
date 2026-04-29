@@ -31,14 +31,14 @@ public sealed class StockDetailEndpointDegradationTests : IClassFixture<StockDet
             return new IntradayMessagesResultDto(Array.Empty<IntradayMessageDto>());
         };
         var client = _factory.CreateClient();
-        client.Timeout = TimeSpan.FromSeconds(8);
+        client.Timeout = TimeSpan.FromSeconds(15);
 
         var stopwatch = Stopwatch.StartNew();
         var response = await client.GetAsync("/api/stocks/detail?symbol=sh000001&persist=false&includeFundamentalSnapshot=false");
         stopwatch.Stop();
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(6), $"detail should degrade quickly, elapsed={stopwatch.Elapsed}");
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(12), $"detail should degrade quickly, elapsed={stopwatch.Elapsed}");
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("sh000001", body.GetProperty("quote").GetProperty("symbol").GetString());
         Assert.Empty(body.GetProperty("messages").EnumerateArray());

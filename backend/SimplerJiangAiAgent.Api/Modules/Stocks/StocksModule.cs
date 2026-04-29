@@ -37,7 +37,7 @@ public sealed class StocksModule : IModule
     };
     private static readonly TimeSpan FinancialWorkerProxyTimeout = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan FinancialWorkerCollectProxyTimeout = TimeSpan.FromSeconds(60);
-    private static readonly TimeSpan IntradayMessagesEndpointTimeout = TimeSpan.FromSeconds(3);
+    private static readonly TimeSpan IntradayMessagesEndpointTimeout = TimeSpan.FromSeconds(8);
     // V041-S8-FU-1: PDF 采集（下载 + 提取 + 投票 + 解析 + 持久化）耗时较长，单独放宽到 5 分钟。
     private static readonly TimeSpan FinancialWorkerPdfCollectProxyTimeout = TimeSpan.FromMinutes(5);
 

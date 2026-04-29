@@ -149,6 +149,22 @@ public static class StockMarketDataSchemaInitializer
                     );
                     CREATE UNIQUE INDEX IF NOT EXISTS IX_StockDividendRecords_StockCode_ExDividendDate
                         ON StockDividendRecords (StockCode, ExDividendDate);
+
+                    CREATE TABLE IF NOT EXISTS StockQueryHistories (
+                        Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        Symbol TEXT NOT NULL,
+                        Name TEXT NOT NULL DEFAULT '',
+                        Price TEXT NOT NULL DEFAULT '0',
+                        ChangePercent TEXT NOT NULL DEFAULT '0',
+                        TurnoverRate TEXT NOT NULL DEFAULT '0',
+                        PeRatio TEXT NOT NULL DEFAULT '0',
+                        High TEXT NOT NULL DEFAULT '0',
+                        Low TEXT NOT NULL DEFAULT '0',
+                        Speed TEXT NOT NULL DEFAULT '0',
+                        UpdatedAt TEXT NOT NULL
+                    );
+                    CREATE UNIQUE INDEX IF NOT EXISTS IX_StockQueryHistories_Symbol
+                        ON StockQueryHistories (Symbol);
                     """;
                 await cmd.ExecuteNonQueryAsync(cancellationToken);
             }
