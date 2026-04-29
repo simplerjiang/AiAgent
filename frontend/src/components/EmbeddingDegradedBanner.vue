@@ -9,7 +9,7 @@ const props = defineProps({
   compact: { type: Boolean, default: false }
 })
 
-defineEmits(['refresh'])
+const emit = defineEmits(['refresh'])
 
 const dismissed = ref(sessionStorage.getItem('rag-banner-dismissed') === 'true')
 function dismiss() {
@@ -28,12 +28,68 @@ const modelText = computed(() => pick(props.status, 'model', 'Model') || '未识
 const dimensionText = computed(() => pick(props.status, 'dimension', 'Dimension') ?? '—')
 const embeddingCount = computed(() => toNumber(pick(props.status, 'embeddingCount', 'EmbeddingCount')) ?? 0)
 const chunkCount = computed(() => toNumber(pick(props.status, 'chunkCount', 'ChunkCount')) ?? 0)
+const coverageRaw = computed(() => toNumber(pick(props.status, 'coverage', 'Coverage')))
 const coverageText = computed(() => {
-  const coverage = toNumber(pick(props.status, 'coverage', 'Coverage'))
-  if (coverage === null) return '—'
-  return `${Math.max(0, Math.min(100, coverage * 100)).toFixed(1)}%`
+  if (coverageRaw.value === null) return '—'
+  return `${Math.max(0, Math.min(100, coverageRaw.value * 100)).toFixed(1)}%`
 })
 const chunkSummary = computed(() => `${embeddingCount.value} / ${chunkCount.value} chunks (${coverageText.value})`)
+
+const embedderAvailable = computed(() => {
+  const val = pick(props.status, 'available', 'Available')
+  return val === true
+})
+
+// Degradation cause: 'ollama' | 'zero' | 'low' | 'unknown'
+const degradationCause = computed(() => {
+  if (props.error) return 'unknown'
+  if (!props.status) return 'unknown'
+  if (!embedderAvailable.value) return 'ollama'
+  if (embeddingCount.value === 0 && chunkCount.value > 0) return 'zero'
+  if (coverageRaw.value !== null && coverageRaw.value < 0.5) return 'low'
+  return 'unknown'
+})
+
+const bannerTitle = computed(() => {
+  switch (degradationCause.value) {
+    case 'ollama': return '向量模型未就绪'
+    case 'zero': return '尚无向量数据'
+    case 'low': return '向量覆盖不足'
+    default: return 'RAG 检索能力已降级'
+  }
+})
+
+const bannerMessage = computed(() => {
+  switch (degradationCause.value) {
+    case 'ollama': return 'Ollama 未运行或 bge-m3 模型未安装'
+    case 'zero': return '点击补建开始构建检索索引'
+    case 'low': return `当前覆盖率 ${coverageText.value} — AI 分析引用质量可能受影响`
+    default: return 'Embedding 不可用或覆盖率不足，AI 分析和财报问答可能无法读取完整证据。'
+  }
+})
+
+const showBackfillButton = computed(() => embedderAvailable.value && degradationCause.value !== 'unknown')
+
+const backfilling = ref(false)
+const backfillResult = ref(null)
+
+async function triggerBackfill() {
+  backfilling.value = true
+  backfillResult.value = null
+  try {
+    const res = await fetch('/api/embedding/backfill', { method: 'POST' })
+    if (res.ok) {
+      backfillResult.value = { type: 'success', text: '补建任务已启动，后台处理中...' }
+      setTimeout(() => emit('refresh'), 5000)
+    } else {
+      backfillResult.value = { type: 'error', text: '启动失败，请稍后重试' }
+    }
+  } catch {
+    backfillResult.value = { type: 'error', text: '网络错误' }
+  } finally {
+    backfilling.value = false
+  }
+}
 </script>
 
 <template>
@@ -44,10 +100,8 @@ const chunkSummary = computed(() => `${embeddingCount.value} / ${chunkCount.valu
     role="alert"
   >
     <div class="embedding-degraded-banner__body">
-      <strong class="embedding-degraded-banner__title">RAG 检索能力已降级</strong>
-      <p class="embedding-degraded-banner__message">
-        Embedding 不可用或覆盖率不足，AI 分析和财报问答可能无法读取完整证据。
-      </p>
+      <strong class="embedding-degraded-banner__title">{{ bannerTitle }}</strong>
+      <p class="embedding-degraded-banner__message">{{ bannerMessage }}</p>
       <p v-if="error" class="embedding-degraded-banner__error">{{ error }}</p>
       <dl class="embedding-degraded-banner__meta">
         <div>
@@ -63,13 +117,25 @@ const chunkSummary = computed(() => `${embeddingCount.value} / ${chunkCount.valu
           <dd>{{ chunkSummary }}</dd>
         </div>
       </dl>
+      <p v-if="backfillResult" class="embedding-degraded-banner__backfill-result" :class="'embedding-degraded-banner__backfill-result--' + backfillResult.type">
+        {{ backfillResult.text }}
+      </p>
     </div>
-    <button
-      type="button"
-      class="embedding-degraded-banner__refresh"
-      :disabled="loading"
-      @click="$emit('refresh')"
-    >{{ loading ? '刷新中' : '刷新状态' }}</button>
+    <div class="embedding-degraded-banner__actions">
+      <button
+        v-if="showBackfillButton"
+        type="button"
+        class="embedding-degraded-banner__backfill"
+        :disabled="backfilling"
+        @click="triggerBackfill"
+      >{{ backfilling ? '补建中...' : (degradationCause === 'zero' ? '开始补建' : '补建向量') }}</button>
+      <button
+        type="button"
+        class="embedding-degraded-banner__refresh"
+        :disabled="loading"
+        @click="$emit('refresh')"
+      >{{ loading ? '刷新中' : '刷新状态' }}</button>
+    </div>
     <button
       type="button"
       class="embedding-degraded-banner__dismiss"
@@ -161,6 +227,43 @@ const chunkSummary = computed(() => `${embeddingCount.value} / ${chunkCount.valu
 .embedding-degraded-banner__refresh:disabled {
   opacity: 0.65;
   cursor: not-allowed;
+}
+
+.embedding-degraded-banner__actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.embedding-degraded-banner__backfill {
+  border: 1px solid #166534;
+  border-radius: 6px;
+  background: #166534;
+  color: #f0fdf4;
+  font-weight: 700;
+  padding: var(--space-2) var(--space-3);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.embedding-degraded-banner__backfill:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.embedding-degraded-banner__backfill-result {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.embedding-degraded-banner__backfill-result--success {
+  color: #166534;
+}
+
+.embedding-degraded-banner__backfill-result--error {
+  color: #991b1b;
 }
 
 .embedding-degraded-banner__dismiss {
