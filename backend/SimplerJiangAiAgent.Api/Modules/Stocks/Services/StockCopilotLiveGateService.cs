@@ -37,6 +37,7 @@ public sealed class StockCopilotLiveGateService : IStockCopilotLiveGateService
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IConfiguration _configuration;
     private readonly IGpuTaskQueue _gpuQueue;
+    private readonly ILlmSettingsStore _llmSettingsStore;
     private readonly ILogger<StockCopilotLiveGateService> _logger;
 
     public StockCopilotLiveGateService(
@@ -53,6 +54,7 @@ public sealed class StockCopilotLiveGateService : IStockCopilotLiveGateService
         IHttpClientFactory httpClientFactory,
         IConfiguration configuration,
         IGpuTaskQueue gpuQueue,
+        ILlmSettingsStore llmSettingsStore,
         ILogger<StockCopilotLiveGateService> logger)
     {
         _chatHistoryService = chatHistoryService;
@@ -68,6 +70,7 @@ public sealed class StockCopilotLiveGateService : IStockCopilotLiveGateService
         _httpClientFactory = httpClientFactory;
         _configuration = configuration;
         _gpuQueue = gpuQueue;
+        _llmSettingsStore = llmSettingsStore;
         _logger = logger;
     }
 
@@ -145,7 +148,9 @@ public sealed class StockCopilotLiveGateService : IStockCopilotLiveGateService
         string finalAnswerText;
         if (execution.ToolResults.Any(t => string.Equals(t.Status, "completed", StringComparison.OrdinalIgnoreCase)))
         {
-            await using var gpuLease = await _gpuQueue.AcquireAsync(
+            var resolvedProvider = await _llmSettingsStore.ResolveProviderKeyAsync(provider, cancellationToken);
+            await using var gpuLease = await _gpuQueue.AcquireIfLocalAsync(
+                resolvedProvider,
                 $"Copilot LLM: {(trimmedQuestion.Length > 20 ? trimmedQuestion[..20] : trimmedQuestion)}",
                 GpuTaskPriority.High, cancellationToken);
             using var llmCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, gpuLease.CancellationToken);

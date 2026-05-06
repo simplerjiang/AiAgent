@@ -21,6 +21,7 @@ public sealed class TradeReviewService : ITradeReviewService
     private readonly AppDbContext _db;
     private readonly ILlmService _llmService;
     private readonly IGpuTaskQueue _gpuQueue;
+    private readonly ILlmSettingsStore _llmSettingsStore;
 
     private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web)
     {
@@ -28,11 +29,12 @@ public sealed class TradeReviewService : ITradeReviewService
         WriteIndented = false
     };
 
-    public TradeReviewService(AppDbContext db, ILlmService llmService, IGpuTaskQueue gpuQueue)
+    public TradeReviewService(AppDbContext db, ILlmService llmService, IGpuTaskQueue gpuQueue, ILlmSettingsStore llmSettingsStore)
     {
         _db = db;
         _llmService = llmService;
         _gpuQueue = gpuQueue;
+        _llmSettingsStore = llmSettingsStore;
     }
 
     public async Task<TradeReviewItemDto> GenerateReviewAsync(TradeReviewGenerateDto dto, CancellationToken cancellationToken = default)
@@ -143,8 +145,9 @@ public sealed class TradeReviewService : ITradeReviewService
         var prompt = BuildPrompt(contextJson);
 
         // 8. Call LLM
-        await using var gpuLease = await _gpuQueue.AcquireAsync(
-            "交易复盘", GpuTaskPriority.High, cancellationToken);
+        var resolvedProvider = await _llmSettingsStore.ResolveProviderKeyAsync("active", cancellationToken);
+        await using var gpuLease = await _gpuQueue.AcquireIfLocalAsync(
+            resolvedProvider, "交易复盘", GpuTaskPriority.High, cancellationToken);
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, gpuLease.CancellationToken);
 
         LlmChatResult llmResult;

@@ -26,6 +26,7 @@ public sealed class SourceGovernanceService : ISourceGovernanceService
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ICommandRunner _commandRunner;
     private readonly IGpuTaskQueue _gpuQueue;
+    private readonly ILlmSettingsStore _llmSettingsStore;
     private readonly string _repoRoot;
 
     private static readonly string[] AllowedCrawlerPathPrefixes =
@@ -45,7 +46,8 @@ public sealed class SourceGovernanceService : ISourceGovernanceService
         ILlmService llmService,
         IHttpClientFactory httpClientFactory,
         ICommandRunner commandRunner,
-        IGpuTaskQueue gpuQueue)
+        IGpuTaskQueue gpuQueue,
+        ILlmSettingsStore llmSettingsStore)
     {
         _dbContext = dbContext;
         _options = options.Value;
@@ -54,13 +56,15 @@ public sealed class SourceGovernanceService : ISourceGovernanceService
         _httpClientFactory = httpClientFactory;
         _commandRunner = commandRunner;
         _gpuQueue = gpuQueue;
+        _llmSettingsStore = llmSettingsStore;
         _repoRoot = string.IsNullOrWhiteSpace(_options.RepositoryRoot) ? ResolveRepositoryRoot() : _options.RepositoryRoot;
     }
 
     public async Task RunOnceAsync(CancellationToken cancellationToken = default)
     {
-        await using var gpuLease = await _gpuQueue.AcquireAsync(
-            "数据源治理", GpuTaskPriority.Low, cancellationToken);
+        var resolvedProvider = await _llmSettingsStore.ResolveProviderKeyAsync(_options.LlmProvider, cancellationToken);
+        await using var gpuLease = await _gpuQueue.AcquireIfLocalAsync(
+            resolvedProvider, "数据源治理", GpuTaskPriority.Low, cancellationToken);
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, gpuLease.CancellationToken);
         cancellationToken = linkedCts.Token;
 

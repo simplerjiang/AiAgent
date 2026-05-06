@@ -99,6 +99,7 @@ public sealed class RecommendationRunnerTests
             new FakeLlmService(),
             provider.GetRequiredService<IServiceScopeFactory>(),
             NullGpuTaskQueue.Instance,
+            NullLlmSettingsStore.Instance,
             NullLogger<RecommendationRunner>.Instance);
     }
 

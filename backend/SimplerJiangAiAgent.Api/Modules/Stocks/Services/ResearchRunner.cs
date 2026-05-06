@@ -113,8 +113,11 @@ public sealed class ResearchRunner : IResearchRunner
 
     public async Task RunTurnAsync(long turnId, CancellationToken cancellationToken = default)
     {
-        await using var gpuLease = await _gpuQueue.AcquireAsync(
-            $"深度研究 Turn#{turnId}", GpuTaskPriority.High, cancellationToken);
+        var activeProvider = _llmSettingsStore != null
+            ? await _llmSettingsStore.GetActiveProviderKeyAsync(cancellationToken)
+            : "ollama";
+        await using var gpuLease = await _gpuQueue.AcquireIfLocalAsync(
+            activeProvider, $"深度研究 Turn#{turnId}", GpuTaskPriority.High, cancellationToken);
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, gpuLease.CancellationToken);
         cancellationToken = linkedCts.Token;
 

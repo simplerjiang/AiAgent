@@ -46,7 +46,8 @@ public sealed class TradingPlanReviewServiceTests
             Options.Create(new TradingPlanReviewOptions()),
             NullLogger<TradingPlanReviewService>.Instance,
             new FakeTradingCalendar(),
-            NullGpuTaskQueue.Instance);
+            NullGpuTaskQueue.Instance,
+            NullLlmSettingsStore.Instance);
 
         var changes = await service.EvaluateAsync(new DateTimeOffset(2026, 3, 16, 2, 8, 0, TimeSpan.Zero));
 
@@ -90,7 +91,8 @@ public sealed class TradingPlanReviewServiceTests
             Options.Create(new TradingPlanReviewOptions()),
             NullLogger<TradingPlanReviewService>.Instance,
             new FakeTradingCalendar(),
-            NullGpuTaskQueue.Instance);
+            NullGpuTaskQueue.Instance,
+            NullLlmSettingsStore.Instance);
 
         var changes = await service.EvaluateAsync(new DateTimeOffset(2026, 3, 16, 2, 8, 0, TimeSpan.Zero));
 
@@ -126,7 +128,8 @@ public sealed class TradingPlanReviewServiceTests
             Options.Create(new TradingPlanReviewOptions()),
             NullLogger<TradingPlanReviewService>.Instance,
             new FakeTradingCalendar(),
-            NullGpuTaskQueue.Instance);
+            NullGpuTaskQueue.Instance,
+            NullLlmSettingsStore.Instance);
 
         var changes = await service.EvaluateAsync(new DateTimeOffset(2026, 3, 16, 2, 8, 0, TimeSpan.Zero));
 
@@ -171,7 +174,8 @@ public sealed class TradingPlanReviewServiceTests
             Options.Create(new TradingPlanReviewOptions()),
             NullLogger<TradingPlanReviewService>.Instance,
             new FakeTradingCalendar(),
-            NullGpuTaskQueue.Instance);
+            NullGpuTaskQueue.Instance,
+            NullLlmSettingsStore.Instance);
 
         var changes = await service.EvaluateAsync(new DateTimeOffset(2026, 3, 16, 2, 8, 0, TimeSpan.Zero));
 
@@ -205,7 +209,8 @@ public sealed class TradingPlanReviewServiceTests
             Options.Create(new TradingPlanReviewOptions()),
             NullLogger<TradingPlanReviewService>.Instance,
             new FakeTradingCalendar(),
-            NullGpuTaskQueue.Instance);
+            NullGpuTaskQueue.Instance,
+            NullLlmSettingsStore.Instance);
 
         var changes = await service.EvaluateAsync(new DateTimeOffset(2026, 3, 16, 2, 8, 0, TimeSpan.Zero));
 
@@ -242,7 +247,8 @@ public sealed class TradingPlanReviewServiceTests
             Options.Create(new TradingPlanReviewOptions()),
             NullLogger<TradingPlanReviewService>.Instance,
             new FakeTradingCalendar(),
-            NullGpuTaskQueue.Instance);
+            NullGpuTaskQueue.Instance,
+            NullLlmSettingsStore.Instance);
 
         var changes = await service.EvaluateAsync(new DateTimeOffset(2026, 3, 16, 2, 8, 0, TimeSpan.Zero));
 

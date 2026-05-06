@@ -989,8 +989,10 @@ public sealed class LocalFactAiEnrichmentService : ILocalFactAiEnrichmentService
 
     public async Task<LocalFactPendingProcessSummary> ProcessPendingBatchAsync(CancellationToken cancellationToken = default)
     {
-        await using var gpuLease = await _gpuQueue.AcquireAsync(
-            "新闻AI清洗 (batch)", GpuTaskPriority.Low, cancellationToken);
+        var (cleansingProvider, _, _) = await _settingsStore.GetNewsCleansingSettingsAsync(cancellationToken);
+        var resolvedProvider = await _settingsStore.ResolveProviderKeyAsync(cleansingProvider, cancellationToken);
+        await using var gpuLease = await _gpuQueue.AcquireIfLocalAsync(
+            resolvedProvider, "新闻AI清洗 (batch)", GpuTaskPriority.Low, cancellationToken);
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, gpuLease.CancellationToken);
         cancellationToken = linkedCts.Token;
 

@@ -26,6 +26,7 @@ public sealed class RecommendationRunner : IRecommendationRunner
     private readonly ILlmService _llmService;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IGpuTaskQueue _gpuQueue;
+    private readonly ILlmSettingsStore _llmSettingsStore;
     private readonly ILogger<RecommendationRunner> _logger;
     private readonly ISessionFileLogger? _sessionLogger;
 
@@ -41,8 +42,9 @@ public sealed class RecommendationRunner : IRecommendationRunner
         ILlmService llmService,
         IServiceScopeFactory scopeFactory,
         IGpuTaskQueue gpuQueue,
+        ILlmSettingsStore llmSettingsStore,
         ILogger<RecommendationRunner> logger)
-        : this(db, roleExecutor, eventBus, llmService, scopeFactory, gpuQueue, logger, null)
+        : this(db, roleExecutor, eventBus, llmService, scopeFactory, gpuQueue, llmSettingsStore, logger, null)
     {
     }
 
@@ -53,6 +55,7 @@ public sealed class RecommendationRunner : IRecommendationRunner
         ILlmService llmService,
         IServiceScopeFactory scopeFactory,
         IGpuTaskQueue gpuQueue,
+        ILlmSettingsStore llmSettingsStore,
         ILogger<RecommendationRunner> logger,
         ISessionFileLogger? sessionLogger)
     {
@@ -62,14 +65,16 @@ public sealed class RecommendationRunner : IRecommendationRunner
         _llmService = llmService;
         _scopeFactory = scopeFactory;
         _gpuQueue = gpuQueue;
+        _llmSettingsStore = llmSettingsStore;
         _logger = logger;
         _sessionLogger = sessionLogger;
     }
 
     public async Task RunTurnAsync(long turnId, CancellationToken ct = default)
     {
-        await using var gpuLease = await _gpuQueue.AcquireAsync(
-            $"推荐组合 Turn#{turnId}", GpuTaskPriority.High, ct);
+        var activeProvider = await _llmSettingsStore.GetActiveProviderKeyAsync(ct);
+        await using var gpuLease = await _gpuQueue.AcquireIfLocalAsync(
+            activeProvider, $"推荐组合 Turn#{turnId}", GpuTaskPriority.High, ct);
 
         using var timeoutCts = new CancellationTokenSource(TimeSpan.FromMinutes(15));
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, gpuLease.CancellationToken, timeoutCts.Token);

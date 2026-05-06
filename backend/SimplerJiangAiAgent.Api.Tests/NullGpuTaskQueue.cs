@@ -14,6 +14,9 @@ internal sealed class NullGpuTaskQueue : IGpuTaskQueue
     public Task<IGpuLease> AcquireAsync(string taskName, GpuTaskPriority priority, CancellationToken ct = default)
         => Task.FromResult<IGpuLease>(new NullLease());
 
+    public Task<IGpuLease> AcquireIfLocalAsync(string resolvedProviderKey, string taskName, GpuTaskPriority priority, CancellationToken ct = default)
+        => Task.FromResult<IGpuLease>(new NullLease());
+
     public GpuQueueSnapshot GetSnapshot()
         => new(null, [], 0, false);
 

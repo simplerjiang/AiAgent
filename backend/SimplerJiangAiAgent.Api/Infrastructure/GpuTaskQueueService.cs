@@ -52,6 +52,12 @@ public interface IGpuTaskQueue
     void Resume();
     bool CancelCurrent();
     Task<IGpuLease> AcquireAsync(string taskName, GpuTaskPriority priority, CancellationToken ct = default);
+
+    /// <summary>
+    /// Only acquires a GPU lease when the resolved provider is a local provider (e.g. Ollama).
+    /// Remote providers (openai, antigravity, etc.) get a no-op lease immediately.
+    /// </summary>
+    Task<IGpuLease> AcquireIfLocalAsync(string resolvedProviderKey, string taskName, GpuTaskPriority priority, CancellationToken ct = default);
     GpuQueueSnapshot GetSnapshot();
     IReadOnlyList<GpuTaskInfo> GetHistory(int count = 50);
 }
@@ -139,6 +145,26 @@ public sealed class GpuTaskQueueService : IGpuTaskQueue
         await entry.Tcs.Task;
 
         return new GpuLease(entry, this);
+    }
+
+    private static readonly string[] LocalProviders = ["ollama"];
+
+    public Task<IGpuLease> AcquireIfLocalAsync(string resolvedProviderKey, string taskName, GpuTaskPriority priority, CancellationToken ct = default)
+    {
+        if (LocalProviders.Contains(resolvedProviderKey, StringComparer.OrdinalIgnoreCase))
+            return AcquireAsync(taskName, priority, ct);
+
+        return Task.FromResult<IGpuLease>(NoOpLease.Instance);
+    }
+
+    private sealed class NoOpLease : IGpuLease
+    {
+        public static readonly NoOpLease Instance = new();
+        public string TaskId => "noop";
+        public CancellationToken CancellationToken => CancellationToken.None;
+        public void ReportProgress(string? status) { }
+        public void MarkFailed() { }
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
     public GpuQueueSnapshot GetSnapshot()

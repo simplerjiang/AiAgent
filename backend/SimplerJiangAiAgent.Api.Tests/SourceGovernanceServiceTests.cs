@@ -47,7 +47,7 @@ public sealed class SourceGovernanceServiceTests
                 Content = new StringContent("published 2026-03-12 market update")
             }));
 
-        var service = new SourceGovernanceService(dbContext, options, new FakeFileLogWriter(), llm, httpFactory, new FakeCommandRunner(), NullGpuTaskQueue.Instance);
+        var service = new SourceGovernanceService(dbContext, options, new FakeFileLogWriter(), llm, httpFactory, new FakeCommandRunner(), NullGpuTaskQueue.Instance, NullLlmSettingsStore.Instance);
         await service.RunOnceAsync();
 
         var registry = await dbContext.NewsSourceRegistries.SingleAsync();
@@ -125,7 +125,7 @@ public sealed class SourceGovernanceServiceTests
         commandRunner.SetExitCode("dotnet test backend/SimplerJiangAiAgent.Api.Tests/SimplerJiangAiAgent.Api.Tests.csproj --filter SinaCompanyNewsParserTests", 0);
         commandRunner.SetExitCode("dotnet test backend/SimplerJiangAiAgent.Api.Tests/SimplerJiangAiAgent.Api.Tests.csproj --filter SourceGovernanceServiceTests", 0);
 
-        var service = new SourceGovernanceService(dbContext, options, new FakeFileLogWriter(), llm, httpFactory, commandRunner, NullGpuTaskQueue.Instance);
+        var service = new SourceGovernanceService(dbContext, options, new FakeFileLogWriter(), llm, httpFactory, commandRunner, NullGpuTaskQueue.Instance, NullLlmSettingsStore.Instance);
         await service.RunOnceAsync();
 
         var queue = await dbContext.CrawlerChangeQueues.SingleAsync();
@@ -176,7 +176,8 @@ public sealed class SourceGovernanceServiceTests
             new FakeLlmService("[]"),
             new FakeHttpClientFactory(new FakeHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK))),
             new FakeCommandRunner(),
-            NullGpuTaskQueue.Instance);
+            NullGpuTaskQueue.Instance,
+            NullLlmSettingsStore.Instance);
 
         await service.RunOnceAsync();
 
@@ -253,7 +254,7 @@ public sealed class SourceGovernanceServiceTests
         var commandRunner = new FakeCommandRunner();
         commandRunner.SetExitCode("dotnet build backend/SimplerJiangAiAgent.Api/SimplerJiangAiAgent.Api.csproj -nologo", 1);
 
-        var service = new SourceGovernanceService(dbContext, options, new FakeFileLogWriter(), llm, httpFactory, commandRunner, NullGpuTaskQueue.Instance);
+        var service = new SourceGovernanceService(dbContext, options, new FakeFileLogWriter(), llm, httpFactory, commandRunner, NullGpuTaskQueue.Instance, NullLlmSettingsStore.Instance);
         await service.RunOnceAsync();
 
         var queue = await dbContext.CrawlerChangeQueues.SingleAsync();
@@ -316,7 +317,8 @@ public sealed class SourceGovernanceServiceTests
             new FakeLlmService("[]"),
             new FakeHttpClientFactory(new FakeHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK))),
             new FakeCommandRunner(),
-            NullGpuTaskQueue.Instance);
+            NullGpuTaskQueue.Instance,
+            NullLlmSettingsStore.Instance);
 
         await service.RunOnceAsync();
 

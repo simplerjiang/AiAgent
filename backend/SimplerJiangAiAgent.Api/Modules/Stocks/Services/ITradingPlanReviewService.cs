@@ -25,6 +25,7 @@ public sealed class TradingPlanReviewService : ITradingPlanReviewService
     private readonly ILogger<TradingPlanReviewService> _logger;
     private readonly ITradingCalendarService _calendar;
     private readonly IGpuTaskQueue _gpuQueue;
+    private readonly ILlmSettingsStore _llmSettingsStore;
 
     public TradingPlanReviewService(
         AppDbContext dbContext,
@@ -32,7 +33,8 @@ public sealed class TradingPlanReviewService : ITradingPlanReviewService
         IOptions<TradingPlanReviewOptions> options,
         ILogger<TradingPlanReviewService> logger,
         ITradingCalendarService calendar,
-        IGpuTaskQueue gpuQueue)
+        IGpuTaskQueue gpuQueue,
+        ILlmSettingsStore llmSettingsStore)
     {
         _dbContext = dbContext;
         _llmService = llmService;
@@ -40,6 +42,7 @@ public sealed class TradingPlanReviewService : ITradingPlanReviewService
         _logger = logger;
         _calendar = calendar;
         _gpuQueue = gpuQueue;
+        _llmSettingsStore = llmSettingsStore;
     }
 
     public async Task<int> EvaluateAsync(DateTimeOffset now, CancellationToken cancellationToken = default)
@@ -129,8 +132,9 @@ public sealed class TradingPlanReviewService : ITradingPlanReviewService
                 TradingPlanThreatReviewResult review;
                 try
                 {
-                    await using var gpuLease = await _gpuQueue.AcquireAsync(
-                        "交易计划复核", GpuTaskPriority.Low, cancellationToken);
+                    var resolvedProvider = await _llmSettingsStore.ResolveProviderKeyAsync(_options.LlmProvider, cancellationToken);
+                    await using var gpuLease = await _gpuQueue.AcquireIfLocalAsync(
+                        resolvedProvider, "交易计划复核", GpuTaskPriority.Low, cancellationToken);
                     using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, gpuLease.CancellationToken);
 
                     var llmResult = await _llmService.ChatAsync(
