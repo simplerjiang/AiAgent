@@ -128,7 +128,7 @@ describe('EmbeddingDegradedBanner', () => {
     await wrapper.find('.embedding-degraded-banner__backfill').trigger('click')
     await vi.dynamicImportSettled()
 
-    expect(fetch).toHaveBeenCalledWith('/api/embedding/backfill', { method: 'POST' })
+    expect(fetch).toHaveBeenCalledWith('/api/stocks/financial/embedding/backfill', { method: 'POST' })
     expect(wrapper.text()).toContain('补建任务已启动')
     vi.unstubAllGlobals()
   })

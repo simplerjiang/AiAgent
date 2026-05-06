@@ -99,7 +99,7 @@ async function triggerBackfill() {
   backfilling.value = true
   backfillResult.value = null
   try {
-    const res = await fetch('/api/embedding/backfill', { method: 'POST' })
+    const res = await fetch('/api/stocks/financial/embedding/backfill', { method: 'POST' })
     if (res.ok) {
       backfillResult.value = { type: 'success', text: '补建任务已启动，后台处理中...' }
       setTimeout(() => emit('refresh'), 5000)
